@@ -1,0 +1,31 @@
+{
+  "name": "hyperreality-system",
+  "version": "0.1.0",
+  "description": "Hyperreal AI Video System (HAVS) — 面向好莱坞工业级标准的AI视频预生产系统",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node tests/test-integration.js",
+    "smoke": "node scripts/smoke-test.js"
+  },
+  "keywords": [
+    "ai-video",
+    "video-generation",
+    "film-production",
+    "multi-agent",
+    "seedance",
+    "prompt-engineering",
+    "cinematography",
+    "llm"
+  ],
+  "author": "Genius <63904380@qq.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/geniusdapeng-collab/hyperreality-system.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {}
+}

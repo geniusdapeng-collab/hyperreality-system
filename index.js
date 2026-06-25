@@ -14,7 +14,7 @@ const { PostProductionEngine } = require('./engines/post-production-engine/post-
 const { RequirementListBuilder } = require('./engines/script-engine/core/requirement-list-builder');
 const { CreativeIntensityEngine } = require('./engines/script-engine/core/creative-intensity-engine');
 const { OpeningTitleOptimizer } = require('./engines/production-engine/agents/opening-title-optimizer');
-const { routeAndEnhance } = require('../skills/hollywood-cinematography/cinematography-skill-router');
+const { routeAndEnhance } = require('./skills/hollywood-cinematography/cinematography-skill-router');
 const { FieldGuard } = require('./engines/field-guard');
 const fs = require('fs');
 const path = require('path');
@@ -271,7 +271,7 @@ class HyperrealitySystem {
       // ========== 🆕 好莱坞导演技能注入 ==========
       console.log('\n🎬 [Director Skills] 好莱坞导演技能注入...');
       try {
-        const { routeAndEnhance } = require('../skills/hollywood-cinematography/cinematography-skill-router');
+        const { routeAndEnhance } = require('./skills/hollywood-cinematography/cinematography-skill-router');
         const { enhancedShots, report } = routeAndEnhance(productionResult.shots, {
           minScore: 5,
           maxSkillsPerShot: 2
