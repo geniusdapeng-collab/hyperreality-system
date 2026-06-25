@@ -1,0 +1,159 @@
+/**
+ * LLM Agent 基类
+ * v2.0.0: 所有制作引擎Agent的基类，封装LLM调用、重试、降级逻辑
+ */
+const path = require('path');
+
+// v2.0.0-LLM-Agent: 加载LLM引擎（修正：需要实例化）
+function loadLLMEngine() {
+  try {
+    const SYSTEMS_PATH = path.join(__dirname, '../../../../systems');
+    const LLMClass = require(path.join(SYSTEMS_PATH, 'llm-reasoning-engine.js'))?.LLMEngine;
+    if (!LLMClass) {
+      console.warn('[BaseAgent] LLMEngine类加载失败');
+      return null;
+    }
+    // 实例化LLM引擎
+    return new LLMClass({ model: 'kimi-k2p6', maxTokens: 16000 });
+  } catch (e) {
+    console.warn(`[BaseAgent] LLM引擎加载失败: ${e.message}`);
+    return null;
+  }
+}
+
+class BaseAgent {
+  constructor(options = {}) {
+    this.name = options.name || 'BaseAgent';
+    this.llmTimeout = options.llmTimeout || 300000; // 5分钟
+    this.llmMaxRetries = options.llmMaxRetries || 3;
+    this.llmModel = options.llmModel || 'kimi-k2p6';
+    this.enabled = options.enabled !== false;
+
+    // 延迟加载LLM引擎（避免构造时失败阻断）
+    this._llmEngine = null;
+    this._llmEngineLoaded = false;
+  }
+
+  /**
+   * 获取LLM引擎实例（惰性加载）
+   */
+  _getLLMEngine() {
+    if (!this._llmEngineLoaded) {
+      this._llmEngine = loadLLMEngine();
+      this._llmEngineLoaded = true;
+      if (this._llmEngine) {
+        console.log(`[${this.name}] LLM引擎加载成功`);
+      } else {
+        console.warn(`[${this.name}] LLM引擎不可用，将使用降级模式`);
+      }
+    }
+    return this._llmEngine;
+  }
+
+  /**
+   * 核心LLM调用方法（带重试+降级）
+   * @param {string} prompt - 提示词
+   * @param {object} schema - 期望的JSON结构
+   * @param {Function} fallbackFn - 降级回调
+   * @returns {object} { result, degraded, degradeReason }
+   */
+  async _callLLM(prompt, schema, fallbackFn) {
+    if (!this.enabled) {
+      console.log(`[${this.name}] Agent已禁用，使用降级`);
+      return this._executeFallback(fallbackFn, 'Agent disabled');
+    }
+
+    const llm = this._getLLMEngine();
+    if (!llm) {
+      console.warn(`[${this.name}] LLM引擎不可用，使用降级`);
+      return this._executeFallback(fallbackFn, 'LLM engine not available');
+    }
+
+    try {
+      // 使用 reasonStructured（内置JSON解析、schema验证、3次重试）
+      const fullPrompt = `${this._getSystemPrompt()}\n\n${prompt}`;
+      const result = await llm.reasonStructured(fullPrompt, schema, {
+        maxTokens: 16000,
+        timeoutMs: this.llmTimeout
+      });
+
+      if (!result.success) {
+        throw new Error(`LLM引擎返回失败: ${result.error}`);
+      }
+
+      console.log(`[${this.name}] LLM调用成功 ✓`);
+      return {
+        result: result.data,
+        degraded: false,
+        degradeReason: null
+      };
+
+    } catch (err) {
+      console.warn(`[${this.name}] LLM调用失败: ${err.message}`);
+      return this._executeFallback(fallbackFn, `LLM failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * 执行降级回调
+   */
+  _executeFallback(fallbackFn, reason) {
+    try {
+      const fallbackResult = fallbackFn ? fallbackFn() : null;
+      return {
+        result: fallbackResult,
+        degraded: true,
+        degradeReason: reason,
+        attempts: this.llmMaxRetries
+      };
+    } catch (fallbackErr) {
+      console.error(`[${this.name}] 降级也失败了: ${fallbackErr.message}`);
+      return {
+        result: null,
+        degraded: true,
+        degradeReason: `LLM failed and fallback failed: ${fallbackErr.message}`,
+        attempts: this.llmMaxRetries
+      };
+    }
+  }
+
+  /**
+   * Schema校验
+   */
+  _validateSchema(data, schema) {
+    if (!schema || !schema.required) {
+      return { valid: true };
+    }
+
+    for (const field of schema.required) {
+      if (data[field] === undefined || data[field] === null) {
+        return { valid: false, reason: `缺少必需字段: ${field}` };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * 获取系统提示词（子类可覆盖）
+   */
+  _getSystemPrompt() {
+    return '你是一位专业的AI视频导演。只输出严格格式的JSON，不要markdown代码块，不要解释，不要思考过程。使用最紧凑的JSON格式。';
+  }
+
+  /**
+   * 休眠辅助
+   */
+  _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 批量处理镜头（子类实现）
+   */
+  async process(shots, blueprint) {
+    throw new Error('子类必须实现 process 方法');
+  }
+}
+
+module.exports = { BaseAgent };
