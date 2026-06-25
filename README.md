@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-v2.1.5-orange)](https://github.com/yourusername/hyperreality-system/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 
-> **这不是又一个文生视频玩具，而是一套面向电影工业级标准的AI视频预生产系统。**
+> **这不是又一个文生视频玩具，而是一套面向电影工业级标准的AI视频自动生产系统。**
 >
 > 从经典电影工业中解构运镜语法，将 Harness 架构、Multi-Agent 协作、影视领域 Skills 融合转化为系统化的镜头语言工程。
 > **剧本是灵魂，运镜是骨架，真实感是底线。**
