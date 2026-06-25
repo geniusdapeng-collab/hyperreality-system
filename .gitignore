@@ -26,6 +26,8 @@ debug_llm/
 *.mp3
 *.wav
 *.flac
+
+# 图片资源（assets目录除外）
 *.jpg
 *.jpeg
 *.png
@@ -33,6 +35,12 @@ debug_llm/
 *.webp
 *.psd
 *.ai
+
+# 允许项目配图（assets目录）
+!assets/*.jpg
+!assets/*.jpeg
+!assets/*.png
+!assets/*.gif
 *.pdf
 
 # 依赖和构建产物（不推送）
