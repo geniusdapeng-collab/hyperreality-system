@@ -327,14 +327,18 @@ ${meta._directorStyle}` : ''}
       try {
         console.log('[ScriptGenerator] 使用LLMEngine调用...');
         
+        // 【v2.1.5-fix-B】移除systemPrompt，将指令合并到user prompt中
+        // 原因：systemPrompt + 长prompt导致LLM reasoning占用过多token，content输出被截断
+        const systemInstruction = '你是一位专业的AI视频编剧。只输出严格格式的JSON，不要markdown代码块，不要解释，不要思考过程。使用最紧凑的JSON格式（不要换行和缩进）。';
+        const fullPrompt = systemInstruction + '\n\n' + prompt;
+        
         // 创建超时promise
         const timeoutPromise = new Promise((_, reject) => {
           timer = setTimeout(() => reject(new Error(`ScriptGenerator LLM 超时(${timeoutMs}ms)`)), timeoutMs);
         });
         
-        // 调用LLM
-        const llmPromise = this.llmEngine.generate(prompt, {
-          systemPrompt: '你是一位专业的AI视频编剧。只输出严格格式的JSON，不要markdown代码块，不要解释，不要思考过程。使用最紧凑的JSON格式（不要换行和缩进）。',
+        // 调用LLM（不带systemPrompt）
+        const llmPromise = this.llmEngine.generate(fullPrompt, {
           maxTokens: 8192,
           timeoutMs: 600000,
           forceJson: true,
