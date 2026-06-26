@@ -16,6 +16,7 @@ const { CreativeIntensityEngine } = require('./engines/script-engine/core/creati
 const { OpeningTitleOptimizer } = require('./engines/production-engine/agents/opening-title-optimizer');
 const { routeAndEnhance } = require('./skills/hollywood-cinematography/cinematography-skill-router');
 const { FieldGuard } = require('./engines/field-guard');
+const { ErrorCodes } = require('./config/error-codes');
 const fs = require('fs');
 const path = require('path');
 
@@ -186,10 +187,14 @@ class HyperrealitySystem {
 
         // 【审计修复·P0】校验 adapted 存在且非空
         if (!scriptResult || !scriptResult.adapted) {
-          throw new Error('scriptEngine 未产出 adapted Blueprint');
+          const err = new Error('scriptEngine 未产出 adapted Blueprint');
+          err.code = ErrorCodes.DATA_MISSING;
+          throw err;
         }
         if (!Array.isArray(scriptResult.adapted.scenes) || scriptResult.adapted.scenes.length === 0) {
-          throw new Error('Blueprint scenes 为空，无法继续生产');
+          const err = new Error('Blueprint scenes 为空，无法继续生产');
+          err.code = ErrorCodes.DATA_MISSING;
+          throw err;
         }
 
         result.stages.scriptEngine = {
