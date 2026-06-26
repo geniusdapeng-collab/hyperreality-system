@@ -210,6 +210,7 @@ class ProductionEngine {
       
       fs.writeFileSync(tmpFile, safeData, 'utf8');
       fs.renameSync(tmpFile, file);
+      fs.renameSync(tmpFile, file);
       this.log('CHECKPOINT', `✅ ${phase} 已落盘 → ${path.basename(file)}`);
     } catch (e) {
       this.log('CHECKPOINT', `保存失败(忽略): ${e.message}`);

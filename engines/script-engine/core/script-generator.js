@@ -746,18 +746,38 @@ ${meta._directorStyle}` : ''}
    * 保存剧本到文件
    */
   async saveBlueprint(blueprint, outputPath) {
-    const json = blueprint.toJSON();
-    fs.writeFileSync(outputPath, json, 'utf-8');
-    console.log(`[ScriptGenerator] 剧本已保存: ${outputPath}`);
-    return outputPath;
+    try {
+      const json = blueprint.toJSON();
+      fs.writeFileSync(outputPath, json, 'utf-8');
+      // v2.1.5-audit: 验证文件写入成功
+      if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+        throw new Error(`文件写入失败或为空: ${outputPath}`);
+      }
+      console.log(`[ScriptGenerator] 剧本已保存: ${outputPath}`);
+      return outputPath;
+    } catch (e) {
+      console.error(`[ScriptGenerator] 保存剧本失败: ${e.message}`);
+      throw e; // 向上传播，让调用方决定如何处理
+    }
   }
 
   /**
    * 从文件加载剧本
    */
   static loadBlueprint(filePath) {
-    const json = fs.readFileSync(filePath, 'utf-8');
-    return ScriptBlueprint.fromJSON(json);
+    try {
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`剧本文件不存在: ${filePath}`);
+      }
+      const json = fs.readFileSync(filePath, 'utf-8');
+      if (!json || json.trim().length === 0) {
+        throw new Error(`剧本文件为空: ${filePath}`);
+      }
+      return ScriptBlueprint.fromJSON(json);
+    } catch (e) {
+      console.error(`[ScriptGenerator] 加载剧本失败: ${e.message}`);
+      throw e;
+    }
   }
 }
 

@@ -287,7 +287,27 @@ const CRITICAL_FIELDS = {
 };
 
 function deepClone(obj) {
-  return JSON.parse(JSON.stringify(obj ?? {}));
+  // v2.1.5-audit: 使用 WeakMap 防止循环引用，支持特殊类型
+  const seen = new WeakMap();
+  const clone = (value) => {
+    if (value === null || typeof value !== 'object') return value;
+    if (value instanceof Date) return new Date(value.getTime());
+    if (value instanceof RegExp) return new RegExp(value.source, value.flags);
+    if (Array.isArray(value)) {
+      const arr = [];
+      seen.set(value, arr);
+      for (const item of value) arr.push(clone(item));
+      return arr;
+    }
+    if (seen.has(value)) return seen.get(value);
+    const result = {};
+    seen.set(value, result);
+    for (const [k, v] of Object.entries(value)) {
+      result[k] = clone(v);
+    }
+    return result;
+  };
+  return clone(obj ?? {});
 }
 
 function toArray(value) {
