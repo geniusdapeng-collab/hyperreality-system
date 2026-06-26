@@ -1,16 +1,17 @@
 /**
- * LLMGateway - LLM网关护盾
+ * LLMGateway - LLM网关护盾（通用化版本）
  * 
  * 核心职责：
  * 1. 熔断器：连续失败自动切换兜底模型
  * 2. 响应缓存：相同输入零延迟返回
- * 3. 多模型负载均衡：k2p6主 / k2p5备 / 规则模板兜底
+ * 3. 多模型负载均衡：主模型/备用模型/规则兜底
  * 4. 超时控制：防止LLM挂起导致系统阻塞
  * 
  * 设计原则：
  * - 所有LLM调用必须经过此网关
  * - 失败时自动降级，不抛异常到上层
  * - 缓存命中时零延迟返回
+ * - 兜底规则不返回具体业务内容，只返回最小必要结构
  */
 
 const fs = require('fs');
@@ -18,19 +19,19 @@ const crypto = require('crypto');
 
 class LLMGateway {
   constructor(options = {}) {
-    // 模型配置
+    // 模型配置（由外部传入，不硬编码具体模型）
     this.models = {
-      primary: options.primaryModel || 'kimi-k2p6',
-      backup: options.backupModel || 'kimi-k2p5',
-      fallback: options.fallbackModel || 'rule-template'
+      primary: options.primaryModel || 'default',
+      backup: options.backupModel || 'backup',
+      fallback: options.fallbackModel || 'fallback'
     };
 
     // 熔断器配置
     this.circuitBreaker = {
-      failureThreshold: options.failureThreshold || 5,    // 连续失败5次触发熔断
-      recoveryTimeout: options.recoveryTimeout || 30000,  // 30秒后尝试恢复
-      halfOpenMaxCalls: options.halfOpenMaxCalls || 3,    // 半开状态最多试3次
-      state: 'CLOSED',  // CLOSED / OPEN / HALF_OPEN
+      failureThreshold: options.failureThreshold || 5,
+      recoveryTimeout: options.recoveryTimeout || 30000,
+      halfOpenMaxCalls: options.halfOpenMaxCalls || 3,
+      state: 'CLOSED',
       failureCount: 0,
       lastFailureTime: null,
       successCount: 0
@@ -39,11 +40,11 @@ class LLMGateway {
     // 缓存配置
     this.cache = new Map();
     this.cacheEnabled = options.cacheEnabled !== false;
-    this.cacheTTL = options.cacheTTL || 3600000; // 默认1小时
-    this.cacheMaxSize = options.cacheMaxSize || 1000; // 最多缓存1000条
+    this.cacheTTL = options.cacheTTL || 3600000;
+    this.cacheMaxSize = options.cacheMaxSize || 1000;
 
     // 超时配置
-    this.timeout = options.timeout || 300000; // 默认5分钟
+    this.timeout = options.timeout || 300000;
 
     // 统计
     this.stats = {
@@ -53,6 +54,9 @@ class LLMGateway {
       fallbackCalls: 0,
       avgLatency: 0
     };
+
+    // 兜底规则生成器（由外部注入，不内置具体业务逻辑）
+    this.fallbackGenerator = options.fallbackGenerator || null;
 
     // 清理过期缓存的定时器
     this._startCacheCleanup();
@@ -103,10 +107,8 @@ class LLMGateway {
           options.timeout || this.timeout
         );
 
-        // 成功：更新熔断器
         this._onSuccess();
 
-        // 写入缓存
         if (this.cacheEnabled) {
           this._setCache(prompt, result);
         }
@@ -134,7 +136,6 @@ class LLMGateway {
 
           console.log('[LLMGateway] 备用模型调用成功');
 
-          // 写入缓存
           if (this.cacheEnabled) {
             this._setCache(prompt, result);
           }
@@ -153,7 +154,7 @@ class LLMGateway {
           console.warn(`[LLMGateway] 备用模型也失败: ${backupError.message}`);
           this._onFailure();
 
-          // 5. 兜底规则模板
+          // 5. 兜底规则
           return this._fallback(prompt, options, startTime);
         }
       }
@@ -191,16 +192,12 @@ class LLMGateway {
    * 主模型调用（实际LLM调用）
    */
   async _callPrimaryModel(prompt, options) {
-    // 这里调用实际的LLM接口
-    // 当前为占位，实际使用时替换为真实调用
     const model = options.model || this.models.primary;
     
-    // 模拟LLM调用（实际使用时替换）
     if (global.llmAdapter) {
       return await global.llmAdapter.generate(prompt, { model, ...options });
     }
 
-    // 如果没有全局LLM适配器，返回错误（触发降级）
     throw new Error('LLM adapter not configured');
   }
 
@@ -218,69 +215,32 @@ class LLMGateway {
   }
 
   /**
-   * 兜底规则模板
+   * 兜底规则
    */
   _fallback(prompt, options, startTime) {
     this.stats.fallbackCalls++;
-    console.log('[LLMGateway] 🛡️ 触发兜底规则模板');
+    console.log('[LLMGateway] 🛡️ 触发兜底');
 
-    // 根据prompt类型返回兜底结果
-    const fallbackResult = this._generateFallbackResult(prompt, options);
+    // 如果外部注入了兜底生成器，使用它
+    if (this.fallbackGenerator && typeof this.fallbackGenerator === 'function') {
+      const fallbackResult = this.fallbackGenerator(prompt, options);
+      return {
+        success: true,
+        data: fallbackResult,
+        source: 'fallback-custom',
+        latency: Date.now() - startTime,
+        isFallback: true
+      };
+    }
 
+    // 默认兜底：返回空对象，不返回任何具体业务内容
     return {
       success: true,
-      data: fallbackResult,
-      source: 'fallback-rule',
+      data: {},
+      source: 'fallback-empty',
       latency: Date.now() - startTime,
       isFallback: true
     };
-  }
-
-  /**
-   * 生成兜底结果（基于规则模板）
-   */
-  _generateFallbackResult(prompt, options) {
-    const promptType = this._detectPromptType(prompt);
-
-    const fallbacks = {
-      'scene-design': {
-        scenes: [
-          {
-            scene_id: 'S01',
-            scene_type: 'opening',
-            setting: '室内环境',
-            description: '开场镜头，建立场景氛围',
-            duration: 5
-          }
-        ],
-        _fallbackGenerated: true
-      },
-      'prompt-fusion': {
-        fusionText: '写实风格，高质量画面，专业运镜',
-        _fallbackGenerated: true
-      },
-      'character-ref': {
-        characterRef: 'NONE',
-        _fallbackGenerated: true
-      },
-      'default': {
-        result: '兜底响应：系统当前使用规则模板生成',
-        _fallbackGenerated: true
-      }
-    };
-
-    return fallbacks[promptType] || fallbacks['default'];
-  }
-
-  /**
-   * 检测Prompt类型
-   */
-  _detectPromptType(prompt) {
-    const text = String(prompt).toLowerCase();
-    if (text.includes('scene') || text.includes('场景')) return 'scene-design';
-    if (text.includes('fusion') || text.includes('融合')) return 'prompt-fusion';
-    if (text.includes('character') || text.includes('角色')) return 'character-ref';
-    return 'default';
   }
 
   /**
@@ -342,7 +302,6 @@ class LLMGateway {
     
     if (!entry) return null;
     
-    // 检查是否过期
     if (Date.now() - entry.timestamp > this.cacheTTL) {
       this.cache.delete(key);
       return null;
@@ -355,7 +314,6 @@ class LLMGateway {
    * 缓存：设置
    */
   _setCache(prompt, data) {
-    // 如果缓存满了，清理最旧的
     if (this.cache.size >= this.cacheMaxSize) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
@@ -379,7 +337,7 @@ class LLMGateway {
           this.cache.delete(key);
         }
       }
-    }, 60000); // 每分钟清理一次
+    }, 60000);
   }
 
   /**
@@ -393,7 +351,7 @@ class LLMGateway {
    * 更新平均延迟
    */
   _updateLatency(latency) {
-    const alpha = 0.1; // 指数移动平均
+    const alpha = 0.1;
     this.stats.avgLatency = this.stats.avgLatency * (1 - alpha) + latency * alpha;
   }
 

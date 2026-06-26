@@ -1,15 +1,15 @@
 /**
- * BaselineRegistry - 基线模板注册表
+ * BaselineRegistry - 基线模板注册表（通用化版本）
  * 
  * 核心职责：
- * 1. 管理已审核通过的基线模板（按题材/类型/版本）
+ * 1. 管理已审核通过的基线模板（按类型/版本）
  * 2. 提供热启动加载（基线 + LLM增量合并）
  * 3. 版本管理（v1.0 → v1.1 → v2.0）
  * 
- * 基线模板结构：
- * - lockedFields: 锁定的稳定字段（导演指令、约束、负面提示等）
- * - deltaFields: 允许LLM覆盖的创意字段（场景、动作、台词、运镜）
- * - metadata: 版本信息、审核人、审核时间
+ * 设计原则：
+ * - 系统不预置任何默认模板或领域知识
+ * - 所有基线必须由外部注册（人工审核通过后）
+ * - 匹配基于通用相似度算法，不依赖具体关键词
  */
 
 const fs = require('fs');
@@ -23,14 +23,13 @@ class BaselineRegistry {
     // 内存缓存
     this.cache = new Map();
     
-    // 题材分类映射
-    this.categoryMap = {
-      'health': '健康科普',
-      'medical': '医疗科普',
-      'education': '教育科普',
-      'product': '产品广告',
-      'story': '故事短片',
-      'default': '通用基线'
+    // 通用匹配权重（不依赖具体领域）
+    this.matchWeights = options.matchWeights || {
+      title: 0.3,        // 标题匹配权重
+      style: 0.25,      // 风格匹配权重
+      characters: 0.2,  // 角色匹配权重
+      intent: 0.15,     // 意图匹配权重
+      format: 0.1       // 格式匹配权重
     };
   }
 
@@ -41,54 +40,32 @@ class BaselineRegistry {
   }
 
   /**
-   * 注册新基线模板（冷启动后人工审核通过）
-   * @param {string} category - 题材类型（health/medical/education等）
-   * @param {string} version - 版本号（如 v1.0）
-   * @param {Object} baseline - 基线数据
-   * @param {Object} approval - 审核信息
+   * 注册新基线模板（外部审核通过后调用）
+   * @param {string} type - 类型标识（由外部定义，系统不预设）
+   * @param {string} version - 版本号
+   * @param {Object} baseline - 基线数据（lockedFields + deltaFields）
+   * @param {Object} metadata - 元数据（来源、描述等，由外部提供）
    */
-  register(category, version, baseline, approval = {}) {
-    const templateId = `${category}_${version}`;
+  register(type, version, baseline, metadata = {}) {
+    const templateId = `${type}_${version}`;
     const templatePath = path.join(this.registryDir, `${templateId}.json`);
 
     const template = {
       id: templateId,
-      category,
+      type,  // 使用 type 替代 category，更通用
       version,
       // 锁定的稳定字段（LLM不可覆盖）
-      lockedFields: {
-        directorInstruction: baseline.directorInstruction || '',
-        constraint: baseline.constraint || '',
-        baseline: baseline.baseline || '',
-        negativePrompt: baseline.negativePrompt || '',
-        colorScience: baseline.colorScience || '',
-        renderStyle: baseline.renderStyle || '',
-        characterConstraint: baseline.characterConstraint || '',
-        consistency: baseline.consistency || '',
-        brightConstraint: baseline.brightConstraint || '',
-        aspectRatio: baseline.aspectRatio || '16:9',
-        frameRate: baseline.frameRate || '24fps',
-        resolution: baseline.resolution || '1920x1080'
-      },
+      lockedFields: baseline.lockedFields || {},
       // 允许LLM覆盖的创意字段
-      deltaFields: {
-        scene: true,
-        action: true,
-        dialogue: true,
-        camera: true,
-        mood: true,
-        lighting: true,
-        timeline: true,
-        backgroundSound: true
-      },
-      // 审核信息
+      deltaFields: baseline.deltaFields || {},
+      // 匹配特征（用于相似度匹配）
+      matchFeatures: baseline.matchFeatures || {},
+      // 元数据（由外部提供，系统不预设）
       metadata: {
-        approvedBy: approval.approvedBy || 'system',
-        approvedAt: approval.approvedAt || new Date().toISOString(),
-        description: approval.description || '',
-        sourceProject: approval.sourceProject || '',
+        registeredAt: new Date().toISOString(),
         usageCount: 0,
-        lastUsed: null
+        lastUsed: null,
+        ...metadata  // 外部传入的元数据覆盖默认值
       }
     };
 
@@ -103,17 +80,17 @@ class BaselineRegistry {
   }
 
   /**
-   * 加载基线模板（热启动）
-   * @param {string} category - 题材类型
+   * 加载基线模板
+   * @param {string} type - 类型标识
    * @param {string} version - 版本号（默认最新）
    */
-  load(category, version = null) {
+  load(type, version = null) {
     // 如果未指定版本，找最新版本
     if (!version) {
-      version = this.getLatestVersion(category);
+      version = this.getLatestVersion(type);
     }
 
-    const templateId = `${category}_${version}`;
+    const templateId = `${type}_${version}`;
 
     // 先查内存缓存
     if (this.cache.has(templateId)) {
@@ -125,15 +102,15 @@ class BaselineRegistry {
     // 从文件加载
     const templatePath = path.join(this.registryDir, `${templateId}.json`);
     if (!fs.existsSync(templatePath)) {
-      console.warn(`[BaselineRegistry] ⚠️ 基线模板不存在: ${templateId}，将使用默认基线`);
-      return this._createDefaultBaseline(category);
+      console.warn(`[BaselineRegistry] ⚠️ 基线模板不存在: ${templateId}`);
+      return null;  // 不返回默认基线，让调用方决定如何处理
     }
 
     const template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
     this.cache.set(templateId, template);
     this._updateUsage(template);
     
-    console.log(`[BaselineRegistry] 📋 基线模板已加载: ${templateId} (已使用${template.metadata.usageCount}次)`);
+    console.log(`[BaselineRegistry] 📋 基线模板已加载: ${templateId}`);
     return template;
   }
 
@@ -147,10 +124,9 @@ class BaselineRegistry {
       // 先填充锁定的稳定字段（LLM不可覆盖）
       ...template.lockedFields,
       
-      // 再填充LLM生成的增量字段（如果存在）
-      ...Object.entries(llmOutput).reduce((acc, [key, value]) => {
-        // 只合并允许delta的字段
-        if (template.deltaFields[key] === true && value) {
+      // 再填充LLM生成的增量字段（只合并允许delta的字段）
+      ...Object.entries(llmOutput || {}).reduce((acc, [key, value]) => {
+        if (template.deltaFields[key] === true && value !== undefined && value !== null) {
           acc[key] = value;
         }
         return acc;
@@ -166,148 +142,143 @@ class BaselineRegistry {
   }
 
   /**
-   * 检查输入是否匹配基线模板（用于热启动判断）
+   * 通用相似度匹配（不依赖具体领域关键词）
    * @param {Object} requirement - 用户需求
+   * @returns {Object} { type, template, score, isHotStart }
    */
   findBestMatch(requirement) {
-    const category = this._detectCategory(requirement);
-    const template = this.load(category);
+    const templates = this.list();
     
-    return {
-      category,
-      template,
-      isHotStart: template.metadata.usageCount > 0
-    };
-  }
+    if (templates.length === 0) {
+      return { type: null, template: null, score: 0, isHotStart: false };
+    }
 
-  /**
-   * 自动检测题材类型
-   */
-  _detectCategory(requirement) {
-    const text = JSON.stringify(requirement).toLowerCase();
-    
-    const keywords = {
-      'health': ['健康', '养生', '科普', '横纹肌', '护理', '健康护理'],
-      'medical': ['医疗', '医院', '疾病', '治疗', '药品', '医生'],
-      'education': ['教育', '教学', '学习', '知识', '课程', '培训'],
-      'product': ['产品', '广告', '商品', '品牌', '销售', '推广', 'cleanmaster'],
-      'story': ['故事', '剧情', '短片', '电影', '叙事', '角色']
-    };
+    let bestMatch = null;
+    let bestScore = 0;
 
-    for (const [category, words] of Object.entries(keywords)) {
-      if (words.some(w => text.includes(w))) {
-        return category;
+    for (const template of templates) {
+      const score = this._calculateSimilarity(requirement, template);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = template;
       }
     }
 
-    return 'default';
+    // 阈值判断：相似度 > 0.6 认为可以热启动
+    const threshold = 0.6;
+    const isHotStart = bestScore >= threshold;
+
+    if (isHotStart && bestMatch) {
+      const fullTemplate = this.load(bestMatch.type, bestMatch.version);
+      return { type: bestMatch.type, template: fullTemplate, score: bestScore, isHotStart: true };
+    }
+
+    return { type: null, template: null, score: bestScore, isHotStart: false };
   }
 
   /**
-   * 获取某题材的最新版本
+   * 计算相似度（通用算法，不依赖具体领域）
+   * 基于 matchFeatures 的键值匹配
    */
-  getLatestVersion(category) {
-    const files = fs.readdirSync(this.registryDir)
-      .filter(f => f.startsWith(`${category}_`) && f.endsWith('.json'))
-      .sort();
-    
-    if (files.length === 0) return 'v1.0';
-    
-    const latest = files[files.length - 1];
-    return latest.replace(`${category}_`, '').replace('.json', '');
+  _calculateSimilarity(requirement, template) {
+    if (!template.matchFeatures || Object.keys(template.matchFeatures).length === 0) {
+      return 0;  // 没有匹配特征的模板不参与匹配
+    }
+
+    let totalWeight = 0;
+    let matchedWeight = 0;
+
+    const reqText = JSON.stringify(requirement).toLowerCase();
+
+    for (const [key, weight] of Object.entries(this.matchWeights)) {
+      totalWeight += weight;
+      
+      const featureValue = template.matchFeatures[key];
+      if (!featureValue) continue;
+
+      // 支持字符串或数组形式的特征值
+      const featureTexts = Array.isArray(featureValue) ? featureValue : [featureValue];
+      
+      for (const text of featureTexts) {
+        if (reqText.includes(String(text).toLowerCase())) {
+          matchedWeight += weight;
+          break;  // 该维度已匹配，不再累加
+        }
+      }
+    }
+
+    return totalWeight > 0 ? matchedWeight / totalWeight : 0;
+  }
+
+  /**
+   * 获取某类型的最新版本
+   */
+  getLatestVersion(type) {
+    try {
+      const files = fs.readdirSync(this.registryDir)
+        .filter(f => f.startsWith(`${type}_`) && f.endsWith('.json'))
+        .sort();
+      
+      if (files.length === 0) return null;
+      
+      const latest = files[files.length - 1];
+      return latest.replace(`${type}_`, '').replace('.json', '');
+    } catch (e) {
+      return null;
+    }
   }
 
   /**
    * 列出所有可用的基线模板
    */
   list() {
-    const files = fs.readdirSync(this.registryDir)
-      .filter(f => f.endsWith('.json'));
-    
-    return files.map(f => {
-      const template = JSON.parse(fs.readFileSync(path.join(this.registryDir, f), 'utf8'));
-      return {
-        id: template.id,
-        category: template.category,
-        version: template.version,
-        usageCount: template.metadata.usageCount,
-        lastUsed: template.metadata.lastUsed,
-        approvedBy: template.metadata.approvedBy
-      };
-    });
+    try {
+      const files = fs.readdirSync(this.registryDir)
+        .filter(f => f.endsWith('.json'));
+      
+      return files.map(f => {
+        const template = JSON.parse(fs.readFileSync(path.join(this.registryDir, f), 'utf8'));
+        return {
+          id: template.id,
+          type: template.type,
+          version: template.version,
+          usageCount: template.metadata.usageCount,
+          lastUsed: template.metadata.lastUsed,
+          matchFeatures: template.matchFeatures
+        };
+      });
+    } catch (e) {
+      console.warn(`[BaselineRegistry] 读取模板列表失败: ${e.message}`);
+      return [];
+    }
   }
 
   /**
-   * 从成功的项目中提取基线
+   * 从成功的项目中提取基线（通用提取，不依赖具体字段名）
    * @param {Object} projectOutput - 成功的项目输出
+   * @param {Array<string>} stableFieldKeys - 稳定的字段名列表（由外部指定）
+   * @param {Array<string>} creativeFieldKeys - 创意的字段名列表（由外部指定）
    */
-  extractFromProject(projectOutput) {
+  extractFromProject(projectOutput, stableFieldKeys = [], creativeFieldKeys = []) {
     const lockedFields = {};
-    const deltaFields = {};
 
-    // 遍历所有镜头，统计哪些字段是稳定的（所有镜头一致）
     const shots = projectOutput.shots || [];
     if (shots.length === 0) return null;
 
-    const stableKeys = [
-      'directorInstruction', 'constraint', 'baseline', 'negativePrompt',
-      'colorScience', 'renderStyle', 'characterConstraint', 'consistency',
-      'brightConstraint', 'aspectRatio', 'frameRate', 'resolution'
-    ];
-
-    const creativeKeys = [
-      'scene', 'action', 'dialogue', 'camera', 'mood', 'lighting',
-      'timeline', 'backgroundSound'
-    ];
-
-    // 提取第一个镜头的稳定字段作为基线
+    // 从第一个镜头提取稳定字段
     const firstShot = shots[0];
-    stableKeys.forEach(key => {
-      if (firstShot[key]) lockedFields[key] = firstShot[key];
-    });
+    for (const key of stableFieldKeys) {
+      if (firstShot[key] !== undefined) {
+        lockedFields[key] = firstShot[key];
+      }
+    }
 
     return {
       lockedFields,
-      deltaFields: creativeKeys.reduce((acc, key) => {
+      deltaFields: creativeFieldKeys.reduce((acc, key) => {
         acc[key] = true;
         return acc;
       }, {})
-    };
-  }
-
-  /**
-   * 创建默认基线（兜底）
-   */
-  _createDefaultBaseline(category) {
-    return {
-      id: `${category}_default`,
-      category,
-      version: 'default',
-      lockedFields: {
-        directorInstruction: '好莱坞纪录片质感，写实风格，无特效',
-        constraint: 'Aspect ratio: 16:9, Resolution: 1920x1080, Format: MP4, Frame rate: 24fps',
-        baseline: '8K resolution, cinematic quality, highly detailed, photorealistic',
-        negativePrompt: 'no text, no watermark, no logo, no cartoon style',
-        colorScience: 'REC.709 color space, natural skin tones',
-        renderStyle: 'cinematic film look, 35mm texture',
-        characterConstraint: '保持角色形象一致，服装发型每帧统一',
-        consistency: '禁止角色变形或分身',
-        brightConstraint: 'bright lighting, well-lit scene, clear visibility',
-        aspectRatio: '16:9',
-        frameRate: '24fps',
-        resolution: '1920x1080'
-      },
-      deltaFields: {
-        scene: true, action: true, dialogue: true, camera: true,
-        mood: true, lighting: true, timeline: true, backgroundSound: true
-      },
-      metadata: {
-        approvedBy: 'system',
-        approvedAt: new Date().toISOString(),
-        description: '自动生成的默认基线',
-        usageCount: 0,
-        lastUsed: null
-      }
     };
   }
 
@@ -315,7 +286,7 @@ class BaselineRegistry {
     template.metadata.usageCount++;
     template.metadata.lastUsed = new Date().toISOString();
     
-    // 异步写回文件（不阻塞主流程）
+    // 异步写回文件
     const templatePath = path.join(this.registryDir, `${template.id}.json`);
     setImmediate(() => {
       try {

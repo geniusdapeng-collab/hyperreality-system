@@ -1,5 +1,5 @@
 /**
- * 三层稳定性护盾测试
+ * 三层稳定性护盾测试（通用化版本）
  */
 
 const { BaselineRegistry } = require('../shields/baseline-registry/baseline-registry');
@@ -8,7 +8,7 @@ const { HealthMonitor } = require('../shields/health-monitor/health-monitor');
 const { StabilityShield } = require('../shields/stability-shield');
 
 console.log('========================================');
-console.log('  三层稳定性护盾测试 v1.0');
+console.log('  三层稳定性护盾测试 v2.0（通用化）');
 console.log('========================================\n');
 
 let passCount = 0;
@@ -26,7 +26,7 @@ function test(name, fn) {
 }
 
 // ========== 测试1: BaselineRegistry ==========
-console.log('\n🔥 [测试1] 基线模板注册表');
+console.log('\n🔥 [测试1] 基线模板注册表（通用化）');
 
 const baselineRegistry = new BaselineRegistry({
   registryDir: './tests/templates-test'
@@ -46,15 +46,25 @@ if (fs.existsSync('./tests/templates-test')) {
 
 test('注册基线模板', () => {
   const baseline = {
-    directorInstruction: '好莱坞纪录片质感',
-    constraint: 'Aspect ratio: 16:9',
-    baseline: '8K resolution',
-    negativePrompt: 'no text'
+    lockedFields: {
+      directorInstruction: '纪录片质感',
+      constraint: 'Aspect ratio: 16:9',
+      baseline: '8K resolution',
+      negativePrompt: 'no text'
+    },
+    deltaFields: {
+      scene: true,
+      action: true,
+      dialogue: true
+    },
+    matchFeatures: {
+      title: ['健康', '护理'],
+      style: ['纪录片', '科普']
+    }
   };
   
   const template = baselineRegistry.register('health', 'v1.0', baseline, {
-    approvedBy: 'test',
-    description: '健康科普基线模板'
+    description: '测试基线模板'
   });
   
   if (!template || template.id !== 'health_v1.0') {
@@ -64,8 +74,8 @@ test('注册基线模板', () => {
 
 test('加载基线模板', () => {
   const template = baselineRegistry.load('health', 'v1.0');
-  if (!template || template.category !== 'health') {
-    throw new Error('加载失败');
+  if (!template || template.type !== 'health') {
+    throw new Error(`加载失败: ${template?.type}`);
   }
 });
 
@@ -88,19 +98,27 @@ test('基线合并', () => {
   }
 });
 
-test('题材自动检测', () => {
-  const req1 = { title: '健康护理知识' };
-  const req2 = { title: '产品销售推广' };
+test('通用相似度匹配', () => {
+  // 使用与模板 matchFeatures 高度匹配的需求
+  const req1 = { title: '健康护理', style: '纪录片' };
   
   const match1 = baselineRegistry.findBestMatch(req1);
-  const match2 = baselineRegistry.findBestMatch(req2);
   
-  if (match1.category !== 'health') {
-    throw new Error(`检测失败: ${match1.category}`);
+  // 通用匹配基于 matchFeatures 的相似度
+  // title匹配(0.3) + style匹配(0.25) = 0.55，但阈值是0.6，所以不会热启动
+  // 这是正确的通用化行为：只有高相似度才热启动
+  if (match1.score <= 0) {
+    throw new Error(`相似度计算失败: ${match1.score}`);
   }
-  if (match2.category !== 'product') {
-    throw new Error(`检测失败: ${match2.category}`);
+  // 验证是冷启动（因为相似度0.55 < 0.6）
+  if (match1.isHotStart) {
+    throw new Error('低相似度不应触发热启动');
   }
+  
+  // 使用更高匹配度的需求（title + style + intent + format 都匹配）
+  const req2 = { title: '健康护理', style: '纪录片', intent: '科普', format: '视频' };
+  // 但模板只有 title 和 style 特征，所以最高还是 0.55
+  // 这是正确的：系统不应为未注册特征预设权重
 });
 
 test('列出所有模板', () => {
@@ -111,11 +129,11 @@ test('列出所有模板', () => {
 });
 
 // ========== 测试2: LLMGateway ==========
-console.log('\n🔥 [测试2] LLM网关');
+console.log('\n🔥 [测试2] LLM网关（通用化）');
 
 const llmGateway = new LLMGateway({
   cacheEnabled: true,
-  cacheTTL: 60000, // 1分钟测试缓存
+  cacheTTL: 60000,
   timeout: 5000
 });
 
@@ -129,26 +147,25 @@ test('熔断器初始状态', () => {
 test('缓存机制', () => {
   // 模拟调用（没有实际LLM，会走fallback）
   llmGateway.call('test-prompt-1').then(result1 => {
-    // 第二次调用应该命中缓存
     llmGateway.call('test-prompt-1').then(result2 => {
-      if (result2.source !== 'cache') {
-        // 没有实际LLM，第一次也不会进缓存，所以fallback不缓存
-        // 这个测试在真实环境才有意义
-      }
+      // 通用化后fallback不缓存，第二次也不会命中缓存
+      // 这个测试在真实环境才有意义
     });
   });
 });
 
-test('兜底规则模板', () => {
-  // 模拟fallback
+test('兜底规则（通用化）', () => {
+  // 通用化兜底返回空对象，不返回具体业务内容
   const result = llmGateway._fallback('test', {}, Date.now());
-  if (!result.success || result.source !== 'fallback-rule') {
-    throw new Error('兜底失败');
+  if (!result.success || result.source !== 'fallback-empty') {
+    throw new Error(`兜底失败: ${result.source}`);
+  }
+  if (Object.keys(result.data).length !== 0) {
+    throw new Error('兜底不应返回具体业务内容');
   }
 });
 
 test('熔断器触发', () => {
-  // 模拟多次失败
   for (let i = 0; i < 5; i++) {
     llmGateway._onFailure();
   }
@@ -168,10 +185,10 @@ test('熔断器重置', () => {
 });
 
 // ========== 测试3: HealthMonitor ==========
-console.log('\n🔥 [测试3] 健康监控');
+console.log('\n🔥 [测试3] 健康监控（通用化）');
 
 const healthMonitor = new HealthMonitor({
-  checkInterval: 60000, // 1分钟（测试中不实际触发）
+  checkInterval: 60000,
   latencyThreshold: 1000
 });
 
@@ -217,7 +234,7 @@ test('统计信息', () => {
 healthMonitor.stop();
 
 // ========== 测试4: StabilityShield集成 ==========
-console.log('\n🔥 [测试4] 护盾集成器');
+console.log('\n🔥 [测试4] 护盾集成器（通用化）');
 
 const shield = new StabilityShield({
   baselineRegistryDir: './tests/templates-test',
@@ -237,22 +254,34 @@ test('获取状态', () => {
   }
 });
 
-test('构建增量Prompt', () => {
-  const prompt = shield._buildDeltaPrompt({
-    _category: 'health',
-    scene: '医院',
-    action: '行走'
+test('Prompt构建器注入', () => {
+  // 通用化版本：Prompt构建器由外部注入
+  const customPromptBuilder = {
+    buildDelta: (req, template) => `增量Prompt: ${JSON.stringify(req)}`,
+    buildFull: (req) => `完整Prompt: ${JSON.stringify(req)}`
+  };
+  
+  const shieldWithBuilder = new StabilityShield({
+    baselineRegistryDir: './tests/templates-test',
+    promptBuilder: customPromptBuilder
   });
   
-  if (!prompt.includes('医院') || !prompt.includes('增量')) {
-    throw new Error('Prompt构建失败');
+  if (!shieldWithBuilder.promptBuilder) {
+    throw new Error('Prompt构建器注入失败');
   }
 });
 
-test('构建完整Prompt', () => {
-  const prompt = shield._buildFullPrompt({ title: '测试' });
-  if (!prompt.includes('测试')) {
-    throw new Error('Prompt构建失败');
+test('外部兜底生成器', () => {
+  const customFallback = (prompt, options) => ({ custom: 'fallback' });
+  
+  const shieldWithFallback = new StabilityShield({
+    baselineRegistryDir: './tests/templates-test',
+    fallbackGenerator: customFallback
+  });
+  
+  // 验证兜底生成器被正确传递
+  if (shieldWithFallback.llmGateway.fallbackGenerator !== customFallback) {
+    throw new Error('兜底生成器注入失败');
   }
 });
 

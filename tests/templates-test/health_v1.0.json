@@ -1,37 +1,15 @@
 {
   "id": "health_v1.0",
-  "category": "health",
+  "type": "health",
   "version": "v1.0",
-  "lockedFields": {
-    "directorInstruction": "好莱坞纪录片质感",
-    "constraint": "Aspect ratio: 16:9",
-    "baseline": "8K resolution",
-    "negativePrompt": "no text",
-    "colorScience": "",
-    "renderStyle": "",
-    "characterConstraint": "",
-    "consistency": "",
-    "brightConstraint": "",
-    "aspectRatio": "16:9",
-    "frameRate": "24fps",
-    "resolution": "1920x1080"
-  },
-  "deltaFields": {
-    "scene": true,
-    "action": true,
-    "dialogue": true,
-    "camera": true,
-    "mood": true,
-    "lighting": true,
-    "timeline": true,
-    "backgroundSound": true
-  },
+  "lockedFields": {},
+  "deltaFields": {},
+  "matchFeatures": {},
   "metadata": {
+    "registeredAt": "2026-06-26T11:59:54.386Z",
+    "usageCount": 0,
+    "lastUsed": null,
     "approvedBy": "test",
-    "approvedAt": "2026-06-26T11:18:08.228Z",
-    "description": "健康科普基线模板",
-    "sourceProject": "",
-    "usageCount": 3,
-    "lastUsed": "2026-06-26T11:18:08.230Z"
+    "description": "健康科普基线模板"
   }
 }

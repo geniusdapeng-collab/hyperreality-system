@@ -31,11 +31,14 @@ class HealthMonitor extends EventEmitter {
     // 补偿事务记录
     this.compensations = [];
     
+    // 外部告警处理器
+    this.alertHandler = options.alertHandler || null;
+    
     // 启动监控循环
     this._startMonitoring();
     
     // 监听系统事件
-    this._setupEventListeners();
+    this._setupEventListeners(this.alertHandler);
   }
 
   /**
@@ -279,16 +282,21 @@ class HealthMonitor extends EventEmitter {
 
   /**
    * 设置事件监听
+   * @param {Function} alertHandler - 外部告警处理器（可选）
    */
-  _setupEventListeners() {
+  _setupEventListeners(alertHandler) {
     // 监听告警事件，输出到日志
     this.on('alert', (alert) => {
       const level = alert.level.toUpperCase();
       console.log(`[HealthMonitor:${level}] ${alert.message}`);
       
-      // 这里可以接入飞书告警
-      if (global.feishuBot) {
-        global.feishuBot.sendAlert(alert);
+      // 如果外部提供了告警处理器，调用它
+      if (alertHandler && typeof alertHandler === 'function') {
+        try {
+          alertHandler(alert);
+        } catch (e) {
+          console.warn(`[HealthMonitor] 外部告警处理器失败: ${e.message}`);
+        }
       }
     });
 

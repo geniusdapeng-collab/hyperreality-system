@@ -1,17 +1,16 @@
 /**
- * StabilityShield - 三层稳定性护盾集成器
+ * StabilityShield - 三层稳定性护盾集成器（通用化版本）
  * 
  * 将三个护盾整合为统一的稳定性保障层：
  * - Shield 1: BaselineRegistry（确定性基线）
  * - Shield 2: LLMGateway（熔断/缓存/兜底）
  * - Shield 3: HealthMonitor（监控/自愈/补偿）
  * 
- * 使用方式：
- * const shield = new StabilityShield(config);
- * await shield.initialize();
- * 
- * // 生产时
- * const result = await shield.produce(requirement);
+ * 设计原则：
+ * - 系统不预置任何Prompt模板或业务逻辑
+ * - Prompt构建器由外部注入
+ * - 补偿事务由外部注册
+ * - 只提供稳定性保障机制，不介入具体业务
  */
 
 const { BaselineRegistry } = require('./baseline-registry/baseline-registry');
@@ -28,23 +27,28 @@ class StabilityShield {
     });
     
     this.llmGateway = new LLMGateway({
-      primaryModel: config.primaryModel || 'kimi-k2p6',
-      backupModel: config.backupModel || 'kimi-k2p5',
+      primaryModel: config.primaryModel || 'default',
+      backupModel: config.backupModel || 'backup',
       cacheEnabled: config.cacheEnabled !== false,
       cacheTTL: config.cacheTTL || 3600000,
-      timeout: config.llmTimeout || 300000
+      timeout: config.llmTimeout || 300000,
+      fallbackGenerator: config.fallbackGenerator || null  // 外部注入兜底生成器
     });
     
     this.healthMonitor = new HealthMonitor({
       checkInterval: config.healthCheckInterval || 30000,
       latencyThreshold: config.latencyThreshold || 120000,
-      successRateThreshold: config.successRateThreshold || 0.8
+      successRateThreshold: config.successRateThreshold || 0.8,
+      alertHandler: config.alertHandler || null  // 外部注入告警处理器
     });
 
     // 生产引擎引用（外部注入）
     this.productionEngine = null;
     
-    console.log('[StabilityShield] 🛡️ 三层稳定性护盾已初始化');
+    // Prompt构建器（由外部注入，不硬编码）
+    this.promptBuilder = config.promptBuilder || null;
+    
+    console.log('[StabilityShield] 🛡️ 三层稳定性护盾已初始化（通用化版本）');
   }
 
   /**
@@ -53,7 +57,6 @@ class StabilityShield {
   async initialize(productionEngine) {
     this.productionEngine = productionEngine;
     
-    // 注册生产引擎到健康监控
     if (this.productionEngine) {
       this.healthMonitor.registerAgent('ProductionEngine', this.productionEngine);
     }
@@ -72,31 +75,27 @@ class StabilityShield {
     try {
       // ========== Shield 1: 基线模板 ==========
       const baselineMatch = this.baselineRegistry.findBestMatch(requirement);
-      const { category, template, isHotStart } = baselineMatch;
+      const { type, template, isHotStart } = baselineMatch;
 
-      console.log(`[StabilityShield] ${isHotStart ? '🔥 热启动' : '❄️ 冷启动'}: ${category}`);
+      console.log(`[StabilityShield] ${isHotStart ? '🔥 热启动' : '❄️ 冷启动'}`);
 
       let productionInput;
 
       if (isHotStart && template) {
-        // 热启动：基线 + LLM增量
-        productionInput = await this._hotStartProduction(requirement, template);
+        productionInput = await this._hotStartProduction(requirement, template, options);
       } else {
-        // 冷启动：全LLM生成
-        productionInput = await this._coldStartProduction(requirement, category);
+        productionInput = await this._coldStartProduction(requirement, options);
       }
 
       // ========== Shield 2: LLM Gateway ==========
-      // 所有LLM调用都经过Gateway（已在各Agent内部集成）
+      // LLM调用已在底层通过Gateway
       
       // ========== Shield 3: Health Monitor ==========
-      // 注册补偿事务
-      this._registerCompensations();
+      // 补偿事务已由外部注册
 
       // 执行生产
       const result = await this._executeProduction(productionInput);
 
-      // 记录成功
       this.healthMonitor.recordCall('ProductionEngine', true, Date.now() - startTime);
 
       return {
@@ -108,10 +107,8 @@ class StabilityShield {
       };
 
     } catch (error) {
-      // 记录失败
       this.healthMonitor.recordCall('ProductionEngine', false, Date.now() - startTime);
       
-      // 触发补偿
       await this.healthMonitor.compensate('ProductionEngine');
 
       return {
@@ -125,33 +122,34 @@ class StabilityShield {
   /**
    * 热启动：基线 + LLM增量
    */
-  async _hotStartProduction(requirement, template) {
+  async _hotStartProduction(requirement, template, options) {
     console.log('[StabilityShield] 🔥 热启动：加载基线模板 + LLM增量生成');
 
-    // 1. 提取创意字段（需要LLM生成的部分）
-    const deltaRequirement = {
-      scene: requirement.scene,
-      action: requirement.action,
-      dialogue: requirement.dialogue,
-      camera: requirement.camera,
-      mood: requirement.mood,
-      lighting: requirement.lighting,
-      _category: template.category
-    };
+    // 提取增量字段（由外部定义哪些字段需要增量生成）
+    const deltaFields = options.deltaFields || Object.keys(template.deltaFields || {});
+    const deltaRequirement = {};
+    for (const key of deltaFields) {
+      if (requirement[key] !== undefined) {
+        deltaRequirement[key] = requirement[key];
+      }
+    }
 
-    // 2. 通过LLM Gateway生成增量（只生成20%字段）
-    const llmResult = await this.llmGateway.call(
-      this._buildDeltaPrompt(deltaRequirement),
-      { timeout: 120000 }
-    );
+    // 通过LLM Gateway生成增量
+    let llmResult;
+    if (this.promptBuilder && typeof this.promptBuilder.buildDelta === 'function') {
+      const deltaPrompt = this.promptBuilder.buildDelta(deltaRequirement, template);
+      llmResult = await this.llmGateway.call(deltaPrompt, { timeout: 120000 });
+    } else {
+      // 没有外部Prompt构建器，直接传递增量字段
+      llmResult = { success: true, data: deltaRequirement };
+    }
 
     if (!llmResult.success) {
       console.warn('[StabilityShield] ⚠️ LLM增量生成失败，使用基线兜底');
-      // 失败时只返回基线（无增量）
       return this.baselineRegistry.merge(template, {});
     }
 
-    // 3. 合并基线 + LLM增量
+    // 合并基线 + LLM增量
     const merged = this.baselineRegistry.merge(template, llmResult.data);
     
     return merged;
@@ -160,14 +158,17 @@ class StabilityShield {
   /**
    * 冷启动：全LLM生成
    */
-  async _coldStartProduction(requirement, category) {
+  async _coldStartProduction(requirement, options) {
     console.log('[StabilityShield] ❄️ 冷启动：全LLM生成');
 
-    // 全量LLM生成（走Gateway）
-    const llmResult = await this.llmGateway.call(
-      this._buildFullPrompt(requirement),
-      { timeout: 300000 }
-    );
+    let llmResult;
+    if (this.promptBuilder && typeof this.promptBuilder.buildFull === 'function') {
+      const fullPrompt = this.promptBuilder.buildFull(requirement);
+      llmResult = await this.llmGateway.call(fullPrompt, { timeout: 300000 });
+    } else {
+      // 没有外部Prompt构建器，直接传递需求
+      llmResult = { success: true, data: requirement };
+    }
 
     if (!llmResult.success) {
       throw new Error(`冷启动失败: ${llmResult.error}`);
@@ -184,81 +185,27 @@ class StabilityShield {
       throw new Error('ProductionEngine未注入');
     }
 
-    // 这里调用实际的生产引擎
     return await this.productionEngine.produce(input);
   }
 
   /**
-   * 注册基线模板（审核通过后调用）
+   * 注册基线模板（外部审核通过后调用）
+   * @param {string} type - 类型标识（由外部定义）
+   * @param {string} version - 版本号
+   * @param {Object} baseline - 基线数据
+   * @param {Object} metadata - 元数据（由外部提供）
    */
-  async registerBaseline(category, version, projectOutput, approval) {
-    const extracted = this.baselineRegistry.extractFromProject(projectOutput);
-    if (!extracted) {
-      throw new Error('无法从项目输出中提取基线');
-    }
-
-    return this.baselineRegistry.register(category, version, extracted.lockedFields, approval);
+  async registerBaseline(type, version, baseline, metadata) {
+    return this.baselineRegistry.register(type, version, baseline, metadata);
   }
 
   /**
-   * 构建增量Prompt（只生成变化的部分）
+   * 注册补偿事务（由外部调用）
+   * @param {string} stageId - Stage标识
+   * @param {Function} compensateFn - 补偿函数
    */
-  _buildDeltaPrompt(requirement) {
-    return `
-请根据以下需求生成视频镜头的创意字段（只返回变化的字段）：
-
-题材类型: ${requirement._category || 'general'}
-场景描述: ${requirement.scene || '待生成'}
-动作描述: ${requirement.action || '待生成'}
-台词内容: ${requirement.dialogue || '待生成'}
-运镜方式: ${requirement.camera || '待生成'}
-情绪基调: ${requirement.mood || '待生成'}
-灯光设置: ${requirement.lighting || '待生成'}
-
-请只返回以下JSON格式的增量字段：
-{
-  "scene": "...",
-  "action": "...",
-  "dialogue": "...",
-  "camera": "...",
-  "mood": "...",
-  "lighting": "..."
-}
-`;
-  }
-
-  /**
-   * 构建完整Prompt（冷启动）
-   */
-  _buildFullPrompt(requirement) {
-    return `
-请根据以下需求生成完整的视频镜头方案：
-
-${JSON.stringify(requirement, null, 2)}
-
-请返回完整的镜头方案，包含所有必要字段。
-`;
-  }
-
-  /**
-   * 注册补偿事务
-   */
-  _registerCompensations() {
-    // 注册各Stage的补偿方法
-    this.healthMonitor.registerCompensation('SceneDesign', async () => {
-      console.log('[Compensate] 清理SceneDesign产物');
-      // 清理临时文件
-    });
-
-    this.healthMonitor.registerCompensation('PromptFusion', async () => {
-      console.log('[Compensate] 清理PromptFusion产物');
-      // 清理生成的prompt文件
-    });
-
-    this.healthMonitor.registerCompensation('Rendering', async () => {
-      console.log('[Compensate] 清理Rendering产物');
-      // 清理渲染输出
-    });
+  registerCompensation(stageId, compensateFn) {
+    this.healthMonitor.registerCompensation(stageId, compensateFn);
   }
 
   /**

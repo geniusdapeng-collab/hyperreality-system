@@ -17,6 +17,7 @@ const { OpeningTitleOptimizer } = require('./engines/production-engine/agents/op
 const { routeAndEnhance } = require('./skills/hollywood-cinematography/cinematography-skill-router');
 const { FieldGuard } = require('./engines/field-guard');
 const { ErrorCodes } = require('./config/error-codes');
+const { StabilityShield } = require('./shields/stability-shield');
 const fs = require('fs');
 const path = require('path');
 
@@ -52,7 +53,18 @@ class HyperrealitySystem {
     });
     this.postProductionEngine = new PostProductionEngine(options.postProductionEngine);
     this.fieldGuard = new FieldGuard({ strict: true, logPrefix: '[Hyperreality]' });
-    this.version = '2.0.5';
+    
+    // 🛡️ v2.1.5-shield: 三层稳定性护盾
+    this.stabilityShield = new StabilityShield({
+      baselineRegistryDir: options.baselineRegistryDir || path.join(__dirname, './shields/baseline-registry/templates'),
+      primaryModel: options.primaryModel || 'kimi-k2p6',
+      backupModel: options.backupModel || 'kimi-k2p5',
+      cacheEnabled: options.cacheEnabled !== false,
+      llmTimeout: options.llmTimeout || 300000
+    });
+    this.stabilityShield.initialize(this.productionEngine);
+    
+    this.version = '2.1.5-shield';
   }
 
   /**
@@ -172,6 +184,25 @@ class HyperrealitySystem {
         console.log(`      Layer 2: ${Object.keys(engineConfigs.productionEngine).length > 0 ? '✅' : '❌'} 视觉表现配置`);
         console.log(`      Layer 3: ${Object.keys(engineConfigs.renderingEngine).length > 0 ? '✅' : '❌'} 渲染质感配置`);
         console.log(`      Layer 4: ${Object.keys(engineConfigs.postProductionEngine).length > 0 ? '✅' : '❌'} 后期风格配置`);
+        
+        // 🛡️ v2.1.5-shield: 基线热启动判断
+        const baselineMatch = this.stabilityShield.baselineRegistry.findBestMatch({
+          intent,
+          title: metadata.title,
+          characters: metadata.characters,
+          style: requirementList.style
+        });
+        
+        if (baselineMatch.isHotStart && baselineMatch.template) {
+          console.log(`\n🛡️ [稳定性护盾] 热启动模式: 命中基线模板 ${baselineMatch.template.id}`);
+          console.log(`   题材: ${baselineMatch.category} | 已使用${baselineMatch.template.metadata.usageCount}次`);
+          metadata._baseline = baselineMatch.template;
+          metadata._baselineCategory = baselineMatch.category;
+        } else {
+          console.log(`\n🛡️ [稳定性护盾] 冷启动模式: 未命中基线，将全LLM生成`);
+          metadata._baseline = null;
+          metadata._baselineCategory = baselineMatch.category;
+        }
       } else {
         console.log('\n⚠️ [Layer 0] 需求清单生成跳过(调试模式)');
         result.stages.requirementList = { skipped: true };
@@ -430,7 +461,7 @@ class HyperrealitySystem {
         // v2.0.6: 先在FieldGuard之前处理片头字段(避免校验失败阻断)
         const adapter = result.stages?.adapter || {};
         // 【审计修复】统一片头判定,兼容 SC00/S00
-        const openingShot = productionResult.shots.find(s => isOpeningShot(s));
+        let openingShot = productionResult.shots.find(s => isOpeningShot(s));
         if (openingShot) {
           // 如果片头缺少title/subtitle,先用adapter标题兜底
           if (!openingShot.title || openingShot.title === '未命名') {
@@ -449,7 +480,7 @@ class HyperrealitySystem {
 
           // 【v2.1.4-fix11-G】片头优化必须在FieldGuard之前执行,确保片头字段被正确添加
           // 【审计修复】统一片头判定,兼容 SC00/S00
-          const openingShot = productionResult.shots.find(s => isOpeningShot(s));
+          openingShot = productionResult.shots.find(s => isOpeningShot(s));
           if (openingShot) {
             console.log('\n🎬 [OpeningTitleOptimizer] 片头专属字段优化...');
             try {
@@ -516,6 +547,7 @@ class HyperrealitySystem {
                     promptOpening.subtitle = openingShot.subtitle;
                   }
                 }
+              }
             } catch (e) {
               console.warn('   ⚠️ 片头优化失败:', e.message);
               // 【v2.1.4-fix13】异常时也要补全全部 5 个字段,不能留空
