@@ -5,6 +5,11 @@
 
 const path = require('path');
 
+// v2.1.5-refactor: 提取工具函数
+const { safeStringify } = require('./utils/safe-stringify');
+const { CheckpointManager } = require('./utils/checkpoint-manager');
+const { LLMOutputNormalizer } = require('./utils/llm-output-normalizer');
+
 // v2.0.0-LLM-Agent: 导入Agent
 const { SceneDesignAgent } = require('./agents/scene-design-agent');
 const { VisualLanguageAgent } = require('./agents/visual-language-agent');
@@ -189,59 +194,25 @@ class ProductionEngine {
   }
 
   /**
-   * 【新增】增量保存 checkpoint(进程被杀也能恢复部分结果)
-   * 【审计修复·P0】安全序列化：过滤多层循环引用，先写临时文件再原子重命名
+   * 【新增】增量保存 checkpoint（已提取到 utils/checkpoint-manager.js）
+   * 保持向后兼容，内部委托给 CheckpointManager
    */
   async _saveCheckpoint(phase, shots, extra = {}) {
-    try {
-      const fs = require('fs');
-      const dir = this._checkpointDir || path.join(process.cwd(), 'checkpoints');
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const file = path.join(dir, `checkpoint-${phase}.json`);
-      const tmpFile = file + '.tmp';
-      
-      const safeData = this._safeStringify({
-        phase,
-        shots: shots || [],
-        opening: extra.opening || null,
-        llmStats: extra.llmStats || {},
-        savedAt: new Date().toISOString()
-      });
-      
-      fs.writeFileSync(tmpFile, safeData, 'utf8');
-      fs.renameSync(tmpFile, file);
-      
-      // v2.1.5-fix: 写入验证
-      if (!fs.existsSync(file)) {
-        throw new Error(`checkpoint文件写入后不存在: ${file}`);
-      }
-      const stats = fs.statSync(file);
-      if (stats.size === 0) {
-        throw new Error(`checkpoint文件写入后大小为0: ${file}`);
-      }
-      
-      this.log('CHECKPOINT', `✅ ${phase} 已落盘 → ${path.basename(file)} (${stats.size} bytes)`);
-    } catch (e) {
-      this.log('CHECKPOINT', `保存失败(忽略): ${e.message}`);
+    if (!this._checkpointManager) {
+      this._checkpointManager = new CheckpointManager(this._checkpointDir);
+    }
+    const result = this._checkpointManager.save(phase, shots, extra, this.log.bind(this));
+    if (!result.success) {
+      // 保持原有行为：保存失败不抛异常
     }
   }
 
   /**
-   * 【审计修复·P0】安全序列化：用 WeakSet 过滤所有层级的循环引用
+   * 【审计修复·P0】安全序列化（已提取到 utils/safe-stringify.js）
+   * 保持向后兼容，内部委托给提取的工具函数
    */
   _safeStringify(obj) {
-    const seen = new WeakSet();
-    return JSON.stringify(obj, (key, value) => {
-      if (['_blueprint', '_adapter', '_llm', '_engine', '_metadata_raw'].includes(key)) {
-        return undefined;
-      }
-      if (typeof value === 'function') return undefined;
-      if (typeof value === 'object' && value !== null) {
-        if (seen.has(value)) return undefined;
-        seen.add(value);
-      }
-      return value;
-    }, 2);
+    return safeStringify(obj);
   }
 
   /**
@@ -335,90 +306,30 @@ class ProductionEngine {
    */
   /**
    * v2.0.5-彻底修复: LLM Agent输出标准化层
-   * 将LLM Agent的各种输出格式(对象/数组)统一转换为字符串,
-   * 确保与v1.x的_engineerPrompts完全兼容
+   * 已提取到 utils/llm-output-normalizer.js
+   * 保持向后兼容，内部委托给 LLMOutputNormalizer
    */
   _normalizeLLMOutput(shots, blueprint) {
-    return shots.map(shot => {
-      const normalized = { ...shot };
-
-      // 1. timeline: 数组 → 字符串
-      if (Array.isArray(shot.timeline)) {
-        normalized.timelineString = shot.timeline.map(seg => 
-          `${seg.timeRange || ''}: ${seg.cameraMovement || ''} (${seg.purpose || ''})`
-        ).join('; ');
-        // 保留原始数组供内部使用，但添加字符串版本
-      } else if (shot.timeline?.string && typeof shot.timeline.string === 'string') {
-        normalized.timelineString = shot.timeline.string;
-      } else if (typeof shot.timeline === 'string') {
-        normalized.timelineString = shot.timeline;
-      }
-
-      // 2. camera: 对象 → 字符串
-      if (shot.camera && typeof shot.camera === 'object') {
-        if (shot.camera.string && typeof shot.camera.string === 'string') {
-          normalized.cameraString = shot.camera.string;
-        } else {
-          // 从对象构建字符串描述
-          const parts = [];
-          if (shot.camera.shotSize) parts.push(shot.camera.shotSize);
-          if (shot.camera.movement) parts.push(shot.camera.movement);
-          if (shot.camera.lens) parts.push(shot.camera.lens);
-          if (shot.camera.focus) parts.push(shot.camera.focus);
-          normalized.cameraString = parts.join(', ');
-        }
-      } else if (typeof shot.camera === 'string') {
-        normalized.cameraString = shot.camera;
-      }
-
-      // 3. lighting: 对象 → 字符串
-      if (shot.lighting && typeof shot.lighting === 'object') {
-        if (shot.lighting.string && typeof shot.lighting.string === 'string') {
-          normalized.lightingString = shot.lighting.string;
-        } else {
-          const parts = [];
-          if (shot.lighting.keyLight) {
-            const kl = shot.lighting.keyLight;
-            parts.push(`key: ${kl.direction || ''} ${kl.colorTemp || ''}K ${kl.effect || ''}`);
-          }
-          if (shot.lighting.fillLight) {
-            const fl = shot.lighting.fillLight;
-            parts.push(`fill: ${fl.direction || ''} ${fl.colorTemp || ''}K ${fl.effect || ''}`);
-          }
-          if (shot.lighting.special) parts.push(`special: ${shot.lighting.special}`);
-          normalized.lightingString = parts.join(', ');
-        }
-      } else if (typeof shot.lighting === 'string') {
-        normalized.lightingString = shot.lighting;
-      }
-
-      // 4. backgroundSound: 对象 → 字符串
-      if (shot.backgroundSound && typeof shot.backgroundSound === 'object') {
-        if (shot.backgroundSound.string && typeof shot.backgroundSound.string === 'string') {
-          normalized.backgroundSoundString = shot.backgroundSound.string;
-        } else {
-          const parts = [];
-          if (shot.backgroundSound.ambient) parts.push(`AMBIENT: ${shot.backgroundSound.ambient}`);
-          if (shot.backgroundSound.spatial) parts.push(`SPATIAL: ${shot.backgroundSound.spatial}`);
-          if (shot.backgroundSound.intensity) parts.push(`INTENSITY: ${JSON.stringify(shot.backgroundSound.intensity)}`);
-          normalized.backgroundSoundString = parts.join('; ');
-        }
-      }
-
+    const normalized = LLMOutputNormalizer.normalizeShots(shots, blueprint);
+    
+    // 保留原有的角色信息补全逻辑（未提取到独立工具中）
+    return normalized.map((shot, idx) => {
+      const originalShot = shots[idx];
+      
       // 5. 角色信息补全:如果shot没有characters,从blueprint补
-      if (!shot.characters || shot.characters.length === 0) {
-        normalized.characters = blueprint.characters || [];
+      if (!originalShot.characters || originalShot.characters.length === 0) {
+        shot.characters = blueprint.characters || [];
       }
 
       // 6. 角色引用补全:如果characterRef为NONE但有角色,生成描述性引用
-      if ((!shot.characterRef || shot.characterRef === 'NONE') && blueprint.characters && blueprint.characters.length > 0) {
+      if ((!originalShot.characterRef || originalShot.characterRef === 'NONE') && blueprint.characters && blueprint.characters.length > 0) {
         const mainChar = blueprint.characters.find(c => c.role === 'protagonist') || blueprint.characters[0];
         if (mainChar) {
-          normalized.characterRef = `${mainChar.name}: ${mainChar.description || mainChar.persona || 'main character'}`;
+          shot.characterRef = `${mainChar.name}: ${mainChar.description || mainChar.persona || 'main character'}`;
         }
       }
 
-      return normalized;
+      return shot;
     });
   }
 
