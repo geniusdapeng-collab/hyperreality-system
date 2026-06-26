@@ -14,6 +14,7 @@ const { RuleFallbackEngine } = require('./utils/rule-fallback');
 const { QualityGate } = require('./utils/quality-gate');
 const { ContinuityChecker } = require('./utils/continuity-checker');
 const { ShotNormalizer } = require('./utils/shot-normalizer');
+const { PromptBuilder } = require('./utils/prompt-builder');
 
 // v2.0.0-LLM-Agent: 导入Agent
 const { SceneDesignAgent } = require('./agents/scene-design-agent');
@@ -124,6 +125,7 @@ class ProductionEngine {
     this.qualityGate = new QualityGate(this.config);
     this.continuityChecker = new ContinuityChecker();
     this.shotNormalizer = new ShotNormalizer(this.config);
+    this.promptBuilder = new PromptBuilder(this.config);
   }
 
   /**
@@ -1492,10 +1494,10 @@ class ProductionEngine {
         ...filteredShot,
         backgroundSound: bgSoundResult
       };
-      const prompt = this._buildShotPrompt(shotWithSound, blueprint, { cameraStr, lightingStr, timelineStr });
+      const prompt = this.promptBuilder.buildShotPrompt(shotWithSound, blueprint, { cameraStr, lightingStr, timelineStr }, globalNegativePromptInjector);
 
       // 字符计数
-      const promptLength = this._countChars(prompt.fullPrompt);
+      const promptLength = this.promptBuilder.countChars(prompt.fullPrompt);
 
       // v6.37-P1+: 构建标准输出对象(严格按 v6.37 标准字段)
       // 正片 S01+: 14 核心字段 | 片头 S00: + audioLayer + titleOverlay
@@ -1686,407 +1688,6 @@ class ProductionEngine {
    * L9: 质控层(P0必加)- 负面约束/角色一致性
    */
   /**
-   * 构建单个镜头的完整 Prompt(v6.37-P1+: 优先级截断 + 结构化对象)
-   */
-  _buildShotPrompt(shot, blueprint, structuredStrings = {}) {
-    const { cameraStr, lightingStr, timelineStr } = structuredStrings;
-
-    // v2.0.4-fix: 如果 shot 有 fusionText(LLM融合产出),优先使用作为L3-L7基础
-    const hasFusion = shot.fusionText && shot.fusionText.length > 10;
-
-    // v1.2.5: 从blueprint metadata中提取系列信息,控制片头和结尾
-    // 修复:兼容顶层_metadata和config._metadata
-    const _meta = blueprint._metadata || blueprint.config?._metadata || {};
-    const isSeries = _meta.isSeries || false;
-    const episodeNumber = _meta.episodeNumber || 1;
-    const hasOpening = _meta.hasOpening !== false; // 默认true
-    const noNextEpisodePreview = blueprint._metadata?.noNextEpisodePreview || false;
-
-    // 检查当前镜头是否为片头/结尾,根据系列规则调整
-    const isOpeningShot = shot.sceneType === 'opening' || shot.sceneType === 'establish';
-    const isResolutionShot = shot.sceneType === 'resolution';
-
-    // 定义优先级和截断策略(专家反馈)
-    const priorityMap = {
-      'L1_constraint': { priority: 'P0', strategy: 'never' },
-      'L2_base': { priority: 'P0', strategy: 'never' },
-      'L3_scene': { priority: 'P1', strategy: 'keep_core_location' },
-      'L4_character': { priority: 'P0', strategy: 'minimal_anchor' },
-      'L4_action': { priority: 'P1', strategy: 'keep_core_verb' },
-      'L4_dialogue': { priority: 'P0', strategy: 'keep_core_dialogue' },
-      'L5_camera': { priority: 'P1', strategy: 'keep_core_movement' },
-      'L5_timeline': { priority: 'P2', strategy: 'keep_duration_type' },
-      'L6_mood': { priority: 'P2', strategy: 'keyword_list' },
-      'L6_lighting': { priority: 'P1', strategy: 'keep_main_light' },
-      'L7_audio': { priority: 'P1', strategy: 'keep_core_sound' },
-      'L8_internal': { priority: 'P2', strategy: 'truncate' },
-      'L9_negative': { priority: 'P0', strategy: 'keep_top_3' }
-    };
-
-    const parts = [];
-    const partMeta = [];
-
-    // === L1: 约束层(P0必加)===
-    // v1.2.5: 从blueprint.config读取画幅,默认16:9横屏
-    const ratio = blueprint.config?.aspectRatio || '16:9';
-    // v6.6.10-fix: 使用全局负面提示词模块，区分片头/内容镜
-    const isOpening = shot.sceneType === 'opening' || shot.sceneType === 'establish';
-    const negativePrompt = isOpening
-      ? globalNegativePromptInjector.generateForOpeningShot({ maxLength: 250 })
-      : globalNegativePromptInjector.generateForContentShot({ maxLength: 300 });
-    const l1Constraint = `${ratio} cinematic, 24fps cinematic, ${negativePrompt.replace('【负面约束】', '')}`;
-    parts.push(`【约束】${l1Constraint}`);
-    partMeta.push({ id: 'L1_constraint', priority: 'P0' });
-
-    // === L2: 基础层(P0必加)===
-    parts.push('【基础】hyperrealistic, ultra-detailed, high dynamic range, detail in highlights and shadows, film grain, 35mm texture, cinematic film');
-    partMeta.push({ id: 'L2_base', priority: 'P0' });
-
-    // === L3: 空间层(P1)===
-    if (hasFusion) {
-      // v2.0.4-fix: LLM融合段直接放入,包含场景/角色/动作/运镜/灯光/情绪的叙事化描述
-      parts.push(`【场景】${shot.fusionText}`);
-      partMeta.push({ id: 'L3-L7_fusion', priority: 'P1' });
-    } else {
-      if (shot.scene) {
-        parts.push(`【场景】${shot.scene}`);
-        partMeta.push({ id: 'L3_scene', priority: 'P1' });
-      }
-
-      // === L4: 主体层(P0-P1)===
-      if (shot.character && shot.character !== 'NONE') {
-        parts.push(`【角色】${shot.character}`);
-        partMeta.push({ id: 'L4_character', priority: 'P0' });
-      }
-
-      if (shot.action) {
-        parts.push(`【动作】${shot.action}`);
-        partMeta.push({ id: 'L4_action', priority: 'P1' });
-      }
-    }
-
-    // v2.0.4-fix: 注入定妆照引用(characterRef)到prompt中
-    if (shot.characterRef && shot.characterRef !== 'NONE') {
-      parts.push(`【定妆照】${shot.characterRef}`);
-      partMeta.push({ id: 'L4_characterRef', priority: 'P0' });
-    }
-
-    if (shot.dialogueText && shot.dialogueText !== '') {
-      // 【v2.1.4-fix6】台词字段只包含纯台词内容，不包含结构化标签
-      // 使用 shot.dialogueText（纯文本）而非 shot.dialogue（含SPEAKER/TYPE/EMOTION/LIP_SYNC标签）
-      const pureDialogue = shot.dialogueText.replace(/;/g, '；'); // 将分号分隔改为中文分号，更自然
-      parts.push(`"${pureDialogue}"`);
-      partMeta.push({ id: 'L4_dialogue', priority: 'P0' });
-    } else if (shot.dialogue && shot.dialogue !== '') {
-      // 兜底：如果dialogueText不存在，从dialogue提取纯文本
-      const pureDialogue = shot.dialogue.replace(/[^:]+:([^;]+);/g, '$1').replace(/LIP_SYNC:YES/g, '').replace(/;+/g, '；').replace(/^;+|;+$/g, '').trim();
-      if (pureDialogue) {
-        parts.push(`"${pureDialogue}"`);
-        partMeta.push({ id: 'L4_dialogue', priority: 'P0' });
-      }
-    }
-
-    // === L5: 动态层(P1-P2)===
-    // v2.0.5-fix: 确保始终是字符串,防止对象污染prompt
-    const camera = cameraStr || (typeof shot.camera === 'string' ? shot.camera : '');
-    if (camera) {
-      parts.push(`【运镜】${camera}`);
-      partMeta.push({ id: 'L5_camera', priority: 'P1' });
-    }
-
-    const timeline = timelineStr || (typeof shot.timeline === 'string' ? shot.timeline : '');
-    if (timeline) {
-      parts.push(`【时间轴】${timeline}`);
-      partMeta.push({ id: 'L5_timeline', priority: 'P2' });
-    }
-
-    // === L6: 风格层(P1-P2)===
-    if (shot.mood) {
-      parts.push(`【情绪】${shot.mood}`);
-      partMeta.push({ id: 'L6_mood', priority: 'P2' });
-    }
-
-    const lighting = lightingStr || (typeof shot.lighting === 'string' ? shot.lighting : '');
-    if (lighting) {
-      parts.push(`【灯光】${lighting}`);
-      partMeta.push({ id: 'L6_lighting', priority: 'P1' });
-    }
-
-    // === L7: 音频层(P1)===
-    // v6.37-P1+: 使用字符串版本(避免对象输出)
-    const bgSound = shot.backgroundSound?.string || shot.backgroundSound;
-    if (bgSound && typeof bgSound === 'string') {
-      parts.push(`【音频】${bgSound}`);
-      partMeta.push({ id: 'L7_audio', priority: 'P1' });
-    }
-
-    const audioLayer = shot.audioLayer?.string || shot.audioLayer;
-    if (audioLayer && audioLayer !== '' && typeof audioLayer === 'string') {
-      parts.push(`【音频层】${audioLayer}`);
-      partMeta.push({ id: 'L7_audio', priority: 'P1' });
-    }
-
-    // === L8: 内部层(P2)===
-    if (shot.physicsLayer && shot.physicsLayer !== '') {
-      parts.push(`【物理】${shot.physicsLayer}`);
-      partMeta.push({ id: 'L8_internal', priority: 'P2' });
-    }
-
-    if (shot.colorScience && shot.colorScience !== '') {
-      parts.push(`【色彩】${shot.colorScience}`);
-      partMeta.push({ id: 'L8_internal', priority: 'P2' });
-    }
-
-    if (shot.renderStyle && shot.renderStyle !== '') {
-      parts.push(`【渲染】${shot.renderStyle}`);
-      partMeta.push({ id: 'L8_internal', priority: 'P2' });
-    }
-
-    if (shot.directorStyle && shot.directorStyle !== '') {
-      parts.push(`【导演】${shot.directorStyle}`);
-      partMeta.push({ id: 'L8_internal', priority: 'P2' });
-    }
-
-    // === L9: 质控层(P0)===
-    if (shot.worldId && shot.worldId !== 'default') {
-      parts.push(`${shot.worldId} world`);
-    }
-
-    // === L9: 质控层(P0)===
-    const negativeConstraints = [
-      '【负面约束】no watermark, no logo, no text overlay, no subtitle, no caption, no text anywhere in frame, no readable characters, no alphabets, no Chinese characters',
-      '【负面约束】no text on walls, no text on objects, no text on documents, no text on signs, no text on labels, no text on screens, no text on clothing, no text in background',
-      '【负面约束】no brand logos with text, no text in medical charts, no text on posters, no text on billboards, no text on packaging, no handwritten text, no printed text, no signage text',
-      '【负面约束】no text overlays, no UI elements with text, no text on book covers, no text on medicine bottles, no text on report forms, no text on devices, no text on badges, no text on nameplates',
-      '【负面约束】no text on doors, no text on windows, no text on floors, no text on ceilings',
-      '【负面约束】blurry, low resolution, pixelated, compression artifacts',
-      '【负面约束】cartoon, anime, illustration, 3D render look, CGI appearance, plastic look',
-      '【负面约束】distorted perspective, impossible geometry, floating objects',
-      '【负面约束】flat lighting, overexposed, crushed blacks, double shadows',
-      '【负面约束】unnatural physics, fake water, static water, cardboard texture, plastic foliage'
-    ];
-
-    if (shot.characters?.length > 0 || shot.character) {
-      negativeConstraints.push('【负面约束】distorted face, deformed face, extra fingers, plastic skin, waxy skin, unnatural pose');
-    }
-
-    if (shot.worldId && shot.worldId !== 'default') {
-      negativeConstraints.push('【负面约束】natural eye colors only, no metallic shine');
-    }
-    parts.push(...negativeConstraints);
-    partMeta.push({ id: 'L9_negative', priority: 'P0' });
-
-    if (shot.characters?.length > 0) {
-      parts.push(`【角色一致性】保持${shot.characters.join('、')}形象一致,杜绝分身重影`);
-    }
-
-    const fullPrompt = parts.join(',');
-
-    // v6.37-P1+: 优先级截断(专家反馈)
-    const truncated = this._truncateWithPriority(fullPrompt, this.config.maxPromptLength, partMeta, parts);
-
-    // 【v2.1.4-patch5】兜底过滤：最终prompt中任何残留的竖杠全部过滤，防止Seedance渲染乱码
-    const stripPipes = (str) => str.replace(/\|/g, '; ');
-
-    return {
-      fullPrompt: stripPipes(truncated),
-      rawPrompt: fullPrompt, // 保留原始prompt用于调试
-      parts,
-      partMeta,
-      wasTruncated: fullPrompt.length !== truncated.length,
-      audioIncluded: !!shot.backgroundSound
-    };
-  }
-
-  /**
-   * v1.2.7-fix-A3: 优先级截断(保持 L1-L9 原始顺序)
-   * 修复:截断时不再重排 parts,保持 v6.37 规定的融合顺序
-   */
-  _truncateWithPriority(prompt, maxLength, partMeta, parts) {
-    if (prompt.length <= maxLength) return prompt;
-
-    // 阶段1: 最小化所有 P2 部分(保持原位)
-    let workingParts = parts.map((p, i) => {
-      if (partMeta[i]?.priority === 'P2') return this._minimizePart(p, 'P2');
-      return p;
-    });
-    let result = workingParts.join(',');
-    if (result.length <= maxLength) return result;
-
-    // 阶段2: 最小化所有 P1 部分(P2 已最小化,保持原位)
-    workingParts = parts.map((p, i) => {
-      if (partMeta[i]?.priority === 'P2') return this._minimizePart(p, 'P2');
-      if (partMeta[i]?.priority === 'P1') return this._minimizePart(p, 'P1');
-      return p;
-    });
-    result = workingParts.join(',');
-    if (result.length <= maxLength) return result;
-
-    // 阶段3: 逐个移除 P2 部分(从后往前移除,保持其余顺序)
-    const p2Indices = partMeta
-      .map((m, i) => m?.priority === 'P2' ? i : -1)
-      .filter(i => i >= 0);
-
-    for (const idx of p2Indices.slice().reverse()) {
-      workingParts[idx] = null; // 标记移除
-      result = workingParts.filter(p => p !== null).join(',');
-      if (result.length <= maxLength) return result;
-    }
-
-    // 阶段4: 逐个移除 P1 部分(从后往前)
-    const p1Indices = partMeta
-      .map((m, i) => m?.priority === 'P1' ? i : -1)
-      .filter(i => i >= 0);
-
-    for (const idx of p1Indices.slice().reverse()) {
-      workingParts[idx] = null;
-      result = workingParts.filter(p => p !== null).join(',');
-      if (result.length <= maxLength) return result;
-    }
-
-    // 阶段5: 最后兜底--保留前N个字符(P0字段在前,至少保留 L1+L2)
-    return result.substring(0, maxLength);
-  }
-
-  /**
-   * 最小化部分(按策略)
-   * v1.2.7-fix-A6: P1 用英文逗号和中文逗号都尝试分割
-   */
-  _minimizePart(part, priority) {
-    if (priority === 'P2') {
-      // P2: 只保留前20字符
-      return part.substring(0, 20) + '...';
-    }
-    if (priority === 'P1') {
-      // P1: 保留核心(第一个逗号前的内容,兼容中英文逗号)
-      const core = part.split(/[,,]/)[0];
-      return core.length < part.length ? core + '...' : part;
-    }
-    return part;
-  }
-
-  /**
-   * 🔊 v2.0-B+: 截断保护(保留音频层和角色一致性)
-   */
-  _truncatePromptWithAudioProtection(prompt, maxLength) {
-    if (prompt.length <= maxLength) return prompt;
-
-    // 保护末尾:角色一致性 + 音频层(如果存在)
-    const lastPart = '角色一致性:保持形象一致,杜绝分身重影';
-
-    // 检查是否包含音频描述
-    const hasAudio = prompt.includes('伴随') && prompt.includes('氛围弥漫');
-    let audioPart = '';
-    if (hasAudio) {
-      const audioMatch = prompt.match(/伴随[^,]*,[^,]*氛围弥漫[^,]*(?:,[^,]*声画精准同步[^,]*)?/);
-      if (audioMatch) {
-        audioPart = audioMatch[0];
-      }
-    }
-
-    const protectParts = [lastPart];
-    if (audioPart) protectParts.unshift(audioPart);
-
-    const protectText = protectParts.join(',');
-    const availableLength = maxLength - protectText.length - 2;
-
-    if (availableLength > 50) {
-      return prompt.substring(0, availableLength) + ',' + protectText;
-    }
-
-    return prompt.substring(0, maxLength);
-  }
-
-  /**
-   * 截断 Prompt(旧方法,保留向后兼容)
-   */
-  _truncatePrompt(prompt, maxLength) {
-    return this._truncatePromptWithAudioProtection(prompt, maxLength);
-  }
-
-  /**
-   * 构建定妆照引用
-   */
-  _buildImageReferences(shot, blueprint) {
-    const refs = [];
-    const characters = blueprint.characters || [];
-
-    for (const cid of (shot.characters || [])) {
-      const char = characters.find(c => c.character_id === cid);
-      if (!char) continue;
-
-      const portraits = char.portraits || {};
-
-      // 选择最佳角度
-      const angle = this._selectBestAngle(shot.sceneType, Object.keys(portraits));
-      const path = portraits[angle];
-
-      if (path) {
-        refs.push({
-          characterId: cid,
-          characterName: char.name,
-          angle,
-          path,
-          description: this._buildImageDescription(char, angle)
-        });
-      }
-    }
-
-    return refs;
-  }
-
-  /**
-   * 选择最佳角度
-   */
-  _selectBestAngle(sceneType, availableAngles) {
-    if (!availableAngles || availableAngles.length === 0) return null;
-
-    const priority = {
-      'opening': ['front', 'threeQuarter', 'closeup'],
-      'establishing': ['threeQuarter', 'front', 'closeup'],
-      'conflict': ['closeup', 'threeQuarter', 'front'],
-      'emotional_climax': ['closeup', 'front', 'threeQuarter'],
-      'resolution': ['threeQuarter', 'front', 'closeup']
-    };
-
-    const preferred = priority[sceneType] || ['threeQuarter', 'front', 'closeup'];
-
-    for (const angle of preferred) {
-      if (availableAngles.includes(angle)) return angle;
-    }
-
-    return availableAngles[0];
-  }
-
-  /**
-   * 构建定妆照描述
-   */
-  _buildImageDescription(character, angle) {
-    const angleDesc = {
-      'front': '正面',
-      'threeQuarter': '侧面',
-      'closeup': '近景',
-      'side': '另一侧面'
-    };
-
-    const features = character.visual_anchor?.core_features || [];
-    return `${character.name}${angleDesc[angle] || angle},${features.join(',')},超写实`;
-  }
-
-  /**
-   * v6.37-P0: 字符计数
-   */
-  _countChars(text) {
-    if (!text) return 0;
-    // 计算字符数(包括中英文)
-    let count = 0;
-    for (const char of text) {
-      count++;
-    }
-    return count;
-  }
-
-  /**
    * Stage 6: 片头生成
    * v6.37-P0: 产出符合片头结构(15字段)
    */
@@ -2163,13 +1764,13 @@ class ProductionEngine {
     };
 
     // 构建片头 Prompt(传入结构化字符串)
-    const prompt = this._buildShotPrompt(openingData, blueprint, {
+    const prompt = this.promptBuilder.buildShotPrompt(openingData, blueprint, {
       cameraStr: openingData.cameraString,
       lightingStr: openingData.lightingString,
       timelineStr: openingData.timelineString
-    });
+    }, globalNegativePromptInjector);
     openingData.prompt = prompt.fullPrompt;
-    openingData.promptCharCount = this._countChars(prompt.fullPrompt);
+    openingData.promptCharCount = this.promptBuilder.countChars(prompt.fullPrompt);
 
     return {
       generated: true,
