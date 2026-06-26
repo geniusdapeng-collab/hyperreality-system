@@ -73,6 +73,30 @@ class ProductionEngine {
     this.logs = [];
     this._initResourceGuard();
     this._initModules();
+    
+    // v2.1.5-refactor: 初始化 Phase 执行器（渐进式重构）
+    this._initPhases();
+  }
+
+  /**
+   * v2.1.5-refactor: 初始化 Phase 执行器
+   * 通过环境变量 HYPERREALITY_USE_PHASES 控制是否启用新架构
+   */
+  _initPhases() {
+    const usePhases = process.env.HYPERREALITY_USE_PHASES === 'true';
+    if (!usePhases) return;
+    
+    const { Phase1SceneDesign } = require('./phases/phase-1-scene-design');
+    this.phase1 = new Phase1SceneDesign({
+      agents: this.agents,
+      logFn: this.log.bind(this),
+      saveCheckpoint: this._saveCheckpoint.bind(this),
+      canAfford: this._canAfford.bind(this),
+      budgetRemaining: this._budgetRemaining.bind(this),
+      checkMemory: this._checkMemory.bind(this),
+      cloneShots: this._cloneShots.bind(this),
+      mergeShots: this._mergeShotsByShotId.bind(this)
+    });
   }
 
   /**
@@ -431,7 +455,21 @@ class ProductionEngine {
       }
 
       // ----- Phase 1:SceneDesign ∥ OpeningDesign -----
-      if (startPhase <= 1) {
+      // v2.1.5-refactor: 条件使用新 Phase 架构
+      if (this.phase1) {
+        // 新架构：使用 Phase1SceneDesign 执行器
+        const phase1Result = await this.phase1.execute({ 
+          shots: currentShots, 
+          result, 
+          adaptedBlueprint 
+        });
+        if (phase1Result.success) {
+          currentShots = phase1Result.shots;
+        } else {
+          phase1Failed = true;
+        }
+      } else if (startPhase <= 1) {
+      // 旧架构：直接内嵌（保持原有代码）
       try {
         if (!this._canAfford(140000)) {
           this.log('PHASE-1', `⚠️ 预算不足(剩${this._budgetRemaining()}ms),保存当前结果退出,下次续跑`);
