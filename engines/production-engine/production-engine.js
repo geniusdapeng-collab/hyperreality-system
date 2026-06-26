@@ -89,6 +89,7 @@ class ProductionEngine {
     const { Phase1SceneDesign } = require('./phases/phase-1-scene-design');
     const { Phase2VisualAudio } = require('./phases/phase-2-visual-audio');
     const { Phase3PromptFusion } = require('./phases/phase-3-prompt-fusion');
+    const { Phase35FieldQuality } = require('./phases/phase-3-5-field-quality');
     
     const commonOptions = {
       agents: this.agents,
@@ -104,6 +105,11 @@ class ProductionEngine {
     this.phase1 = new Phase1SceneDesign(commonOptions);
     this.phase2 = new Phase2VisualAudio(commonOptions);
     this.phase3 = new Phase3PromptFusion(commonOptions);
+    this.phase35 = new Phase35FieldQuality({
+      ...commonOptions,
+      llmModel: this.llmModel,
+      globalDeadline: this._globalDeadline
+    });
   }
 
   /**
