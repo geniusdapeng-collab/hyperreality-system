@@ -146,7 +146,7 @@ async function runTest() {
   try {
     const fs = require('fs');
     const path = require('path');
-    const outputDir = '/tmp/hyperreality-test';
+    const outputDir = process.env.TEST_OUTPUT_DIR || './output/tests/hyperreality-test';
     
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });

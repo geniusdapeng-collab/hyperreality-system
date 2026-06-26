@@ -25,7 +25,7 @@ class RenderingEngine {
       apiUrl: options.apiUrl || 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
       maxConcurrent: options.maxConcurrent || 3,
       charactersDir: options.charactersDir || path.join(__dirname, '../../../characters'),
-      outputDir: options.outputDir || '/tmp/hyperreality-output',
+      outputDir: options.outputDir || process.env.OUTPUT_DIR || './output/hyperreality-output',
       ...options
     };
 

@@ -118,7 +118,7 @@ async function runTest() {
   console.log();
 
   const engine = new PostProductionEngine({
-    outputDir: '/tmp/hyperreality-test-post',
+    outputDir: process.env.TEST_OUTPUT_DIR || './output/tests/hyperreality-test-post',
     enableSubtitles: true,
     enableDanmaku: true,
     enableMusic: true,
@@ -252,7 +252,7 @@ async function runTest() {
   }
 
   // 保存测试报告
-  const reportPath = '/tmp/hyperreality-test-post/report.md';
+  const reportPath = (process.env.TEST_OUTPUT_DIR || './output/tests/hyperreality-test-post') + '/report.md';
   fs.writeFileSync(reportPath, report);
   
   // v2.1.5-fix: 写入验证

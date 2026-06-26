@@ -55,7 +55,7 @@ const IDENTITY_INTRO_TEMPLATES = [
 class PostProductionEngine {
   constructor(options = {}) {
     this.config = {
-      outputDir: options.outputDir || '/tmp/hyperreality-post',
+      outputDir: options.outputDir || process.env.OUTPUT_DIR || './output/hyperreality-post',
       hyperframesBin: options.hyperframesBin || 'npx hyperframes',
       musicSource: options.musicSource || 'pixabay',
       enableSubtitles: options.enableSubtitles !== false,      // 默认开启字幕

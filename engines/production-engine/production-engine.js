@@ -50,7 +50,7 @@ class ProductionEngine {
       maxPromptLength: 12000, // 【审计修复】与 config/prompt-length.js 保持一致
       targetPromptLength: 12000, // 【审计修复】与 config/prompt-length.js 保持一致
       referenceImageCount: 2,
-      outputDir: options.outputDir || '/tmp/hyperreality-output',
+      outputDir: options.outputDir || process.env.OUTPUT_DIR || './output/hyperreality-output',
       ...options
     };
 
