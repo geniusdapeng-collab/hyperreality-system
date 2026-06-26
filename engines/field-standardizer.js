@@ -287,7 +287,7 @@ const CRITICAL_FIELDS = {
 };
 
 function deepClone(obj) {
-  // v2.1.5-audit: 使用 WeakMap 防止循环引用，支持特殊类型
+  // v2.1.5-fix: 使用 WeakMap 防止循环引用，支持特殊类型
   const seen = new WeakMap();
   const clone = (value) => {
     if (value === null || typeof value !== 'object') return value;

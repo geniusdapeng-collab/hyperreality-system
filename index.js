@@ -454,18 +454,18 @@ class HyperrealitySystem {
                 openingShot.title = optimized.title_content || openingShot.title;
                 openingShot.subtitle = optimized.subtitle_content || openingShot.subtitle;
 
-                // v2.1.5-fix: 同步更新 prompts 数组中的片头镜头
-                const promptIdx = productionResult.prompts.findIndex(p => isOpeningShot(p));
-                if (promptIdx >= 0) {
-                  const promptShot = productionResult.prompts[promptIdx];
-                  promptShot.title_content = openingShot.title_content;
-                  promptShot.subtitle_content = openingShot.subtitle_content;
-                  promptShot.title_animation = openingShot.title_animation;
-                  promptShot.title_font_design = openingShot.title_font_design;
-                  promptShot.opening_audio_design = openingShot.opening_audio_design;
-                  promptShot.title = openingShot.title;
-                  promptShot.subtitle = openingShot.subtitle;
-                  console.log('   ✅ prompts 片头字段已同步');
+                // v2.1.5-fix: 同步到 prompts[0]，确保双数组一致
+                if (productionResult.prompts && productionResult.prompts.length > 0) {
+                  const promptOpening = productionResult.prompts.find(p => isOpeningShot(p));
+                  if (promptOpening) {
+                    promptOpening.title_content = optimized.title_content;
+                    promptOpening.subtitle_content = optimized.subtitle_content;
+                    promptOpening.title_animation = optimized.title_animation;
+                    promptOpening.title_font_design = optimized.title_font_design;
+                    promptOpening.opening_audio_design = optimized.opening_audio_design;
+                    promptOpening.title = optimized.title_content || promptOpening.title;
+                    promptOpening.subtitle = optimized.subtitle_content || promptOpening.subtitle;
+                  }
                 }
 
                 console.log('   ✅ 片头优化完成');
@@ -484,20 +484,19 @@ class HyperrealitySystem {
                 openingShot.title = openingShot.title_content;
                 openingShot.subtitle = openingShot.subtitle_content;
 
-                // v2.1.5-fix: 降级时同步 prompts
-                const promptIdx = productionResult.prompts.findIndex(p => isOpeningShot(p));
-                if (promptIdx >= 0) {
-                  const promptShot = productionResult.prompts[promptIdx];
-                  promptShot.title_content = openingShot.title_content;
-                  promptShot.subtitle_content = openingShot.subtitle_content;
-                  promptShot.title_animation = openingShot.title_animation;
-                  promptShot.title_font_design = openingShot.title_font_design;
-                  promptShot.opening_audio_design = openingShot.opening_audio_design;
-                  promptShot.title = openingShot.title;
-                  promptShot.subtitle = openingShot.subtitle;
-                  console.log('   ✅ prompts 片头降级字段已同步');
+                // v2.1.5-fix: 降级分支也同步到 prompts
+                if (productionResult.prompts && productionResult.prompts.length > 0) {
+                  const promptOpening = productionResult.prompts.find(p => isOpeningShot(p));
+                  if (promptOpening) {
+                    promptOpening.title_content = openingShot.title_content;
+                    promptOpening.subtitle_content = openingShot.subtitle_content;
+                    promptOpening.title_animation = openingShot.title_animation;
+                    promptOpening.title_font_design = openingShot.title_font_design;
+                    promptOpening.opening_audio_design = openingShot.opening_audio_design;
+                    promptOpening.title = openingShot.title;
+                    promptOpening.subtitle = openingShot.subtitle;
+                  }
                 }
-              }
             } catch (e) {
               console.warn('   ⚠️ 片头优化失败:', e.message);
               // 【v2.1.4-fix13】异常时也要补全全部 5 个字段,不能留空
@@ -507,18 +506,16 @@ class HyperrealitySystem {
               openingShot.title_font_design = openingShot.title_font_design || '粗体无衬线字体,白色,带微阴影';
               openingShot.opening_audio_design = openingShot.opening_audio_design || '环境音渐起,配合标题入场';
 
-              // v2.1.5-fix: 异常时同步 prompts
-              const promptIdx = productionResult.prompts.findIndex(p => isOpeningShot(p));
-              if (promptIdx >= 0) {
-                const promptShot = productionResult.prompts[promptIdx];
-                promptShot.title_content = openingShot.title_content;
-                promptShot.subtitle_content = openingShot.subtitle_content;
-                promptShot.title_animation = openingShot.title_animation;
-                promptShot.title_font_design = openingShot.title_font_design;
-                promptShot.opening_audio_design = openingShot.opening_audio_design;
-                promptShot.title = openingShot.title;
-                promptShot.subtitle = openingShot.subtitle;
-                console.log('   ✅ prompts 片头异常字段已同步');
+              // v2.1.5-fix: 异常分支也同步到 prompts
+              if (productionResult.prompts && productionResult.prompts.length > 0) {
+                const promptOpening = productionResult.prompts.find(p => isOpeningShot(p));
+                if (promptOpening) {
+                  promptOpening.title_content = openingShot.title_content;
+                  promptOpening.subtitle_content = openingShot.subtitle_content;
+                  promptOpening.title_animation = openingShot.title_animation;
+                  promptOpening.title_font_design = openingShot.title_font_design;
+                  promptOpening.opening_audio_design = openingShot.opening_audio_design;
+                }
               }
             }
           }
