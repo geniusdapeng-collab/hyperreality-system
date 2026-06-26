@@ -13,6 +13,7 @@ const { ContentBoundaryGuard } = require('./utils/content-boundary-guard');
 const { RuleFallbackEngine } = require('./utils/rule-fallback');
 const { QualityGate } = require('./utils/quality-gate');
 const { ContinuityChecker } = require('./utils/continuity-checker');
+const { ShotNormalizer } = require('./utils/shot-normalizer');
 
 // v2.0.0-LLM-Agent: 导入Agent
 const { SceneDesignAgent } = require('./agents/scene-design-agent');
@@ -122,6 +123,7 @@ class ProductionEngine {
     });
     this.qualityGate = new QualityGate(this.config);
     this.continuityChecker = new ContinuityChecker();
+    this.shotNormalizer = new ShotNormalizer(this.config);
   }
 
   /**
@@ -924,10 +926,10 @@ class ProductionEngine {
       const sceneDescription = this._buildFiveDimensionScene(scene, worldSetting);
 
       // v6.37-P0: 构建 mood(3-5情绪关键词)
-      const mood = this._buildMood(scene);
+      const mood = this.shotNormalizer.buildMood(scene);
 
       // v6.37-P0: 构建 action(核心动词+交互目标)
-      const action = this._buildAction(scene);
+      const action = this.shotNormalizer.buildAction(scene);
 
       return {
         shotId: scene.scene_id || `S${String(index + 1).padStart(2, '0')}`,
@@ -953,7 +955,7 @@ class ProductionEngine {
         // v6.37-P0: 角色(极简锚点)
         // 【v2.1.4-patch5】将 | 改为逗号,避免Seedance渲染乱码
         character: characterAnchors.join(', '),
-        characterRef: this._buildCharacterRef(scene, characters),
+        characterRef: this.shotNormalizer.buildCharacterRef(scene, characters),
 
         // v6.37-P0: 动作
         action: action,
@@ -1070,189 +1072,6 @@ class ProductionEngine {
   /**
    * v6.37-P0: 构建 mood(3-5情绪关键词)
    */
-  /**
-   * v6.37-P0: 构建 mood(3-5情绪关键词)
-   * B8-fix: 优先从 scene 动态提取,兜底用默认映射
-   */
-  _buildMood(scene) {
-    // B8-fix: 优先使用 LLM 生成的情绪数据
-    if (scene.emotional_target) {
-      const et = scene.emotional_target;
-      const moods = [];
-      // 从 emotional_target 的 valence/arousal 推断情绪
-      if (et.valence > 0.5) moods.push('hopeful', 'positive');
-      else if (et.valence < -0.3) moods.push('tense', 'serious');
-      else moods.push('neutral', 'calm');
-
-      if (et.arousal > 0.7) moods.push('intense', 'dramatic');
-      else if (et.arousal < 0.3) moods.push('peaceful', 'gentle');
-
-      // 补充 scene 自带的情绪标签
-      if (scene.mood_tags && Array.isArray(scene.mood_tags)) {
-        moods.push(...scene.mood_tags.slice(0, 2));
-      }
-
-      if (moods.length >= 3) return moods.slice(0, 5).join(', ');
-    }
-
-    // 兜底:按场景类型映射
-    const moodMap = {
-      'opening': 'epic, mysterious, awe-inspiring',
-      'establishing': 'mysterious, anticipation, wonder',
-      'conflict': 'tense, determined, brave, confrontational',
-      'emotional_climax': 'epic, emotional, powerful, cathartic',
-      'resolution': 'peaceful, warm, nostalgic, hopeful',
-      'discovery': 'curious, excited, surprised, wondrous',
-      'transition': 'flowing, continuous, seamless'
-    };
-
-    return moodMap[scene.scene_type] || 'neutral, calm, steady';
-  }
-
-  /**
-   * v6.37-P0: 构建 action(核心动词+交互目标)
-   * B8-fix: 优先从 scene 动态提取
-   */
-  _buildAction(scene) {
-    // B8-fix: 优先使用 scene 自带的 action/visual_notes
-    if (scene.action && scene.action.length > 5) return scene.action;
-    if (scene.visual_notes && scene.visual_notes.length > 5) return scene.visual_notes;
-
-    // 从 dialogue 推断动作
-    if (scene.dialogue?.lines?.[0]?.text) {
-      const firstLine = scene.dialogue.lines[0].text;
-      // 根据台词情绪推断基础动作
-      const emotion = scene.dialogue.lines[0].emotion || '';
-      if (emotion.includes('紧张') || emotion.includes('tense')) {
-        return 'tense posture, direct gaze, deliberate movement';
-      }
-      if (emotion.includes('兴奋') || emotion.includes('excited')) {
-        return 'animated gesture, energetic movement, expressive';
-      }
-      return 'speaking to camera, clear hand gestures, professional delivery';
-    }
-
-    // 兜底:按场景类型映射
-    const actionMap = {
-      'opening': 'establishing shot, camera slowly descending through atmospheric layers',
-      'establishing': 'standing in scene, observing and explaining with focused gaze',
-      'conflict': 'confrontation stance, direct eye contact, tension building in posture',
-      'emotional_climax': 'dramatic gesture, emotional peak, decisive movement',
-      'resolution': 'gentle release, returning to calm, peaceful closure',
-      'discovery': 'leaning forward, reaching out, examining with curiosity'
-    };
-
-    return actionMap[scene.scene_type] || 'neutral stance, steady breathing';
-  }
-
-  /**
-   * v1.2.7-fix-A2: 构建角色定妆照引用
-   * 修复:优先使用真实定妆照路径,而非凭空生成
-   */
-  _buildCharacterRef(scene, characters) {
-    const fs = require('fs');
-    const path = require('path');
-
-    const refs = (scene.characters || []).map(cid => {
-      // 先通过 character_id 查找角色
-      let char = characters.find(c => c.character_id === cid);
-      // 如果没找到,再通过 name 查找(scene.characters 可能存储的是中文名)
-      if (!char) {
-        char = characters.find(c => c.name === cid);
-      }
-      if (!char) return null;
-
-      // v1.2.7-fix-A2: 优先使用角色已有的真实定妆照路径
-      const existingPaths = [];
-
-      // 来源1: visual_anchor.reference_images(LLM生成或角色覆盖注入的)
-      const refImages = char.visual_anchor?.reference_images || [];
-      if (Array.isArray(refImages) && refImages.length > 0) {
-        existingPaths.push(...refImages.filter(p => p && typeof p === 'string'));
-      }
-
-      // 来源2: portraits 对象(adapter 解析的真实文件路径)
-      if (char.portraits && typeof char.portraits === 'object') {
-        const portraitPaths = Object.values(char.portraits).filter(p => p && typeof p === 'string');
-        existingPaths.push(...portraitPaths);
-      }
-
-      // 来源3: portraitPaths 数组(用户直接传入的)
-      if (Array.isArray(char.portraitPaths)) {
-        existingPaths.push(...char.portraitPaths.filter(p => p && typeof p === 'string'));
-      }
-
-      // 去重
-      const uniquePaths = [...new Set(existingPaths)];
-
-      if (uniquePaths.length > 0) {
-        // 有真实路径,直接使用
-        return `${char.name}: ${uniquePaths.join(', ')}`;
-      }
-
-      // 兜底:检查默认目录是否有定妆照文件(支持递归子目录搜索)
-      const charDir = char.character_id || cid;
-      const defaultAngles = ['front', 'profile', 'three-quarter', 'closeup', 'side', 'threeQuarter'];
-      const baseDir = this.config?.charactersDir || 'characters';
-      const foundPaths = [];
-
-      console.log(`[_buildCharacterRef] 搜索定妆照: charDir=${charDir}, baseDir=${baseDir}`);
-
-      // v2.1.5-fix: 递归搜索所有子目录
-      const searchDirRecursive = (dir) => {
-        try {
-          const entries = fs.readdirSync(dir, { withFileTypes: true });
-          for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-              // 递归搜索子目录
-              searchDirRecursive(fullPath);
-            } else if (entry.isFile()) {
-              // 检查文件是否匹配角色和角度
-              const ext = path.extname(entry.name).toLowerCase();
-              if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) continue;
-              
-              const basename = path.basename(entry.name, ext);
-              // 匹配规则: 文件名包含角色ID或角色名，且包含角度名称
-              const isMatch = (basename.includes(charDir) || basename.includes(char.name)) &&
-                defaultAngles.some(angle => basename.includes(angle));
-              
-              if (isMatch) {
-                const relativePath = path.relative(baseDir, fullPath);
-                foundPaths.push(`image://characters/${relativePath}`);
-                console.log(`[_buildCharacterRef] 找到定妆照: ${fullPath}`);
-              }
-            }
-          }
-        } catch (e) {
-          // 目录不存在或无权访问，跳过
-        }
-      };
-
-      // 从角色专属目录开始搜索
-      const charBaseDir = path.join(baseDir, charDir);
-      if (fs.existsSync(charBaseDir)) {
-        searchDirRecursive(charBaseDir);
-      }
-
-      // 同时搜索 portraits 子目录
-      const portraitsDir = path.join(baseDir, charDir, 'portraits');
-      if (fs.existsSync(portraitsDir)) {
-        searchDirRecursive(portraitsDir);
-      }
-
-      if (foundPaths.length > 0) {
-        return `${char.name}: ${foundPaths.join(', ')}`;
-      }
-
-      // 最终兜底:标记为无定妆照(而非虚构路径)
-      console.warn(`[ProductionEngine] ⚠️ 角色 ${char.name}(${cid}) 无定妆照,characterRef 标记为 NONE`);
-      return null;
-    }).filter(Boolean);
-
-    return refs.join(', ') || 'NONE';
-  }
-
   /**
    * Stage 2: 时长分配(精细化)
    * v6.37-P0: 新增 timeline 字段
@@ -1665,7 +1484,7 @@ class ProductionEngine {
           string: filteredShot.backgroundSoundString
         };
       } else {
-        bgSoundResult = this._buildBackgroundSound(filteredShot);
+        bgSoundResult = this.shotNormalizer.buildBackgroundSound(filteredShot);
       }
 
       // v2.0.5-彻底修复: 构建shotWithSound供_buildShotPrompt使用
@@ -1744,8 +1563,8 @@ class ProductionEngine {
       const hasOpening = isSeries ? (episodeNumber === 1) : true;
 
       if (filteredShot.sceneType === 'opening' && hasOpening) {
-        const audioLayer = this._buildAudioLayer(filteredShot);
-        const titleOverlay = this._buildTitleOverlay(blueprint);
+        const audioLayer = this.shotNormalizer.buildAudioLayer(filteredShot);
+        const titleOverlay = this.shotNormalizer.buildTitleOverlay(blueprint);
         standardOutput.audioLayer = audioLayer.object;
         standardOutput.audioLayerString = audioLayer.string;
         standardOutput.titleOverlay = titleOverlay.object;
@@ -1772,111 +1591,6 @@ class ProductionEngine {
     };
 
     return actionMap[shot.sceneType] || '嘴部自然闭合';
-  }
-
-  /**
-   * v6.37-P0: 构建 backgroundSound 字段(三段式)
-   */
-  _buildBackgroundSound(shot) {
-    const type = shot.sceneType || 'normal';
-
-    const soundMap = {
-      'opening': {
-        ambient: 'deep earth rumble 20-60Hz, epic atmosphere',
-        spatial: '3D audio pan synchronized with camera movement',
-        intensity: { crescendo: '0-3s', peak: '3-7s', decay: '7-10s' }
-      },
-      'establishing': {
-        ambient: 'natural environment, wind and distant sounds',
-        spatial: 'ambient stereo field',
-        intensity: { steady: '0-100%', variations: 'subtle' }
-      },
-      'conflict': {
-        ambient: 'tension building, low frequency rumble',
-        spatial: 'directional audio pan',
-        intensity: { building: '0-5s', peak: '5-8s', decay: '8-10s' }
-      },
-      'emotional_climax': {
-        ambient: 'full frequency spectrum, rich harmonics',
-        spatial: 'immersive surround',
-        intensity: { maximum: '0-3s', sustain: '3-10s' }
-      },
-      'resolution': {
-        ambient: 'gentle atmosphere, soft reverb',
-        spatial: 'wide stereo field',
-        intensity: { fading: '0-5s', quiet: '5-10s' }
-      }
-    };
-
-    const soundObj = soundMap[type] || {
-      ambient: 'neutral atmosphere',
-      spatial: 'centered mono',
-      intensity: { steady: '100%' }
-    };
-
-    // 字符串格式(用于Prompt融合)
-    const intensityStr = Object.entries(soundObj.intensity).map(([k, v]) => `${k} ${v}`).join(', ');
-    // 【v2.1.4-patch5】将竖杠改为分号，避免Seedance渲染乱码
-    const soundStr = `AMBIENT: ${soundObj.ambient}; SPATIAL: ${soundObj.spatial}; INTENSITY: ${intensityStr}`;
-
-    return {
-      object: soundObj,
-      string: soundStr
-    };
-  }
-
-  /**
-   * v6.37-P1+: 构建 audioLayer 字段(片头专属,结构化对象)
-   */
-  _buildAudioLayer(shot) {
-    const segments = [
-      { time: '0-3s', sound: 'sub-bass earth rumble fade in' },
-      { time: '3-5s', sound: 'distant wind and environmental sounds' },
-      { time: '5-8s', sound: 'string section long note' },
-      { time: '8-10s', sound: 'timpani strike' }
-    ];
-
-    const audioStr = segments.map(s => s.sound).join(', ');
-
-    return {
-      object: { segments },
-      string: audioStr
-    };
-  }
-
-  /**
-   * v6.37-P1+: 构建 titleOverlay 字段(片头专属,结构化对象)
-   */
-  _buildTitleOverlay(blueprint) {
-    const config = blueprint.config || {};
-    const worldSetting = blueprint.worldSetting || {};
-    // v1.2.5-fix: 兼容顶层_metadata和config._metadata
-    const _metadata = config._metadata || blueprint._metadata || {};
-
-    // v1.2.5: 系列作品片头逻辑
-    const isSeries = _metadata.isSeries || false;
-    const episodeNumber = _metadata.episodeNumber || 1;
-    const totalEpisodes = _metadata.totalEpisodes || 1;
-
-    // 只有第一集显示完整片头title
-    const showTitle = isSeries ? (episodeNumber === 1) : true;
-
-    const titleObj = {
-      mainTitle: showTitle ? (config.title || '未命名') : '',
-      subtitle: showTitle ? (worldSetting.name || '系列作品') : '',
-      producer: showTitle ? `by ${config.producer || 'HAVS Team'}` : '',
-      titleAnim: showTitle ? 'light-vein carving growth 3.0-5.0s' : 'none',
-      episodeInfo: isSeries ? `第${episodeNumber}集 / 共${totalEpisodes}集` : ''
-    };
-
-    const titleStr = showTitle
-      ? `MAIN_TITLE: "${titleObj.mainTitle}"; SUBTITLE: "${titleObj.subtitle}"; PRODUCER: "${titleObj.producer}"; TITLE_ANIM: ${titleObj.titleAnim}`
-      : `EPISODE: ${titleObj.episodeInfo}; TITLE_ANIM: none`;
-
-    return {
-      object: titleObj,
-      string: titleStr
-    };
   }
 
   /**
@@ -2384,7 +2098,7 @@ class ProductionEngine {
     // if (!beastId) { return { generated: false, reason: '无 featured_beast_id' }; }
 
     // B7-fix: 复用 _buildBackgroundSound 保证格式一致
-    const openingBgSound = this._buildBackgroundSound({ sceneType: 'opening' });
+    const openingBgSound = this.shotNormalizer.buildBackgroundSound({ sceneType: 'opening' });
     const openingData = {
       shotId: 'S00',
       duration: config.opening_duration || 10,
