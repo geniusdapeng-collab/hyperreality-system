@@ -9,6 +9,10 @@ const path = require('path');
 const { safeStringify } = require('./utils/safe-stringify');
 const { CheckpointManager } = require('./utils/checkpoint-manager');
 const { LLMOutputNormalizer } = require('./utils/llm-output-normalizer');
+const { ContentBoundaryGuard } = require('./utils/content-boundary-guard');
+const { RuleFallbackEngine } = require('./utils/rule-fallback');
+const { QualityGate } = require('./utils/quality-gate');
+const { ContinuityChecker } = require('./utils/continuity-checker');
 
 // v2.0.0-LLM-Agent: 导入Agent
 const { SceneDesignAgent } = require('./agents/scene-design-agent');
@@ -108,6 +112,16 @@ class ProductionEngine {
       llmModel: this.llmModel,
       globalDeadline: this._globalDeadline
     });
+    
+    // v2.1.5-refactor: 初始化辅助模块
+    this.boundaryGuard = new ContentBoundaryGuard(this.log.bind(this));
+    this.ruleFallback = new RuleFallbackEngine({
+      logFn: this.log.bind(this),
+      config: this.config,
+      llmModel: this.llmModel
+    });
+    this.qualityGate = new QualityGate(this.config);
+    this.continuityChecker = new ContinuityChecker();
   }
 
   /**
@@ -533,10 +547,12 @@ class ProductionEngine {
       }
 
       // ===== 内容边界后处理(最终防线)=====
-    currentShots = this._enforceContentBoundaries(currentShots, adaptedBlueprint);
+      // v2.1.5-refactor: 使用 ContentBoundaryGuard
+      currentShots = this.boundaryGuard.enforce(currentShots, adaptedBlueprint);
 
     // ===== Quality Gate =====
-      result.stages.qualityGate = await this._runStage('quality-gate', () => this._runQualityGate(currentShots));
+      // v2.1.5-refactor: 使用 QualityGate 模块
+      result.stages.qualityGate = await this._runStage('quality-gate', () => this.qualityGate.run(currentShots));
 
       result.shots = currentShots;
       result.prompts = currentShots;
@@ -556,7 +572,7 @@ class ProductionEngine {
       try {
         this.log('RECOVERY', '尝试规则兜底恢复...');
         const baseShots = result.stages.durationAllocation?.shots || [];
-        const fallbackShots = await this._engineerPromptsFallback(baseShots, adaptedBlueprint);
+        const fallbackShots = await this.ruleFallback.engineerPromptsFallback(baseShots, adaptedBlueprint);
         if (fallbackShots.length > 0) {
           result.shots = fallbackShots;
           result.prompts = fallbackShots;
@@ -571,151 +587,6 @@ class ProductionEngine {
     }
 
     return result;
-  }
-
-  /**
-   * 【新增】规则模式完整生产路径(LLM 禁用时)
-   */
-  async _produceViaRules(currentShots, adaptedBlueprint, result, startTime) {
-    this.log('RULES', '启用规则引擎模式(LLM 已禁用)');
-    result.stages.promptEngineering = await this._runStage('prompt-engineering', () => this._engineerPrompts(currentShots, adaptedBlueprint));
-    currentShots = result.stages.promptEngineering.shots;
-    result.stages.qualityGate = await this._runStage('quality-gate', () => this._runQualityGate(currentShots));
-    if (this._shouldGenerateOpening(adaptedBlueprint)) {
-      result.stages.opening = await this._runStage('opening', () => this._generateOpening(adaptedBlueprint));
-    }
-    result.stages.continuity = await this._runStage('continuity', () => this._checkContinuity(currentShots));
-    result.shots = currentShots;
-    result.prompts = currentShots;
-    result.meta = this._buildMeta(adaptedBlueprint);
-    result.opening = result.stages.opening?.openingData || null;
-    result.success = true;
-    result.degraded = true;
-    result.timing.total = Date.now() - startTime;
-    this.log('PRODUCE', `✅ 规则模式完成 | ${currentShots.length} 镜头 | ${result.timing.total}ms`);
-    return result;
-  }
-
-  /**
-   * 【新增】规则 Prompt 工程兜底(LLM PromptFusion 失败时)
-   * 优先复用现有 _engineerPrompts,否则用极简拼接
-   */
-  async _engineerPromptsFallback(shots, blueprint) {
-    if (typeof this._engineerPrompts === 'function') {
-      try {
-        const r = await this._engineerPrompts(shots, blueprint);
-        if (r?.shots?.length) return r.shots;
-      } catch (e) {
-        this.log('FALLBACK', `_engineerPrompts 失败: ${e.message},使用极简拼接`);
-      }
-    }
-    return shots.map(s => ({
-      ...s,
-      prompt: this._assemblePromptSimple(s),
-      enhanced_prompt: this._assemblePromptSimple(s),
-      negative_prompt: 'blurry, low quality, distorted, watermark, text, deformed, extra limbs'
-    }));
-  }
-
-  /**
-   * 【新增】极简 Prompt 拼接(最后兜底)
-   * 【v2.1.4-fix9-P12】兜底路径也强制写实场景和动作
-   */
-  _assemblePromptSimple(shot) {
-    const parts = [];
-    
-    // 场景强制写实检查
-    let sceneDesc = shot.scene || '';
-    const sceneForbidden = ['全息', '虚拟', '投影', '抽象', '光影场域', '数据空间', '元宇宙', '时间操控', '霓虹', '微观世界', '宏观', '抽象几何', '流动光影', '交织光影', '色彩对冲'];
-    if (sceneForbidden.some(w => sceneDesc.includes(w))) {
-      const fallbackScenes = [
-        '医院健康宣教室，白色荧光灯均匀照明，白墙面贴有无文字骨骼肌解剖图与运动损伤海报（纯图形版），木质讲台表面带有细微使用划痕，地面浅灰色防滑PVC地胶',
-        '三甲医院检验科走廊，冷白色LED光源从走廊顶部连续排列向下照射，无文字箭头标识牌指向尿液检验窗口，地面浅色抛光瓷砖，墙面白色医用抗菌涂层',
-        '医生诊室，白色墙面悬挂无文字人体解剖示意图（纯图形版），办公桌摆放听诊器与血压计，检查床铺有蓝色一次性床单，无影灯悬于上方，窗光透入',
-        '医院健康管理中心，嵌入式LED灯带洒下柔和暖白光，接待台后方排列无文字健康宣传展板（纯图形版），前方皮质沙发与实木茶几，地面灰色哑光瓷砖'
-      ];
-      const idx = parseInt(shot.shotId?.replace(/\D/g, '') || '0') || 0;
-      sceneDesc = fallbackScenes[idx % fallbackScenes.length];
-    }
-    if (sceneDesc) parts.push(sceneDesc);
-    
-    if (shot.visual_elements) parts.push(shot.visual_elements);
-    if (shot.lighting) parts.push(shot.lighting);
-    if (shot.camera_movement) parts.push(shot.camera_movement);
-    
-    // 动作强制写实检查
-    let actionDesc = shot.action || '';
-    const actionForbidden = ['全息', '虚拟', '投影', '空间扭曲', '时间残影', '霓虹', '数据流', '光即角色', '抽象构图', '梦境流动性', '手绘动画', '湿版摄影', '黑色电影'];
-    if (actionForbidden.some(w => actionDesc.includes(w))) {
-      const fallbackActions = [
-        '镜头缓慢推近，示例角色站立讲台前，自然手势讲解，眼神注视镜头，警服在荧光灯下轮廓清晰',
-        '稳定机位中景，示例角色沿走廊缓步前行，侧头指向检验窗口，白大褂医生从背景走过',
-        '手持微晃跟拍，示例角色靠近检查床，手指轻触医学挂图，无影灯在头顶形成柔和光晕',
-        '固定机位中景，示例角色坐于沙发边缘，双手交叠置于膝上，LED灯带在身后形成均匀轮廓光',
-        '缓慢后拉全景，示例角色站立检验窗口前，转身面向镜头，不锈钢台面反射冷白色光源'
-      ];
-      const idx = parseInt(shot.shotId?.replace(/\D/g, '') || '0') || 0;
-      actionDesc = fallbackActions[idx % fallbackActions.length];
-    }
-    if (actionDesc) parts.push(actionDesc);
-    
-    if (shot.mood) parts.push(`atmosphere: ${shot.mood}`);
-    
-    // v6.6.10-fix: 极简路径使用全局模块，区分片头/内容镜
-    const isOpeningSimple = shot.type === 'opening' || shot.sceneType === 'opening';
-    const negativeSimple = isOpeningSimple
-      ? globalNegativePromptInjector.generateForOpeningShot({ maxLength: 200 }).replace('【负面约束】', '')
-      : globalNegativePromptInjector.generateForContentShot({ maxLength: 250 }).replace('【负面约束】', '');
-    parts.push(negativeSimple);
-    
-    return parts.filter(Boolean).join(', ').slice(0, this.config.maxPromptLength);
-  }
-
-  /**
-   * 【新增】内容边界强制过滤(最后防线)
-   * 检测并清除越界内容(预告下集、提前讲后续知识点等)
-   */
-  _enforceContentBoundaries(shots, blueprint) {
-    const meta = blueprint.config?._metadata || blueprint._metadata || {};
-    const isSeries = meta.isSeries || (meta.series?.totalEpisodes > 1) || (meta.total_episodes > 1);
-    const noPreview = meta.noNextEpisodePreview || meta.no_next_episode_preview;
-
-    if (!isSeries && !noPreview) return shots;
-
-    const forbiddenPatterns = [
-      /下一集/g, /下集/g, /后续.*介绍/g, /下次再说/g, /下次.*讲/g,
-      /待.*续/g, /未完待续/g, /且听.*分解/g
-    ];
-
-    let violations = 0;
-    const cleaned = shots.map(shot => {
-      let prompt = shot.prompt || '';
-      let fusionText = shot.fusionText || '';
-      let changed = false;
-
-      for (const pattern of forbiddenPatterns) {
-        if (pattern.test(prompt)) {
-          prompt = prompt.replace(pattern, '...');
-          changed = true;
-          violations++;
-        }
-        if (pattern.test(fusionText)) {
-          fusionText = fusionText.replace(pattern, '...');
-          changed = true;
-          violations++;
-        }
-      }
-
-      if (changed) {
-        this.log('BOUNDARY-GUARD', `⚠️ 清除越界内容: ${shot.shotId}`);
-      }
-      return changed ? { ...shot, prompt, fusionText } : shot;
-    });
-
-    if (violations > 0) {
-      this.log('BOUNDARY-GUARD', `✅ 共清除 ${violations} 处越界内容`);
-    }
-    return cleaned;
   }
 
   /**
@@ -2502,64 +2373,6 @@ class ProductionEngine {
   }
 
   /**
-   * Stage 5: 质量门校验
-   * v6.37-P2: 审核增强 - 检查新字段格式与完整性
-   */
-  _runQualityGate(prompts) {
-    const checks = [];
-    for (const p of prompts) {
-      // v2.0.5-fix: 质量门也做类型保护,确保 .trim() 安全
-      const camStr = String(p.cameraString || (typeof p.camera === 'string' ? p.camera : '') || '');
-      const lightStr = String(p.lightingString || (typeof p.lighting === 'string' ? p.lighting : '') || '');
-      const tlStr = String(p.timelineString || (typeof p.timeline === 'string' ? p.timeline : '') || '');
-      const bgStr = String(p.backgroundSoundString || (typeof p.backgroundSound === 'string' ? p.backgroundSound : '') || '');
-
-      const check = {
-        shotId: p.shotId,
-        promptLength: p.promptCharCount || 0,
-
-        // 格式无关:只看字段是否存在且有内容
-        hasScene: !!(p.scene && String(p.scene).trim().length > 8),
-        hasMood: !!(p.mood && String(p.mood).trim().length > 1),
-        hasCamera: camStr.trim().length > 5,
-        hasLighting: lightStr.trim().length > 5,
-        hasCharacter: !!(p.character && p.character !== 'NONE'),
-        hasAction: !!(p.action && String(p.action).length > 3),
-        hasTimeline: tlStr.trim().length > 3 || Array.isArray(p.timeline) && p.timeline.length > 0,
-        hasBackgroundSound: bgStr.trim().length > 3,
-        hasPrompt: !!(p.prompt && String(p.prompt).length > 50),
-
-        withinLimit: (p.promptCharCount || 0) <= this.config.maxPromptLength,
-
-        // 片头专属(S00 在 openingData 中,这里仅保留兼容检查)
-        isOpening: p.shotId === 'S00',
-        hasAudioLayer: p.shotId === 'S00' ? (!!p.audioLayerString && p.audioLayerString.length > 5) : true,
-        hasTitleOverlay: p.shotId === 'S00' ? (!!p.titleOverlayString && p.titleOverlayString.length > 5) : true
-      };
-
-      // 对白/角色可为 NONE(无对白、无人物镜头),不强制;其余为核心必过项
-      check.passed =
-        check.hasScene && check.hasMood && check.hasCamera && check.hasLighting &&
-        check.hasAction && check.hasTimeline && check.hasBackgroundSound &&
-        check.hasPrompt && check.withinLimit && check.hasAudioLayer && check.hasTitleOverlay;
-
-      checks.push(check);
-    }
-
-    const allPassed = checks.every(c => c.passed);
-    return {
-      passed: allPassed,
-      checks,
-      totalPrompts: prompts.length,
-      passedCount: checks.filter(c => c.passed).length,
-      failedFields: checks.filter(c => !c.passed).map(c => ({
-        shotId: c.shotId,
-        failed: Object.entries(c).filter(([k, v]) => k.startsWith('has') && !v).map(([k]) => k)
-      }))
-    };
-  }
-
-  /**
    * Stage 6: 片头生成
    * v6.37-P0: 产出符合片头结构(15字段)
    */
@@ -2660,65 +2473,6 @@ class ProductionEngine {
     const depth = worldSetting.spatial_depth || 'atmospheric layers';
 
     return `${worldName}, ${atmosphere} atmosphere, ${timeOfDay} lighting, ${depth}, spatial depth: infinite`;
-  }
-
-  /**
-   * Stage 7: 连续性检查
-   * v6.37-P0: 适配新字段结构(characterRef 替代 imageRefs)
-   */
-  _checkContinuity(prompts) {
-    const issues = [];
-
-    // 检查角色连续性(从 characterRef 解析)
-    const characterMentions = prompts.map((p, idx) => {
-      const chars = this._parseCharacterRefForContinuity(p.characterRef);
-      return { idx, chars };
-    });
-
-    // 检查时序连续性
-    for (let i = 1; i < prompts.length; i++) {
-      const prev = prompts[i - 1];
-      const curr = prompts[i];
-
-      const prevChars = this._parseCharacterRefForContinuity(prev.characterRef);
-      const currChars = this._parseCharacterRefForContinuity(curr.characterRef);
-
-      // 检查是否有共享角色
-      const sharedChars = prevChars.filter(c => currChars.includes(c));
-
-      if (sharedChars.length === 0 && prevChars.length > 0 && currChars.length > 0) {
-        issues.push({
-          type: 'character_gap',
-          between: [prev.shotId, curr.shotId],
-          message: '相邻镜头无共享角色,可能导致叙事断裂'
-        });
-      }
-    }
-
-    return {
-      passed: issues.length === 0,
-      issues,
-      promptCount: prompts.length
-    };
-  }
-
-  /**
-   * v6.37-P0: 从 characterRef 解析角色名(用于连续性检查)
-   */
-  _parseCharacterRefForContinuity(characterRef) {
-    if (!characterRef || characterRef === 'NONE') return [];
-
-    const chars = [];
-    const parts = characterRef.split('; ');
-
-    for (const part of parts) {
-      const match = part.match(/(.+?):\s*/);
-      if (match) {
-        chars.push(match[1].trim());
-      }
-    }
-
-    return chars;
   }
 
   /**
