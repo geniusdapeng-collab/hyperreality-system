@@ -83,9 +83,7 @@ class ProductionEngine {
    * 通过环境变量 HYPERREALITY_USE_PHASES 控制是否启用新架构
    */
   _initPhases() {
-    const usePhases = process.env.HYPERREALITY_USE_PHASES === 'true';
-    if (!usePhases) return;
-    
+    // v2.1.5-refactor: 默认启用新 Phase 架构
     const { Phase1SceneDesign } = require('./phases/phase-1-scene-design');
     const { Phase2VisualAudio } = require('./phases/phase-2-visual-audio');
     const { Phase3PromptFusion } = require('./phases/phase-3-prompt-fusion');
@@ -468,9 +466,8 @@ class ProductionEngine {
       }
 
       // ----- Phase 1:SceneDesign ∥ OpeningDesign -----
-      // v2.1.5-refactor: 条件使用新 Phase 架构
-      if (this.phase1) {
-        // 新架构：使用 Phase1SceneDesign 执行器
+      // v2.1.5-refactor: 使用新 Phase 架构
+      if (startPhase <= 1) {
         const phase1Result = await this.phase1.execute({ 
           shots: currentShots, 
           result, 
@@ -481,61 +478,11 @@ class ProductionEngine {
         } else {
           phase1Failed = true;
         }
-      } else if (startPhase <= 1) {
-      // 旧架构：直接内嵌（保持原有代码）
-      try {
-        if (!this._canAfford(140000)) {
-          this.log('PHASE-1', `⚠️ 预算不足(剩${this._budgetRemaining()}ms),保存当前结果退出,下次续跑`);
-          await this._saveCheckpoint('phase0', currentShots, { opening: result.opening, llmStats: result.llmStats });
-          throw new Error('预算不足,请重跑以断点续跑(LLM 产出已保存)');
-        }
-        this.log('PHASE-1', 'SceneDesign + OpeningDesign 并行启动...');
-        const phase1Start = Date.now();
-        const [sdResult, odResult] = await this._runParallel({
-          'scene-design-agent': this.agents.sceneDesign.process(this._cloneShots(currentShots), adaptedBlueprint),
-          'opening-design-agent': this._shouldGenerateOpening(adaptedBlueprint)
-            ? this.agents.openingDesign.process(adaptedBlueprint)
-            : Promise.resolve(null)
-        }, 'PHASE-1');
-
-        currentShots = this._mergeShotsByShotId(currentShots, sdResult.shots, ['scene', 'mood', 'action', 'emotional_target']);
-        if (odResult && odResult.opening) {
-          result.stages.opening = { agent: 'openingDesign', ...odResult };
-          result.opening = odResult.opening;
-          // 【v2.1.4-patch3】将opening数据注入到sceneType=opening的shot中
-          // 【审计修复·P0】先克隆片头shot再修改，避免直接变异原始对象
-          const openingIdx = currentShots.findIndex(s => s.sceneType === 'opening');
-          if (openingIdx >= 0) {
-            currentShots[openingIdx] = this._deepCloneShot(currentShots[openingIdx]);
-          }
-          const openingShot = openingIdx >= 0 ? currentShots[openingIdx] : null;
-          if (openingShot) {
-            const od = odResult.opening;
-            // v2.1.4-fix8: 兼容下划线命名(main_title/sub_title)和驼峰命名(mainTitle/subtitle)
-            const titleOverlay = od.titleOverlay || {};
-            openingShot.title = od.title || titleOverlay.mainTitle || titleOverlay.main_title || '';
-            openingShot.subtitle = od.subtitle || titleOverlay.subtitle || titleOverlay.sub_title || '';
-            openingShot.titleOverlay = od.titleOverlay || null;
-            openingShot.audioLayer = od.audioLayer || null;
-            openingShot.lightingString = od.lightingString || openingShot.lightingString;
-            openingShot.cameraString = od.cameraString || openingShot.cameraString;
-            console.log(`[ProductionEngine] OpeningDesign数据已注入到 ${openingShot.shotId}: title="${openingShot.title}", subtitle="${openingShot.subtitle}"`);
-          }
-        }
-        result.llmStats.sceneDesign = sdResult.timing;
-        result.llmStats.openingDesign = odResult?.timing;
-        this.log('PHASE-1', `完成 (${Date.now() - phase1Start}ms)`);
-        await this._saveCheckpoint('phase1', currentShots, { opening: result.opening, llmStats: result.llmStats });
-        this._checkMemory('phase1');
-      } catch (e) {
-        this.log('PHASE-1-FAIL', `❌ ${e.message}`);
-        phase1Failed = true;
-      }
       }
 
       // ----- Phase 2:VisualLanguage → AudioDesign → ContinuityReview -----
-      // v2.1.5-refactor: 条件使用新 Phase 架构
-      if (this.phase2) {
+      // v2.1.5-refactor: 使用新 Phase 架构
+      if (startPhase <= 2) {
         const phase2Result = await this.phase2.execute({ 
           shots: currentShots, 
           result, 
@@ -544,61 +491,11 @@ class ProductionEngine {
         if (phase2Result.success) {
           currentShots = phase2Result.shots;
         }
-      } else if (startPhase <= 2) {
-      // 旧架构：直接内嵌（保持原有代码）
-        if (phase1Failed) {
-          this.log('PHASE-2', '⚠️ Phase 1 已失败，Phase 2 用现有 shots 尝试继续（降级模式）');
-        }
-        try {
-          if (!this._canAfford(80000)) {
-            this.log('PHASE-2', `⚠️ 预算不足(剩${this._budgetRemaining()}ms),保存退出,下次从 Phase2 续跑`);
-            await this._saveCheckpoint('phase1', currentShots, { opening: result.opening, llmStats: result.llmStats });
-            throw new Error('预算不足,请重跑以断点续跑(Phase1 LLM 产出已保存)');
-          }
-          this.log('PHASE-2', 'VisualLanguage → AudioDesign → ContinuityReview 串行启动...');
-          const phase2Start = Date.now();
-          
-          // 【v2.1.4-fix9-P2】串行执行避免内存/并发超限
-          const vlResult = await this.agents.visualLanguage.process(this._cloneShots(currentShots), adaptedBlueprint);
-          this.log('VISUAL-LANGUAGE-AGENT', `完成`);
-          currentShots = this._mergeShotsByShotId(currentShots, vlResult.shots, ['visual_elements', 'lighting', 'color_temperature', 'camera_movement']);
-          
-          const adResult = await this.agents.audioDesign.process(this._cloneShots(currentShots), adaptedBlueprint);
-          this.log('AUDIO-DESIGN-AGENT', `完成`);
-          currentShots = this._mergeShotsByShotId(currentShots, adResult.shots, ['audio', 'music', 'sound_effects', 'backgroundSound', 'backgroundSoundString']);
-          
-          const crResult = await this.agents.continuityReview.process(
-            this._cloneShots(currentShots),
-            adaptedBlueprint,
-            {
-              totalEpisodes: adaptedBlueprint.config?._metadata?.series?.totalEpisodes || adaptedBlueprint.config?._metadata?.totalEpisodes || 1,
-              episodeIndex: adaptedBlueprint.config?._metadata?.series?.currentEpisode || adaptedBlueprint.config?._metadata?.episode || 1,
-              episodeContract: this._buildEpisodeContract(adaptedBlueprint)
-            }
-          );
-          this.log('CONTINUITY-REVIEW-AGENT', `完成`);
-          
-          result.stages.continuity = { agent: 'continuityReview', ...crResult };
-          // 【v2.1.4】保存跨集边界校验报告
-          if (crResult.boundaryReport) {
-            result.stages.boundaryReport = crResult.boundaryReport;
-            this.log('BOUNDARY-GUARD', `跨集边界校验: ${crResult.boundaryReport.summary}`);
-          }
-          result.llmStats.visualLanguage = vlResult.timing;
-          result.llmStats.audioDesign = adResult.timing;
-          result.llmStats.continuityReview = crResult.timing;
-          this.log('PHASE-2', `完成 (${Date.now() - phase2Start}ms)`);
-          await this._saveCheckpoint('phase2', currentShots, { opening: result.opening, llmStats: result.llmStats });
-          this._checkMemory('phase2');
-        } catch (e) {
-          this.log('PHASE-2-FAIL', `❌ ${e.message},Phase2 失败但继续`);
-          // Phase 2 失败不致命,用已有数据继续
-        }
       }
 
       // ----- Phase 3:PromptFusion -----
-      // v2.1.5-refactor: 条件使用新 Phase 架构
-      if (this.phase3) {
+      // v2.1.5-refactor: 使用新 Phase 架构
+      if (startPhase <= 3) {
         const phase3Result = await this.phase3.execute({ 
           shots: currentShots, 
           result, 
@@ -606,45 +503,6 @@ class ProductionEngine {
         });
         if (phase3Result.success) {
           currentShots = phase3Result.shots;
-        }
-      } else if (startPhase <= 3) {
-      // 旧架构：直接内嵌（保持原有代码）
-        if (phase1Failed) {
-          this.log('PHASE-3', '⚠️ Phase 1 已失败，Phase 3 用现有 shots 尝试继续（降级模式）');
-        }
-        // 【v2.1.4-fix11-D】动态预算分配：根据镜头数计算Phase 3所需时间
-        // 公式：镜头数 × 180秒(LLM生成) + 30秒(缓冲)
-        // 【v2.1.5-fix】从90s增加到180s，实际LLM调用需120-180s/镜头
-        const shotCount = currentShots.length;
-        const PHASE3_PER_SHOT_MS = 180000; // 每镜头180秒（实际需120-180s）
-        const PHASE3_BUFFER_MS = 30000;   // 30秒缓冲
-        const phase3NeedMs = shotCount * PHASE3_PER_SHOT_MS + PHASE3_BUFFER_MS;
-        
-        this.log('PHASE-3', `📊 动态预算计算: ${shotCount}镜头 × ${PHASE3_PER_SHOT_MS/1000}s + ${PHASE3_BUFFER_MS/1000}s缓冲 = 需${Math.round(phase3NeedMs/1000)}s`);
-        
-        if (!this._canAfford(phase3NeedMs)) {
-          this.log('PHASE-3', `⚠️ 预算不足(剩${Math.round(this._budgetRemaining()/1000)}s,需${Math.round(phase3NeedMs/1000)}s),保存退出,下次从 Phase3 续跑`);
-          await this._saveCheckpoint('phase2', currentShots, { opening: result.opening, llmStats: result.llmStats });
-          throw new Error('预算不足,请重跑以断点续跑(Phase1+2 LLM 产出已保存)');
-        }
-        try {
-          this.log('PROMPT-FUSION-AGENT', `开始(串行模式,${shotCount}镜头,预计${Math.round(phase3NeedMs/1000)}s)...`);
-          const phase3Start = Date.now();
-          const pfResult = await this.agents.promptFusion.process(this._cloneShots(currentShots), adaptedBlueprint);
-          // 【审计修复】补全 25 字段，原列表缺 lighting/scene/character/action/dialogue/mood/timeline/composition/constraint/baseline
-          currentShots = this._mergeShotsByShotId(currentShots, pfResult.shots, [
-            'prompt', 'enhanced_prompt', 'negative_prompt', 'fields', 'fusionText', 'promptCharCount',
-            // 25字段全部纳入
-            'director_instruction', 'constraint', 'baseline', 'scene', 'lighting', 'composition',
-            'color_palette', 'depth_of_field', 'camera_movement', 'character', 'costume', 'makeup',
-            'action', 'props', 'portraits', 'dialogue', 'timeline', 'mood', 'pacing', 'transition',
-            'audio', 'negative', 'bright_constraint', 'character_constraint', 'consistency'
-          ]);
-          result.llmStats.promptFusion = pfResult.timing;
-          this.log('PROMPT-FUSION-AGENT', `完成 (${Date.now() - phase3Start}ms)`);
-          await this._saveCheckpoint('phase3', currentShots, { opening: result.opening, llmStats: result.llmStats });
-        } catch (e) {
-          this.log('PROMPT-FUSION-FAIL', `❌ ${e.message},部分镜头降级到规则 Prompt`);
         }
       }
 
@@ -664,74 +522,14 @@ class ProductionEngine {
       });
 
       // ===== Phase-3.5: 字段质量检查与修复（自适应预算）=====
-      const remainingBudget = this._budgetRemaining();
-      if (remainingBudget < 15000) {
-        this.log('FIELD-QUALITY', `⚠️ 预算不足(剩${remainingBudget}ms),跳过字段质量检查`);
-      } else if (remainingBudget < 60000) {
-        // 15s-60s: 纯规则检查（不调LLM）
-        try {
-          this.log('FIELD-QUALITY', '开始(纯规则检查模式，预算极低)...');
-          const fqStart = Date.now();
-          const { FieldQualityPipeline } = require('../field-quality');
-          const pipeline = new FieldQualityPipeline({
-            llmModel: this.llmModel,
-            maxRounds: 0, // 纯规则，不调用LLM
-            checkerTimeout: 30000,
-            repairerTimeout: 0,
-          });
-          pipeline.setPRDFromBlueprint(adaptedBlueprint);
-          // 【v2.1.4-fix13-审计修复】下发全局 deadline
-          pipeline.setDeadline?.(this._globalDeadline);
-          const { finalShots, summary } = await pipeline.runAll(currentShots);
-          currentShots = finalShots;
-          this.log('FIELD-QUALITY', `完成 (${Date.now() - fqStart}ms) | 通过:${summary.passed}/${summary.totalShots} | 修复:${summary.totalRepairs} (纯规则模式)`);
-        } catch (e) {
-          this.log('FIELD-QUALITY-FAIL', `❌ ${e.message},继续执行`);
-        }
-      } else if (remainingBudget < 300000) {
-        // 60s-300s: LLM检查1轮
-        try {
-          this.log('FIELD-QUALITY', '开始(规则+LLM 1轮检查与修复)...');
-          const fqStart = Date.now();
-          const { FieldQualityPipeline } = require('../field-quality');
-          const pipeline = new FieldQualityPipeline({
-            llmModel: this.llmModel,
-            maxRounds: 1, // 1轮
-            checkerTimeout: 60000,
-            repairerTimeout: 120000,
-          });
-          pipeline.setPRDFromBlueprint(adaptedBlueprint);
-          // 【v2.1.4-fix13-审计修复】下发全局 deadline
-          pipeline.setDeadline?.(this._globalDeadline);
-          const { finalShots, summary } = await pipeline.runAll(currentShots);
-          currentShots = finalShots;
-          this.log('FIELD-QUALITY', `完成 (${Date.now() - fqStart}ms) | 通过:${summary.passed}/${summary.totalShots} | 修复:${summary.totalRepairs}`);
-          await this._saveCheckpoint('phase3.5', currentShots, { opening: result.opening, llmStats: result.llmStats });
-        } catch (e) {
-          this.log('FIELD-QUALITY-FAIL', `❌ ${e.message},继续执行`);
-        }
-      } else {
-        // ≥300s: LLM检查2轮（原逻辑）
-        try {
-          this.log('FIELD-QUALITY', '开始(规则+LLM混合检查与修复)...');
-          const fqStart = Date.now();
-          const { FieldQualityPipeline } = require('../field-quality');
-          const pipeline = new FieldQualityPipeline({
-            llmModel: this.llmModel,
-            maxRounds: 2,
-            checkerTimeout: 120000,
-            repairerTimeout: 180000,
-          });
-          pipeline.setPRDFromBlueprint(adaptedBlueprint);
-          // 【v2.1.4-fix13-审计修复】下发全局 deadline
-          pipeline.setDeadline?.(this._globalDeadline);
-          const { finalShots, summary } = await pipeline.runAll(currentShots);
-          currentShots = finalShots;
-          this.log('FIELD-QUALITY', `完成 (${Date.now() - fqStart}ms) | 通过:${summary.passed}/${summary.totalShots} | 修复:${summary.totalRepairs}`);
-          await this._saveCheckpoint('phase3.5', currentShots, { opening: result.opening, llmStats: result.llmStats });
-        } catch (e) {
-          this.log('FIELD-QUALITY-FAIL', `❌ ${e.message},继续执行`);
-        }
+      // v2.1.5-refactor: 使用新 Phase 架构
+      const phase35Result = await this.phase35.execute({ 
+        shots: currentShots, 
+        result, 
+        adaptedBlueprint 
+      });
+      if (phase35Result.success) {
+        currentShots = phase35Result.shots;
       }
 
       // ===== 内容边界后处理(最终防线)=====

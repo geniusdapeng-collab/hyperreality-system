@@ -24,19 +24,22 @@ function assert(condition, message) {
 }
 
 async function runTest() {
-  // 测试1: 旧架构（默认）
-  console.log('🔥 [测试1] 旧架构（默认模式）');
-  delete process.env.HYPERREALITY_USE_PHASES; // 确保旧模式
-  const peOld = new ProductionEngine({ llmModel: 'kimi-k2p6' });
-  assert(!peOld.phase1, 'Phase1应为undefined（旧模式）');
-  assert(!peOld.phase2, 'Phase2应为undefined（旧模式）');
-  assert(!peOld.phase3, 'Phase3应为undefined（旧模式）');
-  assert(!peOld.phase35, 'Phase3.5应为undefined（旧模式）');
+  // 测试1: 默认启用新架构
+  console.log('🔥 [测试1] 默认启用新架构');
+  const peDefault = new ProductionEngine({ llmModel: 'kimi-k2p6' });
+  assert(!!peDefault.phase1, 'Phase1默认已加载');
+  assert(!!peDefault.phase2, 'Phase2默认已加载');
+  assert(!!peDefault.phase3, 'Phase3默认已加载');
+  assert(!!peDefault.phase35, 'Phase3.5默认已加载');
   console.log('');
 
-  // 测试2: 新架构（HYPERREALITY_USE_PHASES=true）
-  console.log('🔥 [测试2] 新架构（启用Phase模式）');
-  process.env.HYPERREALITY_USE_PHASES = 'true'; // 启用新模式
+  // 测试2: 向后兼容验证（produce方法存在）
+  console.log('🔥 [测试2] 向后兼容验证');
+  assert(typeof peDefault.produce === 'function', 'produce方法存在');
+  console.log('');
+
+  // 测试3: 新架构功能验证
+  console.log('🔥 [测试3] 新架构功能验证');
   const peNew = new ProductionEngine({ llmModel: 'kimi-k2p6' });
   assert(!!peNew.phase1, 'Phase1应已加载');
   assert(!!peNew.phase2, 'Phase2应已加载');
@@ -105,7 +108,7 @@ async function runTest() {
 
   // 测试5: 验证向后兼容（produce方法存在且为函数）
   console.log('🔥 [测试5] 向后兼容验证');
-  assert(typeof peOld.produce === 'function', '旧架构produce方法存在');
+  assert(typeof peDefault.produce === 'function', '默认架构produce方法存在');
   assert(typeof peNew.produce === 'function', '新架构produce方法存在');
   console.log('');
 
