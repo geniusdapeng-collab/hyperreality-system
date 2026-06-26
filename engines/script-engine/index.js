@@ -7,7 +7,7 @@ const { ScriptBlueprint } = require('./core/script-blueprint');
 const { ScriptGenerator } = require('./core/script-generator');
 const { ScriptValidator } = require('./core/script-validator');
 const { ScriptBlueprintAdapter } = require('./core/adapter');
-const { NirathExtension } = require('./extensions/nirath-extension');
+const { 示例世界Extension: NirathExtension } = require('./extensions/nirath-extension');
 
 class ScriptEngine {
   constructor(options = {}) {
