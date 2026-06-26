@@ -140,35 +140,40 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
     {
       "shotId": "SC01",
       "fields": {
-        "constraint": "Aspect ratio: 16:9, Resolution: 1920x1080, Format: MP4, Frame rate: 24fps, no text, no subtitle, no caption, no watermark",
-        "baseline": "8K resolution, cinematic quality, highly detailed, photorealistic, intricate textures, sharp focus",
-        "scene": "三甲医院检验科走廊，冷白色LED顶灯连续照射，墙面白色瓷砖，地面浅灰色防滑地胶，不锈钢检验窗口，走廊纵深约十五米",
-        "lighting": "主光：顶部LED面板灯 5600K冷白光，均匀漫射无阴影；补光：墙面反射光填充阴影；背景光：走廊尽头窗户自然光 6500K；特效：检验窗口玻璃微弱反射光",
-        "composition": "景别：中景（膝上）；主体位置：画面黄金分割右1/3处；线条引导：走廊纵深由近及远；画框边缘：左侧留白1/4展示环境",
-        "color_palette": "主色调：冷白偏青（医院感）；辅助色：不锈钢金属银灰；肤色：自然偏暖；饱和度：中等偏低；对比度：中高",
-        "depth_of_field": "焦点：人物面部；景深：中等（f/2.8），背景适度虚化可辨；前景：无；背景：走廊纵深渐变模糊；层次：中景（人物）-背景两层",
-        "camera_movement": "0-2s：稳定器缓慢推近（0.3m/s）→ 2-6s：固定机位 → 6-10s：手持微晃（呼吸感，幅度±2度）",
-        "character": "穿警服的示例角色，健康科普主讲人，短发整齐，站姿挺拔，表情关切",
-        "costume": "藏青色警服外套（毛呢质地，肩章完整），内搭浅蓝色衬衫（棉质，领口整洁），黑色西裤，黑色皮鞋",
-        "makeup": "短发整齐（黑色，长度及耳），素颜淡妆，眉毛自然，唇色淡粉",
-        "action": "右手自然抬起至胸前做强调手势，左手自然下垂，身体微微前倾，目光直视镜头",
-        "props": "手持：空白A4文件夹（白色，无文字）；背景：不锈钢检验窗口台面",
-        "portraits": "image://characters/chen-zhuo/portraits/chen-zhuo-front.png",
-        "dialogue": "典型症状是肌肉疼痛、无力。",
-        "timeline": "T00:00 - 中景，示例角色站立讲台前，阳光从侧面照入；缓缓抬起头，目光注视镜头\nT00:02 - 近景过渡，镜头缓慢推进至面部；眼神由冷静转为关切，嘴角微微抿紧\nT00:04 - 特写定格，示例角色眼部区域；眼睛眨动一次，瞳孔中反射出讲台景象",
-        "mood": "calm, professional",
-        "pacing": "整体：沉稳中等节奏；开头：缓慢引入（2s）；中段：稍快推进（紧迫感）；高潮：停顿强调（1s留白）；结尾：平缓收尾",
-        "transition": "切镜（硬切，保持紧张感）",
-        "audio": "环境音：医院走廊低频设备嗡鸣，远处隐约脚步声；音乐：冷色调氛围音乐铺底，低沉弦乐",
-        "negative": "no watermark, no logo, no cartoon style, no flat lighting, no text anywhere in frame, no readable characters, no alphabets, no Chinese characters",
-        "bright_constraint": "bright lighting, well-lit scene, clear visibility, no dark shadows on face, adequate illumination",
-        "character_constraint": "只出现示例角色一人，禁止其他人物入镜，禁止同一角色重复出现，禁止角色分身或克隆",
-        "director_instruction": "好莱坞大导演质感，电影级画面，写实风格，无特效，无科幻元素",
-        "consistency": "保持示例角色角色形象一致，短发警服造型不变，面部特征与体型每帧统一"
+        "constraint": "画幅比例、分辨率、格式、帧率等技术约束",
+        "baseline": "8K分辨率、画质风格、细节增强词",
+        "scene": "场景环境描述（≥120字符，含地点、时间、空间、材质）",
+        "lighting": "灯光设计（≥150字符，含主光方向+色温K值+光质+补光+背景光）",
+        "composition": "构图设计（≥100字符，含景别+主体位置+线条引导+画框边缘）",
+        "color_palette": "色彩方案（≥80字符，含主色调+辅助色+肤色+饱和度+对比度）",
+        "depth_of_field": "景深控制（≥80字符，含焦点+光圈+前景/背景虚化+层次）",
+        "camera_movement": "运镜设计（≥100字符，含运动方式+速度+时间分布+起止点）",
+        "character": "角色外貌与姿态（根据实际角色设定，不要套用固定示例）",
+        "costume": "服装描述（颜色、款式、质地、配饰）",
+        "makeup": "妆容发型细节",
+        "action": "具体动作（≥120字符，含手势+步伐+视线+情绪+姿态）",
+        "props": "关键道具（手持物、桌面物品、背景物件）",
+        "portraits": "定妆照引用路径（如：image://characters/角色名/portrait.png）",
+        "dialogue": "角色台词（纯台词内容，不要写画外音/旁白）",
+        "timeline": "时间轴（≥200字符，分≥3段，T00:XX格式，每段含画面+动作）",
+        "mood": "情绪关键词（1-2个，如calm/professional/tense）",
+        "pacing": "节奏（五段式：整体/开头/中段/高潮/结尾）",
+        "transition": "转场方式（类型+持续时间+方向）",
+        "audio": "音频（≥100字符，环境音+音乐风格+音量+BPM）",
+        "negative": "负面约束（通用负面词+场景特定负面词）",
+        "bright_constraint": "明亮约束（亮度/光照强制要求）",
+        "character_constraint": "角色约束（只出现指定角色，禁止分身/克隆）",
+        "director_instruction": "导演指令（≥80字符，风格定位+质感要求+禁忌）",
+        "consistency": "跨镜头一致性（角色/光线/色调统一）"
       }
     }
   ]
 }
+
+【⚠️ 重要：示例仅用于展示字段结构，不得直接复制内容】
+上述示例中的具体描述（如"三甲医院检验科走廊"、"藏青色警服"等）仅为字段格式演示，
+实际生成时必须根据当前项目的真实场景、真实角色、真实内容重新创作，严禁照搬示例内容。
+每个字段必须根据镜头信息独立生成，与示例无关。
 
 关键要求：
 1. 【内容充分性要求】每个字段描述必须充分详细，参考以下最低字符数要求：

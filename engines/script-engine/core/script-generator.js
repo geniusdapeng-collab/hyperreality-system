@@ -318,26 +318,34 @@ ${meta._directorStyle}` : ''}
    */
   async _callLLM(prompt) {
     // 【v2.1.4-fix13-审计修复】增加 Promise.race 超时保护，防止 LLM 调用 hang 住
-    const timeoutMs = this.config.timeout || 300000;
+    // 【v2.1.5-fix】修复 Promise.race + finally 死锁问题：改为手动清除定时器
+    const timeoutMs = this.config.timeout || 600000;
     let timer;
-    const timeoutPromise = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`ScriptGenerator LLM 超时(${timeoutMs}ms)`)), timeoutMs);
-    });
-
+    
     // 优先使用LLMEngine
     if (this.llmEngine) {
       try {
         console.log('[ScriptGenerator] 使用LLMEngine调用...');
-        const result = await Promise.race([
-          this.llmEngine.generate(prompt, {
-            systemPrompt: '你是一位专业的AI视频编剧。只输出严格格式的JSON，不要markdown代码块，不要解释，不要思考过程。使用最紧凑的JSON格式（不要换行和缩进）。',
-            maxTokens: 32000,
-            timeoutMs: timeoutMs,
-            forceJson: true,
-            allowReasoningFallback: false
-          }),
-          timeoutPromise
-        ]).finally(() => clearTimeout(timer));
+        
+        // 创建超时promise
+        const timeoutPromise = new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`ScriptGenerator LLM 超时(${timeoutMs}ms)`)), timeoutMs);
+        });
+        
+        // 调用LLM
+        const llmPromise = this.llmEngine.generate(prompt, {
+          systemPrompt: '你是一位专业的AI视频编剧。只输出严格格式的JSON，不要markdown代码块，不要解释，不要思考过程。使用最紧凑的JSON格式（不要换行和缩进）。',
+          maxTokens: 8192,
+          timeoutMs: 600000,
+          forceJson: true,
+          allowReasoningFallback: false
+        });
+        
+        // 等待结果（带超时保护）
+        const result = await Promise.race([llmPromise, timeoutPromise]);
+        
+        // 成功后清除定时器
+        if (timer) clearTimeout(timer);
         
         // v1.2.6-fix: 正确处理LLM引擎返回结构
         if (!result.success) {
@@ -360,6 +368,8 @@ ${meta._directorStyle}` : ''}
         }
         throw new Error('LLM返回空内容（success=true但content为空，forceJson模式异常）');
       } catch (error) {
+        // 错误时也要清除定时器
+        if (timer) clearTimeout(timer);
         console.error('[ScriptGenerator] LLMEngine调用失败:', error.message);
         throw error;
       }
