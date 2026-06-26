@@ -87,7 +87,9 @@ class ProductionEngine {
     if (!usePhases) return;
     
     const { Phase1SceneDesign } = require('./phases/phase-1-scene-design');
-    this.phase1 = new Phase1SceneDesign({
+    const { Phase2VisualAudio } = require('./phases/phase-2-visual-audio');
+    
+    const commonOptions = {
       agents: this.agents,
       logFn: this.log.bind(this),
       saveCheckpoint: this._saveCheckpoint.bind(this),
@@ -96,7 +98,10 @@ class ProductionEngine {
       checkMemory: this._checkMemory.bind(this),
       cloneShots: this._cloneShots.bind(this),
       mergeShots: this._mergeShotsByShotId.bind(this)
-    });
+    };
+    
+    this.phase1 = new Phase1SceneDesign(commonOptions);
+    this.phase2 = new Phase2VisualAudio(commonOptions);
   }
 
   /**
@@ -520,9 +525,19 @@ class ProductionEngine {
       }
       }
 
-      // ----- Phase 2:VisualLanguage → AudioDesign → ContinuityReview (串行，避免并发超限SIGKILL) -----
-      // 【审计修复】Phase 1 失败不应跳过 Phase 2/3，应像 Phase 2 那样用已有 shots 继续
-      if (startPhase <= 2) {
+      // ----- Phase 2:VisualLanguage → AudioDesign → ContinuityReview -----
+      // v2.1.5-refactor: 条件使用新 Phase 架构
+      if (this.phase2) {
+        const phase2Result = await this.phase2.execute({ 
+          shots: currentShots, 
+          result, 
+          adaptedBlueprint 
+        });
+        if (phase2Result.success) {
+          currentShots = phase2Result.shots;
+        }
+      } else if (startPhase <= 2) {
+      // 旧架构：直接内嵌（保持原有代码）
         if (phase1Failed) {
           this.log('PHASE-2', '⚠️ Phase 1 已失败，Phase 2 用现有 shots 尝试继续（降级模式）');
         }
