@@ -19,12 +19,12 @@ const { globalNegativePromptInjector } = require('../../../systems/global-negati
 // v2.0.0-LLM-Agent: Agent配置
 const DEFAULT_AGENT_CONFIG = {
   enableLLMAgents: true,
-  llmTimeout: 180000, // 【v2.1.4-fix10-P25-fix3】单次3分钟，避免一次失败吃掉1/3预算
+  llmTimeout: 300000, // v2.1.5-fix: 从180000提升至300000(5分钟)，覆盖kimi-k2p6推理+content生成(90-180s)
   llmMaxRetries: 2,
   // 【v2.1.4-fix13-审计修复】从环境变量读取模型配置，消除硬编码
   llmModel: process.env.STORMAXE_LLM_MODEL || 'kimi-k2p6',
   fastModel: process.env.STORMAXE_LLM_FAST_MODEL || process.env.STORMAXE_LLM_MODEL || 'kimi-k2p6',
-  totalDeadlineMs: 1050000, // 【v2.1.4-fix13-审计修复】从540000提升至1050000(~17.5分钟)，匹配实际需求：Phase1(~90s)+Phase2(~300s)+Phase3(~540s)+QualityCheck(~120s)
+  totalDeadlineMs: 1800000, // v2.1.5-fix: 从1050000提升至1800000(30分钟)，覆盖Phase1(~90s)+Phase2(~300s)+Phase3(~930s)+QualityCheck(~120s)
   memThresholdMB: 1800, // 【v2.1.4-fix10-P25-fix3】提升阈值，避免GC风暴
   promptFusionConcurrency: 2 // 【v2.1.4-fix10-P25-fix3】并发2，平衡速度与稳定性
 };
@@ -1529,43 +1529,35 @@ class ProductionEngine {
         return `${char.name}: ${uniquePaths.join(', ')}`;
       }
 
-      // 兜底:检查默认目录是否有定妆照文件(支持 portraits/ 子目录和带前缀文件名)
-      const charDir = char.character_id || cid; // 使用 character_id 作为目录名
-      const defaultAngles = ['front', 'profile', 'three-quarter', 'closeup', 'side', 'threeQuarter'];
-      const searchDirs = [
-        path.join(this.config?.charactersDir || 'characters', charDir),
-        path.join(this.config?.charactersDir || 'characters', charDir, 'portraits')
-      ];
+      // 兜底:检查默认目录是否有定妆照文件(支持 portraits/ 子目录递归搜索)
+      const charDir = char.character_id || cid;
+      const baseDir = path.join(this.config?.charactersDir || 'characters', charDir);
+      const portraitsDir = path.join(baseDir, 'portraits');
       const foundPaths = [];
 
-      console.log(`[_buildCharacterRef] 搜索定妆照: charDir=${charDir}, charactersDir=${this.config?.charactersDir}, searchDirs=${JSON.stringify(searchDirs)}`);
+      console.log(`[_buildCharacterRef] 搜索定妆照: charDir=${charDir}, charactersDir=${this.config?.charactersDir}, baseDir=${baseDir}`);
 
-      for (const searchDir of searchDirs) {
-        for (const angle of defaultAngles) {
-          // 尝试多种扩展名和文件名格式
-          const possibleNames = [
-            `${angle}`,
-            `${charDir}-${angle}`,
-            `${charDir}_${angle}`
-          ];
-          for (const name of possibleNames) {
-            for (const ext of ['.png', '.jpg', '.jpeg', '.webp']) {
-              const filePath = path.join(searchDir, `${name}${ext}`);
-              try {
-                if (fs.existsSync(filePath)) {
-                  foundPaths.push(`image://characters/${charDir}/${angle}${ext}`);
-                  console.log(`[_buildCharacterRef] 找到定妆照: ${filePath}`);
-                  break;
-                }
-              } catch (e) {
-                // 路径检查失败,跳过
-              }
-            }
-            if (foundPaths.length > 0) break;
+      // v2.1.5-fix: 递归搜索所有子目录，收集所有图片文件
+      function searchDir(dir) {
+        if (!fs.existsSync(dir)) return;
+        const items = fs.readdirSync(dir, { withFileTypes: true });
+        for (const item of items) {
+          const fullPath = path.join(dir, item.name);
+          if (item.isDirectory()) {
+            searchDir(fullPath);  // 递归子目录
+          } else if (item.isFile() && /\.(png|jpg|jpeg|webp)$/i.test(item.name)) {
+            const relativePath = path.relative(baseDir, fullPath);
+            foundPaths.push(`image://characters/${charDir}/${relativePath}`);
+            console.log(`[_buildCharacterRef] 找到定妆照: ${fullPath}`);
           }
-          if (foundPaths.length > 0) break;
         }
-        if (foundPaths.length > 0) break;
+      }
+
+      // 搜索 portraits 目录（含子目录）
+      searchDir(portraitsDir);
+      // 如果 portraits 没找到，也搜索角色根目录
+      if (foundPaths.length === 0) {
+        searchDir(baseDir);
       }
 
       if (foundPaths.length > 0) {

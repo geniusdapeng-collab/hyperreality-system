@@ -114,7 +114,8 @@ ${shotsInfo}
 
   _fallback(shots) {
     console.log(`[VisualLanguageAgent] 使用降级规则...`);
-    // 【v2.1.4-fix13-审计修复】提供完整的降级默认值，避免空字段
+    // v2.1.5-fix: 统一降级数据格式与LLM正常返回格式一致
+    // timeline字段必须与正常返回格式一致: timeRange/cameraMovement/shotType/purpose
     return {
       shots: shots.map(shot => ({
         shotId: shot.shotId,
@@ -134,8 +135,8 @@ ${shotsInfo}
         },
         lightingString: shot.lightingString || '柔和顶光照明，自然补光填充，白天室内明亮氛围',
         timeline: shot.timeline || [
-          { time: 'T00:00-00:03', action: '镜头稳定，角色入画', purpose: '建立场景' },
-          { time: 'T00:03-00:06', action: '保持构图，角色开始动作', purpose: '推进叙事' }
+          { segment: 1, timeRange: '0s-3s', cameraMovement: '镜头稳定，角色入画', shotType: 'wide', purpose: '建立场景' },
+          { segment: 2, timeRange: '3s-6s', cameraMovement: '保持构图，角色开始动作', shotType: 'medium', purpose: '推进叙事' }
         ]
       }))
     };
