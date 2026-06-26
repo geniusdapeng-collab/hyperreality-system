@@ -64,7 +64,7 @@ class HyperrealitySystem {
     });
     this.stabilityShield.initialize(this.productionEngine);
     
-    this.version = '2.1.5-shield';
+    this.version = '2.1.5';
   }
 
   /**
