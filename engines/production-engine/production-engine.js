@@ -88,6 +88,7 @@ class ProductionEngine {
     
     const { Phase1SceneDesign } = require('./phases/phase-1-scene-design');
     const { Phase2VisualAudio } = require('./phases/phase-2-visual-audio');
+    const { Phase3PromptFusion } = require('./phases/phase-3-prompt-fusion');
     
     const commonOptions = {
       agents: this.agents,
@@ -102,6 +103,7 @@ class ProductionEngine {
     
     this.phase1 = new Phase1SceneDesign(commonOptions);
     this.phase2 = new Phase2VisualAudio(commonOptions);
+    this.phase3 = new Phase3PromptFusion(commonOptions);
   }
 
   /**
@@ -588,9 +590,19 @@ class ProductionEngine {
         }
       }
 
-      // ----- Phase 3:PromptFusion(串行模式,每镜头独立 LLM 调用)-----
-      // 【审计修复】Phase 1 失败不应跳过 Phase 2/3
-      if (startPhase <= 3) {
+      // ----- Phase 3:PromptFusion -----
+      // v2.1.5-refactor: 条件使用新 Phase 架构
+      if (this.phase3) {
+        const phase3Result = await this.phase3.execute({ 
+          shots: currentShots, 
+          result, 
+          adaptedBlueprint 
+        });
+        if (phase3Result.success) {
+          currentShots = phase3Result.shots;
+        }
+      } else if (startPhase <= 3) {
+      // 旧架构：直接内嵌（保持原有代码）
         if (phase1Failed) {
           this.log('PHASE-3', '⚠️ Phase 1 已失败，Phase 3 用现有 shots 尝试继续（降级模式）');
         }
