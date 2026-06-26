@@ -252,8 +252,20 @@ async function runTest() {
   }
 
   // 保存测试报告
-  fs.writeFileSync('/tmp/hyperreality-test-post/report.md', report);
-  console.log('\n💾 测试报告已保存到: /tmp/hyperreality-test-post/report.md');
+  const reportPath = '/tmp/hyperreality-test-post/report.md';
+  fs.writeFileSync(reportPath, report);
+  
+  // v2.1.5-fix: 写入验证
+  if (!fs.existsSync(reportPath)) {
+    console.error(`❌ 测试报告写入后不存在: ${reportPath}`);
+  } else {
+    const stats = fs.statSync(reportPath);
+    if (stats.size === 0) {
+      console.error(`❌ 测试报告写入后大小为0: ${reportPath}`);
+    } else {
+      console.log(`\n💾 测试报告已保存到: ${reportPath} (${stats.size} bytes)`);
+    }
+  }
 }
 
 runTest().catch(err => {

@@ -700,6 +700,15 @@ class CreativeIntensityRecommender {
       const dir = require('path').dirname(this.dataPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(this.dataPath, JSON.stringify(this.data, null, 2));
+      
+      // v2.1.5-fix: 写入验证
+      if (!fs.existsSync(this.dataPath)) {
+        throw new Error(`数据文件写入后不存在: ${this.dataPath}`);
+      }
+      const stats = fs.statSync(this.dataPath);
+      if (stats.size === 0) {
+        throw new Error(`数据文件写入后大小为0: ${this.dataPath}`);
+      }
     } catch (e) {
       console.warn(`[Recommender] 数据保存失败: ${e.message}`);
     }

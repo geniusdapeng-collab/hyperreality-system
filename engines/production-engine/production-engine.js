@@ -210,7 +210,17 @@ class ProductionEngine {
       
       fs.writeFileSync(tmpFile, safeData, 'utf8');
       fs.renameSync(tmpFile, file);
-      this.log('CHECKPOINT', `✅ ${phase} 已落盘 → ${path.basename(file)}`);
+      
+      // v2.1.5-fix: 写入验证
+      if (!fs.existsSync(file)) {
+        throw new Error(`checkpoint文件写入后不存在: ${file}`);
+      }
+      const stats = fs.statSync(file);
+      if (stats.size === 0) {
+        throw new Error(`checkpoint文件写入后大小为0: ${file}`);
+      }
+      
+      this.log('CHECKPOINT', `✅ ${phase} 已落盘 → ${path.basename(file)} (${stats.size} bytes)`);
     } catch (e) {
       this.log('CHECKPOINT', `保存失败(忽略): ${e.message}`);
     }

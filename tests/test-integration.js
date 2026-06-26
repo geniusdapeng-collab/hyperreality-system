@@ -154,16 +154,32 @@ async function runTest() {
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     
-    fs.writeFileSync(
-      path.join(outputDir, `test-result-${timestamp}.json`),
-      JSON.stringify(result, null, 2)
-    );
+    const resultPath = path.join(outputDir, `test-result-${timestamp}.json`);
+    fs.writeFileSync(resultPath, JSON.stringify(result, null, 2));
+    
+    // v2.1.5-fix: 写入验证
+    if (!fs.existsSync(resultPath)) {
+      console.error(`❌ 结果文件写入后不存在: ${resultPath}`);
+    } else {
+      const stats = fs.statSync(resultPath);
+      if (stats.size === 0) {
+        console.error(`❌ 结果文件写入后大小为0: ${resultPath}`);
+      }
+    }
     
     if (result.finalReport) {
-      fs.writeFileSync(
-        path.join(outputDir, `test-report-${timestamp}.md`),
-        result.finalReport
-      );
+      const reportPath = path.join(outputDir, `test-report-${timestamp}.md`);
+      fs.writeFileSync(reportPath, result.finalReport);
+      
+      // v2.1.5-fix: 写入验证
+      if (!fs.existsSync(reportPath)) {
+        console.error(`❌ 报告文件写入后不存在: ${reportPath}`);
+      } else {
+        const stats = fs.statSync(reportPath);
+        if (stats.size === 0) {
+          console.error(`❌ 报告文件写入后大小为0: ${reportPath}`);
+        }
+      }
     }
     
     console.log(`\n💾 测试结果已保存到: ${outputDir}`);

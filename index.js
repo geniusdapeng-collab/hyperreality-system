@@ -19,6 +19,20 @@ const { FieldGuard } = require('./engines/field-guard');
 const fs = require('fs');
 const path = require('path');
 
+// v2.1.5-fix: 日志级别控制
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
+const CURRENT_LOG_LEVEL = LOG_LEVELS[LOG_LEVEL] || 1;
+
+function log(level, ...args) {
+  if (LOG_LEVELS[level] >= CURRENT_LOG_LEVEL) {
+    const prefix = `[${level.toUpperCase()}]`;
+    if (level === 'error') console.error(prefix, ...args);
+    else if (level === 'warn') console.warn(prefix, ...args);
+    else console.log(prefix, ...args);
+  }
+}
+
 class HyperrealitySystem {
   constructor(options = {}) {
     this.requirementListBuilder = new RequirementListBuilder(options.requirementListBuilder);
@@ -1055,6 +1069,7 @@ class HyperrealitySystem {
    */
   async save(result, outputDir) {
     const fs = require('fs').promises;
+    const fsSync = require('fs');
     const path = require('path');
 
     await fs.mkdir(outputDir, { recursive: true });
@@ -1062,42 +1077,60 @@ class HyperrealitySystem {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const basePath = path.join(outputDir, `hyperreality-${timestamp}`);
 
+    // v2.1.5-fix: 安全写入函数（带验证）
+    const safeWrite = async (filePath, content, label) => {
+      await fs.writeFile(filePath, content);
+      // 写入验证
+      if (!fsSync.existsSync(filePath)) {
+        throw new Error(`${label} 写入后文件不存在: ${filePath}`);
+      }
+      const stats = fsSync.statSync(filePath);
+      if (stats.size === 0) {
+        throw new Error(`${label} 写入后文件大小为0: ${filePath}`);
+      }
+    };
+
     // 保存完整结果 JSON
-    await fs.writeFile(
+    await safeWrite(
       `${basePath}-result.json`,
-      JSON.stringify(result, null, 2)
+      JSON.stringify(result, null, 2),
+      '结果JSON'
     );
 
     // 保存 Markdown 报告
     if (result.finalReport) {
-      await fs.writeFile(
+      await safeWrite(
         `${basePath}-report.md`,
-        result.finalReport
+        result.finalReport,
+        '报告MD'
       );
     }
 
     // 保存提示词审核报告
     if (result.confirmations?.prompts?.report) {
-      await fs.writeFile(
+      await safeWrite(
         `${basePath}-prompt-review.md`,
-        result.confirmations.prompts.report
+        result.confirmations.prompts.report,
+        '提示词审核'
       );
     }
 
     // 保存后期制作报告
     if (result.stages?.postProductionEngine?.report) {
-      await fs.writeFile(
+      await safeWrite(
         `${basePath}-post-production.md`,
-        result.stages.postProductionEngine.report
+        result.stages.postProductionEngine.report,
+        '后期制作报告'
       );
     }
 
     // 保存 Prompts 单独文件
     if (result.stages?.productionEngine?.prompts) {
       const promptsMD = this._generatePromptsOnlyMD(result.stages.productionEngine.prompts);
-      await fs.writeFile(
+      await safeWrite(
         `${basePath}-prompts.md`,
-        promptsMD
+        promptsMD,
+        'Prompts清单'
       );
     }
 

@@ -107,6 +107,15 @@ class RenderingEngine {
           fs.mkdirSync(this.config.outputDir, { recursive: true });
         }
         fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        
+        // v2.1.5-fix: 写入验证
+        if (!fs.existsSync(manifestPath)) {
+          throw new Error(`清单文件写入后不存在: ${manifestPath}`);
+        }
+        const stats = fs.statSync(manifestPath);
+        if (stats.size === 0) {
+          throw new Error(`清单文件写入后大小为0: ${manifestPath}`);
+        }
 
         // 调用现有系统的提交核心
         const submitResult = await this.submitter.submit(shots, {
