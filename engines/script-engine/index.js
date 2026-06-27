@@ -7,6 +7,7 @@ const { ScriptBlueprint } = require('./core/script-blueprint');
 const { ScriptGenerator } = require('./core/script-generator');
 const { ScriptValidator } = require('./core/script-validator');
 const { ScriptBlueprintAdapter } = require('./core/adapter');
+const { CreativeIntensityEngine } = require('./core/creative-intensity-engine');
 const { 示例世界Extension: NirathExtension } = require('./extensions/nirath-extension');
 
 class ScriptEngine {
@@ -32,6 +33,24 @@ class ScriptEngine {
     // 1. 解析意图
     const userIntent = this.intentParser.parse(rawInput, metadata);
     console.log(`[ScriptEngine] 意图解析完成: ${userIntent.parsed.primary_mode}`);
+
+    // 【P0-7 修复】接入 CreativeIntensityEngine，创意指数影响"怎么拍"
+    const ciValue = metadata.creativeIntensity || metadata.creative_intensity || 0.7;
+    try {
+      const creativeEngine = new CreativeIntensityEngine();
+      const engineConfigs = creativeEngine.generateEngineConfigs(ciValue, userIntent.parsed?.narrative_mode || 'dialogue');
+      const layerInstructions = creativeEngine.generateLayerInstructions('Layer 1', ciValue, userIntent.parsed?.narrative_mode || 'dialogue');
+      userIntent.metadata = userIntent.metadata || {};
+      userIntent.metadata._creativeIntensity = {
+        intensity: ciValue,
+        instructions: layerInstructions,
+        configs: engineConfigs
+      };
+      userIntent.metadata.creativeIntensity = ciValue; // camelCase 兜底
+      console.log(`[ScriptEngine] CreativeIntensity 接入完成: intensity=${ciValue}`);
+    } catch (e) {
+      console.warn('[ScriptEngine] CreativeIntensity 接入失败:', e.message);
+    }
 
     // 2. 生成剧本（需要 LLM）
     let blueprint;

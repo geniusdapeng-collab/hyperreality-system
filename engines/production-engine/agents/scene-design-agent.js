@@ -223,11 +223,12 @@ ${sceneOptions}
     console.log(`[SceneDesignAgent] 使用降级规则...`);
     return {
       shots: shots.map(shot => ({
+        ...shot, // 【P1-5 修复】保留上游全部字段
         shotId: shot.shotId,
         scene: shot.scene || '',
         mood: shot.mood || '',
         action: shot.action || '',
-        emotional_target: ''
+        emotional_target: shot.emotional_target || ''
       }))
     };
   }

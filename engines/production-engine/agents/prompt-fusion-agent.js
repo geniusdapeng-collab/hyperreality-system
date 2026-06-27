@@ -276,8 +276,14 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
     // 【v2.1.4-fix10】在 LLM 输出入口统一标准化为 snake_case
     fields = normalizeFields(fields);
     
-    // 【v2.1.4-fix10-P25-fix3】字段完整性校验 + 定向补齐
-    fields = await this._ensureFieldCompleteness(shot, fields, ratio, characters);
+    // 【P1-4 修复】根据LLM结果和字段完整性标记降级状态
+    const usedFallback = llmResult.degraded || Object.keys(fields).length === 0;
+    const completeness = await this._ensureFieldCompleteness(shot, fields, ratio, characters);
+    fields = completeness.fields;
+    const finalDegraded = usedFallback || completeness.usedRuleFallback;
+    const finalDegradeReason = finalDegraded
+      ? (usedFallback ? '主LLM失败,规则兜底' : '部分字段规则补齐')
+      : null;
     
     // 【v2.1.4-fix9-P25-fix7】将 fields 中的关键字段展开到 shot 顶层
     const expandedFields = { ...fields };
@@ -292,8 +298,8 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
       fusionText: fields.scene || '',
       prompt: fullPrompt,
       promptCharCount: this._countChars(fullPrompt),
-      degraded: false,
-      degradeReason: null
+      degraded: finalDegraded, // 【P1-4 修复】真实降级标记
+      degradeReason: finalDegradeReason
     };
   }
 
@@ -302,6 +308,7 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
    * 先校验，缺哪些就只让 LLM 补哪些，一次轻量调用搞定
    */
   async _ensureFieldCompleteness(shot, fields, ratio, characters) {
+    let usedRuleFallback = false;
     // 1. 找出缺失或过短字段
     const missing = REQUIRED_FIELDS.filter(f => {
       const v = fields[f];
@@ -310,7 +317,7 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
       return min > 0 && this._countChars(String(v)) < min;
     });
 
-    if (missing.length === 0) return fields; // 全齐，无需补
+    if (missing.length === 0) return { fields, usedRuleFallback: false }; // 全齐，无需补
 
     console.log(`[PromptFusion] ${shot.shotId} 缺失/过短字段 ${missing.length} 个: ${missing.join(',')} → 定向补齐`);
 
@@ -319,9 +326,11 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
     const fillSchema = { shotId: shot.shotId, fields: Object.fromEntries(missing.map(k => [k, STANDARD_FIELDS_SCHEMA[k]])) };
 
     try {
+      // 【P1-2 修复】fill调用用小预算，不占用主调用时间
       const fillResult = await this._callLLM(fillPrompt, fillSchema, () => null, {
         maxRetries: 1,
-        maxTokens: 4096 // 只补几个字段，预算充足
+        maxTokens: 4096,
+        timeoutMs: 45000 // fill 用小预算
       });
       const fillFields = fillResult?.result?.fields || fillResult?.result?.[shot.shotId] || {};
       const normalized = normalizeFields(fillFields);
@@ -337,6 +346,7 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
     // 3. 仍缺的字段，才用规则兜底（明确标记来源，便于审计）
     const stillMissing = REQUIRED_FIELDS.filter(f => !fields[f] || String(fields[f]).trim() === '');
     if (stillMissing.length > 0) {
+      usedRuleFallback = true;
       const shotData = this._extractFieldsFromShot(shot);
       for (const f of stillMissing) {
         if (shotData[f]) fields[f] = shotData[f];
@@ -345,7 +355,7 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
       console.warn(`[PromptFusion] ${shot.shotId} 规则兜底 ${stillMissing.length} 字段`);
     }
 
-    return fields;
+    return { fields, usedRuleFallback };
   }
 
   /**
@@ -371,7 +381,8 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
 
       try {
         console.log(`  🔄 补全尝试 ${attempt}/${maxRetries}...`);
-        const filled = await this._ensureFieldCompleteness(shot, fields, ratio, characters);
+        const completeness = await this._ensureFieldCompleteness(shot, fields, ratio, characters);
+        const filled = completeness.fields;
         
         // 检查是否还有空字段
         const stillEmpty = REQUIRED_FIELDS.filter(f => !filled[f] || String(filled[f]).trim() === '');

@@ -69,6 +69,9 @@ class Phase35FieldQuality extends PhaseExecutor {
       
       const { finalShots, summary } = await pipeline.runAll(shots);
       
+      // 【P1-8 修复】Phase3.5 成功后保存 checkpoint
+      await this.saveCheckpoint('phase3.5', finalShots, { opening: result.opening, llmStats: result.llmStats });
+      
       const timing = Date.now() - startTime;
       this.log('FIELD-QUALITY', `完成 (${timing}ms) | 通过:${summary.passed}/${summary.totalShots} | 修复:${summary.totalRepairs} (${mode})`);
 

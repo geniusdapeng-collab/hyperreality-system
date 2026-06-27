@@ -20,31 +20,39 @@ class QualityGate {
   run(prompts) {
     const checks = [];
     for (const p of prompts) {
-      // v2.0.5-fix: 质量门也做类型保护,确保 .trim() 安全
-      const camStr = String(p.cameraString || (typeof p.camera === 'string' ? p.camera : '') || '');
-      const lightStr = String(p.lightingString || (typeof p.lighting === 'string' ? p.lighting : '') || '');
-      const tlStr = String(p.timelineString || (typeof p.timeline === 'string' ? p.timeline : '') || '');
+      // 【P1-11 修复】改读25字段标准名，兼容camelCase和旧xxxString
+      const camStr = String(
+        p.camera_movement || p.cameraMovement || p.cameraString
+        || (typeof p.camera === 'string' ? p.camera : '') || ''
+      );
+      const lightStr = String(
+        p.lighting || p.lightingString
+        || (typeof p.lighting === 'object' ? JSON.stringify(p.lighting) : '') || ''
+      );
+      const tlStr = String(
+        p.timeline || p.timelineString
+        || (Array.isArray(p.timeline) ? JSON.stringify(p.timeline) : '') || ''
+      );
       const bgStr = String(p.backgroundSoundString || (typeof p.backgroundSound === 'string' ? p.backgroundSound : '') || '');
 
       const check = {
         shotId: p.shotId,
         promptLength: p.promptCharCount || 0,
 
-        // 格式无关:只看字段是否存在且有内容
         hasScene: !!(p.scene && String(p.scene).trim().length > 8),
         hasMood: !!(p.mood && String(p.mood).trim().length > 1),
         hasCamera: camStr.trim().length > 5,
         hasLighting: lightStr.trim().length > 5,
         hasCharacter: !!(p.character && p.character !== 'NONE'),
         hasAction: !!(p.action && String(p.action).length > 3),
-        hasTimeline: tlStr.trim().length > 3 || Array.isArray(p.timeline) && p.timeline.length > 0,
+        hasTimeline: tlStr.trim().length > 3 || (Array.isArray(p.timeline) && p.timeline.length > 0),
         hasBackgroundSound: bgStr.trim().length > 3,
         hasPrompt: !!(p.prompt && String(p.prompt).length > 50),
 
         withinLimit: (p.promptCharCount || 0) <= this.config.maxPromptLength,
 
-        // 片头专属(S00 在 openingData 中,这里仅保留兼容检查)
-        isOpening: p.shotId === 'S00',
+        // 【P1-11 修复】复用 isOpeningShot 统一片头判断
+        isOpening: p.shotId === 'S00' || p.shotId === 'SC00' || p.shotId?.startsWith('S00-') || p.shotId?.startsWith('SC00-'),
         hasAudioLayer: p.shotId === 'S00' ? (!!p.audioLayerString && p.audioLayerString.length > 5) : true,
         hasTitleOverlay: p.shotId === 'S00' ? (!!p.titleOverlayString && p.titleOverlayString.length > 5) : true
       };

@@ -200,6 +200,18 @@ class RuleRepairer {
       }
     }
 
+    // 【P1-10 修复】RuleRepairer 写值同步 snake/camel/fields 三处
+    for (const action of actions) {
+      const fieldEn = action.fieldEn;
+      const fixed = repaired[fieldEn];
+      if (fixed === undefined) continue;
+      const camel = fieldEn.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      if (camel !== fieldEn) repaired[camel] = fixed;
+      if (repaired.fields && typeof repaired.fields === 'object') {
+        repaired.fields[fieldEn] = fixed;
+      }
+    }
+
     return { repaired, actions };
   }
 }

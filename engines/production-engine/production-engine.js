@@ -482,6 +482,13 @@ class ProductionEngine {
     const globalDeadline = startTime + HARD_BUDGET_MS - SAFETY_MARGIN_MS;
     this._globalDeadline = globalDeadline;
     this._setAgentDeadline(globalDeadline);
+    // 【P1-7 修复】Phase35 FieldQuality 同步下发 deadline
+    if (this.phase35) {
+      this.phase35.globalDeadline = globalDeadline;
+      if (this.phase35.fieldQualityPipeline && typeof this.phase35.fieldQualityPipeline.setDeadline === 'function') {
+        this.phase35.fieldQualityPipeline.setDeadline(globalDeadline);
+      }
+    }
 
     this.log('PRODUCE', `🎬 ProductionEngine 启动 | LLM=${this.agentConfig.enableLLMAgents} | 预算 ${Math.round(HARD_BUDGET_MS / 1000)}s | 余量 ${Math.round(SAFETY_MARGIN_MS / 1000)}s | 堆 ${this._checkMemory('start')}MB`);
 
@@ -513,9 +520,10 @@ class ProductionEngine {
         result.llmStats = ckpt.llmStats || {};
         if (ckpt.phase === 'phase1') startPhase = 2;
         else if (ckpt.phase === 'phase2') startPhase = 3;
-        else if (ckpt.phase === 'phase3') {
+        else if (ckpt.phase === 'phase3') startPhase = 4; // 【P1-8 修复】phase3完成后应进phase3.5
+        else if (ckpt.phase === 'phase3.5') {
           startPhase = 99;
-          this.log('RESUME', '✅ 全部 Phase 已完成,跳过 LLM 直接进 Quality Gate');
+          this.log('RESUME', '✅ Phase3.5 已完成,跳过 LLM 直接进 Quality Gate');
         }
         result.resumed = true;
       }

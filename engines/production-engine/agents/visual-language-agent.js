@@ -125,10 +125,9 @@ ${shotsInfo}
 
   _fallback(shots) {
     console.log(`[VisualLanguageAgent] 使用降级规则...`);
-    // v2.1.5-fix: 统一降级数据格式与LLM正常返回格式一致
-    // timeline字段必须与正常返回格式一致: timeRange/cameraMovement/shotType/purpose
     return {
       shots: shots.map(shot => ({
+        ...shot, // 【P1-5 修复】保留上游全部字段
         shotId: shot.shotId,
         camera: shot.camera || {
           shot_size: 'medium',
