@@ -590,6 +590,9 @@ class PostProductionEngine {
       // B10-fix: 标准输出用 duration 字段，不是 timing.duration
       const totalDuration = shots.reduce((sum, s) => sum + (s.duration || s.timing?.duration || 25), 0);
     
+    // 【P0-11 修复】构建 renderResult 映射，消费真实渲染路径
+    const renderMap = new Map((renderResult?.results || []).map(r => [r.shotId, r]));
+    
     let html = [];
     
     // HTML 头部
@@ -644,10 +647,14 @@ class PostProductionEngine {
       // B10-fix: 优先使用顶层 duration 字段
       const duration = shot.duration || shot.timing?.duration || 25;
       
-      // 视频片段（实际使用时替换为渲染后的视频文件）
+      // 【P0-11 修复】视频源优先使用 renderResult 真实路径，非硬编码文件名
+      const renderEntry = renderMap.get(shot.shotId);
+      const videoSrc = renderEntry?.videoPath || renderEntry?.videoUrl || `shot-${shot.shotId}.mp4`;
+      
+      // 视频片段
       html.push(`  <!-- Shot ${shot.shotId} -->`);
       html.push(`  <video class="clip" data-start="${currentTime}" data-duration="${duration}" data-track-index="${trackIndex++}"`);
-      html.push(`         src="shot-${shot.shotId}.mp4" muted playsinline style="width:100%; height:100%;"></video>`);
+      html.push(`         src="${videoSrc}" muted playsinline style="width:100%; height:100%;"></video>`);
       html.push('');
       
       // 转场效果（镜头之间）
@@ -680,8 +687,14 @@ class PostProductionEngine {
       for (const track of musicTracks) {
         const start = track.sceneId ? this.getSceneStartTime(track.sceneId, shots) : 0;
         const duration = track.searchParams?.duration || 25;
-        html.push(`  <audio class="clip" data-start="${start}" data-duration="${duration}" data-track-index="${trackIndex++}"`);
-        html.push(`         data-volume="${track.config.volume}" src="music-${track.sceneId}.mp3"></audio>`);
+        // 【P0-11 修复】音乐源优先使用真实 URL 或 filePath，不存在时不生成 audio 标签
+        const musicSrc = track.source?.url || track.filePath;
+        if (musicSrc) {
+          html.push(`  <audio class="clip" data-start="${start}" data-duration="${duration}" data-track-index="${trackIndex++}"`);
+          html.push(`         data-volume="${track.config.volume}" src="${musicSrc}"></audio>`);
+        } else {
+          html.push(`  <!-- 音乐 ${track.sceneId}: 无可用音源 -->`);
+        }
       }
       html.push('');
     }
@@ -753,24 +766,52 @@ class PostProductionEngine {
    * 质量检查
    */
   async qualityCheck(versions) {
+    const fs = require('fs');
     const issues = [];
     
-    // 检查每个版本
+    // 【P1-21 修复】qualityCheck 改为实质性检查：文件存在、引用有效、shots非空
     for (const [version, data] of Object.entries(versions)) {
-      // 检查 HTML 文件是否存在
+      // 1. 检查 HTML 文件真实存在
       if (!data.htmlPath) {
         issues.push(`版本 ${version}: HTML 文件路径缺失`);
+      } else if (!fs.existsSync(data.htmlPath)) {
+        issues.push(`版本 ${version}: HTML 文件不存在 (${data.htmlPath})`);
       }
       
-      // 检查版本特征是否匹配
+      // 2. 检查 shots 非空
+      if (!data.shots || data.shots.length === 0) {
+        issues.push(`版本 ${version}: shots 为空`);
+      }
+      
+      // 3. 检查引用的视频/音频文件存在
+      if (data.shots && data.shots.length > 0) {
+        for (const shot of data.shots) {
+          const videoSrc = shot.videoSrc || shot.videoPath || `shot-${shot.shotId}.mp4`;
+          if (videoSrc && !videoSrc.startsWith('http') && !fs.existsSync(videoSrc)) {
+            issues.push(`版本 ${version}: 视频文件不存在 (${videoSrc})`);
+          }
+        }
+      }
+      
+      // 4. 检查音乐文件存在
+      if (data.musicTracks && data.musicTracks.length > 0) {
+        for (const track of data.musicTracks) {
+          const musicSrc = track.source?.url || track.filePath;
+          if (musicSrc && !musicSrc.startsWith('http') && !fs.existsSync(musicSrc)) {
+            issues.push(`版本 ${version}: 音乐文件不存在 (${musicSrc})`);
+          }
+        }
+      }
+      
+      // 5. 特征配置保留为辅助检查（非阻塞）
       const expectedFeatures = this.getVersionConfig(version);
       if (JSON.stringify(expectedFeatures) !== JSON.stringify(data.features)) {
-        issues.push(`版本 ${version}: 特征配置不匹配`);
+        issues.push(`版本 ${version}: 特征配置不匹配(警告)`);
       }
     }
     
     return {
-      passed: issues.length === 0,
+      passed: issues.filter(i => !i.includes('(警告)')).length === 0,
       issues
     };
   }

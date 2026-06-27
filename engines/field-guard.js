@@ -68,9 +68,19 @@ class FieldGuard {
       console.warn(`${this.logPrefix} ${context} 已就地修复 ${failingIdx.length} 个镜头`);
     }
 
+    // 【FieldGuard 修复】区分严格模式：strict=true 时 P0 缺失视为失败
+    const criticalErrors = errors.filter(e => /P0 Missing/.test(e));
+    const passed = this.strict ? criticalErrors.length === 0 : true;
+    
     return {
       shots: normalized,
-      report: { passed: true, errors: [], warnings: errors, details, summary: { totalShots: normalized.length } }
+      report: {
+        passed,
+        errors: this.strict ? criticalErrors : [],
+        warnings: this.strict ? errors.filter(e => !/P0 Missing/.test(e)) : errors,
+        details,
+        summary: { totalShots: normalized.length, fixedShots: failingIdx.length }
+      }
     };
   }
 

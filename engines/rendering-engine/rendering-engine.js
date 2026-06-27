@@ -21,7 +21,8 @@ class RenderingEngine {
     this.config = {
       apiKey: options.apiKey || process.env.VOLCENGINE_ARK_API_KEY,
       // 【v2.1.4-fix13-审计修复】endpoint 从环境变量读取，消除硬编码
-      endpoint: options.endpoint || process.env.VOLCENGINE_ARK_ENDPOINT || 'ep-20260518004622-jp46s',
+      // 【P1-25 修复】默认改 null，未配置时显式报错，避免凭据泄漏+跨账号不可用
+      endpoint: options.endpoint || process.env.VOLCENGINE_ARK_ENDPOINT || null,
       apiUrl: options.apiUrl || 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
       maxConcurrent: options.maxConcurrent || 3,
       charactersDir: options.charactersDir || path.join(__dirname, '../../../characters'),
@@ -77,13 +78,25 @@ class RenderingEngine {
     };
 
     try {
-      // 检查 API 密钥
+      // 检查 API 密钥和 endpoint
       if (!this.config.apiKey && !options.dryRun) {
         throw new Error('VOLCENGINE_ARK_API_KEY 未设置，无法渲染');
       }
+      if (!this.config.endpoint && !options.dryRun) {
+        throw new Error('VOLCENGINE_ARK_ENDPOINT 未设置，无法渲染');
+      }
+      
+      // 【P1-24 修复】过滤空/无效 prompt，避免单坏镜头拖垮整批
+      const validPrompts = prompts.filter(p => p && typeof p.prompt === 'string' && p.prompt.length > 50);
+      if (validPrompts.length === 0) {
+        throw new Error('无有效 prompt（所有 prompt 为空或长度不足50字符）');
+      }
+      if (validPrompts.length < prompts.length) {
+        this.log('RENDER', `⚠️ 过滤掉 ${prompts.length - validPrompts.length} 个无效 prompt`);
+      }
 
       // 构建渲染数据结构（兼容现有系统）
-      const shots = prompts.map(p => this._convertToShotFormat(p));
+      const shots = validPrompts.map(p => this._convertToShotFormat(p));
 
       if (options.dryRun) {
         // 模拟模式：只验证不提交
@@ -129,16 +142,22 @@ class RenderingEngine {
         result.success = submitResult.success;
 
       } else {
-        // 无提交器，模拟
-        this.log('RENDER', '⚠️ 无提交器，使用模拟模式');
+        // 【P0-10 修复】无提交器时显式失败，不再返回 mock 假成功
+        this.log('RENDER', '❌ 渲染核心未加载(render-submitter-core.js缺失)，无法真实渲染');
+        result.success = false;
+        result.degraded = true;
+        result.mode = 'mock';
+        result.errors.push('RenderSubmitterCore 未加载');
         result.results = shots.map(s => ({
-          success: true,
+          success: false,
           shotId: s.shotId,
-          taskId: `MOCK-${s.shotId}`,
-          status: 'mock'
+          taskId: null,
+          status: 'mock',
+          error: '渲染核心未加载'
         }));
-        result.submitted = shots.length;
-        result.success = true;
+        result.submitted = 0;
+        result.failed = shots.length;
+        this.log('RENDER', `❌ 渲染失败: 0/${prompts.length} 成功 (RenderSubmitterCore未加载)`);
       }
 
       result.timing.total = Date.now() - startTime;
@@ -171,7 +190,7 @@ class RenderingEngine {
       // 定妆照引用（v6.37-P0: 从 characterRef 解析）
       referenceImages: this._parseCharacterRef(prompt.characterRef),
       // 字符数
-      promptLength: prompt.promptCharCount || prompt.length || 0,
+      promptLength: prompt.promptCharCount || (typeof prompt.prompt === 'string' ? prompt.prompt.length : 0) || 0,
       // v6.37-P0: 保留新字段用于调试
       mood: prompt.mood,
       camera: prompt.camera,
@@ -187,7 +206,8 @@ class RenderingEngine {
     if (!characterRef || characterRef === 'NONE') return [];
     
     const refs = [];
-    const parts = characterRef.split(' | ');
+    // 【P1-17 修复】多角色分隔符统一为 '; '（与 buildCharacterRef 构建侧一致）
+    const parts = characterRef.split('; ');
     
     for (const part of parts) {
       const match = part.match(/(.+?):\s*(.+)/);
@@ -355,9 +375,13 @@ class RenderingEngine {
         })
       );
 
-      // 汇总状态
-      const allDone = results.every(r => r.status === 'succeeded' || r.status === 'failed');
-      const anyFailed = results.some(r => r.status === 'failed');
+      // 【P1-19 修复】任务状态判定支持更多终态变体，避免永久 in_progress
+      const TERMINAL_OK = new Set(['succeeded', 'success', 'completed', 'done']);
+      const TERMINAL_FAIL = new Set(['failed', 'failure', 'error', 'canceled', 'cancelled', 'timeout', 'rejected']);
+      const isTerminal = (s) => TERMINAL_OK.has(s) || TERMINAL_FAIL.has(s);
+      
+      const allDone = results.every(r => isTerminal(r.status));
+      const anyFailed = results.some(r => TERMINAL_FAIL.has(r.status));
 
       return {
         status: allDone ? (anyFailed ? 'partial_failure' : 'completed') : 'in_progress',

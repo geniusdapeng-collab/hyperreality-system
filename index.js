@@ -395,7 +395,9 @@ class HyperrealitySystem {
           const stage3Start = Date.now();
 
           renderResult = await this.renderingEngine.render(productionResult.prompts, {
-            dryRun: options.dryRun || !this.renderingEngine.config.apiKey
+            // 【P0-9 修复】dryRun 仅由显式选项控制，不再因缺 apiKey 强制开启
+            // 无 apiKey 时让渲染引擎自己抛错，暴露配置问题
+            dryRun: options.dryRun === true
           });
 
           result.stages.renderingEngine = {
@@ -450,7 +452,14 @@ class HyperrealitySystem {
       }
 
       // ========== 汇总 ==========
-      result.success = true;
+      // 【P0-8 修复】result.success 不再无条件置 true，基于各阶段实际状态聚合
+      const hasRenderError = result.stages.renderingEngine?.error || (result.stages.renderingEngine?.render?.success === false && !result.stages.renderingEngine?.skipped);
+      const hasPostProdError = result.stages.postProductionEngine?.error || (result.stages.postProductionEngine?.success === false && !result.stages.postProductionEngine?.skipped);
+      const hasProductionError = productionResult?.success === false;
+      result.success = result.errors.length === 0 && !hasRenderError && !hasPostProdError && !hasProductionError;
+      if (result.errors.length > 0 || hasRenderError || hasPostProdError || hasProductionError) {
+        result.degraded = true;
+      }
       result.timing.total = Date.now() - totalStart;
 
       console.log(`\n🏁 [完成] 总耗时: ${result.timing.total}ms`);
