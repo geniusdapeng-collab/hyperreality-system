@@ -636,11 +636,20 @@ ${missing.map(f => `- ${f}：${FIELD_DESCS[f]}`).join('\n')}
     if (portraitsField) parts.push(`【定妆照】${portraitsField}`);
 
     // 台词
-    const dialogueField = getField('dialogue');
-    if (dialogueField) {
-      // 【v2.1.4-fix13】确保台词有【台词】前缀
-      const dialogueText = dialogueField.startsWith('【台词】') ? dialogueField : `【台词】${dialogueField}`;
-      parts.push(dialogueText);
+    // 【v2.1.6】优先使用 dialogueBlocks 渲染为 Seedance 2.0 内联格式
+    if (shot.dialogueBlocks && Array.isArray(shot.dialogueBlocks) && shot.dialogueBlocks.length > 0) {
+      const renderedDialogue = this._renderDialogueBlocks(shot.dialogueBlocks, shot.duration || 10);
+      if (renderedDialogue) {
+        parts.push(renderedDialogue);
+      }
+    } else {
+      // 回退：使用旧的 dialogue 字段
+      const dialogueField = getField('dialogue');
+      if (dialogueField) {
+        // 【v2.1.4-fix13】确保台词有【台词】前缀
+        const dialogueText = dialogueField.startsWith('【台词】') ? dialogueField : `【台词】${dialogueField}`;
+        parts.push(dialogueText);
+      }
     }
 
     // 【时间轴】镜头内部微观导演调度（T00:XX相对时间戳格式）
@@ -840,6 +849,35 @@ ${missing.map(f => `- ${f}：${FIELD_DESCS[f]}`).join('\n')}
       return parts[3].trim();
     }
     return dialogue.trim();
+  }
+
+  /**
+   * 【v2.1.6】将 DIALOGUE_BLOCK 数组渲染为 Seedance 2.0 内联对话格式
+   * 格式：【台词】[时间戳] 角色 trigger, emotion 说："line"
+   */
+  _renderDialogueBlocks(blocks, duration) {
+    if (!blocks || blocks.length === 0) return '';
+    
+    const lines = [];
+    const segmentDuration = duration / blocks.length;
+    
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      const startTime = Math.round(i * segmentDuration);
+      const endTime = Math.round((i + 1) * segmentDuration);
+      const timeStr = `[${String(startTime).padStart(2, '0')}s-${String(endTime).padStart(2, '0')}s]`;
+      
+      // 构建内联格式
+      const trigger = b.trigger || 'looks at camera';
+      const emotion = b.emotion || 'neutral';
+      const line = b.line || '';
+      const speaker = b.speaker || '角色';
+      
+      // Seedance 2.0 格式：时间戳 + 动作触发 + 情绪副词 + 说："台词"
+      lines.push(`${timeStr} ${speaker} ${trigger}, ${emotion} 说："${line}"`);
+    }
+    
+    return '【台词】' + lines.join('\n');
   }
 
   _buildBatchPrompt(shots, ratio, characters) {

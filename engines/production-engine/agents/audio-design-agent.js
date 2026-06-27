@@ -70,17 +70,28 @@ class AudioDesignAgent extends BaseAgent {
 
   _buildPrompt(shots, blueprint) {
     const shotsInfo = shots.map(s => {
-      return `镜头 ${s.shotId}: 场景"${(s.scene || '').substring(0, 50)}", 情绪"${s.mood || ''}"`;
+      // 【v2.1.6】读取 dialogueBlocks 中的 manner，供音频设计参考
+      const blocks = s.dialogueBlocks || [];
+      const mannerInfo = blocks.map(b => `[${b.speaker}] ${b.manner || '无说话方式'}`).join('; ');
+      return `镜头 ${s.shotId}: 场景"${(s.scene || '').substring(0, 50)}", 情绪"${s.mood || ''}", 说话方式"${mannerInfo.substring(0, 100)}"`;
     }).join('\n');
 
     return `## 镜头场景
 ${shotsInfo}
 
 ## 任务
-为每个镜头设计环境音效:
+为每个镜头设计环境音效。
+
+【重要】每个镜头的"说话方式"信息已提供，你的音频设计必须与之配合：
+- 如果说话方式是"quietly"，环境音强度应低（low），背景安静，突出角色低语
+- 如果说话方式是"direct-address"，环境音应干净（low-medium），避免干扰直接对话
+- 如果说话方式是"with a smile"，环境音可温暖柔和，氛围轻松
+- 如果说话方式是"firmly"，环境音可略高（medium），增强力量感
+
+输出每个镜头的:
 1. environment: 环境音类型（outdoor_urban/indoor_office/hospital/park等）
-2. description: 音效描述（15-30字）
-3. intensity: 强度（low/medium/high，与情绪匹配）
+2. description: 音效描述（15-30字，必须呼应说话方式）
+3. intensity: 强度（low/medium/high，与说话方式匹配）
 
 输出JSON: {"shots": [{"shotId":"SC01","backgroundSound":{"environment":"...","description":"...","intensity":"..."}}]}`;
   }
