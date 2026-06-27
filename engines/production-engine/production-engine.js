@@ -136,8 +136,13 @@ class ProductionEngine {
    * @param {HealthMonitor} healthMonitor - HealthMonitor 实例
    */
   setHealthMonitor(healthMonitor) {
+    console.log('[ProductionEngine] setHealthMonitor called with', healthMonitor ? 'HealthMonitor instance' : 'null');
     this.healthMonitor = healthMonitor;
     // 重新初始化 Phase 执行器，传递 healthMonitor
+    const { Phase1SceneDesign } = require('./phases/phase-1-scene-design');
+    const { Phase2VisualAudio } = require('./phases/phase-2-visual-audio');
+    const { Phase3PromptFusion } = require('./phases/phase-3-prompt-fusion');
+    const { Phase35FieldQuality } = require('./phases/phase-3-5-field-quality');
     const commonOptions = {
       agents: this.agents,
       logFn: this.log.bind(this),
@@ -157,6 +162,7 @@ class ProductionEngine {
       llmModel: this.llmModel,
       globalDeadline: this._globalDeadline
     });
+    console.log('[ProductionEngine] Phases re-initialized with healthMonitor:', this.phase3.healthMonitor ? 'yes' : 'no');
   }
 
   /**

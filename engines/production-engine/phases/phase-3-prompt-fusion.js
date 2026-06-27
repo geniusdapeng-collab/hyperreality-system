@@ -38,7 +38,11 @@ class Phase3PromptFusion extends PhaseExecutor {
     try {
       // 【v2.1.6-fix】系统级修复：启用长时间任务模式，避免HealthMonitor误判
       if (this.healthMonitor) {
-        this.healthMonitor.setLongTaskMode('ProductionEngine', true, shotCount * 120000 + 60000);
+        // 每镜头至少3分钟缓冲，总时长不低于10分钟
+        const phase3Timeout = Math.max(shotCount * 180000 + 60000, 600000);
+        this.healthMonitor.setLongTaskMode('ProductionEngine', true, phase3Timeout);
+      } else {
+        console.log('[Phase3PromptFusion] ⚠️ healthMonitor 未设置，长时间任务模式未启用');
       }
 
       this.log('PROMPT-FUSION-AGENT', `开始(串行模式,${shotCount}镜头,预计${Math.round(needMs/1000)}s)...`);

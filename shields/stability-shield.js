@@ -54,7 +54,7 @@ class StabilityShield {
   /**
    * 初始化护盾（注册Agent等）
    */
-  async initialize(productionEngine) {
+  initialize(productionEngine) {
     this.productionEngine = productionEngine;
     
     if (this.productionEngine) {
@@ -67,6 +67,13 @@ class StabilityShield {
   }
 
   /**
+   * 【v2.1.6-fix】系统级修复：为外部提供启用长时间任务模式的接口
+   */
+  setLongTaskMode(agentId, enabled, timeoutMs) {
+    this.healthMonitor.setLongTaskMode(agentId, enabled, timeoutMs);
+  }
+
+  /**
    * 主入口：带稳定性保障的生产
    * @param {Object} requirement - 用户需求
    * @param {Object} options - 选项
@@ -75,6 +82,9 @@ class StabilityShield {
     const startTime = Date.now();
     
     try {
+      // 【v2.1.6-fix】预生产期间启用长时间任务模式，避免HealthMonitor误判
+      this.healthMonitor.setLongTaskMode('ProductionEngine', true, 1200000); // 20分钟
+      
       // ========== Shield 1: 基线模板 ==========
       const baselineMatch = this.baselineRegistry.findBestMatch(requirement);
       const { type, template, isHotStart } = baselineMatch;
@@ -99,6 +109,8 @@ class StabilityShield {
       const result = await this._executeProduction(productionInput);
 
       this.healthMonitor.recordCall('ProductionEngine', true, Date.now() - startTime);
+      // 关闭长时间任务模式
+      this.healthMonitor.setLongTaskMode('ProductionEngine', false);
 
       return {
         success: true,
@@ -110,6 +122,8 @@ class StabilityShield {
 
     } catch (error) {
       this.healthMonitor.recordCall('ProductionEngine', false, Date.now() - startTime);
+      // 关闭长时间任务模式
+      this.healthMonitor.setLongTaskMode('ProductionEngine', false);
       
       await this.healthMonitor.compensate('ProductionEngine');
 

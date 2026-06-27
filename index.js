@@ -16,7 +16,7 @@ const { CreativeIntensityEngine } = require('./engines/script-engine/core/creati
 const { OpeningTitleOptimizer } = require('./engines/production-engine/agents/opening-title-optimizer');
 const { routeAndEnhance } = require('./skills/hollywood-cinematography/cinematography-skill-router');
 const { FieldGuard } = require('./engines/field-guard');
-const { ErrorCodes } = require('./config/error-codes');
+const ErrorCodes = require('./config/error-codes');
 const { StabilityShield } = require('./shields/stability-shield');
 const fs = require('fs');
 const path = require('path');
@@ -93,6 +93,9 @@ class HyperrealitySystem {
     const totalStart = Date.now();
 
     try {
+      // 【v2.1.6-fix】系统级修复：整个创作过程启用长时间任务模式，避免HealthMonitor误判
+      this.stabilityShield.setLongTaskMode('ProductionEngine', true, 1200000); // 20分钟
+      
       // ========== 🆕 Layer 0: 需求清单生成确认 ==========
       if (!options.skipRequirementList) {
         console.log('📋 [Layer 0] 需求清单生成 - 解析用户意图...');
@@ -630,6 +633,9 @@ class HyperrealitySystem {
         stack: error.stack
       });
       console.error(`\n❌ [系统错误] ${error.message}`);
+    } finally {
+      // 【v2.1.6-fix】关闭长时间任务模式
+      this.stabilityShield.setLongTaskMode('ProductionEngine', false);
     }
 
     // 【v2.1.4-fix13-审计修复】将完整 shots/prompts/opening 挂到 result,供调用方获取完整数据

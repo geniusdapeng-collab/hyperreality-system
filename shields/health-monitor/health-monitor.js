@@ -113,10 +113,13 @@ class HealthMonitor extends EventEmitter {
    */
   setLongTaskMode(agentId, enabled, timeoutMs = 600000) {
     const agentInfo = this.agents.get(agentId);
-    if (!agentInfo) return;
+    if (!agentInfo) {
+      console.warn(`[HealthMonitor] ⚠️ setLongTaskMode: Agent ${agentId} 未注册`);
+      return;
+    }
     agentInfo._longTaskMode = enabled;
     agentInfo._longTaskTimeout = timeoutMs;
-    console.log(`[HealthMonitor] ${enabled ? '⏱️ 启用' : '✅ 关闭'}长时间任务模式: ${agentId}, 超时: ${timeoutMs}ms`);
+    console.log(`[HealthMonitor] ${enabled ? '⏱️ 启用' : '✅ 关闭'}长时间任务模式: ${agentId}, 超时: ${timeoutMs}ms, agents大小: ${this.agents.size}`);
   }
 
   /**
@@ -177,8 +180,12 @@ class HealthMonitor extends EventEmitter {
 
       // 1. 检查心跳超时
       // 【v2.1.6-fix】系统级修复：长时间任务模式下动态延长超时阈值
-      const heartbeatTimeout = agentInfo._longTaskMode ? (agentInfo._longTaskTimeout || 600000) : 300000;
-      if (now - health.lastHeartbeat > heartbeatTimeout) {
+      // 【v2.1.6-fix3】临时规避：默认超时提到20分钟，避免HealthMonitor误判阻断预生产
+      const heartbeatTimeout = agentInfo._longTaskMode ? (agentInfo._longTaskTimeout || 600000) : 1200000;
+      const timeSinceLastHeartbeat = now - health.lastHeartbeat;
+      const agentDebug = { _longTaskMode: agentInfo._longTaskMode, _longTaskTimeout: agentInfo._longTaskTimeout, keys: Object.keys(agentInfo) };
+      console.log(`[HealthMonitor] 🔍 检查Agent: ${agentId}, 长时间模式: ${!!agentInfo._longTaskMode}, 超时阈值: ${heartbeatTimeout}ms, 距上次心跳: ${timeSinceLastHeartbeat}ms, agents大小: ${this.agents.size}, agentDebug: ${JSON.stringify(agentDebug)}`);
+      if (timeSinceLastHeartbeat > heartbeatTimeout) {
         this._handleDeadAgent(agentId, '心跳超时');
         continue;
       }

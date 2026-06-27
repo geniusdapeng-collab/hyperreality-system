@@ -369,8 +369,40 @@ ${meta._directorStyle}` : ''}
         }
         
         // v1.2.6-fix8: forceJson 模式下，content 必非空
+        // 【v2.1.6-fix12】系统级修复：检查 content 是否为完整 JSON 剧本，不完整则从 reasoning 提取
         if (result.content && result.content.trim()) {
-          return result.content.trim();
+          const content = result.content.trim();
+          
+          // 快速验证：尝试解析并检查关键字段
+          let contentValid = false;
+          try {
+            const parsed = JSON.parse(content);
+            if (parsed.meta && parsed.structure && parsed.structure.scenes && parsed.structure.scenes.length > 0) {
+              contentValid = true;
+              console.log(`[ScriptGenerator] content JSON 验证通过: ${content.length}字符, scenes=${parsed.structure.scenes.length}`);
+            } else {
+              console.warn(`[ScriptGenerator] ⚠️ content JSON 缺少关键字段: meta=${!!parsed.meta}, structure=${!!parsed.structure}, scenes=${parsed.structure?.scenes?.length || 0}`);
+            }
+          } catch (e) {
+            console.warn(`[ScriptGenerator] ⚠️ content JSON 解析失败: ${e.message}, 长度=${content.length}`);
+          }
+          
+          if (contentValid) {
+            return content;
+          }
+          
+          // content 不完整，尝试从 reasoning 提取
+          if (result.reasoning_content && result.reasoning_content.trim()) {
+            console.warn('[ScriptGenerator] ⚠️ content 不完整，尝试从 reasoning 提取完整 JSON...');
+            const extracted = this._extractValidJson(result.reasoning_content);
+            if (extracted && extracted.meta && extracted.structure && extracted.structure.scenes && extracted.structure.scenes.length > 0) {
+              console.log(`[ScriptGenerator] ✅ 从 reasoning 提取完整 JSON: ${JSON.stringify(extracted).length}字符, scenes=${extracted.structure.scenes.length}`);
+              return JSON.stringify(extracted);
+            }
+            console.warn('[ScriptGenerator] ⚠️ 从 reasoning 提取也失败，回退使用不完整的 content');
+          }
+          
+          return content; // 返回不完整的 content，让 _parseLLMResponse 继续处理
         }
         
         // 兜底：从 reasoning 中提取 JSON 对象
@@ -378,7 +410,15 @@ ${meta._directorStyle}` : ''}
           console.warn('[ScriptGenerator] ⚠️ forceJson模式下仍返回空content，尝试从reasoning提取');
           const jsonMatch = result.reasoning_content.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            return jsonMatch[0].trim();
+            const extractedJson = jsonMatch[0].trim();
+            // 调试：检查提取的JSON结构
+            try {
+              const parsed = JSON.parse(extractedJson);
+              console.log(`[ScriptGenerator] 从reasoning提取JSON: meta=${!!parsed.meta}, structure=${!!parsed.structure}, scenes=${parsed.structure?.scenes?.length || 0}`);
+            } catch(e) {
+              console.log('[ScriptGenerator] 提取的JSON无法直接解析，将交给_parseLLMResponse处理');
+            }
+            return extractedJson;
           }
         }
         throw new Error('LLM返回空内容（success=true但content为空，forceJson模式异常）');
