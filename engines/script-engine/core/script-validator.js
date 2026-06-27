@@ -29,7 +29,7 @@ class ScriptValidator {
       
       // Nirath 约束
       nirathRequiredElements: ['Nirath', '硅', '双月', '晶体', '等离子'],
-      forbiddenElements: ['旁白', 'voiceover', '解说', '金属光泽', 'unnatural_eye_color'],
+      forbiddenElements: ['旁白', 'voiceover', '金属光泽', 'unnatural_eye_color'], // 【P1-13 修复】移除'解说'，避免误杀教育/纪录片内容,
       
       ...options
     };
@@ -74,7 +74,9 @@ class ScriptValidator {
     
     // 汇总
     const failedChecks = checks.filter(c => c.passed === false);
-    const passed = failedChecks.length === 0 && scores.overall >= 60;
+    // 【P1-12 修复】只统计 critical 级别失败，warning 不阻塞 passed
+    const criticalFails = checks.filter(c => c.passed === false && c.severity === 'critical');
+    const passed = criticalFails.length === 0 && scores.overall >= 60;
     
     return {
       blueprint_id: blueprint.blueprint_id,
@@ -211,7 +213,9 @@ class ScriptValidator {
     const scenes = blueprint.structure.scenes || [];
     
     // 统计有台词的场景
-    const scenesWithDialogue = scenes.filter(s => s.dialogue?.has_dialogue && s.dialogue?.lines?.length > 0);
+    // 【P1-14 修复】同时检查 lines 和 blocks 两种格式
+    const hasDialogueContent = (d) => (d?.lines?.length > 0) || (d?.blocks?.length > 0);
+    const scenesWithDialogue = scenes.filter(s => s.dialogue?.has_dialogue && hasDialogueContent(s.dialogue));
     
     checks.push({
       category: 'dialogue',
@@ -228,6 +232,14 @@ class ScriptValidator {
       if (scene.dialogue?.lines) {
         for (const line of scene.dialogue.lines) {
           if (line.text && line.text.length > this.config.maxLineLength) {
+            longLines++;
+          }
+        }
+      }
+      // 【P1-14 修复】遍历 blocks 格式
+      if (scene.dialogue?.blocks) {
+        for (const block of scene.dialogue.blocks) {
+          if (block.line && block.line.length > this.config.maxLineLength) {
             longLines++;
           }
         }

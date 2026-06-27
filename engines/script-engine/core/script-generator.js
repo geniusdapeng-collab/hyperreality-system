@@ -406,18 +406,13 @@ ${meta._directorStyle}` : ''}
         }
         
         // 兜底：从 reasoning 中提取 JSON 对象
+        // 【P2-1 修复】改用 _extractValidJson 替代贪婪正则，与主提取逻辑一致
         if (result.reasoning_content && result.reasoning_content.trim()) {
           console.warn('[ScriptGenerator] ⚠️ forceJson模式下仍返回空content，尝试从reasoning提取');
-          const jsonMatch = result.reasoning_content.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const extractedJson = jsonMatch[0].trim();
-            // 调试：检查提取的JSON结构
-            try {
-              const parsed = JSON.parse(extractedJson);
-              console.log(`[ScriptGenerator] 从reasoning提取JSON: meta=${!!parsed.meta}, structure=${!!parsed.structure}, scenes=${parsed.structure?.scenes?.length || 0}`);
-            } catch(e) {
-              console.log('[ScriptGenerator] 提取的JSON无法直接解析，将交给_parseLLMResponse处理');
-            }
+          const extracted = this._extractValidJson(result.reasoning_content);
+          if (extracted) {
+            const extractedJson = JSON.stringify(extracted);
+            console.log(`[ScriptGenerator] 从reasoning提取JSON: meta=${!!extracted.meta}, structure=${!!extracted.structure}, scenes=${extracted.structure?.scenes?.length || 0}`);
             return extractedJson;
           }
         }
@@ -528,6 +523,8 @@ ${meta._directorStyle}` : ''}
         const primaryDesc = metadataChars[0]?.description || primaryName;
         const validNames = overrideCharacters.map(c => c.name);
         const validIds = overrideCharacters.map(c => c.character_id);
+        // 【P1-15 修复】合法speaker集合：只替换非法speaker，保留多角色对话
+        const validSpeakerSet = new Set([...validNames, ...validIds, primaryName]);
 
         // 1. 替换角色系统
         parsed.character_system = { characters: overrideCharacters };
@@ -549,7 +546,7 @@ ${meta._directorStyle}` : ''}
             // 结构A: scene.dialogue.lines = [{speaker, text, ...}]
             if (scene.dialogue?.lines && Array.isArray(scene.dialogue.lines)) {
               for (const line of scene.dialogue.lines) {
-                if (line && typeof line === 'object') {
+                if (line && typeof line === 'object' && !validSpeakerSet.has(line.speaker)) {
                   line.speaker = primaryName;
                 }
               }
@@ -561,7 +558,7 @@ ${meta._directorStyle}` : ''}
                   return { speaker: primaryName, text: line, type: '独白', emotion: '平静' };
                 }
                 if (line && typeof line === 'object') {
-                  line.speaker = primaryName;
+                  if (!validSpeakerSet.has(line.speaker)) line.speaker = primaryName;
                   return line;
                 }
                 return line;
@@ -570,7 +567,7 @@ ${meta._directorStyle}` : ''}
             // 结构C: scene.lines = [...] (部分LLM用这个)
             else if (scene.lines && Array.isArray(scene.lines)) {
               for (const line of scene.lines) {
-                if (line && typeof line === 'object') {
+                if (line && typeof line === 'object' && !validSpeakerSet.has(line.speaker)) {
                   line.speaker = primaryName;
                 }
               }
@@ -608,7 +605,7 @@ ${meta._directorStyle}` : ''}
               } else if (Array.isArray(scene.narration)) {
                 scene.narration = scene.narration.map(n => {
                   if (typeof n === 'string') return n.replace(/示例角色|角色R|角色A|角色B/g, primaryName);
-                  if (n && typeof n === 'object') { n.speaker = primaryName; return n; }
+                  if (n && typeof n === 'object') { if (!validSpeakerSet.has(n.speaker)) n.speaker = primaryName; return n; }
                   return n;
                 });
               }
