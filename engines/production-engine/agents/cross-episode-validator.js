@@ -8,6 +8,7 @@ const path = require('path');
 
 class CrossEpisodeValidator {
   constructor(options = {}) {
+    this._globalDeadline = null;
     this.config = {
       // LLM配置
       llmEngine: options.llmEngine || null,
@@ -32,6 +33,13 @@ class CrossEpisodeValidator {
       },
       ...options
     };
+  }
+
+  setDeadline(deadlineMs) { this._globalDeadline = deadlineMs || null; }
+
+  _remainingMs() {
+    if (!this._globalDeadline) return this.config.timeout;
+    return Math.max(10000, this._globalDeadline - Date.now());
   }
 
   /**

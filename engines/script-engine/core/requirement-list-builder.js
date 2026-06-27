@@ -236,15 +236,23 @@ class RequirementListBuilder {
     };
 
     // 推断视频类型
+    // 【P0-6 修复】改为"全部打分取最高"而非"首条命中即 break"，
+    // 商业/宣传片强信号优先于教育科普
+    const matchedTypes = [];
     for (const rule of this.rules.videoTypeRules) {
       for (const keyword of rule.keywords) {
         if (text.includes(keyword.toLowerCase())) {
-          result.videoType = rule.type;
-          result.videoTypeName = rule.name;
+          matchedTypes.push(rule.type);
           break;
         }
       }
-      if (result.videoType) break;
+    }
+    if (matchedTypes.length > 0) {
+      const priority = { ADV: 3, PROMO: 3, DRAMA: 2, DOC: 2, EDU: 1, LIFELOG: 1 };
+      const bestType = matchedTypes.sort((a, b) => (priority[b] || 0) - (priority[a] || 0))[0];
+      const bestRule = this.rules.videoTypeRules.find(r => r.type === bestType);
+      result.videoType = bestType;
+      result.videoTypeName = bestRule?.name || bestType;
     }
 
     // 推断平台

@@ -590,16 +590,15 @@ ${meta._directorStyle}` : ''}
               scene.scene_description = scene.scene_description.replace(/示例角色|角色R|角色A|角色B/g, primaryName);
             }
             // v2.1.4-fix8: 替换 setting 和 visual_notes 中的错误角色身份
+            // 【P0-5 修复】删除硬编码的"医生→警服/女性"正则替换。
+            // 角色一致性应通过 prompt 约束 + ScriptValidator 保证，
+            // 而非在解析层对场景文本做暴力正则改写。
             if (typeof scene.setting === 'string') {
-              // 强制替换所有可能暗示其他角色的描述
-              scene.setting = scene.setting.replace(/医生|主治医师|主任医师|大夫|医师|医护人员|护士|患者|病人|路人|市民/g, primaryDesc.split(/[,，、]/)[0]);
-              scene.setting = scene.setting.replace(/白色医生服|白大褂|灰色运动服|运动服/g, '警服');
-              scene.setting = scene.setting.replace(/男性|男人|男士|男|中年男子|中年男性/g, '女性');
+              // 只保留示例角色占位符替换，不强制替换职业/性别
+              scene.setting = scene.setting.replace(/示例角色|角色R|角色A|角色B/g, primaryName);
             }
             if (typeof scene.visual_notes === 'string') {
-              scene.visual_notes = scene.visual_notes.replace(/医生|主治医师|主任医师|大夫|医师|医护人员|护士|患者|病人|路人|市民/g, primaryDesc.split(/[,，、]/)[0]);
-              scene.visual_notes = scene.visual_notes.replace(/白色医生服|白大褂|灰色运动服|运动服/g, '警服');
-              scene.visual_notes = scene.visual_notes.replace(/男性|男人|男士|男|中年男子|中年男性/g, '女性');
+              scene.visual_notes = scene.visual_notes.replace(/示例角色|角色R|角色A|角色B/g, primaryName);
             }
 
             // 3d. 替换 narration 字段

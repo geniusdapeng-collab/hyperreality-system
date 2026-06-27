@@ -773,13 +773,19 @@ class ProductionEngine {
     return baseShots.map(shot => {
       const u = map.get(shot.shotId);
       if (!u) return shot;
-      const merged = this._deepCloneShot(shot); // 先深拷贝目标
-      for (const f of fields) {
+      const merged = this._deepCloneShot(shot);
+      // 若指定白名单，优先合并白名单字段；再合并 u 中其他非空字段（防止丢字段）
+      const whiteSet = fields && fields.length ? new Set(fields) : null;
+      const keys = whiteSet
+        ? [...fields, ...Object.keys(u).filter(k => !whiteSet.has(k))]
+        : Object.keys(u);
+      for (const f of keys) {
+        if (f === 'shotId') continue;
         const v = u[f];
-        // 【审计修复】过滤假值，避免 0/false 覆盖有效数据
-        if (v !== undefined && v !== null && v !== '' && !(typeof v === 'number' && v === 0 && f === 'duration')) {
-          merged[f] = this._deepCloneValue(v); // 深拷贝源字段
-        }
+        if (v === undefined || v === null || v === '') continue;
+        // duration 的 0 不覆盖；其他数值 0 也不覆盖有效值
+        if (typeof v === 'number' && v === 0) continue;
+        merged[f] = this._deepCloneValue(v);
       }
       return merged;
     });

@@ -34,7 +34,11 @@ class Phase2VisualAudio extends PhaseExecutor {
       );
       this.log('VISUAL-LANGUAGE-AGENT', '完成');
       let newShots = this.mergeShots(shots, vlResult.shots, [
-        'visual_elements', 'lighting', 'color_temperature', 'camera_movement'
+        'camera', 'cameraString', 'cameraMovement',
+        'lighting', 'lightingString',
+        'timeline',
+        // 兼容旧命名，防止某条路径仍用 snake_case
+        'visual_elements', 'color_temperature', 'camera_movement'
       ]);
 
       const adResult = await this.agents.audioDesign.process(

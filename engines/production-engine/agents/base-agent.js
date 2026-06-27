@@ -72,18 +72,26 @@ class BaseAgent {
    * 同时不影响 race 的正常 reject 传播。
    */
   _callWithTimeout(promise, timeoutMs, label = 'LLM调用') {
+    // 防御 NaN/Infinity/非数字（setTimeout(NaN/Infinity) 会被当 0 立即触发，反而无害；
+    // 但若被篡改成巨大值则需兜底）
+    const ms = (typeof timeoutMs === 'number' && timeoutMs > 0 && timeoutMs < 24 * 3600 * 1000)
+      ? timeoutMs : 300000;
     let timer;
+    let settled = false;
     const p = Promise.resolve(promise);
     // 立即挂 catch：标记 rejection 已被处理，防止超时后悬空 rejection 崩溃进程
-    // 这条链独立于 race，不影响 race 的 reject 传播
     p.catch(() => {});
     const timeoutPromise = new Promise((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error(`${label}超时(${timeoutMs}ms)`)),
-        timeoutMs
-      );
+      timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        console.warn(`[${label}] ⏱️ 外层超时触发(${ms}ms)，强制降级`);
+        reject(new Error(`${label}超时(${ms}ms)`));
+      }, ms);
     });
-    return Promise.race([p, timeoutPromise]).finally(() => clearTimeout(timer));
+    return Promise.race([p, timeoutPromise])
+      .then(v => { settled = true; clearTimeout(timer); return v; },
+            e => { settled = true; clearTimeout(timer); throw e; });
   }
 
   /**
@@ -105,18 +113,20 @@ class BaseAgent {
     // 单次调用可覆盖 maxTokens（补齐等轻量场景用小预算）
     const callMaxTokens = options.maxTokens || this.llmMaxTokens;
     const callMaxRetries = options.maxRetries ?? this.llmMaxRetries;
+    // 支持 options.timeoutMs 覆盖单次超时（补齐等轻量场景用小预算）
+    const baseTimeout = options.timeoutMs || this.llmTimeout;
+    const perCallTimeout = Math.min(baseTimeout, this._remainingMs());
+    console.log(`[${this.name}] _callLLM 进入 | perCallTimeout=${perCallTimeout}ms maxTokens=${callMaxTokens} retries=${callMaxRetries} remaining=${this._remainingMs()}ms`);
 
-    // 截止时间感知：单次超时取「自身超时」与「剩余预算」的较小值
-    const perCallTimeout = Math.min(this.llmTimeout, this._remainingMs());
     if (perCallTimeout < 20000) {
-      // 剩余预算已不足以完成一次完整调用，提前降级，保住全局链路
       console.warn(`[${this.name}] 剩余预算不足(${perCallTimeout}ms)，提前降级以保住全局链路`);
       return this._executeFallback(fallbackFn, 'insufficient time budget');
     }
 
+    const callStart = Date.now();
     try {
       const fullPrompt = `${this._getSystemPrompt()}\n\n${prompt}`;
-      // 【v2.1.4-fix13】用 _callWithTimeout 包装，确保即使底层引擎不实现超时也能被中断
+      console.log(`[${this.name}] reasonStructured 调用前 | promptLen=${fullPrompt.length}`);
       const result = await this._callWithTimeout(
         llm.reasonStructured(fullPrompt, schema, {
           maxTokens: callMaxTokens,
@@ -127,9 +137,11 @@ class BaseAgent {
         perCallTimeout,
         `[${this.name}] reasonStructured`
       );
+      const callElapsed = Date.now() - callStart;
+      console.log(`[${this.name}] reasonStructured 返回 | 耗时=${callElapsed}ms success=${result?.success}`);
 
-      if (!result.success) {
-        throw new Error(`LLM引擎返回失败: ${result.error}`);
+      if (!result || !result.success) {
+        throw new Error(`LLM引擎返回失败: ${result?.error || '无返回'}`);
       }
 
       // 【v2.1.4-fix13】校验返回数据是否满足 schema
@@ -138,11 +150,10 @@ class BaseAgent {
         console.warn(`[${this.name}] Schema校验失败: ${validation.reason}，尝试降级`);
         return this._executeFallback(fallbackFn, `Schema validation failed: ${validation.reason}`);
       }
-
       console.log(`[${this.name}] LLM调用成功 ✓`);
       return { result: result.data, degraded: false, degradeReason: null };
     } catch (err) {
-      console.warn(`[${this.name}] LLM调用失败: ${err.message}`);
+      console.warn(`[${this.name}] LLM调用失败: ${err.message} | 耗时≈${Date.now() - callStart}ms`);
       return this._executeFallback(fallbackFn, `LLM failed: ${err.message}`);
     }
   }
@@ -174,11 +185,14 @@ class BaseAgent {
       if (value === undefined || value === null) {
         return { valid: false, reason: `缺少必需字段: ${field}` };
       }
-      // 【v2.1.4-fix13】增加空字符串和空数组检查
       if (typeof value === 'string' && !value.trim()) {
         return { valid: false, reason: `必需字段为空字符串: ${field}` };
       }
-      if (Array.isArray(value) && value.length === 0 && schema.rejectEmptyArray) {
+      // 【P1-6 修复】类型校验：数组字段
+      if (schema.requiredArrays?.includes(field) && !Array.isArray(value)) {
+        return { valid: false, reason: `${field} 应为数组` };
+      }
+      if (schema.rejectEmptyArray && Array.isArray(value) && value.length === 0) {
         return { valid: false, reason: `必需字段为空数组: ${field}` };
       }
     }

@@ -107,7 +107,9 @@ class IntentParser {
     let primaryType = this.config.defaultMode;
 
     for (const [type, score] of Object.entries(scores)) {
-      if (score > maxScore) {
+      // 【P0-6 修复】平分时 commercial 优先（宣传片强信号不应被 EDU 覆盖）
+      const tiePriority = { commercial: 5, dramatic: 4, documentary: 3, lifelog: 2, educational: 1 };
+      if (score > maxScore || (score === maxScore && (tiePriority[type] || 0) > (tiePriority[primaryType] || 0))) {
         maxScore = score;
         primaryType = type;
       }

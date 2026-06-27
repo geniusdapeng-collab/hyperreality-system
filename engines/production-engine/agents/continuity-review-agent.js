@@ -46,8 +46,36 @@ class ContinuityReviewAgent extends BaseAgent {
 6. 时长分配: 重点场景时长是否足够，过渡场景是否过长`;
   }
 
+  setDeadline(deadlineMs) {
+    super.setDeadline(deadlineMs);
+    if (this.crossEpisodeValidator && typeof this.crossEpisodeValidator.setDeadline === 'function') {
+      this.crossEpisodeValidator.setDeadline(deadlineMs);
+    }
+  }
+
+  // 【P0-1 修复】总体超时包装，确保即使 _callLLM 内部异常挂起，process 也能在固定时间返回
+  _totalTimeout(promise, ms, label) {
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label}总体超时(${ms}ms)`)), ms);
+      })
+    ]).finally(() => clearTimeout(timer));
+  }
+
   async process(shots, blueprint, options = {}) {
     console.log(`[ContinuityReviewAgent] 开始审查 ${shots.length} 个镜头...`);
+    const TOTAL_MS = Math.min(240000, this._remainingMs()); // 总体最多4分钟
+    try {
+      return await this._totalTimeout(this._processCore(shots, blueprint, options), TOTAL_MS, 'ContinuityReview');
+    } catch (err) {
+      console.warn(`[ContinuityReviewAgent] 总体兜底触发: ${err.message}，返回规则降级`);
+      return { review: this._fallback(shots).review, degraded: true, degradeReason: err.message, boundaryReport: null };
+    }
+  }
+
+  async _processCore(shots, blueprint, options = {}) {
 
     const prompt = this._buildPrompt(shots, blueprint);
 
@@ -60,7 +88,8 @@ class ContinuityReviewAgent extends BaseAgent {
     });
 
     if (llmResult.degraded) {
-      return { review: llmResult.result, degraded: true, degradeReason: llmResult.degradeReason };
+      // 【P1-3 修复】降级对齐非降级结构，避免双层嵌套
+      return { review: llmResult.result?.review || llmResult.result || {}, degraded: true, degradeReason: llmResult.degradeReason };
     }
 
     console.log(`[ContinuityReviewAgent] 连续性审查完成 ✓`);

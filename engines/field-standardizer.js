@@ -538,6 +538,20 @@ function standardizeShot(rawInput = {}) {
     standard.sceneType = 'opening';
   }
 
+  // standardizeShot 末尾新增（统一双写，确保两种命名都有值）
+  const syncPairs = [
+    ['camera_movement', 'cameraMovement'],
+    ['color_palette', 'colorPalette'],
+    ['depth_of_field', 'depthOfField'],
+    ['director_instruction', 'directorInstruction'],
+    ['bright_constraint', 'brightConstraint'],
+    ['character_constraint', 'characterConstraint']
+  ];
+  for (const [snake, camel] of syncPairs) {
+    if (standard[snake] && !standard[camel]) standard[camel] = standard[snake];
+    if (standard[camel] && !standard[snake]) standard[snake] = standard[camel];
+  }
+
   return standard;
 }
 
@@ -550,20 +564,27 @@ function validateShot(shot) {
   const warnings = [];
   const isOpening = shot.sceneType === 'opening';
 
+  // 【P0-4 修复】空值判断辅助：空对象/空数组也视为缺失
+  const isEmptyValue = (v) =>
+    v === undefined || v === null || v === '' ||
+    (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) ||
+    (Array.isArray(v) && v.length === 0);
+
   // v2.1.4-fix9-P25: 检查P0致命级字段（12个）
+  // 【P0-4 修复】同时检查 snake_case 与 camelCase 两种命名
   for (const key of CRITICAL_FIELDS.p0) {
-    const value = shot[key];
-    if (value === undefined || value === null || value === '') {
+    const camelKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    if (isEmptyValue(shot[key]) && isEmptyValue(shot[camelKey])) {
       errors.push(`P0 Missing: ${key}`);
-    } else if (Array.isArray(value) && value.length === 0) {
+    } else if (Array.isArray(shot[key]) && shot[key].length === 0) {
       warnings.push(`P0 Empty array: ${key}`);
     }
   }
 
   // v2.1.4-fix9-P25: 检查P1核心级字段（7个）
   for (const key of CRITICAL_FIELDS.p1) {
-    const value = shot[key];
-    if (value === undefined || value === null || value === '') {
+    const camelKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    if (isEmptyValue(shot[key]) && isEmptyValue(shot[camelKey])) {
       warnings.push(`P1 Missing: ${key}`);
     }
   }
