@@ -499,9 +499,10 @@ class HyperrealitySystem {
               const optimizer = new OpeningTitleOptimizer({
                 llmTimeout: 120000,
                 llmMaxRetries: 2,
-                // 【v2.1.4-fix13-审计修复】从环境变量读取模型,消除硬编码
                 llmModel: process.env.STORMAXE_LLM_FAST_MODEL || process.env.STORMAXE_LLM_MODEL || 'kimi-k2p6'
               });
+              // 【P2-10 修复】下发 deadline，防止不受控挂起
+              optimizer.setDeadline(Date.now() + 180000); // 3分钟总体预算
               const blueprint = result.stages?.adapter || { title: result.title || '未命名' };
               const optimized = await optimizer.optimize(openingShot, blueprint);
 

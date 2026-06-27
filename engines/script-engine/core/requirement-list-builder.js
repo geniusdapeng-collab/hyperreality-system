@@ -397,16 +397,12 @@ class RequirementListBuilder {
 
     try {
       if (typeof llmEngine.generate === 'function') {
-        // 方式1: .generate({prompt, maxTokens, temperature}) - 兼容旧接口
+        // 【P1-16 修复】统一调用契约 (prompt, options)，与 ScriptGenerator/CrossEpisodeValidator 一致
         const response = await Promise.race([
-          llmEngine.generate({
-            prompt: prompt,
-            maxTokens: 2500,
-            temperature: 1
-          }),
+          llmEngine.generate(prompt, { maxTokens: 2500, temperature: 1, timeoutMs }),
           timeoutPromise
         ]).finally(() => clearTimeout(timer));
-        responseText = response.success ? (response.content || '') : '';
+        responseText = response?.success ? (response.content || '') : '';
       } else if (typeof llmEngine.chat === 'function') {
         // 方式2: .chat(systemPrompt, userPrompt, temperature) - BaseAgent 标准接口
         const result = await Promise.race([

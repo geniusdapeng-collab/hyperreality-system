@@ -115,26 +115,30 @@ class RenderingEngine {
 
         // 生成绑定清单（从 prompts 的 imageRefs 提取）
         const manifest = this._generateBindingManifest(prompts);
+        // 【P2-21 修复】改为异步 IO，避免阻塞事件循环
         const manifestPath = path.join(this.config.outputDir, 'binding-manifest.json');
-        if (!fs.existsSync(this.config.outputDir)) {
-          fs.mkdirSync(this.config.outputDir, { recursive: true });
-        }
-        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-        
-        // v2.1.5-fix: 写入验证
-        if (!fs.existsSync(manifestPath)) {
-          throw new Error(`清单文件写入后不存在: ${manifestPath}`);
-        }
-        const stats = fs.statSync(manifestPath);
-        if (stats.size === 0) {
-          throw new Error(`清单文件写入后大小为0: ${manifestPath}`);
+        const fsp = require('fs').promises;
+        try {
+          await fsp.mkdir(this.config.outputDir, { recursive: true });
+          await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+          const stats = await fsp.stat(manifestPath);
+          if (stats.size === 0) {
+            throw new Error(`清单文件写入后大小为0: ${manifestPath}`);
+          }
+        } catch (e) {
+          throw new Error(`清单文件操作失败: ${e.message}`);
         }
 
-        // 调用现有系统的提交核心
-        const submitResult = await this.submitter.submit(shots, {
+        // 【P1-18 修复】给 submit 调用加外层超时，防止 Seedance 提交永久挂起
+        const SUBMIT_TIMEOUT = 120000; // 2分钟
+        const submitPromise = this.submitter.submit(shots, {
           bindingManifestPath: manifestPath,
           skipValidation: options.skipValidation
         });
+        const submitResult = await Promise.race([
+          submitPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('渲染提交超时(2分钟)')), SUBMIT_TIMEOUT))
+        ]);
 
         result.results = submitResult.results;
         result.submitted = submitResult.results.filter(r => r.success).length;
@@ -165,11 +169,15 @@ class RenderingEngine {
       this.log('RENDER', `   耗时: ${result.timing.total}ms`);
 
     } catch (error) {
+      // 【P2-22 修复】异常时填充失败 results，避免 failed=0 误导
       result.success = false;
-      result.errors.push({
-        stage: 'RENDER',
-        message: error.message
-      });
+      result.errors.push({ stage: 'RENDER', message: error.message });
+      if (!result.results || result.results.length === 0) {
+        result.results = (shots || []).map(s => ({
+          shotId: s.shotId, success: false, status: 'error', error: error.message
+        }));
+        result.failed = result.results.length;
+      }
       this.log('RENDER', `❌ 渲染失败: ${error.message}`);
     }
 
@@ -187,8 +195,11 @@ class RenderingEngine {
       prompt: prompt.prompt,
       duration: prompt.duration || 12, // 使用实际时长
       isOpening: prompt.shotId === 'S00' || prompt.shotId === 'SC00',
-      // 定妆照引用（v6.37-P0: 从 characterRef 解析）
-      referenceImages: this._parseCharacterRef(prompt.characterRef),
+      // 定妆照引用（v6.37-P0: 优先读标准 portraits 字段，兜底 characterRef）
+      // 【P2-20 修复】25字段标准是 portraits，characterRef 为兼容兜底
+      referenceImages: this._parseCharacterRef(
+        prompt.fields?.portraits || prompt.portraits || prompt.characterRef
+      ),
       // 字符数
       promptLength: prompt.promptCharCount || (typeof prompt.prompt === 'string' ? prompt.prompt.length : 0) || 0,
       // v6.37-P0: 保留新字段用于调试
@@ -265,35 +276,40 @@ class RenderingEngine {
           };
 
           // v1.2.7-fix-A2: 自动扫描 portraits 目录，补全4角度
-          // 使用 characterDir（实际目录名，如 chen-zhuo）而非 characterId（显示名，如示例角色）
           const charDirPath = path.join(this.config.charactersDir, ref.characterDir || charId);
           const portraitsDir = path.join(charDirPath, 'portraits');
           
+          // 【P1-20 修复】目录不存在时跳过而非崩溃
           if (fs.existsSync(portraitsDir)) {
-            const files = fs.readdirSync(portraitsDir);
-            for (const angle of REQUIRED_ANGLES) {
-              // 查找匹配角度的文件（支持前缀，如 chen-zhuo-front.png）
-              const matchedFile = files.find(f => f.includes(`-${angle}.png`) || f === `${angle}.png`);
-              if (matchedFile) {
-                // 生成包含角色目录的完整相对路径，如 chen-zhuo/portraits/chen-zhuo-front.png
-                const relativePath = path.join(ref.characterDir || charId, 'portraits', matchedFile);
-                characters[charId].portraits[angle] = relativePath;
-                console.log(`[BindingManifest] 角色 ${charId} ${angle}: ${relativePath}`);
+            try {
+              const files = fs.readdirSync(portraitsDir);
+              for (const angle of REQUIRED_ANGLES) {
+                const matchedFile = files.find(f => f.includes(`-${angle}.png`) || f === `${angle}.png`);
+                if (matchedFile) {
+                  const relativePath = path.join(ref.characterDir || charId, 'portraits', matchedFile);
+                  characters[charId].portraits[angle] = relativePath;
+                  console.log(`[BindingManifest] 角色 ${charId} ${angle}: ${relativePath}`);
+                }
               }
+            } catch (e) {
+              console.warn(`[BindingManifest] 读取 portraits 目录失败: ${portraitsDir} - ${e.message}`);
             }
           }
           
           // 如果 portraits 目录不存在，尝试直接查找 charDir
-          if (!fs.existsSync(portraitsDir)) {
-            const files = fs.readdirSync(charDirPath).filter(f => f.endsWith('.png') || f.endsWith('.jpg'));
-            for (const angle of REQUIRED_ANGLES) {
-              const matchedFile = files.find(f => f.includes(`-${angle}.png`) || f === `${angle}.png`);
-              if (matchedFile) {
-                // 生成包含角色目录的完整相对路径
-                const relativePath = path.join(ref.characterDir || charId, matchedFile);
-                characters[charId].portraits[angle] = relativePath;
-                console.log(`[BindingManifest] 角色 ${charId} ${angle}: ${relativePath}`);
+          if (!fs.existsSync(portraitsDir) && fs.existsSync(charDirPath)) {
+            try {
+              const files = fs.readdirSync(charDirPath).filter(f => f.endsWith('.png') || f.endsWith('.jpg'));
+              for (const angle of REQUIRED_ANGLES) {
+                const matchedFile = files.find(f => f.includes(`-${angle}.png`) || f === `${angle}.png`);
+                if (matchedFile) {
+                  const relativePath = path.join(ref.characterDir || charId, matchedFile);
+                  characters[charId].portraits[angle] = relativePath;
+                  console.log(`[BindingManifest] 角色 ${charId} ${angle}: ${relativePath}`);
+                }
               }
+            } catch (e) {
+              console.warn(`[BindingManifest] 读取角色目录失败: ${charDirPath} - ${e.message}`);
             }
           }
         }
@@ -357,7 +373,9 @@ class RenderingEngine {
               headers: {
                 'Authorization': `Bearer ${this.config.apiKey}`,
                 'Content-Type': 'application/json'
-              }
+              },
+              // 【P1-18 修复】添加 AbortSignal.timeout，防止 Seedance 查询永久挂起
+              signal: AbortSignal.timeout(15000)
             });
 
             if (!response.ok) {

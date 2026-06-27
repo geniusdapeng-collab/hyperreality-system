@@ -1,6 +1,11 @@
 /**
  * LLMGateway - LLM网关护盾（通用化版本）
  * 
+ * ⚠️ 【架构-1 声明】当前为死代码：StabilityShield.produce() 从未被主流程调用，
+ *    因此 LLMGateway 的熔断/缓存/兜底功能未生效。所有 Agent 直接通过 BaseAgent.loadLLMEngine()
+ *    调用 LLMEngine，绕过 LLMGateway。
+ *    未来如需启用，需让 LLMEngine 的 HTTP 层委托给 gateway.call()。
+ * 
  * 核心职责：
  * 1. 熔断器：连续失败自动切换兜底模型
  * 2. 响应缓存：相同输入零延迟返回

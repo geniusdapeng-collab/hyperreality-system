@@ -197,22 +197,19 @@ class IntentParser {
    * 提取时长（秒）
    */
   _extractDuration(text) {
-    // 匹配 "120秒", "2分钟", "120s", "2min" 等
+    // 【P2-5 修复】显式单位映射，避免 toString().includes 脆弱判断
     const patterns = [
-      /(\d+)\s*秒/,
-      /(\d+)\s*分钟/,
-      /(\d+)\s*s/i,
-      /(\d+)\s*min/i
+      { regex: /(\d+)\s*秒/, unit: 'second' },
+      { regex: /(\d+)\s*分钟/, unit: 'minute' },
+      { regex: /(\d+)\s*s/i, unit: 'second' },
+      { regex: /(\d+)\s*min/i, unit: 'minute' }
     ];
 
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
+    for (const { regex, unit } of patterns) {
+      const match = text.match(regex);
       if (match) {
         let value = parseInt(match[1]);
-        // 分钟转秒
-        if (pattern.toString().includes('分钟') || pattern.toString().includes('min')) {
-          value *= 60;
-        }
+        if (unit === 'minute') value *= 60;
         return value;
       }
     }

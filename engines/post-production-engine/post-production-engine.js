@@ -63,6 +63,8 @@ class PostProductionEngine {
       enableMusic: options.enableMusic !== false,              // 默认开启音乐
       subtitleStyle: options.subtitleStyle || 'identity-card', // identity-card / lower-third / none
       versions: options.versions || ['standard', 'clean', 'subtitled', 'raw'],
+      // 【P2-25 修复】GSAP CDN 可配置，支持离线/内网环境
+      gsapCdnUrl: options.gsapCdnUrl || 'https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js',
       ...options
     };
 
@@ -101,7 +103,7 @@ class PostProductionEngine {
       this.log('POST-PROD', '\n🎬 [Stage 1] 字幕生成 - 身份介绍式字幕');
       const stage1Start = Date.now();
       
-      const subtitleTracks = await this.generateIdentitySubtitles(scriptResult);
+      const subtitleTracks = await this.generateIdentitySubtitles(scriptResult, productionResult);
       result.stages.subtitles = {
         tracks: subtitleTracks,
         count: subtitleTracks.length,
@@ -443,11 +445,8 @@ class PostProductionEngine {
       danmakuPool.push(...typeComments[sceneType]);
     }
     
-    // 从设定提取关键词弹幕
-    if (setting.includes('虚构星球')) danmakuPool.push('虚构星球 星球！');
-    if (setting.includes('晶体')) danmakuPool.push('晶体森林！');
-    if (setting.includes('双月')) danmakuPool.push('双月当空！');
-    if (chars.includes('示例神兽') || chars.includes('示例神兽')) danmakuPool.push('示例神兽！');
+    // 【P2-24 修复】删除神话硬编码，弹幕池由调用方或配置注入
+    // 保留随机选择逻辑，移除写死的关键词
     
     // 随机选择 3-5 条
     const count = 3 + Math.floor(Math.random() * 3);
@@ -588,7 +587,8 @@ class PostProductionEngine {
     const shots = productionResult.shots || [];
     const blueprint = scriptResult.blueprint;
       // B10-fix: 标准输出用 duration 字段，不是 timing.duration
-      const totalDuration = shots.reduce((sum, s) => sum + (s.duration || s.timing?.duration || 25), 0);
+    // 【P2-26 修复】删除未使用的 totalDuration（死代码）
+    // const totalDuration = shots.reduce((sum, s) => sum + (s.duration || s.timing?.duration || 25), 0);
     
     // 【P0-11 修复】构建 renderResult 映射，消费真实渲染路径
     const renderMap = new Map((renderResult?.results || []).map(r => [r.shotId, r]));
@@ -659,8 +659,9 @@ class PostProductionEngine {
       
       // 转场效果（镜头之间）
       if (config.transitions && i < shots.length - 1) {
+        const transId = `trans-${shot.shotId}-${shots[i+1].shotId}`;
         html.push(`  <!-- Transition ${shot.shotId} → ${shots[i+1].shotId} -->`);
-        html.push(`  <div class="clip transition" data-start="${currentTime + duration - 0.5}" data-duration="0.5" data-track-index="${trackIndex++}"`);
+        html.push(`  <div id="${transId}" class="clip transition" data-start="${currentTime + duration - 0.5}" data-duration="0.5" data-track-index="${trackIndex++}"`);
         html.push(`       style="opacity: 0;"></div>`);
         html.push('');
       }
@@ -714,7 +715,7 @@ class PostProductionEngine {
     
     // ========== GSAP 动画 ==========
     html.push('  <!-- GSAP 动画 -->');
-    html.push('  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>');
+    html.push(`  <script src="${this.config.gsapCdnUrl}"></script>`);
     html.push('  <script>');
     html.push('    const tl = gsap.timeline({ paused: true });');
     html.push('    ');
@@ -736,9 +737,12 @@ class PostProductionEngine {
     html.push('      );');
     html.push('    });');
     html.push('    ');
-    html.push('    // 转场淡入');
-    html.push('    tl.to(".transition", { opacity: 1, duration: 0.25, ease: "power2.in" }, "-=0.5");');
-    html.push('    tl.to(".transition", { opacity: 0, duration: 0.25, ease: "power2.out" });');
+    html.push('    // 转场淡入淡出（【P2-23 修复】按每个 transition 的 data-start 单独编排，避免全选择器同时触发）');
+    html.push('    document.querySelectorAll(".transition").forEach(trans => {');
+    html.push('      const tStart = parseFloat(trans.dataset.start) || 0;');
+    html.push('      tl.to(trans, { opacity: 1, duration: 0.25, ease: "power2.in" }, tStart);');
+    html.push('      tl.to(trans, { opacity: 0, duration: 0.25, ease: "power2.out" }, tStart + 0.25);');
+    html.push('    });');
     html.push('    ');
     html.push('    window.__timelines = window.__timelines || {};');
     html.push(`    window.__timelines["hyperreality-${version}"] = tl;`);
@@ -754,7 +758,8 @@ class PostProductionEngine {
   getSceneStartTime(sceneId, shots) {
     let time = 0;
     for (const shot of shots) {
-      if (shot.shotId === sceneId || shot.sceneId === sceneId) {
+      // 【P1-23 修复】shotId 即 scene_id 的值，无需检查不存在的 sceneId 字段
+      if (shot.shotId === sceneId) {
         return time;
       }
       time += shot.duration || shot.timing?.duration || 25;

@@ -719,7 +719,7 @@ class CreativeIntensityRecommender {
    */
   record(entry) {
     const record = {
-      id: `entry_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `entry_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       videoType: entry.videoType || 'unknown',
       intensity: entry.intensity || 0.2,
       completionRate: entry.completionRate || 0,

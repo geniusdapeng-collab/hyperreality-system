@@ -846,12 +846,8 @@ ${missing.map(f => `- ${f}：${FIELD_DESCS[f]}`).join('\n')}
   }
 
   _countChars(str) {
-    if (!str) return 0;
-    let count = 0;
-    for (const char of str) {
-      count += (char.charCodeAt(0) > 127) ? 1.5 : 1;
-    }
-    return Math.ceil(count);
+    // 【P2-13 修复】使用真实字符数，中文不再按1.5计
+    return str ? String(str).length : 0;
   }
 
   _extractPureDialogue(dialogue) {

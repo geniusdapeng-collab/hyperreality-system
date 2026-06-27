@@ -18,7 +18,10 @@ try {
 
 class ScriptGenerator {
   constructor(options = {}) {
-    const model = options.model || process.env.STORMAXE_LLM_MODEL || 'kimi-k2p6';
+    const model = options.model || process.env.STORMAXE_LLM_MODEL || null;
+    if (!model) {
+      console.warn('[ScriptGenerator] ⚠️ 未配置模型名，请设置 STORMAXE_LLM_MODEL 或传入 options.model');
+    }
     this.config = {
       llmEndpoint: options.llmEndpoint || process.env.LLM_ENDPOINT || 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
       apiKey: options.apiKey || process.env.VOLCENGINE_ARK_API_KEY,

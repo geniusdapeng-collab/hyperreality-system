@@ -726,7 +726,8 @@ function normalizeFields(fields) {
   for (const [key, value] of Object.entries(fields)) {
     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
     const targetKey = FIELD_ALIAS_MAP[snakeKey] || snakeKey;
-    if (value !== undefined && value !== null && value !== '') {
+    // 【P2-12 修复】dialogue 允许空字符串（无台词镜头），其他字段仍过滤空串
+    if (value !== undefined && value !== null && (value !== '' || targetKey === 'dialogue')) {
       result[targetKey] = normalizeValue(value);
     }
   }

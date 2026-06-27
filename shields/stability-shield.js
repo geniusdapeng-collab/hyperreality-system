@@ -1,6 +1,11 @@
 /**
  * StabilityShield - 三层稳定性护盾集成器（通用化版本）
  * 
+ * ⚠️ 【架构-2 声明】StabilityShield.produce() 从未被主流程调用。
+ *    HyperrealitySystem.create() 直接调用 productionEngine.produce()，绕过 StabilityShield。
+ *    当前只有 HealthMonitor 的心跳监控在运行（通过 initialize() 注入）。
+ *    如需启用完整护盾，需让 create() 的 Layer 2 调用 stabilityShield.produce() 而非直接 productionEngine.produce()。
+ * 
  * 将三个护盾整合为统一的稳定性保障层：
  * - Shield 1: BaselineRegistry（确定性基线）
  * - Shield 2: LLMGateway（熔断/缓存/兜底）

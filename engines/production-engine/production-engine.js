@@ -203,11 +203,10 @@ class ProductionEngine {
    * 【新增】加载最新 checkpoint(断点续跑)
    * 返回最近完成的 Phase 及其 shots
    */
-  _loadLatestCheckpoint() {
+  _loadLatestCheckpoint(expectedFingerprint = null) {
     if (!this._enableResume) return null;
     try {
       const fs = require('fs');
-      // 【审计修复·P0】补全 phase0/phase3.5，损坏文件删除并继续搜索
       const phases = ['phase3.5', 'phase3', 'phase2', 'phase1', 'phase0'];
       for (const phase of phases) {
         const file = path.join(this._checkpointDir, `checkpoint-${phase}.json`);
@@ -215,10 +214,17 @@ class ProductionEngine {
         try {
           const data = fs.readFileSync(file, 'utf8');
           const parsed = JSON.parse(data);
+          // 【P1-9 修复】校验 blueprint 指纹一致性
+          if (expectedFingerprint && parsed.blueprintFingerprint) {
+            if (parsed.blueprintFingerprint.hash !== expectedFingerprint.hash) {
+              this.log('RESUME', `⚠️ ${phase} checkpoint 指纹不匹配(旧${parsed.blueprintFingerprint.hash}→新${expectedFingerprint.hash})，丢弃`);
+              try { fs.unlinkSync(file); } catch (_) {}
+              continue;
+            }
+          }
           this.log('RESUME', `📂 发现 ${phase} checkpoint(${parsed.shots?.length || 0} 镜头,保存于 ${parsed.savedAt || 'unknown'})`);
           return parsed;
         } catch (e) {
-          // 【审计修复】损坏文件删除，继续搜索更低优先级的 phase
           this.log('RESUME', `⚠️ ${phase} checkpoint 损坏(${e.message})，已删除，继续搜索`);
           try { fs.unlinkSync(file); } catch (_) {}
           continue;
@@ -291,7 +297,12 @@ class ProductionEngine {
     if (!this._checkpointManager) {
       this._checkpointManager = new CheckpointManager(this._checkpointDir);
     }
-    const result = this._checkpointManager.save(phase, shots, extra, this.log.bind(this));
+    // 【P1-9 修复】自动附加 blueprint 指纹
+    const enrichedExtra = {
+      ...extra,
+      blueprintFingerprint: this._blueprintFingerprint
+    };
+    const result = this._checkpointManager.save(phase, shots, enrichedExtra, this.log.bind(this));
     if (!result.success) {
       // 保持原有行为：保存失败不抛异常
     }
@@ -490,7 +501,14 @@ class ProductionEngine {
       }
     }
 
-    this.log('PRODUCE', `🎬 ProductionEngine 启动 | LLM=${this.agentConfig.enableLLMAgents} | 预算 ${Math.round(HARD_BUDGET_MS / 1000)}s | 余量 ${Math.round(SAFETY_MARGIN_MS / 1000)}s | 堆 ${this._checkMemory('start')}MB`);
+    // 【P1-9 修复】生成 blueprint 指纹，用于 checkpoint 一致性校验
+    const crypto = require('crypto');
+    this._blueprintFingerprint = {
+      sceneCount: adaptedBlueprint.scenes?.length || 0,
+      shotIds: (adaptedBlueprint.scenes || []).map(s => s.scene_id).join(','),
+      hash: crypto.createHash('md5').update(JSON.stringify(adaptedBlueprint.scenes || [])).digest('hex').slice(0, 8)
+    };
+    this.log('PRODUCE', `🔖 Blueprint 指纹: ${this._blueprintFingerprint.hash} (${this._blueprintFingerprint.sceneCount}场景)`);
 
     const result = {
       success: false, shots: [], prompts: [], stages: {}, errors: [],
@@ -512,7 +530,7 @@ class ProductionEngine {
       let phase1Failed = false;
 
       // ===== 断点续跑:尝试加载已完成的 checkpoint =====
-      const ckpt = this._loadLatestCheckpoint();
+      const ckpt = this._loadLatestCheckpoint(this._blueprintFingerprint);
       let startPhase = 1;
       if (ckpt) {
         currentShots = ckpt.shots;

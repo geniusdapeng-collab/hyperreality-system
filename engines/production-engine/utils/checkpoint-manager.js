@@ -38,6 +38,7 @@ class CheckpointManager {
         shots: shots || [],
         opening: extra.opening || null,
         llmStats: extra.llmStats || {},
+        blueprintFingerprint: extra.blueprintFingerprint || null,
         savedAt: new Date().toISOString()
       });
 

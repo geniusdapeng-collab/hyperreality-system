@@ -128,21 +128,24 @@ class ScriptValidator {
     // 检查场景连续性
     let continuous = true;
     let lastEnd = 0;
+    let missingTimingCount = 0;
     for (const scene of (structure.scenes || [])) {
       if (scene.timing) {
         if (Math.abs(scene.timing.start - lastEnd) > 1) {
           continuous = false;
         }
         lastEnd = scene.timing.end;
+      } else {
+        missingTimingCount++;
       }
     }
     checks.push({
       category: 'structure',
       name: 'scene_continuity',
-      passed: continuous,
+      passed: continuous && missingTimingCount === 0,
       severity: 'warning',
-      message: continuous ? '场景时序连续' : '场景时序存在断层',
-      suggestion: '确保场景时间轴连续无断层'
+      message: continuous ? (missingTimingCount > 0 ? `场景时序连续，但 ${missingTimingCount} 个场景缺失 timing` : '场景时序连续') : '场景时序存在断层',
+      suggestion: '确保场景时间轴连续无断层，每个场景都有 timing'
     });
     
     // 检查场景 ID 唯一性
