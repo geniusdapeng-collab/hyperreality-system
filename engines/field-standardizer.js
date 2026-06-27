@@ -632,6 +632,33 @@ function validateShot(shot) {
     }
   }
 
+  // 【v2.1.5-fix-C】DIALOGUE_BLOCK 字段完整性检查
+  if (shot.dialogueBlocks && Array.isArray(shot.dialogueBlocks)) {
+    for (const block of shot.dialogueBlocks) {
+      const requiredBlockFields = ['speaker', 'line', 'emotion', 'trigger', 'manner', 'type'];
+      const missingFields = requiredBlockFields.filter(f => !block[f] || String(block[f]).trim() === '');
+      if (missingFields.length > 0) {
+        warnings.push(`DialogueBlock missing fields [${missingFields.join(', ')}] for speaker: ${block.speaker || 'unknown'}`);
+      }
+      // 检查 emotion 是否为副词（简单启发式：以 ly 结尾或包含常见副词）
+      if (block.emotion && !/ly$|confidently|hesitates|gently|quietly|warmly|calmly|firmly|softly/i.test(block.emotion)) {
+        warnings.push(`DialogueBlock emotion should be adverb: "${block.emotion}"`);
+      }
+      // 检查 line 长度
+      if (block.line && block.line.length > 30) {
+        warnings.push(`DialogueBlock line too long (${block.line.length} > 30 chars): "${block.line.substring(0, 20)}..."`);
+      }
+    }
+  }
+
+  // 【v2.1.6】场景描述禁止词汇检查（系统级兜底，防止 LLM 生成科幻/抽象场景）
+  const forbiddenSceneWords = ['全息', '虚拟', '投影', '抽象', '概念', '光影场域', '数据空间', '元宇宙', '时间操控', '霓虹', '微观世界', '宏观', '抽象几何', '流动光影', '交织光影', '色彩对冲'];
+  const sceneDesc = shot.scene || '';
+  const foundForbidden = forbiddenSceneWords.filter(w => sceneDesc.includes(w));
+  if (foundForbidden.length > 0) {
+    errors.push(`Scene contains forbidden words: ${foundForbidden.join(', ')}`);
+  }
+
   return {
     passed: errors.length === 0,
     errors,

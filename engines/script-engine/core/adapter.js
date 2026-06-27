@@ -133,7 +133,8 @@ class ScriptBlueprintAdapter {
         characters: scene.characters || [],
         
         // 对话
-        dialogue: scene.dialogue || { has_dialogue: false, lines: [] },
+        // 【v2.1.5-fix-C】透传 blocks 字段，保持完整 DIALOGUE_BLOCK 结构
+        dialogue: scene.dialogue || { has_dialogue: false, lines: [], blocks: [] },
         
         // 情感目标
         emotional_target: scene.emotional_target || { valence: 0, arousal: 0.5, dominance: 0.5 },
@@ -349,11 +350,13 @@ class ScriptBlueprintAdapter {
 
   /**
    * 适配台词系统
+   * 【v2.1.5-fix-C】同时透传 blocks 字段（DIALOGUE_BLOCK 格式）
    */
   _adaptDialogues(blueprint) {
     const dialogues = [];
     
     for (const scene of blueprint.structure.scenes || []) {
+      // 透传 lines（向后兼容）
       if (scene.dialogue?.has_dialogue && scene.dialogue.lines) {
         for (const line of scene.dialogue.lines) {
           dialogues.push({
@@ -361,6 +364,25 @@ class ScriptBlueprintAdapter {
             speaker: line.speaker,
             text: line.text,
             emotion: line.emotion || 'neutral',
+            timing: {
+              start: scene.timing?.start || 0,
+              duration: scene.timing?.duration || 20
+            }
+          });
+        }
+      }
+      
+      // 【v2.1.5-fix-C】透传 blocks（新格式）
+      if (scene.dialogue?.blocks) {
+        for (const block of scene.dialogue.blocks) {
+          dialogues.push({
+            scene_id: scene.scene_id,
+            speaker: block.speaker,
+            text: block.line,
+            emotion: block.emotion || 'neutral',
+            trigger: block.trigger || '',
+            manner: block.manner || '',
+            type: block.type || 'monologue',
             timing: {
               start: scene.timing?.start || 0,
               duration: scene.timing?.duration || 20

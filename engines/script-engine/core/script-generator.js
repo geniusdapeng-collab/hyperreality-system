@@ -132,9 +132,10 @@ ${meta.featured_beast_id ? '- 主角异兽：' + meta.featured_beast_id : ''}
 1. 禁止旁白（Voiceover），只保留角色对话（Dialogue）
 2. 每个场景必须有角色对话（台词）
 3. 台词必须口语化，适合短视频节奏（每句不超过30字）
-4. 场景时长分配：根据内容重要性、台词长度、视觉复杂度三维度分配
-5. 总时长必须严格等于 ${meta.target_duration} 秒
-6. 角色视觉锚点必须保持一致（定妆照引用）
+4. 【v2.1.5-fix-C】台词必须生成 blocks 字段：每句台词需包含 speaker/line/emotion/trigger/manner/type，emotion 必须是副词（如 confidently/hesitates/gently），trigger 必须是物理动作触发（如 looks at camera/pauses then smiles）
+5. 场景时长分配：根据内容重要性、台词长度、视觉复杂度三维度分配
+6. 总时长必须严格等于 ${meta.target_duration} 秒
+7. 角色视觉锚点必须保持一致（定妆照引用）
 
 ## 剧本结构模板
 采用三幕式结构：
@@ -151,7 +152,7 @@ ${meta.world_setting === '示例世界' ? `
 - 世界观：${meta.world_setting}
 ` : `
 - 现实世界设定，真实场景，写实风格
-- 环境特征：根据内容类型选择合适场景（医院、实验室、户外等）
+- 环境特征：根据内容主题选择合适场景（办公室、演播室、户外、居家等）
 - 要求明亮、专业、可信的视觉效果
 `}
 
@@ -198,7 +199,7 @@ ${meta.world_setting === '示例世界' ? `
           "end": 结束秒数
         },
         "characters": ["角色ID"],
-        "setting": "场景时空设定",
+        "setting": "具体写实场景描述（50-80字）：墙面材质、灯光类型（真实光源）、家具/设备、地面材质。例如：白色乳胶漆墙面，嵌入式LED灯带柔和照明，深色实木办公桌摆放笔记本电脑，地面浅灰色地毯",
         "dialogue": {
           "has_dialogue": true,
           "lines": [
@@ -206,6 +207,16 @@ ${meta.world_setting === '示例世界' ? `
               "speaker": "角色ID",
               "text": "台词内容（口语化，不超过30字）",
               "emotion": "情绪标签"
+            }
+          ],
+          "blocks": [
+            {
+              "speaker": "角色ID",
+              "line": "台词内容（口语化，不超过30字）",
+              "emotion": "情绪副词（如 confidently, hesitates, gently）",
+              "trigger": "动作触发（如 looks at camera, pauses then smiles）",
+              "manner": "说话方式（如 quietly, with a smile, direct-address）",
+              "type": "monologue|dialogue|reaction"
             }
           ]
         },
