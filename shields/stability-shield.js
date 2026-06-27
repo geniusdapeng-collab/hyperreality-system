@@ -59,6 +59,8 @@ class StabilityShield {
     
     if (this.productionEngine) {
       this.healthMonitor.registerAgent('ProductionEngine', this.productionEngine);
+      // 【v2.1.6-fix】系统级修复：传递 healthMonitor 给 ProductionEngine，供 Phase 长时间任务使用
+      this.productionEngine.setHealthMonitor(this.healthMonitor);
     }
 
     console.log('[StabilityShield] ✅ 护盾已激活');

@@ -29,11 +29,18 @@ class Phase3PromptFusion extends PhaseExecutor {
     this.log('PHASE-3', `📊 动态预算: ${shotCount}镜头 × ${PHASE3_PER_SHOT_MS/1000}s + ${PHASE3_BUFFER_MS/1000}s缓冲 = 需${Math.round(needMs/1000)}s`);
 
     // 预算检查
-    if (!this.checkBudget(needMs, 'Phase 3')) {
-      return { success: false, shots, result, timing: 0, error: '预算不足' };
+    // 【v2.1.6-fix】Phase 3 是核心环节，预算不足时告警但继续执行，不可跳过
+    const canAfford = this.checkBudget(needMs, 'Phase 3');
+    if (!canAfford) {
+      this.log('PHASE-3', '⚠️ 预算不足，但 Phase 3 是核心环节，继续执行（可能超时）');
     }
 
     try {
+      // 【v2.1.6-fix】系统级修复：启用长时间任务模式，避免HealthMonitor误判
+      if (this.healthMonitor) {
+        this.healthMonitor.setLongTaskMode('ProductionEngine', true, shotCount * 120000 + 60000);
+      }
+
       this.log('PROMPT-FUSION-AGENT', `开始(串行模式,${shotCount}镜头,预计${Math.round(needMs/1000)}s)...`);
       
       const pfResult = await this.agents.promptFusion.process(
@@ -65,6 +72,11 @@ class Phase3PromptFusion extends PhaseExecutor {
     } catch (e) {
       this.log('PROMPT-FUSION-FAIL', `❌ ${e.message},部分镜头降级到规则 Prompt`);
       return { success: false, shots, result, timing: Date.now() - startTime, error: e.message };
+    } finally {
+      // 【v2.1.6-fix】系统级修复：关闭长时间任务模式
+      if (this.healthMonitor) {
+        this.healthMonitor.setLongTaskMode('ProductionEngine', false);
+      }
     }
   }
 }

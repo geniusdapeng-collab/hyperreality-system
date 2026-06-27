@@ -126,6 +126,37 @@ class ProductionEngine {
     this.continuityChecker = new ContinuityChecker();
     this.shotNormalizer = new ShotNormalizer(this.config);
     this.promptBuilder = new PromptBuilder(this.config);
+    
+    // 【v2.1.6-fix】系统级修复：传递 healthMonitor 给 Phase 执行器
+    this.healthMonitor = null;
+  }
+
+  /**
+   * 【v2.1.6-fix】系统级修复：设置 HealthMonitor 引用，供 Phase 长时间任务使用
+   * @param {HealthMonitor} healthMonitor - HealthMonitor 实例
+   */
+  setHealthMonitor(healthMonitor) {
+    this.healthMonitor = healthMonitor;
+    // 重新初始化 Phase 执行器，传递 healthMonitor
+    const commonOptions = {
+      agents: this.agents,
+      logFn: this.log.bind(this),
+      saveCheckpoint: this._saveCheckpoint.bind(this),
+      canAfford: this._canAfford.bind(this),
+      budgetRemaining: this._budgetRemaining.bind(this),
+      checkMemory: this._checkMemory.bind(this),
+      cloneShots: this._cloneShots.bind(this),
+      mergeShots: this._mergeShotsByShotId.bind(this),
+      healthMonitor: this.healthMonitor
+    };
+    this.phase1 = new Phase1SceneDesign(commonOptions);
+    this.phase2 = new Phase2VisualAudio(commonOptions);
+    this.phase3 = new Phase3PromptFusion(commonOptions);
+    this.phase35 = new Phase35FieldQuality({
+      ...commonOptions,
+      llmModel: this.llmModel,
+      globalDeadline: this._globalDeadline
+    });
   }
 
   /**

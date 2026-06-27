@@ -95,6 +95,31 @@ class HealthMonitor extends EventEmitter {
   }
 
   /**
+   * 主动更新Agent心跳（用于长时间任务期间）
+   * 【v2.1.6-fix】系统级修复：Phase 3串行执行期间主动保活，避免HealthMonitor误判
+   * @param {string} agentId - Agent标识
+   */
+  updateHeartbeat(agentId) {
+    const agentInfo = this.agents.get(agentId);
+    if (!agentInfo) return;
+    agentInfo.health.lastHeartbeat = Date.now();
+  }
+
+  /**
+   * 设置Agent长时间任务模式（动态调整超时阈值）
+   * @param {string} agentId - Agent标识
+   * @param {boolean} enabled - 是否启用
+   * @param {number} timeoutMs - 自定义超时(ms)
+   */
+  setLongTaskMode(agentId, enabled, timeoutMs = 600000) {
+    const agentInfo = this.agents.get(agentId);
+    if (!agentInfo) return;
+    agentInfo._longTaskMode = enabled;
+    agentInfo._longTaskTimeout = timeoutMs;
+    console.log(`[HealthMonitor] ${enabled ? '⏱️ 启用' : '✅ 关闭'}长时间任务模式: ${agentId}, 超时: ${timeoutMs}ms`);
+  }
+
+  /**
    * 注册补偿事务
    * @param {string} stageId - Stage标识
    * @param {Function} compensateFn - 补偿函数
@@ -150,8 +175,9 @@ class HealthMonitor extends EventEmitter {
       const health = agentInfo.health;
       const now = Date.now();
 
-      // 1. 检查心跳超时（5分钟无响应认为死亡）
-      const heartbeatTimeout = 300000;
+      // 1. 检查心跳超时
+      // 【v2.1.6-fix】系统级修复：长时间任务模式下动态延长超时阈值
+      const heartbeatTimeout = agentInfo._longTaskMode ? (agentInfo._longTaskTimeout || 600000) : 300000;
       if (now - health.lastHeartbeat > heartbeatTimeout) {
         this._handleDeadAgent(agentId, '心跳超时');
         continue;
