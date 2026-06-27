@@ -21,8 +21,9 @@ class Phase3PromptFusion extends PhaseExecutor {
     const shotCount = shots.length;
 
     // 动态预算计算
-    const PHASE3_PER_SHOT_MS = 180000; // 每镜头180秒
-    const PHASE3_BUFFER_MS = 30000;    // 30秒缓冲
+    // 【v2.1.6】调整预算：实测每镜头约60-90s，按90s预估
+    const PHASE3_PER_SHOT_MS = 90000; // 每镜头90秒（原180s过于保守）
+    const PHASE3_BUFFER_MS = 30000;   // 30秒缓冲
     const needMs = shotCount * PHASE3_PER_SHOT_MS + PHASE3_BUFFER_MS;
 
     this.log('PHASE-3', `📊 动态预算: ${shotCount}镜头 × ${PHASE3_PER_SHOT_MS/1000}s + ${PHASE3_BUFFER_MS/1000}s缓冲 = 需${Math.round(needMs/1000)}s`);
