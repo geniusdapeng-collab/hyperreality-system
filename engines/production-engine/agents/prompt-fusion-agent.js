@@ -91,9 +91,10 @@ const PromptLengthConfig = require('../../../config/prompt-length.js');
 // ...
     // 【审计修复】从配置文件读取，不再硬编码
     this.maxPromptLength = options.maxPromptLength || PromptLengthConfig.HARD_MAX || 12000;
-    this.concurrency = options.concurrency || 2;
-    this.llmTimeout = 300000; // 5 分钟单次（结构化输出需要更长时间）
-    this.llmMaxRetries = 2;
+    // 【P2-11 修复】删除 concurrency 死代码；llmTimeout 走 options，允许外部配置覆盖
+    // this.concurrency = options.concurrency || 2; // 死代码，process() 中从未使用
+    this.llmTimeout = options.llmTimeout || this.llmTimeout || 300000;
+    this.llmMaxRetries = options.llmMaxRetries || 2;
   }
 
   _getSystemPrompt() {

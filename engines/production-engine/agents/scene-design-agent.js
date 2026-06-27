@@ -92,7 +92,7 @@ ${sceneOptions}
     const prompt = this._buildPrompt(shots, blueprint);
 
     const schema = {
-      required: ['shots']
+      required: ['shots'], requiredArrays: ['shots'], rejectEmptyArray: true, // 【P1-6 修复】启用数组类型校验
     };
 
     const llmResult = await this._callLLM(prompt, schema, () => {
