@@ -76,16 +76,20 @@ class ContinuityReviewAgent extends BaseAgent {
   }
 
   async _processCore(shots, blueprint, options = {}) {
+    console.log(`[ContinuityReviewAgent._processCore] 进入核心处理 | shots=${shots.length} | blueprint=${!!blueprint}`);
 
     const prompt = this._buildPrompt(shots, blueprint);
+    console.log(`[ContinuityReviewAgent._processCore] Prompt构建完成 | length=${prompt.length}`);
 
     const schema = {
       required: ['review']
     };
 
+    console.log(`[ContinuityReviewAgent._processCore] 开始调用LLM...`);
     const llmResult = await this._callLLM(prompt, schema, () => {
       return this._fallback(shots);
     });
+    console.log(`[ContinuityReviewAgent._processCore] LLM返回 | degraded=${llmResult.degraded} | degradeReason=${llmResult.degradeReason || 'none'}`);
 
     if (llmResult.degraded) {
       // 【P1-3 修复】降级对齐非降级结构，避免双层嵌套

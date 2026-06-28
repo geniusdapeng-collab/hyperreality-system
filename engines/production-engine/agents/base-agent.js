@@ -72,8 +72,6 @@ class BaseAgent {
    * 同时不影响 race 的正常 reject 传播。
    */
   _callWithTimeout(promise, timeoutMs, label = 'LLM调用') {
-    // 防御 NaN/Infinity/非数字（setTimeout(NaN/Infinity) 会被当 0 立即触发，反而无害；
-    // 但若被篡改成巨大值则需兜底）
     const ms = (typeof timeoutMs === 'number' && timeoutMs > 0 && timeoutMs < 24 * 3600 * 1000)
       ? timeoutMs : 300000;
     let timer;
@@ -90,8 +88,8 @@ class BaseAgent {
       }, ms);
     });
     return Promise.race([p, timeoutPromise])
-      .then(v => { settled = true; clearTimeout(timer); return v; },
-            e => { settled = true; clearTimeout(timer); throw e; });
+      .then(v => { settled = true; clearTimeout(timer); console.log(`[${label}] ✅ 正常完成，耗时≈${ms - (timer._idleTimeout || 0)}ms`); return v; },
+            e => { settled = true; clearTimeout(timer); console.warn(`[${label}] ❌ 异常/超时退出: ${e.message}`); throw e; });
   }
 
   /**
