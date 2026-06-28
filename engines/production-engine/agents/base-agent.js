@@ -62,20 +62,18 @@ class BaseAgent {
   }
 
   /**
-   * 【v2.1.4-fix13】通用超时包装器 — 核心修复
-   * 任何 Promise 都可以用这个包装，确保不会无限等待
-   */
-  /**
    * 【审计修复·核心】通用超时包装器
-   * 关键修复：超时后底层 promise 仍在跑，其迟到的 rejection 会变成 unhandledRejection
-   * 导致 Node 进程崩溃。这里给原 promise 挂一个 no-op catch 标记其已被处理，
-   * 同时不影响 race 的正常 reject 传播。
+   *
+   * 重要说明：Promise.race 只能对"异步挂起"生效，无法中断同步 CPU 计算。
+   * 真正的同步阻塞由 _extractJsonObject 的预算保护（修复1）根治。
+   * 本方法负责：异步场景下的超时降级 + 防止悬空 rejection 崩溃进程。
    */
   _callWithTimeout(promise, timeoutMs, label = 'LLM调用') {
     const ms = (typeof timeoutMs === 'number' && timeoutMs > 0 && timeoutMs < 24 * 3600 * 1000)
       ? timeoutMs : 300000;
     let timer;
     let settled = false;
+    const callStart = Date.now();
     const p = Promise.resolve(promise);
     // 立即挂 catch：标记 rejection 已被处理，防止超时后悬空 rejection 崩溃进程
     p.catch(() => {});
@@ -88,8 +86,15 @@ class BaseAgent {
       }, ms);
     });
     return Promise.race([p, timeoutPromise])
-      .then(v => { settled = true; clearTimeout(timer); console.log(`[${label}] ✅ 正常完成，耗时≈${ms - (timer._idleTimeout || 0)}ms`); return v; },
-            e => { settled = true; clearTimeout(timer); console.warn(`[${label}] ❌ 异常/超时退出: ${e.message}`); throw e; });
+      .then(v => {
+        settled = true; clearTimeout(timer);
+        console.log(`[${label}] ✅ 正常完成，耗时≈${Date.now() - callStart}ms`);
+        return v;
+      }, e => {
+        settled = true; clearTimeout(timer);
+        console.warn(`[${label}] ❌ 异常/超时退出: ${e.message} | 耗时≈${Date.now() - callStart}ms`);
+        throw e;
+      });
   }
 
   /**
