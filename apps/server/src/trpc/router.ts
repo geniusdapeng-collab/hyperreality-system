@@ -85,6 +85,7 @@ import {
   listProfileSlugs,
   recheckBundle,
 } from "@workloom/base/bundles";
+import { videoRouter } from "../video/router.js";
 
 /** system router：健康检查（公开） */
 const systemRouter = router({
@@ -1636,6 +1637,7 @@ export const appRouter = router({
   roster: rosterRouter,
   im: imRouter,
   bundles: bundlesRouter,
+  video: videoRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,5 +1,5 @@
 {
-  "name": "workloom-im",
+  "name": "videomanager",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -23,7 +23,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "db:verify-chain": "tsx --env-file=.env scripts/verify-chain.ts",
-    "suite": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/suite.ts"
+    "suite": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/suite.ts",
+    "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -37,5 +38,6 @@
     "typescript": "^5.9.0",
     "vitest": "^3.2.0",
     "yaml": "2.9.0"
-  }
+  },
+  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）"
 }
