@@ -48,7 +48,7 @@ WorkLoom 的答案是：**大模型是蒸汽机，企业 Agent IM 是织机。**
 
 > 如果你是刚克隆本仓库的 AI 助手：读完本节即可上手，无需通读全文。
 
-**一句话定位**：企业级 Agent IM 底座——人类员工与 AI Agent 班组在同一 workspace 协作；一切业务动作以「五元事件」写入 append-only 事件库（哈希链），经安全网关三段瀑布（权限→脱敏→高风险授权）收口。运行时地基是 DeepSeek Harness（`@deepseek-ai/dsh`，vendor 锁定 rc.8）。
+**一句话定位**：企业级 Agent IM 底座——人类员工与 AI Agent 班组在同一 workspace 协作；一切业务动作以「五元事件」写入 append-only 事件库（哈希链），经安全网关三段瀑布（权限→脱敏→高风险授权）收口。运行时地基是 DeepSeek Harness（`@deepseek-ai/dsh`，vendor 锁定 0.1.1-rc.1）。
 
 **仓库地图**（pnpm monorepo）：
 
@@ -61,7 +61,7 @@ WorkLoom 的答案是：**大模型是蒸汽机，企业 Agent IM 是织机。**
 | `apps/{server,web,site,desktop}` | Hono+tRPC 服务 / 舰桥前端 / 官网 / Mac 桌面包 |
 | `packages/base/wizard` | **行业落地向导**：首次装机的状态机与编排（技能一/二/三→交付配置），行业内容零预置（D18） |
 | `skills/official/` | 官方套件：`industry-entry/`（行业落地四技能+快速上线模板）、`product-feedback/`（反哺分析技能）（D17） |
-| `vendor/{dsh,dsh-im}` | dsh rc.8 审计基线（只读）/ dsh IM 通道插件（MIT 回馈） |
+| `vendor/{dsh,dsh-im}` | dsh 0.1.1-rc.1 审计基线（只读）/ dsh IM 通道插件（MIT 回馈） |
 | `scripts/` | migrate / seed / demo / verify-chain / **suite（371 场景用例）** / dsh-gate |
 
 **最小跑通路径**（Linux/macOS；需要 PostgreSQL 17 + pgvector 监听 5432）：
@@ -410,7 +410,7 @@ pnpm dev               # server(:8787) + web(:5173)，演示登录选「王店�
 - 🔜 Intel Mac 包 / Windows 包
 - 🔜 技能市场 industry 层开放（脱敏审核流水线 + 跨组织安装）
 - 🔜 更多领域 bundles（社媒营销、AI 视频与内容创作、餐饮、零售、物业）
-- ✅ dsh rc.8 已集成（subagent Codex / Claude Code 按需安装；E6 dsh-gate 门禁全绿）
+- ✅ dsh 0.1.1-rc.1 已集成（subagent Codex / Claude Code 按需安装；E6 dsh-gate 门禁全绿）
 - 🔜 dsh 上游新版本持续跟进（任何新版本含预发布即升 + seam 兼容回归）
 
 ## 致谢

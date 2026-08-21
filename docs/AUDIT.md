@@ -348,3 +348,10 @@ npm 最新 rc.7（latest）/ rc.8（next），与锁定 rc.8 一致——**无�
 - 评估 P3 清单第 1–3 项（DB 层加固，一个 commit 一项）；
 - apps/web 前端九大页走查（本轮聚焦后端与数据层，前端仅 build 验证 + DispatchBar #18 修复点代码确认）；
 - dsh 稳定 1.x 发布后按 §2.5 流程升级评估。
+
+## dsh 0.1.1-rc.1 升级登记（2026-08-21，随发布即升纪律）
+
+- **触发**：官方发布 `0.1.1-rc.1`（npm latest/next 双 tag 同指，发布 2026-08-21T06:49Z）。
+- **变更面实测 diff（rc.8→rc.1）**：CLI 聚合包 `lib/*.js` 与 config/presets 字节一致；README 仅链接修正；变更集中在全家桶子包统一 bump（语义化小版本线）。
+- **动作**：vendor/dsh 换基线 rc.1（integrity `sha512-HVauMT0F…DcZz0w==` 与 registry 逐字符一致 ✅）；dsh-gate pin 0.1.1-rc.1 + 独立 lock 更新 + node-pty 重建；README 中英版本引用同步。
+- **门禁实测**（在酒店版主线同变更实测）：E6 dsh-gate 全绿（用例一全链 37 条验链 ✅ + H-5 kill -9 崩溃重放零重复 ✅）；typecheck 6/6 · base 174/174 · runtime 12/12。

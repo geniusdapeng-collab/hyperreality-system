@@ -48,7 +48,7 @@ WorkLoom's answer: **the LLM is the steam engine; the Enterprise Agent IM is the
 
 > If you're an AI assistant that just cloned this repo: this section is all you need to get productive — no need to read the whole file.
 
-**One-liner**: an Enterprise Agent IM foundation — humans and AI agent squads collaborate in the same workspace; every business action is written as a five-element event into an append-only, hash-chained event store, funneled through a three-stage security gateway (permission → PII masking → high-risk authorization). Runtime foundation: DeepSeek Harness (`@deepseek-ai/dsh`, vendored at rc.8).
+**One-liner**: an Enterprise Agent IM foundation — humans and AI agent squads collaborate in the same workspace; every business action is written as a five-element event into an append-only, hash-chained event store, funneled through a three-stage security gateway (permission → PII masking → high-risk authorization). Runtime foundation: DeepSeek Harness (`@deepseek-ai/dsh`, vendored at 0.1.1-rc.1).
 
 **Repo map** (pnpm monorepo):
 
@@ -59,7 +59,7 @@ WorkLoom's answer: **the LLM is the steam engine; the Enterprise Agent IM is the
 | `packages/runtime` | dsh seam adapters: intent routing (Ask/Agent/Quest), Quest loop (replayable, crash-resumable), preset assembly |
 | `packages/{shared,db}` | Five-element zod schemas / hand-written SQL migrations (DDL source of truth) |
 | `apps/{server,web,site,desktop}` | Hono+tRPC server / bridge web UI / website / Mac desktop bundle |
-| `vendor/{dsh,dsh-im}` | dsh rc.8 audit baseline (read-only) / dsh IM channel plugin (MIT, contributed back) |
+| `vendor/{dsh,dsh-im}` | dsh 0.1.1-rc.1 audit baseline (read-only) / dsh IM channel plugin (MIT, contributed back) |
 | `scripts/` | migrate / seed / demo / verify-chain / **suite (371 scenario cases)** / dsh-gate |
 
 **Shortest path to green** (Linux/macOS; requires PostgreSQL 17 + pgvector on 5432):
@@ -408,7 +408,7 @@ Layout: `apps/{server, web, site, desktop}` + `packages/{shared, db, base, runti
 - 🔜 Intel Mac / Windows builds
 - 🔜 Skill marketplace industry tier (desensitization review pipeline + cross-org installs)
 - 🔜 More domain bundles (social-media marketing, AI video & content creation, F&B, retail, property)
-- ✅ dsh rc.8 integrated (Codex / Claude Code as installable subagents; E6 dsh-gate green)
+- ✅ dsh 0.1.1-rc.1 integrated (Codex / Claude Code as installable subagents; E6 dsh-gate green)
 - 🔜 Continuous dsh upstream tracking (upgrade on ANY new release incl. pre-releases, with seam regression)
 
 ## Acknowledgements
