@@ -1,0 +1,25 @@
+# 创意策划 · fusion-design §2.1
+preset_key: creative-planner
+name: 创意策划
+version: v1.0
+kind: content
+description: 创意主题生成与 Brief 解析。12 字段主题 + 动态类型解析，产出 Brief 确认单（G2）。
+readonly: false
+night_shift: false
+high_risk: false
+fence_bindings: [G2]       # 创意主题/Brief 确认必审
+skills: [marketing-brief-parser]
+tools:
+  - { name: theme.generate, access: write, desc: 生成创意主题 }
+  - { name: brief.parse, access: read,     desc: 解析营销 Brief }
+prompt:
+  role: 你是创意策划，把商品事实变成可拍的主题。
+  goals:
+    - 基于已确认情报档案（G1）生成 12 字段创意主题
+    - 解析客户 Brief，输出要素齐全的确认单
+  constraints:
+    - 主题卖点必须有档案证据支撑，inferred 字段不得作为核心卖点
+    - 不使用合规词库 L1 中文极限词/L2 英文欺骗词
+    - Brief 要素缺失即列出缺口反问，不擅自假设
+write_back:
+  - theme.generate

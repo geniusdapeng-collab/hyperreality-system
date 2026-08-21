@@ -1,0 +1,707 @@
+{
+  "built_at": "2026-07-29T02:42:16.430Z",
+  "count": 20,
+  "domain": "marketing",
+  "skills": [
+    {
+      "file": "营销_钩子_疑问式.md",
+      "skill_id": "marketing_hook_question",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "hook",
+      "style": "question",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "xiaohongshu",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding",
+        "traffic",
+        "conversion"
+      ],
+      "triggers": {
+        "fns": [
+          "hook"
+        ],
+        "styles": [
+          "question"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "xiaohongshu",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding",
+          "traffic",
+          "conversion"
+        ]
+      },
+      "oneLiner": "用目标人群正在自问的问题做开场，2 秒内完成\"这说的就是我\"的身份确认。"
+    },
+    {
+      "file": "营销_钩子_冲突式.md",
+      "skill_id": "marketing_hook_conflict",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "hook",
+      "style": "conflict",
+      "platforms": [
+        "douyin",
+        "tiktok"
+      ],
+      "goals": [
+        "traffic",
+        "conversion"
+      ],
+      "triggers": {
+        "fns": [
+          "hook"
+        ],
+        "styles": [
+          "conflict"
+        ],
+        "platforms": [
+          "douyin",
+          "tiktok"
+        ],
+        "goals": [
+          "traffic",
+          "conversion"
+        ]
+      },
+      "oneLiner": "把两个对立立场砸在第一帧，让观众被迫站队看下去。"
+    },
+    {
+      "file": "营销_钩子_数据式.md",
+      "skill_id": "marketing_hook_datashock",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "hook",
+      "style": "data-shock",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "xiaohongshu",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding",
+        "conversion"
+      ],
+      "triggers": {
+        "fns": [
+          "hook"
+        ],
+        "styles": [
+          "data-shock"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "xiaohongshu",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding",
+          "conversion"
+        ]
+      },
+      "oneLiner": "一个反直觉的具体数字砸在屏幕上，数字本身就是钩子。"
+    },
+    {
+      "file": "营销_钩子_反差式.md",
+      "skill_id": "marketing_hook_contrast",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "hook",
+      "style": "contrast",
+      "platforms": [
+        "tiktok",
+        "xiaohongshu",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "hook"
+        ],
+        "styles": [
+          "contrast"
+        ],
+        "platforms": [
+          "tiktok",
+          "xiaohongshu",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding"
+        ]
+      },
+      "oneLiner": "预期与现实的落差制造记忆点：看起来很贵/很难/很慢，其实相反。"
+    },
+    {
+      "file": "营销_演示_前后对比.md",
+      "skill_id": "marketing_demo_beforeafter",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "demo",
+      "style": "before-after",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "instagram-reels"
+      ],
+      "goals": [
+        "conversion",
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "demo"
+        ],
+        "styles": [
+          "before-after"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "instagram-reels"
+        ],
+        "goals": [
+          "conversion",
+          "seeding"
+        ]
+      },
+      "oneLiner": "同一画面一分为二或先后并置：用之前 vs 用之后，差异即卖点。"
+    },
+    {
+      "file": "营销_演示_对比测评.md",
+      "skill_id": "marketing_demo_review",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "demo",
+      "style": "versus-review",
+      "platforms": [
+        "douyin",
+        "xiaohongshu",
+        "tiktok"
+      ],
+      "goals": [
+        "seeding",
+        "conversion"
+      ],
+      "triggers": {
+        "fns": [
+          "demo"
+        ],
+        "styles": [
+          "versus-review"
+        ],
+        "platforms": [
+          "douyin",
+          "xiaohongshu",
+          "tiktok"
+        ],
+        "goals": [
+          "seeding",
+          "conversion"
+        ]
+      },
+      "oneLiner": "以测评人视角把产品与替代方案放同一测试流程里跑，让过程自己说话。"
+    },
+    {
+      "file": "营销_演示_极限测试.md",
+      "skill_id": "marketing_demo_stresstest",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "demo",
+      "style": "stress-test",
+      "platforms": [
+        "tiktok",
+        "douyin"
+      ],
+      "goals": [
+        "traffic",
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "demo"
+        ],
+        "styles": [
+          "stress-test"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin"
+        ],
+        "goals": [
+          "traffic",
+          "seeding"
+        ]
+      },
+      "oneLiner": "把产品推到极限工况下跑给观众看：最难的输入、最大的量、最紧的时间。"
+    },
+    {
+      "file": "营销_UGC_手持自拍.md",
+      "skill_id": "marketing_ugc_selfie",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "ugc",
+      "style": "selfie-handheld",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding",
+        "traffic"
+      ],
+      "triggers": {
+        "fns": [
+          "ugc"
+        ],
+        "styles": [
+          "selfie-handheld"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding",
+          "traffic"
+        ]
+      },
+      "oneLiner": "模拟真实用户手持自拍的晃动与随意感，让广告伪装成刷到的一条日常。"
+    },
+    {
+      "file": "营销_UGC_原生字幕条.md",
+      "skill_id": "marketing_ugc_nativesubtitle",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "ugc",
+      "style": "native-caption",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "xiaohongshu",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding",
+        "traffic",
+        "conversion"
+      ],
+      "triggers": {
+        "fns": [
+          "ugc"
+        ],
+        "styles": [
+          "native-caption"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "xiaohongshu",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding",
+          "traffic",
+          "conversion"
+        ]
+      },
+      "oneLiner": "字幕条完全复刻平台原生样式与出现逻辑，让用户下意识以为在看原生内容。"
+    },
+    {
+      "file": "营销_UGC_直播间质感.md",
+      "skill_id": "marketing_ugc_livestream",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "ugc",
+      "style": "livestream-feel",
+      "platforms": [
+        "douyin",
+        "tiktok"
+      ],
+      "goals": [
+        "conversion",
+        "traffic"
+      ],
+      "triggers": {
+        "fns": [
+          "ugc"
+        ],
+        "styles": [
+          "livestream-feel"
+        ],
+        "platforms": [
+          "douyin",
+          "tiktok"
+        ],
+        "goals": [
+          "conversion",
+          "traffic"
+        ]
+      },
+      "oneLiner": "借用直播间的镜头语言（正面怼脸/即时反应/口播连击）制造\"正在直播\"的临场感。"
+    },
+    {
+      "file": "营销_种草_开箱仪式感.md",
+      "skill_id": "marketing_seeding_unboxing",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "seeding",
+      "style": "unboxing",
+      "platforms": [
+        "xiaohongshu",
+        "douyin",
+        "tiktok",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "seeding"
+        ],
+        "styles": [
+          "unboxing"
+        ],
+        "platforms": [
+          "xiaohongshu",
+          "douyin",
+          "tiktok",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding"
+        ]
+      },
+      "oneLiner": "把开箱过程拍成一场微型仪式：包装、阻尼、第一眼的顺序本身就是内容。",
+      "categories": [
+        "physical"
+      ]
+    },
+    {
+      "file": "营销_种草_细节特写.md",
+      "skill_id": "marketing_seeding_macro",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "seeding",
+      "style": "macro-detail",
+      "platforms": [
+        "xiaohongshu",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "seeding"
+        ],
+        "styles": [
+          "macro-detail"
+        ],
+        "platforms": [
+          "xiaohongshu",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding"
+        ]
+      },
+      "oneLiner": "放弃全景叙事，用一连串材质/工艺/界面的微距特写堆出\"这东西很贵\"的质感认知。",
+      "categories": [
+        "physical"
+      ]
+    },
+    {
+      "file": "营销_种草_真实试用.md",
+      "skill_id": "marketing_seeding_diary",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "seeding",
+      "style": "real-diary",
+      "platforms": [
+        "xiaohongshu",
+        "tiktok",
+        "douyin"
+      ],
+      "goals": [
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "seeding"
+        ],
+        "styles": [
+          "real-diary"
+        ],
+        "platforms": [
+          "xiaohongshu",
+          "tiktok",
+          "douyin"
+        ],
+        "goals": [
+          "seeding"
+        ]
+      },
+      "oneLiner": "以\"第 N 天使用\"的日记体记录真实体验曲线，包括小缺点，可信度来自不完美。"
+    },
+    {
+      "file": "营销_剪辑_鼓点卡点.md",
+      "skill_id": "marketing_editing_beatcut",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "editing",
+      "style": "beat-cut",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "instagram-reels"
+      ],
+      "goals": [
+        "traffic",
+        "seeding",
+        "conversion"
+      ],
+      "triggers": {
+        "fns": [
+          "editing"
+        ],
+        "styles": [
+          "beat-cut"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "instagram-reels"
+        ],
+        "goals": [
+          "traffic",
+          "seeding",
+          "conversion"
+        ]
+      },
+      "oneLiner": "所有剪辑点对齐 BGM 鼓点重拍，让画面切换长在地心引力上。"
+    },
+    {
+      "file": "营销_剪辑_动作卡点.md",
+      "skill_id": "marketing_editing_motioncut",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "editing",
+      "style": "motion-cut",
+      "platforms": [
+        "tiktok",
+        "douyin"
+      ],
+      "goals": [
+        "traffic",
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "editing"
+        ],
+        "styles": [
+          "motion-cut"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin"
+        ],
+        "goals": [
+          "traffic",
+          "seeding"
+        ]
+      },
+      "oneLiner": "用人物/物体的动作惯性做剪辑掩体：挥手、转身、拿取的瞬间完成场景切换。"
+    },
+    {
+      "file": "营销_剪辑_文字卡点.md",
+      "skill_id": "marketing_editing_textpop",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "editing",
+      "style": "text-pop",
+      "platforms": [
+        "douyin",
+        "tiktok",
+        "xiaohongshu"
+      ],
+      "goals": [
+        "conversion",
+        "traffic"
+      ],
+      "triggers": {
+        "fns": [
+          "editing"
+        ],
+        "styles": [
+          "text-pop"
+        ],
+        "platforms": [
+          "douyin",
+          "tiktok",
+          "xiaohongshu"
+        ],
+        "goals": [
+          "conversion",
+          "traffic"
+        ]
+      },
+      "oneLiner": "花字/字幕的入场动效与鼓点、台词重音三方对齐，文字本身成为节奏乐器。"
+    },
+    {
+      "file": "营销_收尾_关注引导.md",
+      "skill_id": "marketing_cta_follow",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "cta",
+      "style": "follow",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "xiaohongshu",
+        "instagram-reels"
+      ],
+      "goals": [
+        "seeding",
+        "traffic"
+      ],
+      "triggers": {
+        "fns": [
+          "cta"
+        ],
+        "styles": [
+          "follow"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "xiaohongshu",
+          "instagram-reels"
+        ],
+        "goals": [
+          "seeding",
+          "traffic"
+        ]
+      },
+      "oneLiner": "用\"持续关注能获得什么\"做收尾钩子，把单条视频的流量沉淀为账号资产。"
+    },
+    {
+      "file": "营销_收尾_点击转化.md",
+      "skill_id": "marketing_cta_click",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "cta",
+      "style": "click-convert",
+      "platforms": [
+        "douyin",
+        "tiktok"
+      ],
+      "goals": [
+        "conversion"
+      ],
+      "triggers": {
+        "fns": [
+          "cta"
+        ],
+        "styles": [
+          "click-convert"
+        ],
+        "platforms": [
+          "douyin",
+          "tiktok"
+        ],
+        "goals": [
+          "conversion"
+        ]
+      },
+      "oneLiner": "把行动成本降到最低的直接转化收尾：去哪、点什么、得到什么，三句话说清。"
+    },
+    {
+      "file": "营销_收尾_评论互动.md",
+      "skill_id": "marketing_cta_comment",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "cta",
+      "style": "comment-bait",
+      "platforms": [
+        "tiktok",
+        "douyin",
+        "xiaohongshu"
+      ],
+      "goals": [
+        "seeding",
+        "traffic"
+      ],
+      "triggers": {
+        "fns": [
+          "cta"
+        ],
+        "styles": [
+          "comment-bait"
+        ],
+        "platforms": [
+          "tiktok",
+          "douyin",
+          "xiaohongshu"
+        ],
+        "goals": [
+          "seeding",
+          "traffic"
+        ]
+      },
+      "oneLiner": "抛一个低门槛、有立场空间的问题收尾，用评论区互动撬动算法推荐权重。"
+    },
+    {
+      "file": "营销_收尾_合集跳转.md",
+      "skill_id": "marketing_cta_series",
+      "domain": "marketing",
+      "type": "marketing",
+      "fn": "cta",
+      "style": "series-jump",
+      "platforms": [
+        "xiaohongshu",
+        "douyin",
+        "tiktok"
+      ],
+      "goals": [
+        "traffic",
+        "seeding"
+      ],
+      "triggers": {
+        "fns": [
+          "cta"
+        ],
+        "styles": [
+          "series-jump"
+        ],
+        "platforms": [
+          "xiaohongshu",
+          "douyin",
+          "tiktok"
+        ],
+        "goals": [
+          "traffic",
+          "seeding"
+        ]
+      },
+      "oneLiner": "用系列内容的上文/下集引导横向消费，把单条爆款的流量导入内容矩阵。"
+    }
+  ]
+}

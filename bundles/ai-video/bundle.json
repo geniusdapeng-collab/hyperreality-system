@@ -1,0 +1,60 @@
+{
+  "name": "@videomanager/ai-video",
+  "version": "1.0.0",
+  "workloom": {
+    "industry": "ai-video",
+    "displayName": "视频经理 · AI视频制作智能经营系统",
+    "description": "AI视频行业差异资产包：25 个数码员工 preset（制作班组 21 + 经营班组 4）+ G1-G10 基线围栏包 + 3 条 Quest 管线 + 对象/阶段枚举 + 8 个官方技能套件 + SuperMickey 技能内容库（fusion-design §2/§3/§4/§5）",
+    "provides": {
+      "presets": [
+        "presets/director.yml",
+        "presets/intel-collector.yml",
+        "presets/intel-reviewer.yml",
+        "presets/intel-competitor.yml",
+        "presets/intel-verifier.yml",
+        "presets/intel-binder.yml",
+        "presets/creative-planner.yml",
+        "presets/insight-analyst.yml",
+        "presets/prd-specialist.yml",
+        "presets/scriptwriter.yml",
+        "presets/scene-designer.yml",
+        "presets/opening-designer.yml",
+        "presets/visual-director.yml",
+        "presets/audio-designer.yml",
+        "presets/continuity-reviewer.yml",
+        "presets/prompt-fuser.yml",
+        "presets/field-inspector.yml",
+        "presets/portrait-artist.yml",
+        "presets/micromotion-stylist.yml",
+        "presets/render-operator.yml",
+        "presets/post-editor.yml",
+        "presets/trend-researcher.yml",
+        "presets/publish-operator.yml",
+        "presets/metrics-watcher.yml",
+        "presets/comment-operator.yml"
+      ],
+      "fences": ["fences/ai-video-baseline.yml"],
+      "skills": [
+        "skills/jenny-loom-research/SKILL.md",
+        "skills/marketing-brief-parser/SKILL.md",
+        "skills/shot-prompt-craft/SKILL.md",
+        "skills/director-review/SKILL.md",
+        "skills/portrait-studio/SKILL.md",
+        "skills/render-ops/SKILL.md",
+        "skills/publish-ops/SKILL.md",
+        "skills/comment-ops/SKILL.md"
+      ],
+      "schemas": [
+        "schemas/objects.json",
+        "schemas/stages.json"
+      ],
+      "pipelines": [
+        "pipelines/narrative-film.yml",
+        "pipelines/marketing-film.yml",
+        "pipelines/account-ops.yml"
+      ],
+      "library": ["library/"],
+      "ui": ["ui/cases.json"]
+    }
+  }
+}

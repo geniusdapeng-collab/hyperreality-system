@@ -1,0 +1,45 @@
+# 账号经营管线 · fusion-design §4（7×24 常驻，夜班模式）
+# 每步 = Quest 任务卡；断点续跑继承 dsh replay；每步产物写 biz_events 五元事件
+quest: account-ops
+name: 账号经营管线
+version: v1
+description: 定时采集账号/视频数据→阈值告警→早八点战报；评论采集→意图分类→G10 三级分流→回复/转人工
+schedule: 7x24
+steps:
+  - step_key: metrics-collect
+    name: 账号/视频数据采集
+    owner: metrics-watcher
+    cron: "0 */2 * * *"             # 每 2 小时
+    outputs: [account_metric]
+  - step_key: threshold-check
+    name: 阈值检查与告警
+    owner: metrics-watcher
+    outputs: [account_metric]       # 越限即告警事件，不擅自处置
+  - step_key: daily-brief
+    name: 早八点战报
+    owner: metrics-watcher
+    cron: "0 8 * * *"
+    outputs: [account_metric]       # 日报推送至经营群
+  - step_key: comment-collect
+    name: 评论采集
+    owner: comment-operator
+    cron: "*/30 * * * *"            # 每 30 分钟
+    outputs: [comment]
+  - step_key: comment-classify
+    name: 评论意图分类
+    owner: comment-operator
+    outputs: [comment]              # praise/thanks/consult/after_sale/negative/crisis/sensitive
+  - step_key: g10-dispatch
+    name: G10 三级分流
+    owner: comment-operator
+    gate: G10
+    outputs: [comment_reply]        # 夸赞 auto / 咨询 review / 负面 review+告警 / 敏感 block
+  - step_key: comment-reply
+    name: 回复外发或转人工
+    owner: comment-operator
+    outputs: [comment_reply]        # 外发回执落账；block 只写「需介入」事件
+  - step_key: trend-scan
+    name: 趋势/竞品/爆款扫描
+    owner: trend-researcher
+    cron: "0 7 * * *"               # 每日一次，供战报与选题引用
+    outputs: [insight]

@@ -1,0 +1,171 @@
+{
+  "$schema": "nirath://templates/dramatic/v1",
+  "template_name": "三幕式戏剧结构",
+  "template_version": "1.0.0",
+  "description": "经典的戏剧性三幕结构，适用于故事片、短剧、情感叙事",
+  
+  "structure": {
+    "acts": [
+      {
+        "act_id": "ACT-1",
+        "act_name": "第一幕：建立",
+        "act_function": "establish",
+        "description": "引入世界观、角色、核心冲突的种子",
+        "typical_duration_ratio": 0.25,
+        "beats": [
+          {
+            "beat_id": "B-1.1",
+            "beat_type": "hook",
+            "beat_name": "钩子",
+            "description": "在3秒内抓住观众注意力",
+            "function": "立即建立情绪张力或视觉奇观"
+          },
+          {
+            "beat_id": "B-1.2",
+            "beat_type": "setup",
+            "beat_name": "设定",
+            "description": "建立角色、世界、日常状态",
+            "function": "让观众理解角色是谁，他们在哪里"
+          },
+          {
+            "beat_id": "B-1.3",
+            "beat_type": "inciting_incident",
+            "beat_name": "激励事件",
+            "description": "打破平衡的事件，推动角色行动",
+            "function": "角色必须做出反应，无法回到日常"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-2",
+        "act_name": "第二幕：对抗",
+        "act_function": "confront",
+        "description": "冲突升级，角色面对障碍，情感深化",
+        "typical_duration_ratio": 0.50,
+        "beats": [
+          {
+            "beat_id": "B-2.1",
+            "beat_type": "rising_action",
+            "beat_name": "上升动作",
+            "description": "冲突逐步升级，赌注增加",
+            "function": "每一步都比上一步更难"
+          },
+          {
+            "beat_id": "B-2.2",
+            "beat_type": "midpoint",
+            "beat_name": "中点",
+            "description": "故事转折点，角色意识到真相或做出重大决定",
+            "function": "从被动反应转为主动进攻"
+          },
+          {
+            "beat_id": "B-2.3",
+            "beat_type": "abyss",
+            "beat_name": "深渊",
+            "description": "最低谷，角色面临最大失败",
+            "function": "看似一切希望都破灭"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-3",
+        "act_name": "第三幕：解决",
+        "act_function": "resolve",
+        "description": "高潮、角色转变、结局",
+        "typical_duration_ratio": 0.25,
+        "beats": [
+          {
+            "beat_id": "B-3.1",
+            "beat_type": "climax",
+            "beat_name": "高潮",
+            "description": "最终对抗，核心冲突的解决",
+            "function": "情感与视觉的双重峰值"
+          },
+          {
+            "beat_id": "B-3.2",
+            "beat_type": "transformation",
+            "beat_name": "转变",
+            "description": "角色完成内在成长",
+            "function": "角色不是回到旧状态，而是进入新状态"
+          },
+          {
+            "beat_id": "B-3.3",
+            "beat_type": "resolution",
+            "beat_name": "结局",
+            "description": "收尾，余韵，下集钩子",
+            "function": "给观众情感释放和期待"
+          }
+        ]
+      }
+    ]
+  },
+  
+  "scene_types": {
+    "opening": {
+      "name": "片头",
+      "function": "establish",
+      "required_elements": ["角色出场", "世界观建立", "对话"],
+      "typical_duration": 15,
+      "visual_requirements": "电影级远景，超写实，环境特征标识"
+    },
+    "establishing": {
+      "name": "建立场景",
+      "function": "establish",
+      "required_elements": ["角色状态", "环境细节"],
+      "typical_duration": 20,
+      "visual_requirements": "中景，展示角色与环境关系"
+    },
+    "conflict": {
+      "name": "冲突场景",
+      "function": "advance",
+      "required_elements": ["对抗", "情感升级", "对话"],
+      "typical_duration": 25,
+      "visual_requirements": "特写+中景交替，运镜增强张力"
+    },
+    "emotional_climax": {
+      "name": "情感高潮",
+      "function": "climax",
+      "required_elements": ["情感峰值", "角色转变", "对话"],
+      "typical_duration": 30,
+      "visual_requirements": "特写为主，光影戏剧性，运镜密集"
+    },
+    "resolution": {
+      "name": "结局场景",
+      "function": "resolve",
+      "required_elements": ["角色成长", "余韵", "下集钩子"],
+      "typical_duration": 20,
+      "visual_requirements": "远景或中景，温暖色调，留白"
+    }
+  },
+  
+  "character_models": {
+    "protagonist": {
+      "role": "主角",
+      "required_arcs": ["want", "need"],
+      "arc_description": "Want = 外在目标，Need = 内在成长"
+    },
+    "antagonist": {
+      "role": "对手/对立面",
+      "required_arcs": ["motivation"],
+      "arc_description": "必须有合理的动机，不是纯粹的恶"
+    },
+    "featured_beast": {
+      "role": "异兽主角",
+      "required_arcs": ["lore", "visual_anchor"],
+      "arc_description": "必须有完整档案和视觉锚点"
+    }
+  },
+  
+  "dialogue_rules": {
+    "max_line_length": 30,
+    "style": "口语化，适合短视频节奏",
+    "forbidden": ["旁白", "解说", "内心独白"],
+    "required": ["对话", "情绪标签"]
+  },
+  
+  "timing_rules": {
+    "total_duration": 120,
+    "scene_duration_range": [10, 40],
+    "hook_duration": 3,
+    "climax_duration_ratio": 0.25
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "nirath://templates/educational/v1",
+  "template_name": "科普讲解结构",
+  "template_version": "1.0.0",
+  "description": "适用于健康科普、知识讲解、教学类短视频",
+  
+  "structure": {
+    "acts": [
+      {
+        "act_id": "ACT-1",
+        "act_name": "第一幕：引入",
+        "act_function": "hook",
+        "description": "提出问题或现象，引发观众兴趣",
+        "typical_duration_ratio": 0.20,
+        "beats": [
+          {
+            "beat_id": "B-1.1",
+            "beat_type": "hook",
+            "beat_name": "钩子",
+            "description": "用问题、数据或场景引入主题",
+            "function": "3秒内抓住注意力，建立 relevance"
+          },
+          {
+            "beat_id": "B-1.2",
+            "beat_type": "context",
+            "beat_name": "背景",
+            "description": "简要说明主题的重要性和相关性",
+            "function": "让观众明白为什么要关注这个话题"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-2",
+        "act_name": "第二幕：核心知识",
+        "act_function": "explain",
+        "description": "系统讲解核心知识点，配合视觉辅助",
+        "typical_duration_ratio": 0.55,
+        "beats": [
+          {
+            "beat_id": "B-2.1",
+            "beat_type": "definition",
+            "beat_name": "定义",
+            "description": "清晰定义核心概念",
+            "function": "建立准确的知识基础"
+          },
+          {
+            "beat_id": "B-2.2",
+            "beat_type": "explanation",
+            "beat_name": "讲解",
+            "description": "分层次讲解知识点，由浅入深",
+            "function": "用通俗语言解释专业内容"
+          },
+          {
+            "beat_id": "B-2.3",
+            "beat_type": "evidence",
+            "beat_name": "证据",
+            "description": "展示数据、案例或实验结果",
+            "function": "增强可信度和说服力"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-3",
+        "act_name": "第三幕：总结与行动",
+        "act_function": "summarize",
+        "description": "总结要点，给出实用建议或行动号召",
+        "typical_duration_ratio": 0.25,
+        "beats": [
+          {
+            "beat_id": "B-3.1",
+            "beat_type": "summary",
+            "beat_name": "总结",
+            "description": "回顾核心知识点",
+            "function": "强化记忆，巩固学习效果"
+          },
+          {
+            "beat_id": "B-3.2",
+            "beat_type": "action",
+            "beat_name": "行动",
+            "description": "给出可执行的建议或下一步行动",
+            "function": "将知识转化为行动"
+          }
+        ]
+      }
+    ]
+  },
+  
+  "scene_types": {
+    "opening": {
+      "name": "片头",
+      "function": "hook",
+      "required_elements": ["主讲人出场", "主题引入", "标题显示"],
+      "typical_duration": 8,
+      "visual_requirements": "主讲人特写或中景，专业背景，清晰标题"
+    },
+    "explanation": {
+      "name": "讲解场景",
+      "function": "explain",
+      "required_elements": ["主讲人讲解", "知识展示", "可视化辅助"],
+      "typical_duration": 20,
+      "visual_requirements": "主讲人中景，配合图表/动画/实物展示"
+    },
+    "demonstration": {
+      "name": "演示场景",
+      "function": "demonstrate",
+      "required_elements": ["操作演示", "步骤展示", "注意事项"],
+      "typical_duration": 15,
+      "visual_requirements": "特写+中景，清晰展示操作细节"
+    },
+    "warning": {
+      "name": "警示场景",
+      "function": "warn",
+      "required_elements": ["风险提示", "严重后果", "预防建议"],
+      "typical_duration": 10,
+      "visual_requirements": "警示色调，严肃表情，关键信息高亮"
+    },
+    "ending": {
+      "name": "结尾场景",
+      "function": "resolve",
+      "required_elements": ["要点回顾", "行动建议", "结束语"],
+      "typical_duration": 6,
+      "visual_requirements": "主讲人中景，温暖色调，简洁收尾"
+    }
+  },
+  
+  "character_models": {
+    "host": {
+      "role": "主讲人",
+      "required_arcs": ["authority", "approachability"],
+      "arc_description": "Authority = 专业可信度，Approachability = 亲和易懂"
+    },
+    "patient": {
+      "role": "案例人物",
+      "required_arcs": ["relatability"],
+      "arc_description": "让观众产生共鸣，理解知识应用场景"
+    }
+  },
+  
+  "dialogue_rules": {
+    "max_line_length": 50,
+    "style": "口语化科普，专业但易懂",
+    "forbidden": ["过于学术的术语堆砌","冗长复杂的句式"],
+    "required": ["讲解", "举例", "互动提问"]
+  },
+  
+  "timing_rules": {
+    "total_duration": 62,
+    "scene_duration_range": [6, 20],
+    "hook_duration": 3,
+    "explanation_duration_ratio": 0.55
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$id": "workloom://bundles/ai-video/ui/cases",
+  "description": "视频经理工作台 UI 状态用例清单（皮肤+页面状态同步；UI 用例同步校验基准——page 须在已注册页面表内）",
+  "pages": [
+    "bridge",
+    "library",
+    "scripts",
+    "render",
+    "publish",
+    "watch"
+  ],
+  "cases": [
+    {
+      "page": "bridge",
+      "name": "默认·项目战情首屏",
+      "expect": "首屏 ≤1.5s 出在制项目卡与待办审批（G1-G10 门）"
+    },
+    {
+      "page": "library",
+      "name": "片库·素材与成片",
+      "expect": "素材按 kind/version 分组展示，provenance 与 license_risk 可见"
+    },
+    {
+      "page": "scripts",
+      "name": "片库·脚本 CMS",
+      "expect": "渲染脚本 MD 渲染 + 25/30 字段结构侧栏 + 字符数 2470-3000 实时校验"
+    },
+    {
+      "page": "render",
+      "name": "渲染·三档提交",
+      "expect": "手动单镜/整片批量/自动化连锁三档入口，G8 审批卡挂起状态可见"
+    },
+    {
+      "page": "publish",
+      "name": "发布·全平台任务",
+      "expect": "六平台发布任务列表，RPA 回执与日发布计数（上限 5）可见"
+    },
+    {
+      "page": "watch",
+      "name": "监控·早八点战报",
+      "expect": "账号指标时序 + 评论三级分流队列 + 告警事件流"
+    }
+  ]
+}

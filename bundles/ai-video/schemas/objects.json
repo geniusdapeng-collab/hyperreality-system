@@ -1,0 +1,24 @@
+{
+  "$id": "workloom://bundles/ai-video/schemas/objects",
+  "description": "视频经理版事件 Object 类型枚举（fusion-design §5：对象枚举行业化）",
+  "objects": [
+    { "type": "dossier", "label": "商品情报档案" },
+    { "type": "theme", "label": "创意主题" },
+    { "type": "insight", "label": "业务需求对齐清单" },
+    { "type": "prd", "label": "制作需求书" },
+    { "type": "script_blueprint", "label": "剧本蓝图" },
+    { "type": "scene_card", "label": "场景卡" },
+    { "type": "shot_card", "label": "镜头卡" },
+    { "type": "prompt_package", "label": "镜头提示词包" },
+    { "type": "portrait_set", "label": "定妆照集" },
+    { "type": "render_script", "label": "渲染脚本" },
+    { "type": "render_job", "label": "渲染任务" },
+    { "type": "video_asset", "label": "视频素材" },
+    { "type": "final_video", "label": "成片" },
+    { "type": "publish_task", "label": "发布任务" },
+    { "type": "account_metric", "label": "账号指标" },
+    { "type": "comment", "label": "评论" },
+    { "type": "comment_reply", "label": "评论回复" },
+    { "type": "video_project", "label": "视频项目" }
+  ]
+}

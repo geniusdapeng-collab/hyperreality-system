@@ -1,0 +1,34 @@
+{
+  "projectId": "{project-id}",
+  "projectName": "{项目名称}",
+  "projectType": "health-education",
+  "styleMode": "universal-realistic",
+  "description": "项目描述",
+  "characters": ["coach-li", "chen-nurse"],
+  "voiceStyle": "温柔女声，健康科普主持人",
+  "modelId": "003cENDPOINT_STD003e",
+  "outputDir": "./production/shots",
+  "outputSpecs": {
+    "resolution": "1920x1080",
+    "fps": 30,
+    "codec": "H.264",
+    "durationLimit": 90,
+    "ratio": "16:9"
+  },
+  "rules": {
+    "noFantasyElements": true,
+    "noEpisodePreview": true,
+    "realisticBackground": true,
+    "realisticEnvironment": true,
+    "realisticCharacters": true
+  },
+  "styleConfig": {
+    "sceneType": "indoor",
+    "lighting": "natural",
+    "colorTone": "natural",
+    "mood": "professional"
+  },
+  "createdAt": "{创建时间}",
+  "updatedAt": "{更新时间}",
+  "version": "v1.0"
+}

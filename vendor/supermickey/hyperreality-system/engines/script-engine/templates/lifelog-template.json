@@ -1,0 +1,146 @@
+{
+  "$schema": "nirath://templates/lifelog/v1",
+  "template_name": "生活记录/Vlog结构",
+  "template_version": "1.0.0",
+  "description": "适用于日常记录、Vlog、生活分享类视频的结构",
+
+  "structure": {
+    "acts": [
+      {
+        "act_id": "ACT-1",
+        "act_name": "第一幕：开场",
+        "act_function": "establish",
+        "description": "建立当天/事件的主题，引发兴趣",
+        "typical_duration_ratio": 0.20,
+        "beats": [
+          {
+            "beat_id": "B-1.1",
+            "beat_type": "hook",
+            "beat_name": "开场钩子",
+            "description": "用有趣的开场或问题吸引观众",
+            "function": "让观众想知道'接下来会发生什么'"
+          },
+          {
+            "beat_id": "B-1.2",
+            "beat_type": "preview",
+            "beat_name": "预告",
+            "description": "简要预告今天的内容亮点",
+            "function": "建立期待感"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-2",
+        "act_name": "第二幕：主体内容",
+        "act_function": "confront",
+        "description": "展示主要活动/事件，保持节奏感",
+        "typical_duration_ratio": 0.60,
+        "beats": [
+          {
+            "beat_id": "B-2.1",
+            "beat_type": "activity",
+            "beat_name": "核心活动",
+            "description": "展示主要活动过程",
+            "function": "让观众身临其境"
+          },
+          {
+            "beat_id": "B-2.2",
+            "beat_type": "moment",
+            "beat_name": "高光时刻",
+            "description": "捕捉最有趣/最感人的瞬间",
+            "function": "提供情绪价值"
+          },
+          {
+            "beat_id": "B-2.3",
+            "beat_type": "interaction",
+            "beat_name": "互动/对话",
+            "description": "与他人的互动或内心独白",
+            "function": "增加人情味和真实感"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-3",
+        "act_name": "第三幕：收尾",
+        "act_function": "resolve",
+        "description": "总结感受，与观众互动，留下期待",
+        "typical_duration_ratio": 0.20,
+        "beats": [
+          {
+            "beat_id": "B-3.1",
+            "beat_type": "reflection",
+            "beat_name": "感想",
+            "description": "分享当天的感受或收获",
+            "function": "与观众建立情感连接"
+          },
+          {
+            "beat_id": "B-3.2",
+            "beat_type": "interaction",
+            "beat_name": "互动",
+            "description": "向观众提问或邀请互动",
+            "function": "提高参与感"
+          },
+          {
+            "beat_id": "B-3.3",
+            "beat_type": "teaser",
+            "beat_name": "预告",
+            "description": "预告下期内容",
+            "function": "留住观众，建立追更习惯"
+          }
+        ]
+      }
+    ]
+  },
+
+  "scene_types": {
+    "opening": {
+      "name": "开场",
+      "function": "hook",
+      "required_elements": ["打招呼", "主题预告"],
+      "typical_duration": 5,
+      "visual_requirements": "明亮自然，亲和力，真实感"
+    },
+    "montage": {
+      "name": "快剪蒙太奇",
+      "function": "establish",
+      "required_elements": ["多场景切换", "节奏感", "音乐配合"],
+      "typical_duration": 10,
+      "visual_requirements": "快速剪辑，动感运镜，色彩统一"
+    },
+    "main_scene": {
+      "name": "主体场景",
+      "function": "advance",
+      "required_elements": ["核心活动", "过程展示"],
+      "typical_duration": 20,
+      "visual_requirements": "稳定机位为主，穿插细节特写"
+    },
+    "reaction": {
+      "name": "反应镜头",
+      "function": "climax",
+      "required_elements": ["真实反应", "情绪表达"],
+      "typical_duration": 5,
+      "visual_requirements": "特写，自然光，真实不做作"
+    },
+    "closing": {
+      "name": "结尾",
+      "function": "resolve",
+      "required_elements": ["总结", "互动", "预告"],
+      "typical_duration": 5,
+      "visual_requirements": "亲切自然，与开场呼应"
+    }
+  },
+
+  "dialogue_rules": {
+    "max_line_length": 30,
+    "style": "口语化、亲切、像跟朋友聊天",
+    "forbidden": ["书面语", "过度表演", "说教感"],
+    "required": ["真实感", "个人特色", "互动感"]
+  },
+
+  "timing_rules": {
+    "total_duration": 60,
+    "scene_duration_range": [3, 25],
+    "hook_duration": 3,
+    "climax_duration_ratio": 0.15
+  }
+}

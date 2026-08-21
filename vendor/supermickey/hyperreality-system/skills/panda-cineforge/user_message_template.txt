@@ -1,0 +1,172 @@
+请基于以下输入，生成一个完整的影视创作技能资产。
+
+请严格遵守以下要求：
+- 只输出最终结果
+- 不要解释生成过程
+- 不要复述输入
+- 不要输出隐藏思维链
+- 输出必须同时适合 AI Agent 解析和人类阅读
+
+<OUTPUT_CONTROL>
+output_mode: {{output_mode}}                  # blueprint | run
+output_format: {{output_format}}              # markdown | json | yaml
+qa_pass_threshold: {{qa_pass_threshold}}      # 默认 85
+</OUTPUT_CONTROL>
+
+<IDENTITY>
+skill_name: {{skill_name}}
+skill_id: {{skill_id}}
+package_version: {{package_version}}          # 例如 1.0.0
+skill_version: {{skill_version}}              # 例如 1.0.0
+last_updated: {{last_updated}}                # ISO-8601
+author: {{author}}
+license: {{license}}                          # 默认 internal
+status: {{status}}                            # draft | testing | production | deprecated
+</IDENTITY>
+
+<CLASSIFICATION>
+domain: ai_cinema                             # 固定 ai_cinema
+sub_domain: {{sub_domain}}                    # cinema | short_video | ai_manga_drama
+vertical: {{vertical}}                        # 子领域细分，如 hollywood_pipeline / douyin_marketing
+type: {{type}}
+priority: {{priority}}                        # P0 | P1 | P2 | P3
+tags: {{tags}}
+</CLASSIFICATION>
+
+<CINEMATIC_ROUTING>
+# R0 结构化路由核心字段，必填
+cinematic_role: {{cinematic_role}}            # scene_design|visual_language|audio_design|continuity_review|prompt_fusion|opening_design|editing|color_grading|vfx
+module_target: {{module_target}}              # 对齐制作系统 Agent，如 ["MyStudio.SceneDesign"]
+deliverable_type: {{deliverable_type}}        # shotlist|storyboard|color_script|sound_map|prompt_pack|edit_decision_list|opening_sequence|beat_sheet|continuity_report|mix_plan
+project_stage: {{project_stage}}              # preproduction|production|postproduction|distribution
+</CINEMATIC_ROUTING>
+
+<GENERATION_SPEC>
+title: {{title}}                              # 如为空，默认使用 skill_name
+summary: {{summary}}
+skill_type: {{skill_type}}                    # quick_decision|deep_analysis|daily_practice|emergency_fix|advanced_strategy|monitoring|review|shotlist_design|storyboard_design|color_grading|sound_design|edit_decision|prompt_engineering|opening_design|continuity_review
+automation_level: {{automation_level}}        # L0 | L1 | L2 | L3 | L4
+risk_level: {{risk_level}}                    # low | medium | high | critical
+core_goal: {{core_goal}}
+non_goals: {{non_goals}}
+success_metrics: {{success_metrics}}
+user_scenarios: {{user_scenarios}}
+target_audience: {{target_audience}}
+trigger_intents: {{trigger_intents}}
+estimated_user_time: {{estimated_user_time}}
+estimated_system_time: {{estimated_system_time}}
+difficulty: {{difficulty}}                    # 1-5
+output_style: {{output_style}}                # table_first|checklist_first|briefing|one_pager|code_first|shotlist_first|storyboard_first|color_script_first|prompt_first
+skill_blueprint_id: {{skill_blueprint_id}}    # 如为空，默认等于 skill_id
+skill_run_id: {{skill_run_id}}                # 当 output_mode=run 时必填
+</GENERATION_SPEC>
+
+<EXECUTION_SETUP>
+execution_layer: {{execution_layer}}          # 默认 5
+execution_mode: {{execution_mode}}            # sequential | parallel | hybrid
+module_compatibility: {{module_compatibility}}  # 键为目标制作系统 Agent 名
+fallback_strategy: {{fallback_strategy}}
+</EXECUTION_SETUP>
+
+<PERSONA_AND_RUNTIME_CONTRACT>
+persona_adaptation: {{persona_adaptation}}    # 导演/摄影指导/剪辑师/调色师/声音设计师/视效总监/制片人…
+required_profile_fields: {{required_profile_fields}}
+required_context_fields: {{required_context_fields}}
+priority_order_hint: {{priority_order_hint}}
+disallowed_paths_hint: {{disallowed_paths_hint}}
+missing_info_policy_override: {{missing_info_policy_override}}
+</PERSONA_AND_RUNTIME_CONTRACT>
+
+<CAPABILITIES_AND_EXECUTION>
+capabilities: {{capabilities}}
+tools_read: {{tools_read}}                    # 影视工具链：Midjourney/Runway/Sora/可灵/即梦/达芬奇/Premiere/AE/Blender/ComfyUI…
+tools_write: {{tools_write}}
+confirmation_required_for: {{confirmation_required_for}}
+memory_writeback_fields: {{memory_writeback_fields}}
+fallback_mode: {{fallback_mode}}
+publish_target: {{publish_target}}            # skill_registry | runtime_instance | both
+registry_ingestible: {{registry_ingestible}}  # true | false
+</CAPABILITIES_AND_EXECUTION>
+
+<DOMAIN_PACK>
+domain_pack: {{domain_pack}}                  # 注入三大子领域扩展包之一（cinema/short_video/ai_manga_drama）
+</DOMAIN_PACK>
+
+<USER_PROFILE>
+user_profile: {{user_profile}}
+</USER_PROFILE>
+
+<RUNTIME_CONTEXT>
+runtime_context: {{runtime_context}}
+</RUNTIME_CONTEXT>
+
+<MEMORY>
+memory: {{memory}}
+</MEMORY>
+
+<RETRIEVAL_INPUTS>
+logical_topics: {{logical_topics}}            # 影视 Topic，对齐 CINEMA_TOPICS
+aliases_seed: {{aliases_seed}}
+problem_patterns: {{problem_patterns}}
+entities: {{entities}}                        # {who:[导演/摄影指导…], actions:[运镜/调色/剪辑…], objects:[镜头/LUT/音轨…]}
+scenarios: {{scenarios}}                      # 影视场景
+project_stages: {{project_stages}}            # preproduction|production|postproduction|distribution（替换原 age_stages）
+urgency: {{urgency}}                          # low | normal | high | critical
+negative_queries: {{negative_queries}}
+retrieval_summary: {{retrieval_summary}}
+</RETRIEVAL_INPUTS>
+
+<INDEX_AND_NETWORK_INPUTS>
+candidate_neighbors: {{candidate_neighbors}}
+channel_weights_override: {{channel_weights_override}}
+weighted_recall_text_hint: {{weighted_recall_text_hint}}
+</INDEX_AND_NETWORK_INPUTS>
+
+<QUALITY_THRESHOLDS>
+quality_thresholds_override: {{quality_thresholds_override}}
+qa_contract_override: {{qa_contract_override}}  # 含影视一票否决项 + 11 维评分
+</QUALITY_THRESHOLDS>
+
+<OPTIONAL_TOOL_RESULTS>
+pre_fetched_tool_results: {{pre_fetched_tool_results}}
+</OPTIONAL_TOOL_RESULTS>
+
+<FUSED_KNOWLEDGE>
+# 由 SkillForgeEngine 知识融合层注入的外部专业知识要点（来自 ExternalKnowledgeFetcher）
+{{fused_knowledge}}
+</FUSED_KNOWLEDGE>
+
+<GENERATION_RULES>
+1. 必须输出一个完整影视技能资产，不能只输出片段。
+2. domain 固定 ai_cinema；sub_domain 枚举 cinema/short_video/ai_manga_drama。
+3. cinematic_role / module_target / deliverable_type / project_stage 必填，用于 R0 结构化路由。
+4. 如果 output_format = markdown：开头必须是 YAML Frontmatter，Frontmatter 增补 cinematic_role/module_target/deliverable_type/vertical 四个字段渲染，正文按固定章节顺序输出。
+5. 如果 output_format = json 或 yaml：直接输出单个结构化对象，不要输出注释和解释。
+6. name 必须等于 generation_spec.title；如果 title 为空，则使用 skill_name。
+7. skill_id 作为主键必须稳定，不要擅自改写。version 使用 package_version，generation_spec.skill_version 使用 skill_version。
+8. output_mode = run 时，必须提供 skill_run_id。
+9. 顶层必须包含这些稳定字段：name/skill_id/version/last_updated/domain/sub_domain/vertical/type/priority/cinematic_role/module_target/deliverable_type/project_stage/execution_layer/execution_mode/module_compatibility/fallback_strategy/persona_adaptation/capabilities/retrieval_profile/index_optimization/quality_thresholds/dependencies/author/tags/status/license/generation_spec/runtime_contract/execution_contract/qa_contract/domain_pack/knowledge_provenance。
+10. retrieval_profile.sample_queries 默认生成 16 条，目标分布：exact_match 6 条 / lexical_variation 5 条 / slot_match 3 条 / topic_match 2 条。
+11. retrieval_profile.aliases 应结合 aliases_seed、影视术语、用户口语表达补全。
+12. index_optimization.weighted_recall_text 必须自动生成，适合影视索引与召回。
+13. index_optimization.neighbors：优先从 candidate_neighbors 中选择 3-5 个；无法判断可输出空数组；不得编造 skill_id。
+14. channel_weights 优先使用 channel_weights_override；未提供则生成合理默认值。
+15. 场景分析必须识别：显性需求/隐性需求/场景分类/紧急度/上下文快照/约束（影视六类：时间/预算/设备权限/合规/创意/技术）/assumptions/missing_information/clarification_questions/priority_order/disallowed_paths。
+16. 决策摘要必须解释：为什么主方案成立/至少一个备选方案/至少一个被排除方案及原因/当前主要风险点/当前关键约束。
+17. 专业建议必须包含三层交付：立即执行（5分钟内可开始）/深度方案（主方案+备选+失败回退）/长期资产（Shotlist Template/Storyboard Template/Color Script/Sound Map/Edit Decision List/Prompt Asset/Reusable Workflow）。
+18. 专业建议必须显式包含：recommended_option/why_this_works/domain_knowledge/best_practices/common_mistakes/risk_warnings/escalation_rules/follow_up_checks/reusable_assets。
+19. 工具调用计划必须是工具链设计而非工具名列表。每个工具节点必须说明：why/input_mapping/expected_output/fallback/freshness_requirement/safety_guard。
+20. Agent执行逻辑必须包含：输入校验/条件分支/风险拦截/工具调用/写操作/确认门/失败降级/回滚策略/结果结构/伪代码或代码，对齐制作系统 Agent 执行流。
+21. QA 报告必须真实，不能默认全部通过。至少包含：structural_check/risk_check/execution_safety_check/personalization_check/source_check/retrieval_check/overall_score/issues/auto_fix_actions/final_status。
+22. 所有个性化内容必须来源于：user_profile/runtime_context/memory/pre_fetched_tool_results/显式 assumptions。
+23. 高风险影视场景（版权/审核/渲染/色彩空间/口型/连贯性）必须：前置风险提示/显示 escalation_rules/缺关键数据时阻止自动执行/默认避免不可逆动作。
+24. 任何真实写操作都必须出现在 confirmation_required_for 中，并在 Agent 执行逻辑中体现确认门。
+25. 如果已有 pre_fetched_tool_results，优先融合，不要重复假设工具输出。
+26. 如果无法可靠判断某字段，请诚实使用：assumptions/missing_information/clarification_questions/pending_neighbor_resolution/conservative_mode。
+27. 如果提供了 fused_knowledge（外部专业知识要点），必须在 domain_knowledge/best_practices 中体现这些专业要点，不得忽略。
+28. 不要为了填满字段而写空话、套话、低信息密度内容。
+29. 最终结果必须兼具：可读性/可执行性/可编排性/可检索性/可质检性。
+30. knowledge_provenance 必须输出：sources（知识来源 URL/domain/trust_score/source_class）/knowledge_points（各维度计数）/confidence_score/confidence_tier/dimension_coverage。
+</GENERATION_RULES>
+
+请开始生成最终影视技能资产。

@@ -1,0 +1,18 @@
+{
+  "$id": "workloom://bundles/ai-video/schemas/stages",
+  "description": "视频经理版项目阶段枚举（fusion-design §5：阶段枚举由行业包定义，阶段判定走确定性代码框架）",
+  "stages": [
+    { "id": "research", "label": "情报采集", "hint": "情报五站运行中，商品档案装订前" },
+    { "id": "theme", "label": "创意主题", "hint": "主题/Brief 生成与确认（G2）" },
+    { "id": "insight", "label": "需求洞察", "hint": "受众/场景/风险/参考对齐（G3）" },
+    { "id": "prd", "label": "PRD 编制", "hint": "5 段式 PRD，时长唯一权威（G4）" },
+    { "id": "production", "label": "预生产设计", "hint": "剧本/场景/片头/视听语言/导演评审（G6）" },
+    { "id": "portrait", "label": "定妆照", "hint": "角色/商品定妆照制作与确认（G5）" },
+    { "id": "render", "label": "渲染", "hint": "渲染脚本 CMS 版本管理 + Seedance 提交（G8）" },
+    { "id": "post", "label": "后期", "hint": "剪辑/字幕/音乐/多版本合成" },
+    { "id": "cms", "label": "入库待发", "hint": "成片入 CMS，发布计划编排中" },
+    { "id": "published", "label": "已发布", "hint": "RPA 全平台发布完成（G9）" },
+    { "id": "watching", "label": "经营监控", "hint": "数据采集/阈值告警/评论分流（G10）" },
+    { "id": "archived", "label": "已归档", "hint": "项目结项，素材与事件留档" }
+  ]
+}
