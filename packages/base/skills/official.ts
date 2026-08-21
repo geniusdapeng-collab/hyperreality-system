@@ -19,7 +19,7 @@ export interface OfficialSkillAsset {
 /** 解析 SKILL.md frontmatter（--- 包裹的极简 YAML：name/version/description） */
 export function parseSkillFrontmatter(md: string): { name: string; version: string; description: string } {
   const m = md.match(/^---\n([\s\S]*?)\n---/);
-  const get = (key: string) => m?.[1].match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1].trim() ?? "";
+  const get = (key: string) => m?.[1]?.match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1]?.trim() ?? "";
   return { name: get("name"), version: get("version") || "1.0", description: get("description") };
 }
 

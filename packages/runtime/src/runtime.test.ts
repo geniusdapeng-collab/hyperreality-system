@@ -64,6 +64,38 @@ describe("计划模板（演示剧本）", async () => {
   });
 });
 
+describe("LLM 任务规划（B9 planQuestSmart）", async () => {
+  const { planQuestSmart } = await import("./loop.js");
+  const fakePreset = { fenceBindings: [], tools: [], essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "pricing-agent", version: "v2.3", prompt: null };
+
+  it("合法规划被采用，且价格类步骤自动数据水合（before/after/context 防 E2.1 误熔断）", async () => {
+    const llm = async () => JSON.stringify([
+      { action: "pms.price.read", objectType: "room_price", tool: "pms.price.read", params: {}, label: "读价" },
+      { action: "price.adjust", objectType: "room_price", tool: "pms.price.write", params: { price: 468 }, label: "调价" },
+    ]);
+    const steps = await planQuestSmart("调价", fakePreset as never, llm);
+    expect(steps).toHaveLength(2);
+    expect(steps[1]).toMatchObject({ before: { price: 458 }, after: { price: 468 } });
+    expect(steps[1]?.context).toMatchObject({ night_shift: false });
+  });
+
+  it("垃圾 JSON / 越白名单工具 / 步数越界 → 一律回退确定性模板（D4）", async () => {
+    const garbage = await planQuestSmart("周五调价 5%", fakePreset as never, async () => "not json");
+    expect(garbage.map((s) => s.action)).toEqual(["competitor.fetch", "pms.price.read", "price.adjust"]);
+    const evil = await planQuestSmart("周五调价 5%", fakePreset as never, async () =>
+      JSON.stringify([{ action: "x", objectType: "room", tool: "shell.exec", params: {}, label: "越权" }]));
+    expect(evil.map((s) => s.action)).toEqual(["competitor.fetch", "pms.price.read", "price.adjust"]);
+    const tooMany = await planQuestSmart("周五调价 5%", fakePreset as never, async () =>
+      JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ action: "a" + i, objectType: "room", tool: "order.list", params: {}, label: "s" }))));
+    expect(tooMany).toHaveLength(3);
+  });
+
+  it("未配置 llmCall → 直接走模板（mock 默认口径）", async () => {
+    const steps = await planQuestSmart("周五调价 5%", fakePreset as never, undefined);
+    expect(steps.map((s) => s.action)).toEqual(["competitor.fetch", "pms.price.read", "price.adjust"]);
+  });
+});
+
 /* ================= PG 集成（RUN_DB_TESTS=1） ================= */
 
 const RUN_DB = process.env.RUN_DB_TESTS === "1" && !!process.env.DATABASE_APP_URL;

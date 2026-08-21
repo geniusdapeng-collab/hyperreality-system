@@ -298,6 +298,23 @@ export default function P2() {
                     </SubCallMessage>
                   );
                 }
+                if (ev.decision.action === "ask.answer") {
+                  // ask 问询应答（B8）：正文上屏（§9.1 动作码不直接上屏同口径）
+                  const ans = (ev.decision.after as { text?: string } | undefined)?.text ?? "";
+                  return (
+                    <AgentActionMessage
+                      key={ev.event_id}
+                      sender={ev.who.id}
+                      version={ev.who.version ?? ""}
+                      action="经营参谋·应答"
+                      eventId={ev.event_id}
+                      receipt={receiptOf(ev)}
+                      credits={ev.model_trace?.credits}
+                    >
+                      {ans}
+                    </AgentActionMessage>
+                  );
+                }
                 return (
                   <AgentActionMessage
                     key={ev.event_id}

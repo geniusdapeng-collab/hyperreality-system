@@ -25,10 +25,11 @@ const ok = (result: Record<string, unknown>): ToolResult => ({
 
 /**
  * 架构 K 修复：mock 工具随机返回 synced:false，让 E3.7 回执校验路径在开发阶段就被走到。
- * 通过环境变量 TOOL_UNVERIFIED_RATE 控制比例（默认 0.1 = 10%）；设为 0 关闭。
+ * 通过环境变量 TOOL_UNVERIFIED_RATE 控制比例（默认 0 关闭；工程混沌测试时显式设 0.1——
+ *  生产/演示默认确定性，避免「3/3 完成仍 failed」的偶发；suite/demo 门禁显式置 0 同口径）。
  * 仅作用于 demo 工具，不影响真实适配器。
  */
-const UNVERIFIED_RATE = Number(process.env.TOOL_UNVERIFIED_RATE ?? "0.1");
+const UNVERIFIED_RATE = Number(process.env.TOOL_UNVERIFIED_RATE ?? "0");
 function maybeUnverified(result: Record<string, unknown>): ToolResult {
   if (Math.random() < UNVERIFIED_RATE) {
     return { result, receipt: { synced: false } }; // 无回执=未核实（E3.7）

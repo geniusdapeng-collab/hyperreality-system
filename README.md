@@ -394,6 +394,20 @@ pnpm doctor            # 环境自检
 pnpm dev               # server(:8787) + web(:5173)，演示登录选「王店长」
 ```
 
+### 真实模型接入（三模式真实运行态，D20）
+
+三种交互模式（ask 问询 / agent 逐步商量 / quest 自主执行）默认以确定性 mock 运行（D4 全流程可跑）；配置真实模型后全链真实化——意图分类（B8）、任务规划（B9）、ask 应答合成三环均走真实模型推理，模型出站强制脱敏（L6.2）：
+
+```bash
+# .env
+LLM_PROVIDER=openai            # 任意 OpenAI 兼容端点（DeepSeek/月之暗面/智谱/OpenAI…）
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_API_KEY=sk-xxx
+LLM_MODEL=deepseek-chat
+```
+
+行业化落地经「落地向导」自动化完成（D18/D20）：写 LLM_* 四 env + `registerAskFactProvider` 注册行业事实面 + 装载行业 bundle（六槽），代码零改动即真实运行。
+
 仓库结构：`apps/{server, web, site, desktop}` + `packages/{shared, db, base, runtime}` + `bundles/`（行业包）+ `vendor/{dsh, dsh-im}`，pnpm monorepo。核心底座：**`packages/base/workdata`（WorkData 数据大脑）**。371 条场景用例清单见 [`docs/SUITE.md`](docs/SUITE.md)；CI 门禁（每次 push 全量执行上述全部检查）见 `.github/workflows/ci.yml`。
 
 ## 安全设计
