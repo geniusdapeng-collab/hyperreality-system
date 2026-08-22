@@ -19,7 +19,7 @@ import {
   upsertMemory, searchMemories, getMemorySources, transitionMemory, recordMemoryUsage, MockEmbedder,
 } from "@workloom/base/workdata";
 import { judge, evalCondition, type RuntimeRule } from "@workloom/base/fence-engine";
-import { parseCharter, transition, routeTier, buildMemo, runBriefingBeat, runQueueBeat, runBreakerBeat, loadCharter, effectiveAutonomy } from "@workloom/base/captain";
+import { parseCharter, transition, routeTier, buildMemo, runBriefingBeat, runQueueBeat, runBreakerBeat, loadCharter, effectiveAutonomy, buildScorecard } from "@workloom/base/captain";
 import {
   decide, batchApprove, listQueue, expireSweep, validateGesture, assertApproverRole, ApprovalError,
 } from "@workloom/base/review-console";
@@ -2462,6 +2462,182 @@ function defineE2E(): void {
       eq(ch.autonomy.procurement_cap, 2500, "上限收紧一档（5000→2500）");
       assert((await countEvents("ceo.circuit_breaker")) >= 1, "熔断事件留痕");
     } finally { await restoreArchive(arc); }
+  });
+
+  /* —— 第二轮：集成深测（captain × 既有机制/接口/推理/数据管道全打通） —— */
+
+  RC("quest×裁决×恢复闭环：越线调价挂起→路由 L2→CEO 批准→续跑 completed（#34 同构）", async () => {
+    const arc = await getArchive();
+    const tid = `T-R11-${SFX}`;
+    try {
+      // 正式受托态（±15% 带）：510/458=11.35% 触发 R1 review 且在宪章带内 → 恰好「挂起+路由 L2+CEO 可批」
+      const ch0 = await loadCharter(app, scope);
+      const chActive = transition(transition(ch0, { kind: "expire" }), { kind: "keep_long" });
+      await setCharter(chActive);
+      await qApp(`INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by) VALUES ($1,$2,$3,$4,'quest','running','MEM-001') ON CONFLICT (id) DO NOTHING`, [tid, scope.tenantId, scope.workspaceId, "R11 调价 quest"]);
+      const plan510 = async () => JSON.stringify([
+        { action: "pms.price.read", objectType: "room_price", tool: "pms.price.read", params: { room_type: "RT-DLX-KING" }, label: "读取当前房价" },
+        { action: "price.adjust", objectType: "room_price", tool: "pms.price.write", params: { room_type: "RT-DLX-KING", price: 510 }, label: "LLM 规划：调价至 ¥510" },
+      ]);
+      const r1 = await runQuest(app, gw, scope, { threadId: tid, goal: "把周五雅致大床房调价到 510", presetKey: "pricing-agent", llmCall: plan510 });
+      eq(r1.status, "pending_review", "R1 越线挂起（11.35%>8%）");
+      const apr = (await qApp<{ tier: string }>(`SELECT tier FROM approvals WHERE approval_id=$1`, [r1.pendingApprovalId!])).rows[0]!;
+      eq(apr.tier, "l2_captain", "带内（11.35%<15%）路由 L2");
+      const q = await runQueueBeat(app, scope);
+      assert(q.decided >= 1, "CEO 裁决批准");
+      const st = (await qApp<{ status: string }>(`SELECT status FROM approvals WHERE approval_id=$1`, [r1.pendingApprovalId!])).rows[0]!;
+      eq(st.status, "approved", "审批已批准");
+      const r2 = await runQuest(app, gw, scope, { threadId: tid, goal: "把周五雅致大床房调价到 510", presetKey: "pricing-agent", llmCall: plan510 });
+      eq(r2.status, "completed", "批准后续跑 completed（恢复闭环）");
+    } finally {
+      await restoreArchive(arc);
+      await qApp(`DELETE FROM approvals WHERE event_id IN (SELECT event_id FROM biz_events WHERE session_id=$1)`, [tid]);
+      await qApp(`DELETE FROM threads WHERE id=$1`, [tid]);
+    }
+  });
+
+  RC("裁决节拍幂等：连跑两次不重复裁决、不重复事件", async () => {
+    const arc = await getArchive();
+    try {
+      await qApp(
+        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
+        [`apr-r12-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r12-${SFX}`, JSON.stringify({ action: "price.adjust", params: { price: 480 }, base_price: 458 })]);
+      const r1 = await runQueueBeat(app, scope);
+      const evCount = await countEvents("ceo.decision");
+      const r2 = await runQueueBeat(app, scope);
+      eq(r2.decided, 0, "二次节拍零裁决（pending 已清空）");
+      eq(await countEvents("ceo.decision"), evCount, "二次节拍零新事件");
+      assert(r1.decided >= 1, "首次节拍有裁决");
+    } finally {
+      await restoreArchive(arc);
+      await qApp(`DELETE FROM approvals WHERE approval_id=$1`, [`apr-r12-${SFX}`]);
+    }
+  });
+
+  RC("RLS 隔离：错工作区上下文读不到宪章/审批/简报（数据管道底座打通验证）", async () => {
+    const c = await app.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT set_config('app.workspace_id', $1, true)", ["ws-nope"]);
+      const a = await c.query(`SELECT count(*)::int AS n FROM approvals WHERE workspace_id=$1`, [scope.workspaceId]);
+      eq(a.rows[0]!.n, 0, "错 ws 审批不可见");
+      const p = await c.query(`SELECT count(*)::int AS n FROM profiles WHERE workspace_id=$1`, [scope.workspaceId]);
+      eq(p.rows[0]!.n, 0, "错 ws 档案不可见");
+      const e = await c.query(`SELECT count(*)::int AS n FROM biz_events WHERE workspace_id=$1`, [scope.workspaceId]);
+      eq(e.rows[0]!.n, 0, "错 ws 事件不可见");
+      await c.query("COMMIT");
+    } catch (err) {
+      await c.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally { c.release(); }
+  });
+
+  RC("哈希链完整：CEO 事件逐环链接（事件管道底座打通验证）", async () => {
+    const arc = await getArchive();
+    try {
+      await runBriefingBeat(app, scope, "daily");
+      await runQueueBeat(app, scope);
+      const r = await qApp<{ bad: number }>(
+        `WITH chain AS (
+           SELECT event_id, hash, LAG(hash) OVER (ORDER BY seq) AS prev_actual, prev_hash
+           FROM biz_events WHERE workspace_id=$1
+         ) SELECT count(*)::int AS bad FROM chain WHERE prev_actual IS NOT NULL AND prev_hash IS DISTINCT FROM prev_actual`,
+        [scope.workspaceId]);
+      eq(r.rows[0]!.bad, 0, "全链逐环一致（含全部 ceo.* 事件）");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("简报双轨：LLM stub → via=llm；模型异常 → via=rule 兜底（推理管道验证）", async () => {
+    const arc = await getArchive();
+    try {
+      const ok = await runBriefingBeat(app, scope, "daily", { llmCall: async () => "【stub】昨日 OCC 86%，无请示。" });
+      eq(ok.via, "llm", "stub 合成 via=llm");
+      const boom = await runBriefingBeat(app, scope, "daily", { llmCall: async () => { throw new Error("model down"); } });
+      eq(boom.via, "rule", "异常兜底 via=rule（不静默）");
+      const empty = await runBriefingBeat(app, scope, "daily", { llmCall: async () => "   " });
+      eq(empty.via, "rule", "空输出兜底 via=rule");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("集团晨报：fleet_daily 生成且单店退化为汇报出口（编制不空转）", async () => {
+    const arc = await getArchive();
+    try {
+      const r = await runBriefingBeat(app, scope, "fleet_daily");
+      assert(r.eventId, "集团晨报落库");
+      const ev = await qApp<{ payload: { decision: { after: { text: string } } } }>(
+        `SELECT payload FROM biz_events WHERE event_id=$1`, [r.eventId]);
+      assert(ev.rows[0]!.payload.decision.after.text.includes("集团综合晨报"), "集团叙事");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("成绩单精确性：2 裁决+1 简报+1 熔断后计数精确匹配", async () => {
+    const arc = await getArchive();
+    try {
+      const before = await buildScorecard(app, scope);
+      await qApp(
+        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain'), ($6,$2,$3,$7,'inapp','pending',$5,'l2_captain')
+         ON CONFLICT (event_id, channel) DO NOTHING`,
+        [`apr-r17a-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r17a-${SFX}`, JSON.stringify({ action: "price.adjust", params: { price: 480 }, base_price: 458 }),
+         `apr-r17b-${SFX}`, `E-apr-r17b-${SFX}`]);
+      await runQueueBeat(app, scope);
+      await runBriefingBeat(app, scope, "daily");
+      await gatewayAppend(gw, { ...scope, actor: { id: "suite", type: "agent" }, sessionId: "suite-r17" }, {
+        who: { type: "agent", id: "suite" },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "store", id: "yunqi" },
+        decision: { action: "store.daily.summary", after: { occ: 0.61, adr: 480, revpar: 293 }, basis: ["R17 熔断注入"] },
+        rule_impact: [], model_trace: { model_id: "suite", tier: "standard" },
+      });
+      await runBreakerBeat(app, scope);
+      const after = await buildScorecard(app, scope);
+      eq(after.decisions, before.decisions + 2, "裁决 +2");
+      eq(after.briefings, before.briefings + 1, "简报 +1");
+      eq(after.breakerTrips, before.breakerTrips + 1, "熔断 +1");
+    } finally {
+      await restoreArchive(arc);
+      await qApp(`DELETE FROM approvals WHERE approval_id IN ($1,$2)`, [`apr-r17a-${SFX}`, `apr-r17b-${SFX}`]);
+    }
+  });
+
+  RC("重复授权被拒：已启用工作区再次 grant 抛错（§12.1 状态机守卫）", async () => {
+    const arc = await getArchive();
+    try {
+      const ch = await loadCharter(app, scope); // trial
+      let threw = false;
+      try { transition(ch, { kind: "grant", grant: ch.grant! }); } catch { threw = true; }
+      assert(threw, "trial 态重复授权被拒");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("熔断器作用域：shadow/suspended 不生效（治理边界精确）", async () => {
+    const arc = await getArchive();
+    try {
+      const ch = transition(parseCharter(undefined), { kind: "grant", grant: { event_id: "E-G3", granted_by: "M", granted_at: new Date().toISOString(), disclosure_version: "risk-v1", clauses: ["a"], shadow_days: 3, trial_days: 7, trial_ends_at: null, retain_until: null } });
+      await setCharter(ch); // shadow
+      const r = await runBreakerBeat(app, scope);
+      assert(r.skipped?.includes("shadow"), "影子期熔断器不生效");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("裁决×夜班同源：夜班挂起审批进 L2 队列后 CEO 可裁决（机制融合）", async () => {
+    const arc = await getArchive();
+    try {
+      // 模拟夜班产生的挂起审批（夜班三件套语义：夜间处置 review）
+      await qApp(
+        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
+        [`apr-r20-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r20-${SFX}`, JSON.stringify({ action: "price.adjust", params: { price: 470 }, base_price: 458, origin: "night.package" })]);
+      const r = await runQueueBeat(app, scope);
+      const st = (await qApp<{ status: string; decided_by: string }>(`SELECT status, decided_by FROM approvals WHERE approval_id=$1`, [`apr-r20-${SFX}`])).rows[0]!;
+      eq(st.status, "approved", "夜班挂起项被 CEO 裁决");
+      eq(st.decided_by, "company-ceo", "裁决人=公司CEO");
+      assert(r.decided >= 1, "节拍覆盖夜班来源审批");
+    } finally {
+      await restoreArchive(arc);
+      await qApp(`DELETE FROM approvals WHERE approval_id=$1`, [`apr-r20-${SFX}`]);
+    }
   });
 
   RC("到期自动降级：trial 过期 → suspended + mode_change 事件", async () => {

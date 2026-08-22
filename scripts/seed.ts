@@ -744,6 +744,10 @@ async function main(): Promise<void> {
         JSON.stringify({
           before: p.decision.before ?? null,
           after: p.decision.after ?? null,
+          // D21：裁决判据字段（action/params/base_price）——公司CEO 可据此裁决而非保守全上浮
+          action: p.decision.action,
+          params: p.decision.params ?? {},
+          base_price: (p.decision.before as Record<string, unknown> | null)?.price ?? null,
           expires_at: iso(new Date(Date.now() + 24 * 3600 * 1000)), // G6：24h
         }),
         status === "approved" ? "MEM-001" : null,

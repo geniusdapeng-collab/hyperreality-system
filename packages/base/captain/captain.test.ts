@@ -151,6 +151,52 @@ describe("简报模板合成（via=rule 数字全真）", () => {
   });
 });
 
+describe("边界与细节（二轮深测补充）", () => {
+  it("isExpired：active 无 retain_until 永不过期；shadow 不参与到期", () => {
+    const a = transition(transition(transition(granted(), { kind: "advance" }), { kind: "expire" }), { kind: "keep_long" });
+    expect(isExpired(a)).toBe(false);
+    expect(isExpired(granted())).toBe(false); // shadow
+  });
+
+  it("shadow 不降档（降档仅 trial）；suspended 不降档", () => {
+    expect(effectiveAutonomy(granted()).procurement_cap).toBe(5000);
+    const susp = transition(transition(granted(), { kind: "advance" }), { kind: "expire" });
+    expect(effectiveAutonomy(susp).procurement_cap).toBe(5000);
+  });
+
+  it("tightenAutonomy 保留授权记录与升级清单（熔断不改治理链）", () => {
+    const t = tightenAutonomy(transition(granted(), { kind: "advance" }));
+    expect(t.grant?.event_id).toBe("E-G1");
+    expect(t.escalate.length).toBeGreaterThan(0);
+    expect(t.mode).toBe("trial"); // 模式不因熔断变化
+  });
+
+  it("keep_until 到期后再 keep_long 需先回 suspended（状态机线性）", () => {
+    let c = transition(transition(transition(granted(), { kind: "advance" }), { kind: "expire" }), { kind: "keep_until", until: new Date(Date.now() + 86400e3).toISOString() });
+    expect(c.mode).toBe("active");
+    expect(() => transition(c, { kind: "keep_long" })).toThrow(); // active 不可直接再 keep
+    c = transition(c, { kind: "expire" });
+    expect(c.mode).toBe("suspended");
+    c = transition(c, { kind: "keep_long" });
+    expect(c.mode).toBe("active");
+  });
+
+  it("裁决策略当前无 reject 路径（保守哲学：拿不准一律上浮，不替人否决）", () => {
+    const active = transition(transition(transition(granted(), { kind: "advance" }), { kind: "expire" }), { kind: "keep_long" });
+    // 任何输入都不应产出 reject——reject 只来自人类手势
+    const verdicts = [
+      decideForCaptain(active, { approvalId: "a", eventId: "e", action: "x", params: {}, ruleIds: [], title: "t" }),
+      decideForCaptain(active, { approvalId: "a", eventId: "e", action: "price.adjust", params: {}, ruleIds: [], priceCtx: { afterPrice: 999, basePrice: 458 }, title: "t" }),
+    ];
+    for (const v of verdicts) expect(v.kind).not.toBe("reject");
+  });
+
+  it("集团晨报标签正确（fleet_daily）", () => {
+    const text = composeBriefing("fleet_daily", { kpi: {}, actionsTop: [], pendingByTier: {}, incidents: 0 }, "集团CEO");
+    expect(text).toContain("集团综合晨报");
+  });
+});
+
 describe("宪章解析健壮性", () => {
   it("空档/脏档 → 默认 disabled 宪章", () => {
     expect(parseCharter(undefined).mode).toBe("disabled");

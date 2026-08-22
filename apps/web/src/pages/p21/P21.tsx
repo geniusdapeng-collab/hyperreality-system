@@ -42,6 +42,12 @@ interface StateResp {
 
 interface BriefRow { event_id: string; created_at: string; payload: { decision: { action: string; params?: Record<string, unknown>; after?: Record<string, unknown> } } }
 
+interface ChairmanItem {
+  approval_id: string; event_id: string;
+  snapshot: { action?: string; params?: Record<string, unknown>; base_price?: number; ceo_escalated?: boolean; ceo_rationale?: string };
+  payload: { decision: { action: string; basis?: string[] }; who: { id: string } };
+}
+
 interface Scorecard {
   decisions: number; briefings: number; initiatives: number;
   escalatedToChairman: number; breakerTrips: number; shadowDecisions: number;
@@ -59,6 +65,7 @@ export default function P21() {
   const [state, setState] = useState<StateResp | null>(null);
   const [briefs, setBriefs] = useState<BriefRow[]>([]);
   const [score, setScore] = useState<Scorecard | null>(null);
+  const [queue, setQueue] = useState<ChairmanItem[]>([]);
   const [msg, setMsg] = useState("");
   // 授权向导
   const [clauses, setClauses] = useState<Record<string, boolean>>({});
@@ -72,6 +79,7 @@ export default function P21() {
     setState(await trpc.captain.state.query() as unknown as StateResp);
     setBriefs(await trpc.captain.briefings.query({ limit: 8 }) as unknown as BriefRow[]);
     setScore(await trpc.captain.scorecard.query() as unknown as Scorecard);
+    setQueue(await trpc.captain.chairmanQueue.query() as unknown as ChairmanItem[]);
   };
   useEffect(() => { void load(); }, []);
 
@@ -86,6 +94,12 @@ export default function P21() {
     setMsg(`状态迁移 → ${MODE_LABEL[r.mode]}`);
     await load();
   };
+  const decide = async (approvalId: string, gesture: "approve" | "reject") => {
+    await trpc.approvals.decide.mutate({ approvalId, gesture });
+    setMsg(`请示 ${approvalId} 已${gesture === "approve" ? "批准" : "驳回"}（三手势写回，全链留痕）`);
+    await load();
+  };
+
   const grant = async () => {
     try {
       const r = await trpc.captain.grant.mutate({
@@ -203,6 +217,41 @@ export default function P21() {
               className="rounded border border-gline px-4 py-2 text-gold disabled:opacity-40">
               ⑥ 签署授权（留痕不可篡改）
             </button>
+          </div>
+        </Panel>
+      )}
+
+      {queue.length > 0 && (
+        <Panel title={`请您决策（${queue.length} 件 · L4 董事长级）`}>
+          <div className="space-y-2">
+            {queue.map((q) => {
+              const snap = q.snapshot;
+              const basis = q.payload.decision.basis ?? [];
+              return (
+                <div key={q.approval_id} className="rounded-lg border border-gline bg-card p-3">
+                  <div className="mb-1 flex items-center gap-2 text-[11px] text-ink3">
+                    <span className="font-mono">{q.approval_id}</span>
+                    <span>{snap.action ?? q.payload.decision.action}</span>
+                    {snap.ceo_escalated && <span className="rounded border border-holo/40 px-1 text-holo">公司CEO 谨慎上浮</span>}
+                  </div>
+                  <div className="text-xs text-ink2">
+                    参数 {JSON.stringify(snap.params ?? {})}
+                    {snap.base_price ? ` · 基准价 ¥${snap.base_price}` : ""}
+                  </div>
+                  {snap.ceo_rationale && <div className="mt-1 text-xs text-holo">CEO 意见：{snap.ceo_rationale}</div>}
+                  {basis.length > 0 && (
+                    <details className="mt-1 text-[11px] text-ink3">
+                      <summary className="cursor-pointer">依据链（{basis.length}）</summary>
+                      {basis.map((b, i) => <div key={i}>· {b}</div>)}
+                    </details>
+                  )}
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => void decide(q.approval_id, "approve")} className="rounded border border-go/50 px-3 py-1 text-xs text-go hover:bg-go/10">✓ 批准</button>
+                    <button onClick={() => void decide(q.approval_id, "reject")} className="rounded border border-warn/50 px-3 py-1 text-xs text-warn hover:bg-warn/10">✕ 驳回</button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Panel>
       )}
