@@ -109,11 +109,13 @@ h4.sec{font-size:14px;margin:22px 0 10px;color:var(--gold2)}
     </div>
     <nav class="nav">
       <div class="nav-item on" data-v="deck"><span class="ic">▣</span>主甲板</div>
+      <div class="nav-item" data-v="chat"><span class="ic">◉</span>对话舱 · ASK</div>
       <div class="nav-item" data-v="quest"><span class="ic">◈</span>任务舱<span class="badge">2</span></div>
       <div class="nav-item" data-v="cms"><span class="ic">▤</span>片库 · 脚本 CMS</div>
       <div class="nav-item" data-v="publish"><span class="ic">⇪</span>发布中心</div>
       <div class="nav-item" data-v="data"><span class="ic">◫</span>数据看板</div>
       <div class="nav-item" data-v="comments"><span class="ic">✉</span>评论区<span class="badge">3</span></div>
+      <div class="nav-item" data-v="skills"><span class="ic">✦</span>技能广场<span style="margin-left:auto" class="chip gold">231</span></div>
       <div class="nav-item" data-v="roster"><span class="ic">☰</span>船员名册<span style="margin-left:auto" class="chip gold">25</span></div>
       <div class="nav-item" data-v="fence"><span class="ic">⛨</span>围栏规则</div>
     </nav>
@@ -153,6 +155,50 @@ h4.sec{font-size:14px;margin:22px 0 10px;color:var(--gold2)}
       <div style="height:8px;background:#232D45;border-radius:4px;overflow:hidden"><div style="width:74%;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2))"></div></div>
       <div class="note">情报五站 ✓ → 创意主题 ✓ → 事实红线 ✓ → 需求对齐 ✓ → PRD ✓ → 预生产 ✓ → <b style="color:var(--gold2)">渲染中（S00 完成 / S01 排队 / S02 排队）</b> → 后期 → 发布 → 监控</div>
     </div>
+  </section>
+
+  <!-- ===== 对话舱 · ASK ===== -->
+  <section class="view" id="v-chat">
+    <h1 class="vt">对话舱 · 人机同会话</h1>
+    <div class="vsub">每条消息都是五元事件 · ask 问询 / agent 逐步商量 / quest 自主执行 三模式</div>
+    <div class="grid" style="grid-template-columns:250px 1fr">
+      <div>
+        <div class="card" style="padding:8px">
+          <h3 style="padding:6px 8px">会话（三态工单）</h3>
+          <div class="step doing" style="cursor:pointer"><span class="dot"></span><div><b>保温杯种草片·本周5条</b><div style="font-size:11px;color:var(--dim)">quest · 进行中</div></div></div>
+          <div class="step done" style="cursor:pointer" onclick="toast('已切换到该会话（已归档可回放）')"><span class="dot"></span><div><b>杯子类目选题咨询</b><div style="font-size:11px;color:var(--dim)">ask · 已归档</div></div></div>
+          <div class="step gate done" style="cursor:pointer" onclick="toast('该会话有 1 张待裁决审批卡')"><span class="dot"></span><div><b>B站横版测评首发</b><div style="font-size:11px;color:var(--dim)">待裁决</div></div></div>
+        </div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;min-height:560px">
+        <div style="flex:1;overflow-y:auto" id="chatFlow">
+          <div style="text-align:center;margin:8px 0"><span class="chip">系统 · 陈主理 上线（MEM-V01 · 演示身份）</span></div>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><div style="max-width:70%;background:#24365c;border-radius:12px 12px 4px 12px;padding:10px 14px;font-size:13px;line-height:1.7">我这个类目（保温杯）最近什么选题完播率最高？</div></div>
+          <div style="display:flex;gap:8px;margin-bottom:12px"><div class="avatar" style="background:#1d1533;color:var(--purple)">调</div><div style="max-width:78%;background:var(--panel);border:1px solid var(--line);border-radius:4px 12px 12px 12px;padding:10px 14px;font-size:13px;line-height:1.8"><b style="font-size:12px">调研员 · ask 应答</b><br>近 14 天类目 Top50 拆解：<b style="color:var(--gold2)">「通勤实测」钩子式选题完播率均值 41%</b>（高于剧情式 12pt）。三条候选：① 早八地铁烫嘴实录 ② 24h 冰封挑战 ③ 办公室接力测评。<span style="color:var(--dim);font-size:11px">〔来源：组织记忆召回 ×3 · 竞品采集 E-9021〕</span></div></div>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><div style="max-width:70%;background:#24365c;border-radius:12px 12px 4px 12px;padding:10px 14px;font-size:13px;line-height:1.7">就用①做，这周出 5 条，预算 50 次渲染额度</div></div>
+          <div style="display:flex;gap:8px;margin-bottom:12px"><div class="avatar" style="background:#2A2410;color:var(--gold2)">导</div><div style="max-width:78%;background:var(--panel);border:1px solid #4a3d1a;border-radius:4px 12px 12px 12px;padding:10px 14px;font-size:13px;line-height:1.8"><b style="font-size:12px">总导演 · quest 已立项</b><br>目标拆解为 <b>19 步任务卡</b>（营销片管线）：情报五站 → 创意 → 事实红线闸 → 需求对齐 → PRD → 预生产 → 渲染 → 后期 → 发布 → 监控。途中 7 道审批门会推卡给你。<br><span class="chip gold" style="margin-top:6px">G1 情报档案 · 待你确认</span></div></div>
+        </div>
+        <div style="border-top:1px solid var(--line);padding-top:12px;margin-top:8px">
+          <div class="mode-tabs" style="margin-bottom:8px">
+            <button class="btn on" style="flex:none;padding:4px 12px" onclick="modeTab(this,'ask 问询：随口问，只要答案')">ask 问询</button>
+            <button class="btn" style="flex:none;padding:4px 12px" onclick="modeTab(this,'agent 商量：逐步对齐再动手')">agent 商量</button>
+            <button class="btn" style="flex:none;padding:4px 12px" onclick="modeTab(this,'quest 执行：出目标，它出结果')">quest 执行</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="chatInput" placeholder="对班组说话…（如：周五前出 3 条小红书测评）" style="flex:1;background:#0d1322;border:1px solid var(--line);border-radius:10px;padding:10px 14px;color:var(--txt);font-size:13px;outline:none">
+            <button class="btn primary" onclick="sendChat()">发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 技能广场 ===== -->
+  <section class="view" id="v-skills">
+    <h1 class="vt">技能广场 · 231 个创作技能</h1>
+    <div class="vsub">官方 8 + 好莱坞工艺 203 + 营销工艺 20 · 安装即绑定围栏 · 卸载即撤销</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px" id="skillCats"></div>
+    <div class="grid g3" id="skillGrid"></div>
   </section>
 
   <!-- ===== 任务舱 ===== -->
@@ -339,6 +385,37 @@ document.getElementById('empOps').innerHTML=EMPS_O.map(empHTML).join('');
 
 const FENCES=[["G1","商品情报档案确认必审","review","无源不入库 · 置信度三级"],["G2","创意主题/Brief 确认必审","review","营销类由档案摘要卡回填"],["G3","业务需求对齐清单确认必审","review","洞察挂档案证据锚点"],["G4","PRD 确认必审","review","时长唯一权威源"],["G5","定妆照确认","review","默认可配自动 · 禁 AI 图冒充"],["G6","镜头提示词审核必审","review","导演 5 维评分报告随卡"],["G7","预生产最终确认必审","review","放行后才允许生成渲染脚本"],["G8","渲染提交必审","review","烧额度 · 信任后可降 auto"],["G9","公网发布必审","review","全平台外发动作"],["G9a","新平台首发必审","review","channel_new == true"],["G9b","单账号日发布超限熔断","block","默认日上限 5 条"],["G10a","夸赞/感谢类回复","auto","按主理人口吻候选"],["G10b","咨询/售后类回复必审","review","候选回复随卡"],["G10c","负面/投诉/维权必审+告警","review","处置建议随卡 · 30min 内"],["G10d","敏感内容回复禁止","block","宁可错杀"]];
 document.getElementById('fenceTable').innerHTML+=FENCES.map(f=>`<tr><td><b>${f[0]}</b></td><td>${f[1]}</td><td><span class="chip ${f[2]==='auto'?'green':f[2]==='review'?'gold':'red'}">${f[2]}</span></td><td style="color:var(--dim)">${f[3]}</td></tr>`).join('');
+
+/* ===== 技能广场（数据源自 bundles/ai-video/library 真实构成） ===== */
+const SKILL_CATS=[["全部",231],["官方套件",8],["剧情",39],["微表情",36],["科幻",23],["纪录",22],["喜剧",21],["奇幻",18],["营销工艺",20],["战争",13],["动作",10],["惊悚",6],["悬疑",6],["恐怖",6],["孤独",3]];
+document.getElementById('skillCats').innerHTML=SKILL_CATS.map((c,i)=>`<button class="btn ${i===0?'on':''}" style="padding:4px 12px;font-size:11px" onclick="catTab(this,'${c[0]}')">${c[0]} <span style="color:var(--dim)">${c[1]}</span></button>`).join('');
+const SKILLS=[
+ ["jenny-loom-research","珍妮纺织机·情报五站","官方","采集→挖掘→侦察→交叉验证→装订，无源不入库","official"],
+ ["shot-prompt-craft","镜头提示词工艺","官方","25/30 字段镜头卡全量规范与两阶段字数口径","official"],
+ ["director-review","导演评审","官方","6 问框架 + 5 维评分 + 硬性阻断条件","official"],
+ ["render-ops","渲染提交纪律","官方","三档提交 · 定妆照绑定强制 · 回执落链","official"],
+ ["publish-ops","全平台发布纪律","官方","六平台 RPA · 人工节奏 · 首发必审","official"],
+ ["comment-ops","评论三级分流","官方","夸赞自动/咨询必审/危机告警/敏感禁止","official"],
+ ["portrait-studio","定妆照工作室","官方","角色 8 角度 · 商品真实参考图链路","official"],
+ ["marketing-brief-parser","营销 Brief 解析","官方","Brief 结构化 · 平台蓝图继承","official"],
+ ["剧情_卡梅隆_情感手持","剧情 · 卡梅隆 · 情感手持","剧情","手持跟拍情感戏 · 呼吸感运镜谱","craft"],
+ ["剧情_库布里克_雨夜手持","剧情 · 库布里克 · 雨夜手持","剧情","雨夜氛围 + 手持纪实张力","craft"],
+ ["剧情_斯皮尔伯格_史诗斯坦尼康","剧情 · 斯皮尔伯格 · 史诗斯坦尼康","剧情","史诗调度 · 长镜头情绪推进","craft"],
+ ["科幻_维伦纽瓦_孤独定场","科幻 · 维伦纽瓦 · 孤独定场","科幻","巨物美学 · 静默压迫感开场","craft"],
+ ["科幻_诺兰_紧张交叉","科幻 · 诺兰 · 紧张交叉","科幻","多线交叉剪辑节奏谱","craft"],
+ ["微表情_眼神游移","微表情 · 眼神游移","微表情","ECU 距离可见的眼神微动作库","craft"],
+ ["微表情_呼吸起伏","微表情 · 呼吸起伏","微表情","呼吸引擎 · 情绪距离感知注入","craft"],
+ ["喜剧_昆汀_舞蹈手持","喜剧 · 昆汀 · 舞蹈手持","喜剧","即兴律动 + 反类型幽默节奏","craft"],
+ ["纪录_真实光影","纪录 · 真实光影","纪录","自然光纪实 · 颗粒度保留","craft"],
+ ["钩子_冲突式","营销 · 钩子四式·冲突","营销工艺","前 3 秒冲突钩子 · 完播率导向","craft"],
+ ["种草_痛点对比","营销 · 种草·痛点对比","营销工艺","痛点前置 + 对比实测结构","craft"],
+ ["收尾_CTA引导","营销 · 收尾·CTA 引导","营销工艺","尾镜高潮点对齐 CTA","craft"]];
+function renderSkills(f){const list=f&&f!=='全部'?SKILLS.filter(s=>s[2]===f||(f==='官方套件'&&s[4]==='official')||(f==='营销工艺'&&s[2]==='营销工艺')):SKILLS;document.getElementById('skillGrid').innerHTML=list.map(s=>`<div class="qgoal" onclick="toast('技能「'+this.querySelector('.t').textContent+'」· 安装即绑定围栏，可 dry-run 回放预览')"><div class="t">${s[4]==='official'?'🏅':'🎬'} ${s[1]}</div><div class="d">${s[3]}</div><div style="margin-top:6px"><span class="chip ${s[4]==='official'?'gold':'blue'}">${s[2]}</span> <span class="chip green">已安装</span></div></div>`).join('')||'<div class="note">该分类技能已收录于工艺库，示例见「全部」</div>'}
+renderSkills();function catTab(btn,c){document.querySelectorAll('#skillCats .btn').forEach(x=>x.classList.remove('on'));btn.classList.add('on');renderSkills(c)}
+/* ===== 对话舱交互 ===== */
+function modeTab(btn,m){btn.parentElement.querySelectorAll('.btn').forEach(x=>x.classList.remove('on'));btn.classList.add('on');toast('已切换模式：'+m)}
+function sendChat(){const i=document.getElementById('chatInput');if(!i.value.trim()){toast('输入点什么，班组随时待命');return}document.getElementById('chatFlow').insertAdjacentHTML('beforeend',`<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><div style="max-width:70%;background:#24365c;border-radius:12px 12px 4px 12px;padding:10px 14px;font-size:13px;line-height:1.7">${i.value.replace(/</g,'&lt;')}</div></div><div style="display:flex;gap:8px;margin-bottom:12px"><div class="avatar" style="background:#2A2410;color:var(--gold2)">导</div><div style="max-width:78%;background:var(--panel);border:1px solid var(--line);border-radius:4px 12px 12px 12px;padding:10px 14px;font-size:13px">总导演 已收到，正在按当前模式处理…（演示环境为拟真应答）</div></div>`);i.value='';document.getElementById('chatFlow').scrollTop=99999}
+document.getElementById('chatInput')?.addEventListener('keydown',e=>{if(e.key==='Enter')sendChat()});
 
 /* ===== 交互 ===== */
 function gotoV(id){document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on',n.dataset.v===id));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+id))}

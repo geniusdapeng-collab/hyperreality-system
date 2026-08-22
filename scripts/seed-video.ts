@@ -106,6 +106,45 @@ function loadSkills(): SkillDoc[] {
     });
 }
 
+/**
+ * 工艺技能库（library/）注册：203 好莱坞导演技能 + 20 营销技能 → 技能广场可见
+ * 命名口径「题材_导演_运镜/情绪」（如 剧情_卡梅隆_情感手持）；营销技能直接使用文件名。
+ * 以 team 级技能注册并安装到演示工作区（F8.1 三级体系；body 留摘要，全文在 Bundle library）。
+ */
+function loadLibrarySkills(): SkillDoc[] {
+  const out: SkillDoc[] = [];
+  const roots: Array<{ dir: string; tag: string }> = [
+    { dir: join(BUNDLE_DIR, "library/hollywood-factory"), tag: "好莱坞工艺" },
+    { dir: join(BUNDLE_DIR, "library/social-marketing"), tag: "营销工艺" },
+  ];
+  const walk = (dir: string, tag: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(p, tag);
+      } else if (entry.name.endsWith(".md")) {
+        const base = entry.name.replace(/\.md$/, "");
+        const parts = base.split("_");
+        const genre = parts[0] ?? "通用";
+        const director = parts.length >= 3 ? parts[1] : "";
+        out.push({
+          name: `craft-${base}`,
+          description: `【${tag}·${genre}】${director ? `${director} 风格 · ` : ""}${base}（全文见 bundles/ai-video/library）`,
+          body: `# ${base}\n\n> ${tag} · 由 bundles/ai-video/library 分发的工艺技能全文。`,
+        });
+      }
+    }
+  };
+  for (const r of roots) {
+    try {
+      walk(r.dir, r.tag);
+    } catch {
+      /* library 可选 */
+    }
+  }
+  return out;
+}
+
 /** 一企一档（品牌档案；forbidden 红线双写，L1.6 同源纪律） */
 function studioArchive(): Record<string, unknown> {
   return {
@@ -251,6 +290,24 @@ async function main() {
     );
   }
   console.log(`✓ 官方技能 ×${skillsDocs.length} 已安装`);
+
+  // 工艺技能库注册（203 好莱坞 + 20 营销 → 技能广场可见；team 级已装）
+  const craftSkills = loadLibrarySkills();
+  for (const s of craftSkills) {
+    const skillId = `skill-${s.name}`.slice(0, 120);
+    await q(
+      `INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized)
+       VALUES ($1,'team','ai-video',$2,'1.0.0',$3,'[]',$4,false)
+       ON CONFLICT (id) DO NOTHING`,
+      [skillId, s.name, s.description, s.body],
+    );
+    await q(
+      `INSERT INTO skill_installs (skill_id, workspace_id, installed_by)
+       VALUES ($1,$2,'MEM-V01') ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
+      [skillId, WS_ID],
+    );
+  }
+  console.log(`✓ 工艺技能库 ×${craftSkills.length} 已注册并安装（技能广场可见）`);
 
   // 自动化触发器（account-ops 管线：采集/战报/评论监听）
   const triggers = [

@@ -149,10 +149,34 @@ h3.ct{font-size:12px;color:var(--dim);font-weight:500;margin-bottom:8px}
     </div>
   </div>
 
-  <!-- 评论 -->
-  <div class="screen" id="s-cmt">
-    <div class="greet"><div class="t1">评论区</div><div class="t2">G10 三级分流 · 每 30min 采集</div></div>
-    <div id="mcmts"></div>
+  <!-- 消息（对话 + 评论） -->
+  <div class="screen" id="s-msg">
+    <div class="greet"><div class="t1">消息</div><div class="t2">人机同会话 · ask 问询 / agent 商量 / quest 执行</div></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="btn primary" style="flex:1" id="segChat" onclick="seg('chat')">💬 对话</button>
+      <button class="btn" style="flex:1" id="segCmt" onclick="seg('cmt')">✉️ 评论 <span style="color:var(--red)">3</span></button>
+    </div>
+    <div id="seg-chat">
+      <div class="cmt" style="background:#24365c;margin-left:40px"><div class="body" style="color:var(--txt)">我这个类目最近什么选题完播率最高？</div></div>
+      <div class="cmt" style="margin-right:20px"><span class="who">🔍 调研员 · ask 应答</span><div class="body">近 14 天类目 Top50 拆解：<b style="color:var(--gold2)">「通勤实测」钩子式选题完播率均值 41%</b>（高于剧情式 12pt）。候选：① 早八地铁烫嘴实录 ② 24h 冰封挑战 ③ 办公室接力测评。</div></div>
+      <div class="cmt" style="background:#24365c;margin-left:40px"><div class="body" style="color:var(--txt)">就用①做，这周出 5 条，预算 50 次渲染额度</div></div>
+      <div class="cmt" style="margin-right:20px;border-color:#4a3d1a"><span class="who">🎬 总导演 · quest 已立项</span><div class="body">已拆解为 <b>19 步任务卡</b>（营销片管线），途中 7 道审批门会推卡给你。</div><div style="margin-top:6px"><span class="chip gold">G1 情报档案 · 待你确认</span></div></div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input id="mChatInput" placeholder="对班组说话…" style="flex:1;background:#0d1322;border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--txt);font-size:12px;outline:none">
+        <button class="btn primary" style="flex:none;padding:9px 14px" onclick="mSend()">发送</button>
+      </div>
+    </div>
+    <div id="seg-cmt" style="display:none">
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px">G10 三级分流 · 每 30min 采集</div>
+      <div id="mcmts"></div>
+    </div>
+  </div>
+
+  <!-- 技能广场 -->
+  <div class="screen" id="s-skill">
+    <div class="greet"><div class="t1">技能广场</div><div class="t2">231 个创作技能 · 安装即绑定围栏</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="mSkillCats"></div>
+    <div id="mSkillGrid"></div>
   </div>
 
   <!-- 我的 -->
@@ -175,9 +199,10 @@ h3.ct{font-size:12px;color:var(--dim);font-weight:500;margin-bottom:8px}
 
   <div class="tabbar">
     <div class="tab on" data-s="report"><span class="ic">📊</span>战报</div>
+    <div class="tab" data-s="msg"><span class="ic">💬</span>消息<span class="badge">3</span></div>
     <div class="tab" data-s="appr"><span class="ic">⚖️</span>审批<span class="badge">2</span></div>
     <div class="tab" data-s="lib"><span class="ic">🎬</span>片库</div>
-    <div class="tab" data-s="cmt"><span class="ic">💬</span>评论<span class="badge">3</span></div>
+    <div class="tab" data-s="skill"><span class="ic">✦</span>技能</div>
     <div class="tab" data-s="me"><span class="ic">👤</span>我的</div>
   </div>
   <div class="toast" id="t"></div>
@@ -189,6 +214,14 @@ document.getElementById('shots').innerHTML=SHOTS.map(s=>`<div class="shot-item" 
 const MC=[["@爱喝热水的小周","这个颜值真的绝了，已下单！","夸赞 · G10a 自动","green","已自动回复：谢谢喜欢～记得先温杯，保温更久🧡"],["@通勤打工人","真的能保温 24 小时吗？求实测","咨询 · G10b 待审","gold",null],["@默默","用了两周杯盖有点漏水？？","负面 · G10c 必审+告警","red",null]];
 document.getElementById('mcmts').innerHTML=MC.map(c=>`<div class="cmt"><span class="who">${c[0]}</span> <span class="chip ${c[3]}">${c[2]}</span><div class="body">${c[1]}</div>${c[4]?`<div class="reply">↳ ${c[4]}</div>`:`<div class="btnrow"><button class="btn primary" onclick="ok(this,0,'候选回复已发出（回执落链）')">审批回复</button><button class="btn" onclick="ok(this,0,'已转人工待办')">转人工</button></div>`}</div>`).join('');
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+t.dataset.s))});
+function seg(w){document.getElementById('seg-chat').style.display=w==='chat'?'block':'none';document.getElementById('seg-cmt').style.display=w==='cmt'?'block':'none';document.getElementById('segChat').className='btn '+(w==='chat'?'primary':'');document.getElementById('segCmt').className='btn '+(w==='cmt'?'primary':'')}
+function mSend(){const i=document.getElementById('mChatInput');if(!i.value.trim()){toast('输入点什么，班组随时待命');return}document.getElementById('seg-chat').insertAdjacentHTML('beforeend','');toast('已发送 · 总导演正在按当前模式处理（演示拟真）');i.value=''}
+/* 技能广场（与 PC 端同源：library 真实构成） */
+const MCATS=[["全部",231],["官方",8],["剧情",39],["微表情",36],["科幻",23],["纪录",22],["喜剧",21],["奇幻",18],["营销",20],["战争",13],["动作",10],["惊悚",6],["悬疑",6],["恐怖",6],["孤独",3]];
+document.getElementById('mSkillCats').innerHTML=MCATS.map((c,i)=>`<span class="chip ${i===0?'gold':''}" style="cursor:pointer" onclick="mCat(this,'${c[0]}')">${c[0]} ${c[1]}</span>`).join('');
+const MSK=[["🏅","珍妮纺织机·情报五站","官方 · 无源不入库"],["🏅","镜头提示词工艺","官方 · 25/30 字段规范"],["🏅","导演评审","官方 · 6 问 5 维评分"],["🏅","渲染提交纪律","官方 · 三档提交"],["🎬","剧情_卡梅隆_情感手持","剧情 · 手持情感戏"],["🎬","科幻_维伦纽瓦_孤独定场","科幻 · 巨物美学开场"],["🎬","微表情_眼神游移","微表情 · ECU 眼神库"],["🎬","钩子_冲突式","营销 · 前 3 秒钩子"],["🎬","种草_痛点对比","营销 · 痛点前置结构"],["🎬","纪录_真实光影","纪录 · 自然光纪实"]];
+function mRender(f){const list=!f||f==='全部'?MSK:f==='官方'?MSK.filter(s=>s[2].startsWith('官方')):f==='营销'?MSK.filter(s=>s[2].startsWith('营销')):MSK.filter(s=>s[2].startsWith(f));document.getElementById('mSkillGrid').innerHTML=list.map(s=>`<div class="cmt" style="cursor:pointer" onclick="toast('技能详情 · 安装即绑定围栏，可 dry-run 预览')"><span class="who">${s[0]} ${s[1]}</span><div class="body">${s[2]}</div><div style="margin-top:4px"><span class="chip green">已安装</span></div></div>`).join('')||'<div style="font-size:11px;color:var(--dim)">该分类技能已收录工艺库，见「全部」</div>'}
+mRender();function mCat(el,c){document.querySelectorAll('#mSkillCats .chip').forEach(x=>x.classList.remove('gold'));el.classList.add('gold');mRender(c)}
 function toast(m){const t=document.getElementById('t');t.textContent=m;t.style.display='block';clearTimeout(window._x);window._x=setTimeout(()=>t.style.display='none',2800)}
 function ok(btn,cardId,msg){btn.textContent='✓ 已完成';btn.className='btn done';if(cardId){const c=document.getElementById(cardId);c.style.opacity=.45;const b=c.querySelector('.head b');}toast(msg)}
 </script>
