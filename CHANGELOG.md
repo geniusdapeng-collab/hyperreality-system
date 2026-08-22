@@ -2,6 +2,24 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [1.9.1] - 2026-08-22 · 落地向导（D24）：模拟运行态 → 真实经营
+
+### 新增
+
+- **模拟数据常显横幅（SimBanner）**：P0 经营剧场与舰桥全页面顶部常显——数据为演示种子或模型为内置 mock 时提示「当前为全模拟运行态」，按钮直达 `/onboarding`；事实源为新端点 `onboarding.status`（dataMode + LLM 装配 + 工作区规模），两者皆真实时自动熄灭。
+- **落地向导四步（/onboarding）**：① 环境自检（自动：DB/事件库/团队/模型/数据模式）→ ② 真实大模型（DeepSeek/Kimi/智谱/OpenAI/自定义预设一键填；`onboarding.testLlm` 真实 round-trip 试调，`saveLlmConfig` **试调通过才落盘** .env 四变量 + process.env + 清装配缓存，全链即时真实化免重启）→ ③ 经营主体（写一店一档 `archive.business`）→ ④ 启用真实模式（`activateRealMode` 翻转 `profiles.archive.dataMode`，横幅熄灭）。全程五元事件留痕（`onboarding.llm_configured` / `workspace_profile` / `real_mode_activated`），API Key 只记掩码后 4 位。
+- **ask 联网实时检索事实面**：`ASK_WEB_SEARCH=1` 开启，Bing 公开 RSS（keyless 零依赖）取实时网页结果与库内事实合并供模型合成；检索源标注入 `basis`，失败静默降级。
+- **种子标记**：种子库写入 `dataMode=simulated`（横幅事实源；历史库缺省按模拟态处理，宁多提示不漏提示）。
+
+### 修复
+
+- `OpenAiCompatibleProvider` 支持免 key 网关/本地代理（apiKey 可空，自动省略 authorization 头）。
+- `scripts/reset.sh`：有 docker 守护进程但无 `workloom-im-pg` 容器时误走 `docker exec` 导致重置失败——改为容器真实存在才走 docker 通道，否则回退本机 psql。
+
+### 门禁验证
+
+- ✅ suite 428/428（新增 5 条 D24 E2E：模拟态事实源 / stub 实证 saveLlmConfig→via=llm 真实推理 / mock 还原 / 主体写入+真实模式切换+复位）· demo 44/44 · typecheck 全绿 · verify-chain 全库一致 · 全新克隆首次安装验证（install→migrate→seed→dev 开箱运行态 + 横幅 + 向导浏览器四步点击流全通）
+
 ## [1.5.0] - 2026-08-21 · 行业落地向导批次
 
 ### 新增
