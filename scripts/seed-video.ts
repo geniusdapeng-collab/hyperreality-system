@@ -38,7 +38,7 @@ const FENCE_VERSION = "ai-video-baseline/v1";
 const MEMBERS = [
   { id: "MEM-V01", name: "陈主理", role: "owner" },
   { id: "MEM-V02", name: "林运营", role: "manager" },
-  { id: "MEM-V03", name: "赵剪辑", role: "member" },
+  { id: "MEM-V03", name: "赵剪辑", role: "manager" },
 ] as const;
 
 /* ================= Bundle 资产读取 ================= */
@@ -149,6 +149,26 @@ function loadLibrarySkills(): SkillDoc[] {
 function studioArchive(): Record<string, unknown> {
   return {
     brand: "演示品牌·星芒好物",
+    // 数字CEO 宪章（D21，内容制作行业版，演示：试用期第 2 天）
+    charter: {
+      version: 1,
+      mode: "trial",
+      identity: { name: "公司CEO", persona: "内容经营型" },
+      autonomy: { price_band: [0.85, 1.15], procurement_cap: 5000, campaign_cap: 2000 },
+      escalate: ["对外公开承诺（赔偿/免费/声明）", "广告法敏感口径", "围栏规则放宽（任何放宽）", "新平台/新账号上线", "月累计投流超上限", "宪章变更"],
+      briefing: { daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" },
+      circuit_breaker: { window_days: 14, kpi_floor: { publish_rate: 0.8 }, tightened: false },
+      grant: {
+        event_id: "E-GRANT-VDEMO1", granted_by: "MEM-001",
+        granted_at: new Date(Date.now() - 9 * 86400e3).toISOString(),
+        disclosure_version: "risk-v1",
+        clauses: ["自主调价", "自主采购", "自主对外回复", "试用降档规则", "AI 非法律责任主体·授权人承担经营决策责任"],
+        shadow_days: 3, trial_days: 7,
+        trial_ends_at: new Date(Date.now() + 5 * 86400e3).toISOString(),
+        retain_until: null,
+      },
+      updated_at: new Date().toISOString(),
+    },
     platforms: ["douyin", "xiaohongshu", "bilibili", "shipinhao", "tiktok", "youtube"],
     accounts: [
       { platform: "douyin", handle: "@星芒好物", daily_publish_limit: 5 },
@@ -294,7 +314,7 @@ async function main() {
   // 工艺技能库注册（203 好莱坞 + 20 营销 → 技能广场可见；team 级已装）
   const craftSkills = loadLibrarySkills();
   for (const s of craftSkills) {
-    const skillId = `skill-${s.name}`.slice(0, 120);
+    const skillId = `skill-t-${s.name}`.slice(0, 120);
     await q(
       `INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized)
        VALUES ($1,'team','ai-video',$2,'1.0.0',$3,'[]',$4,false)
@@ -332,6 +352,11 @@ async function main() {
       schedule: "*/30 * * * *",
       action: { dispatch: "comment-operator", template: "comments.ingest" },
     },
+    // 数字CEO 节拍（D21：CEO Loop；调度器消费前经治理守卫校验 charter.mode）
+    { id: "tg-ceo-brief-0830", name: "公司CEO 晨报 08:30", kind: "cron", schedule: "30 8 * * *", action: { beat: "daily" } },
+    { id: "tg-ceo-queue-2h", name: "公司CEO 裁决巡检 2h", kind: "cron", schedule: "7 */2 * * *", action: { beat: "queue" } },
+    { id: "tg-ceo-deviation", name: "公司CEO 目标偏差扫描", kind: "cron", schedule: "15 */4 * * *", action: { beat: "deviation" } },
+    { id: "tg-ceo-breaker", name: "公司CEO 自治熔断巡检", kind: "cron", schedule: "45 23 * * *", action: { beat: "breaker" } },
   ];
   for (const t of triggers) {
     await q(

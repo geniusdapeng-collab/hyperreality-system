@@ -1991,6 +1991,14 @@ p("前后端契约对账：web 全部 trpc 调用点均有后端挂载", async (
       procs.add(`${rm[1]}.${pm[1]}`);
     }
   }
+  // 子模块路由（video: videoRouter 挂载于 apps/server/src/video/router.ts）：
+  // 解析其子 Router 名，映射为 video.<sub>（如 cmsRouter → video.cms）
+  try {
+    const videoSrc = readFileSync(join(root, "apps/server/src/video/router.ts"), "utf-8");
+    for (const rm of videoSrc.matchAll(/(\w+)Router = router\(\{/g)) {
+      procs.add(`video.${(rm[1] as string).replace(/Router$/, "")}`);
+    }
+  } catch { /* 无子模块时跳过 */ }
   const missing = [...calls].filter((c) => !procs.has(c));
   eq(missing.length, 0, `悬空调用：${missing.join(",")}`);
 });
