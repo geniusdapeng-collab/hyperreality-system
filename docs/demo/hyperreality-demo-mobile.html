@@ -381,6 +381,7 @@ mRender();function mCat(el,c){document.querySelectorAll('#mSkillCats .chip').for
 
 /* ===== 交互 ===== */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+t.dataset.s))});
+if(location.hash){const h=location.hash.slice(1);const t=document.querySelector('.tab[data-s="'+h+'"]');if(t)t.click()}
 function seg(w){document.getElementById('seg-chat').style.display=w==='chat'?'block':'none';document.getElementById('seg-cmt').style.display=w==='cmt'?'block':'none';document.getElementById('segChat').className='btn '+(w==='chat'?'gold':'');document.getElementById('segCmt').className='btn '+(w==='cmt'?'gold':'')}
 function mMode(btn){btn.parentElement.querySelectorAll('.btn').forEach(x=>x.classList.remove('holo'));btn.classList.add('holo');toast('已切换模式：'+btn.dataset.m+'（ask 随口问 / agent 逐步商量 / quest 出目标出结果）')}
 function mSend(){const i=document.getElementById('mChatInput');if(!i.value.trim()){toast('输入点什么，班组随时待命');return}
