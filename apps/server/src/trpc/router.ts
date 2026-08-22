@@ -1318,7 +1318,7 @@ const rosterRouter = router({
             constraints: agent.meta?.prompt?.constraints ?? [],
           },
           workspaceName: ws.rows[0]?.name ?? "",
-          bundle: "workloom-hotel", // 首版唯一行业 Bundle（D2）
+          bundle: "hyperreality-ai-video", // 首版唯一行业 Bundle（D2）
           nightWindow: { open: inNightWindow(), range: "22:00–08:00" },
           fences: agent.fence_bindings.map((ruleId) => {
             const hit = fences.find((f) => f.rule_id === ruleId);
@@ -1535,7 +1535,7 @@ const bundlesRouter = router({
           c.release();
         }
       })();
-      const activeSlug = ws.rows[0]?.industry ?? "hotel";
+      const activeSlug = ws.rows[0]?.industry ?? "ai-video";
       const slugs = listProfileSlugs();
       const profiles = [] as Awaited<ReturnType<typeof computeAssembly>>[];
       for (const s of slugs) {

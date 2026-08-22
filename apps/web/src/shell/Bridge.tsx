@@ -85,13 +85,26 @@ export function Bridge({
           {/* 顶栏（原型 V4.0 .abar chrome 条） */}
           <header className="flex items-center gap-3.5 border-b border-line bg-bg950/90 px-4.5 py-2.5 backdrop-blur-md">
             <div className="flex items-center gap-2.5 text-[15px] font-black tracking-wider">
-              <span className="inline-block h-4 w-4 rotate-45 rounded gold-grad shadow-[0_0_14px_rgba(255,160,60,.6)]" />
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden
+                className="shadow-[0_0_14px_rgba(255,160,60,.6)]"
+              >
+                {/* 场记板 + 播放键（金色系） */}
+                <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#c9922e" />
+                <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#e9b558" />
+                <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#7a5410" strokeWidth="1.1" />
+                <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#1b1206" />
+              </svg>
               <span className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text text-transparent">
-                WorkLoom
+                视频经理
               </span>
             </div>
             <span className="text-xs text-ink3">
-              企业 Agent IM · <b className="font-semibold text-ink2">云栖酒店</b>
+              HyperReality · <b className="font-semibold text-ink2">视频创作工作室</b>
             </span>
             <span className="flex-1" />
             <PlanSwitcher onPlan={setPlan} />
@@ -106,9 +119,9 @@ export function Bridge({
               {left ?? (<>
               <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">会话 · THREADS</div>
               {[
-                { id: "T-101", title: "周五旺季调价", status: "completed", cls: "text-go" },
-                { id: "T-102", title: "差评应急回复", status: "pending_review", cls: "text-warn" },
-                { id: "T-103", title: "飞猪首图发布", status: "running", cls: "text-holo" },
+                { id: "T-101", title: "保温杯种草片·三镜渲染", status: "running", cls: "text-holo" },
+                { id: "T-102", title: "抖音评论区差评分流", status: "pending_review", cls: "text-warn" },
+                { id: "T-103", title: "早八点账号战报", status: "completed", cls: "text-go" },
               ].map((t) => (
                 <div
                   key={t.id}

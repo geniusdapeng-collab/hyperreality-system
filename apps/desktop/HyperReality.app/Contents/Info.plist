@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>WorkLoom</string>
+	<string>HyperReality</string>
 	<key>CFBundleDisplayName</key>
-	<string>WorkLoom 织元</string>
+	<string>视频经理 HyperReality</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.workloom.im</string>
+	<string>com.hyperreality.video</string>
 	<key>CFBundleVersion</key>
 	<string>1.0.0</string>
 	<key>CFBundleShortVersionString</key>
@@ -15,7 +15,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleExecutable</key>
-	<string>WorkLoom</string>
+	<string>HyperReality</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>LSMinimumSystemVersion</key>

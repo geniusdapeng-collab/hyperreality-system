@@ -50,13 +50,16 @@ function displayDesc(s: SkillRow): string {
   return m?.[1] ?? s.description;
 }
 
-/** 技能图标（按名称语义映射，演示口径） */
+/** 技能图标（按名称语义映射，视频创作语境，演示口径） */
 function skillIcon(s: SkillRow): string {
-  if (/收益|revenue/i.test(s.id + s.name)) return "📈";
-  if (/差评|危机|crisis/i.test(s.id + s.name)) return "🚒";
-  if (/对账|reconcil/i.test(s.id + s.name)) return "🧾";
+  if (/脚本|script|brief|shot-prompt/i.test(s.id + s.name)) return "📝";
+  if (/渲染|render/i.test(s.id + s.name)) return "🎬";
+  if (/发布|publish/i.test(s.id + s.name)) return "🚀";
+  if (/评论|comment/i.test(s.id + s.name)) return "💬";
+  if (/素材|material|asset/i.test(s.id + s.name)) return "🗂";
+  if (/选题|情报|research|trend/i.test(s.id + s.name)) return "🎯";
+  if (/定妆|portrait/i.test(s.id + s.name)) return "🎭";
   if (/复盘|weekly|review/i.test(s.id + s.name)) return "📊";
-  if (/旺季|满房|peak/i.test(s.id + s.name)) return "🏔";
   return "🛠";
 }
 
@@ -586,7 +589,7 @@ function SkillWizard({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="如：周一经营复盘"
+                placeholder="如：每周爆款复盘"
                 className="mb-2 w-full rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
               />
               <input
@@ -597,7 +600,7 @@ function SkillWizard({
               />
             </div>
             {[
-              { t: "① 何时触发", v: trigger, set: setTrigger, ph: "每周一 08:00，或 RevPAR 连续 3 天下滑时", rows: 2 },
+              { t: "① 何时触发", v: trigger, set: setTrigger, ph: "每周一 08:00，或账号播放连续 3 天下滑时", rows: 2 },
             ].map((f) => (
               <div key={f.t} className="rounded-lg border border-line bg-card p-3">
                 <div className="mb-1.5 text-caption font-bold text-ink2">{f.t}</div>
@@ -615,7 +618,7 @@ function SkillWizard({
               <textarea
                 value={stepsText}
                 onChange={(e) => setStepsText(e.target.value)}
-                placeholder={"汇总上周 OCC/ADR/RevPAR\n对比竞对同档房型\n给出 3 条本周动作建议"}
+                placeholder={"汇总上周发布·播放·涨粉\n对比竞对账号同档内容\n给出 3 条本周动作建议"}
                 rows={3}
                 className="w-full resize-none rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
               />
@@ -625,7 +628,7 @@ function SkillWizard({
               <textarea
                 value={boundary}
                 onChange={(e) => setBoundary(e.target.value)}
-                placeholder="只读分析，不得直接改价；建议涨幅超 5% 必审"
+                placeholder="只读分析，不得直接发布；涉及功效宣称必审"
                 rows={2}
                 className="w-full resize-none rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
               />

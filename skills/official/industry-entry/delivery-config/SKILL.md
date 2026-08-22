@@ -1,7 +1,7 @@
 ---
 name: delivery-config
 version: 1.0
-description: 交付配置技能。行业落地向导的第四步：把技能三产出的行业落地方案（SOP/Skills清单/围栏建议/一店一档Schema）翻译为可运行的行业Bundle配置，交互式收集客户特有信息与授权，经装配检查单、围栏dry-run与审批后激活，交付"WorkLoom行业定制版"。全程事件化留痕，凭据永不进事件明文。
+description: 交付配置技能。行业落地向导的第四步：把技能三产出的行业落地方案（SOP/Skills清单/围栏建议/一店一档Schema）翻译为可运行的行业Bundle配置，交互式收集客户特有信息与授权，经装配检查单、围栏dry-run与审批后激活，交付"HyperReality行业定制版"。全程事件化留痕，凭据永不进事件明文。
 ---
 
 # 交付配置技能（delivery-config）

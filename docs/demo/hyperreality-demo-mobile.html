@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视频经理 HyperReality · 移动端演示</title>
+<style>
+:root{--bg:#0B0F1A;--panel:#121828;--line:#232D45;--gold:#D8A94E;--gold2:#F0C979;--txt:#E8ECF5;--dim:#8B96B0;--green:#3FC17E;--red:#E5605C;--purple:#9B7BEF;--blue:#5B8DEF}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#05070d;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:20px;gap:40px;flex-wrap:wrap}
+.guide{max-width:340px;color:var(--txt)}
+.guide h1{font-size:24px;margin-bottom:12px;background:linear-gradient(120deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.guide p{color:var(--dim);font-size:13px;line-height:1.9;margin-bottom:10px}
+.guide b{color:var(--txt)}
+/* ---- 手机壳 ---- */
+.phone{width:375px;height:780px;background:var(--bg);border-radius:44px;border:10px solid #1a1f2e;box-shadow:0 30px 80px #000,0 0 0 1px #333;overflow:hidden;display:flex;flex-direction:column;position:relative;color:var(--txt);font-size:14px}
+.notch{height:30px;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0}
+.notch:after{content:"";width:110px;height:22px;background:#1a1f2e;border-radius:12px;position:absolute;top:4px}
+.statusbar{position:absolute;top:8px;left:24px;right:24px;display:flex;justify-content:space-between;font-size:11px;color:var(--dim);z-index:2}
+.screen{flex:1;overflow-y:auto;padding:12px 14px 8px;display:none}
+.screen.on{display:block;animation:fade .2s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.tabbar{height:60px;border-top:1px solid var(--line);display:flex;background:var(--panel);flex-shrink:0}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--dim);font-size:10px;cursor:pointer;position:relative}
+.tab.on{color:var(--gold2)}
+.tab .ic{font-size:18px}
+.tab .badge{position:absolute;top:6px;right:calc(50% - 20px);background:var(--red);color:#fff;font-size:9px;border-radius:7px;padding:0 5px}
+/* ---- 组件 ---- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+h3.ct{font-size:12px;color:var(--dim);font-weight:500;margin-bottom:8px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi{background:#0d1322;border-radius:10px;padding:10px}
+.kpi .n{font-size:19px;font-weight:700}.kpi .l{font-size:10px;color:var(--dim);margin-top:2px}
+.up{color:var(--green);font-size:10px}
+.chip{display:inline-block;font-size:10px;padding:2px 7px;border-radius:9px;border:1px solid var(--line);color:var(--dim)}
+.chip.gold{color:var(--gold2);border-color:#4a3d1a;background:#2A2410}
+.chip.green{color:var(--green);border-color:#1c4a33;background:#0f2a1e}
+.chip.red{color:var(--red);border-color:#5a2523;background:#2a1215}
+.chip.purple{color:var(--purple);border-color:#3d2f63;background:#1d1533}
+.chip.blue{color:var(--blue);border-color:#24365c;background:#131f3a}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:#1A2338;color:var(--txt);cursor:pointer;font-size:12px;flex:1}
+.btn.primary{background:linear-gradient(120deg,var(--gold2),var(--gold));color:#14100a;border:none;font-weight:600}
+.btn.done{background:#0f2a1e;color:var(--green);border-color:#1c4a33;pointer-events:none}
+.btnrow{display:flex;gap:8px;margin-top:10px}
+.greet{padding:6px 4px 12px}
+.greet .t1{font-size:19px;font-weight:700}
+.greet .t2{font-size:11px;color:var(--dim);margin-top:3px}
+.report-line{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid #1a2338;font-size:12.5px;line-height:1.6}
+.report-line:last-child{border:none}
+.appr-card{border:1px solid #4a3d1a;background:linear-gradient(180deg,#1c1a10,#121828);border-radius:14px;padding:14px;margin-bottom:10px}
+.appr-card .head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.shot-item{display:flex;align-items:center;gap:10px;padding:11px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--panel);cursor:pointer}
+.shot-item .thumb{width:44px;height:56px;border-radius:8px;background:linear-gradient(135deg,#2a3350,#141b2e);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.shot-item .st{font-size:13px;font-weight:600}.shot-item .ss{font-size:10px;color:var(--dim);margin-top:3px}
+.cmt{padding:11px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--panel)}
+.cmt .who{font-size:12px;font-weight:600}.cmt .body{font-size:12px;color:#c6cede;margin-top:4px;line-height:1.6}
+.cmt .reply{font-size:11.5px;color:var(--green);margin-top:6px;background:#0f2a1e;border-radius:8px;padding:7px 9px;line-height:1.6}
+.mdmini{background:#0d1322;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:11px;line-height:1.8;max-height:220px;overflow-y:auto;white-space:pre-wrap;font-family:Menlo,monospace;color:#c6cede}
+.night{display:flex;gap:10px;align-items:center}
+.night .moon{width:40px;height:40px;border-radius:12px;background:#1d1533;display:flex;align-items:center;justify-content:center;font-size:19px}
+.toast{position:absolute;bottom:74px;left:50%;transform:translateX(-50%);background:#1A2338;border:1px solid var(--gold);color:var(--gold2);padding:8px 16px;border-radius:10px;font-size:12px;display:none;z-index:99;white-space:nowrap;max-width:340px}
+.ver{font-size:10px;color:var(--dim)}
+.ver b{color:var(--gold2)}
+.mine-hero{display:flex;gap:12px;align-items:center;padding:16px 4px}
+.mine-hero .av{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#8a6420);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#0B0F1A}
+.setrow{display:flex;justify-content:space-between;align-items:center;padding:12px 4px;border-bottom:1px solid #1a2338;font-size:13px}
+.setrow .r{font-size:11px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="guide">
+  <h1>视频经理 · 移动端</h1>
+  <p>这是 <b>陈主理</b>（资深内容创作者 · 星芒好物主理人）的手机。创作团队的 AI 班组 7×24 在跑，他在手机上只做三件事：<b>看战报、批审批、回评论</b>。</p>
+  <p>👉 点击手机底部 Tab 切换：<b>战报 / 审批 / 片库 / 评论 / 我的</b>，审批卡与回复按钮都可点。</p>
+  <p style="font-size:11px">数据与 PC 端演示同源：营销片管线 vp-demo-001 · 25 数码员工 · G1-G10 围栏 · 全部为系统真实运行态结构。</p>
+</div>
+
+<div class="phone">
+  <div class="notch"><div class="statusbar"><span>08:00</span><span>📶 🔋</span></div></div>
+
+  <!-- 战报 -->
+  <div class="screen on" id="s-report">
+    <div class="greet"><div class="t1">早，主理 ☕</div><div class="t2">8月22日 周六 · 早八点战报 · 夜班处理了 14 件事</div></div>
+    <div class="card"><h3 class="ct">昨日成绩</h3>
+      <div class="kpis">
+        <div class="kpi"><div class="n">32.8w</div><div class="l">总播放 <span class="up">▲18%</span></div></div>
+        <div class="kpi"><div class="n">38.4%</div><div class="l">完播率 <span class="up">▲3.1pt</span></div></div>
+        <div class="kpi"><div class="n">+1,204</div><div class="l">涨粉 · 抖音占 71%</div></div>
+        <div class="kpi"><div class="n">3/5</div><div class="l">本周发布达成</div></div>
+      </div>
+    </div>
+    <div class="card"><h3 class="ct">昨夜发生了什么</h3>
+      <div class="report-line">🎵 抖音「通勤痛点」切片 22:16 进入推荐池，播放从 4.1w 冲到 <b>12.6w</b> — 看板官已把钩子写入组织记忆</div>
+      <div class="report-line">🚨 22:40「漏水」负面词 30 分钟内 4 次出现 → 评论运营已按 <b>G10c</b> 起草处置建议，等你拍板</div>
+      <div class="report-line">⚠️ 小红书收藏率 1.8%→0.9% 触阈值告警，建议下期封面加「实测数据」元素</div>
+      <div class="report-line">🔥 保温杯正片 3 镜渲染：S00 完成，S01/S02 今晨 06:00 额度刷新后<b>断点续跑</b>入队</div>
+      <div class="report-line">💬 夜间评论 17 条：夸赞 12 条已按你口吻自动回，3 条待审，2 条隔离</div>
+    </div>
+    <div class="card"><h3 class="ct">今天该干什么</h3>
+      <div class="report-line">1️⃣ 批 2 张审批卡（G6 提示词 / G9a B站首发）</div>
+      <div class="report-line">2️⃣ 回复「24h 保温实测」咨询评论（候选稿已备好）</div>
+      <div class="report-line">3️⃣ 20:00 抖音正片定时发布（G9 已批，自动执行）</div>
+    </div>
+  </div>
+
+  <!-- 审批 -->
+  <div class="screen" id="s-appr">
+    <div class="greet"><div class="t1">决断队列</div><div class="t2">2 张待批 · 审批即消息 · 手势落事件库</div></div>
+    <div class="appr-card" id="ap1">
+      <div class="head"><span class="chip purple">G6</span><b style="font-size:13px">镜头提示词审核</b></div>
+      <div style="font-size:12px;color:#c6cede;line-height:1.7">保温杯正片 3 镜 · 连贯审查官评分 <b style="color:var(--gold2)">4.5 / 5</b>（可读 4.6 · 可控 4.4 · 可剪 4.2 · 情绪 4.5 · 记忆点 4.6）· 无硬阻断</div>
+      <div class="btnrow">
+        <button class="btn primary" onclick="ok(this,'ap1','已批准 · 放行下游（E-9042 落链）')">✓ 批准</button>
+        <button class="btn" onclick="ok(this,'ap1','已改派 S02 台词重修')">✎ 改派</button>
+        <button class="btn" onclick="ok(this,'ap1','已驳回 · 退回剧本师')">✗ 驳回</button>
+      </div>
+    </div>
+    <div class="appr-card" id="ap2">
+      <div class="head"><span class="chip red">G9a</span><b style="font-size:13px">B站首发 · 新平台必审</b></div>
+      <div style="font-size:12px;color:#c6cede;line-height:1.7">横版完整测评 · @星芒研究所 · 首次在 B站发布，按基线围栏需你过目。文案规格已按平台蓝图校验（标题 68/80 字 · 标签 6 个）。</div>
+      <div class="btnrow">
+        <button class="btn primary" onclick="ok(this,'ap2','B站首发已批准（E-9051 落链）')">✓ 批准首发</button>
+        <button class="btn" onclick="ok(this,'ap2','已驳回 · 回发布专员改文案')">✗ 驳回</button>
+      </div>
+    </div>
+    <div class="card"><h3 class="ct">已裁决（今天）</h3>
+      <div class="report-line">✅ 07:52 评论候选回复 ×3（夸赞类 · 采纳）</div>
+      <div class="report-line">✅ 昨 22:58 夜班出征包（14 项动作 · 批量采纳）</div>
+    </div>
+  </div>
+
+  <!-- 片库 -->
+  <div class="screen" id="s-lib">
+    <div class="greet"><div class="t1">片库 · 脚本</div><div class="t2">渲染脚本 CMS · 版本链 · 三档提交</div></div>
+    <div id="shots"></div>
+    <div class="card" id="shotDetail">
+      <h3 class="ct">S01 · 通勤场景·痛点呈现 <span class="ver">版本链 v1 → <b>v2 当前</b></span></h3>
+      <div class="mdmini">01.【语言约束】全片中文，口语化种草
+03.【镜头】中景手持跟拍→杯身特写
+（OFA 锚定英雄照 BRAND-HERO-001）
+07.【台词】[00:03] 主角 拧开杯盖,
+ 惊喜 说:"到下午还是烫的！"
+08.【商品锚点】实拍绑定+316 材质锚点
+…25 字段全量 · 字数 2,613 ✓ 口径内</div>
+      <div class="btnrow">
+        <button class="btn" onclick="toast('已存为 v3 · 字段校验自动重跑通过')">✎ 存为新版本</button>
+        <button class="btn primary" onclick="ok(this,0,'已提交 Seedance（mock 回执 rj-8821）')">▶ 渲染此镜</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 评论 -->
+  <div class="screen" id="s-cmt">
+    <div class="greet"><div class="t1">评论区</div><div class="t2">G10 三级分流 · 每 30min 采集</div></div>
+    <div id="mcmts"></div>
+  </div>
+
+  <!-- 我的 -->
+  <div class="screen" id="s-me">
+    <div class="mine-hero"><div class="av">陈</div><div><b style="font-size:16px">陈主理</b><div style="font-size:11px;color:var(--dim);margin-top:3px">星芒好物 · 主理人 · 量产爬坡期</div></div></div>
+    <div class="card"><div class="night"><div class="moon">🌙</div><div><b style="font-size:13px">夜班员工值守中</b><div style="font-size:11px;color:var(--dim);margin-top:2px">看板官 · 评论运营 · 每 2h 采集 / 30min 扫评论</div></div><span class="chip green" style="margin-left:auto">online</span></div></div>
+    <div class="card"><h3 class="ct">我的班组（25 数码员工）</h3>
+      <div class="setrow"><span>制作班组</span><span class="r">导演/情报五站/剧本/分镜/渲染… 21 人</span></div>
+      <div class="setrow"><span>经营班组</span><span class="r">调研/发布/看板/评论 · 4 人</span></div>
+      <div class="setrow"><span>围栏基线</span><span class="r">ai-video-baseline/v1 · 15 条规则</span></div>
+      <div class="setrow"><span>技能广场</span><span class="r">8 官方技能 + 223 工艺技能库</span></div>
+    </div>
+    <div class="card"><h3 class="ct">自动化编排</h3>
+      <div class="setrow"><span>每 2h 数据采集</span><span class="chip green">active</span></div>
+      <div class="setrow"><span>早八点战报</span><span class="chip green">active</span></div>
+      <div class="setrow"><span>每 30min 评论采集分流</span><span class="chip green">active</span></div>
+      <div class="setrow"><span>周一三五 20:00 抖音定时发</span><span class="chip gold">G9 审批后执行</span></div>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <div class="tab on" data-s="report"><span class="ic">📊</span>战报</div>
+    <div class="tab" data-s="appr"><span class="ic">⚖️</span>审批<span class="badge">2</span></div>
+    <div class="tab" data-s="lib"><span class="ic">🎬</span>片库</div>
+    <div class="tab" data-s="cmt"><span class="ic">💬</span>评论<span class="badge">3</span></div>
+    <div class="tab" data-s="me"><span class="ic">👤</span>我的</div>
+  </div>
+  <div class="toast" id="t"></div>
+</div>
+
+<script>
+const SHOTS=[["🎬","S00 片头·悬念钩子","3s · opening · v2 · 已渲染 ✓","green"],["🚇","S01 通勤痛点","8s · establishing · v1 · 排队中","gold"],["🔥","S02 保温实测","10s · climax · v1 · 排队中","gold"]];
+document.getElementById('shots').innerHTML=SHOTS.map(s=>`<div class="shot-item" onclick="toast('已切换到 '+this.querySelector('.st').textContent)"><div class="thumb">${s[0]}</div><div><div class="st">${s[1]}</div><div class="ss">${s[2]}</div></div><span class="chip ${s[3]}" style="margin-left:auto">${s[3]==='green'?'done':'queue'}</span></div>`).join('');
+const MC=[["@爱喝热水的小周","这个颜值真的绝了，已下单！","夸赞 · G10a 自动","green","已自动回复：谢谢喜欢～记得先温杯，保温更久🧡"],["@通勤打工人","真的能保温 24 小时吗？求实测","咨询 · G10b 待审","gold",null],["@默默","用了两周杯盖有点漏水？？","负面 · G10c 必审+告警","red",null]];
+document.getElementById('mcmts').innerHTML=MC.map(c=>`<div class="cmt"><span class="who">${c[0]}</span> <span class="chip ${c[3]}">${c[2]}</span><div class="body">${c[1]}</div>${c[4]?`<div class="reply">↳ ${c[4]}</div>`:`<div class="btnrow"><button class="btn primary" onclick="ok(this,0,'候选回复已发出（回执落链）')">审批回复</button><button class="btn" onclick="ok(this,0,'已转人工待办')">转人工</button></div>`}</div>`).join('');
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+t.dataset.s))});
+function toast(m){const t=document.getElementById('t');t.textContent=m;t.style.display='block';clearTimeout(window._x);window._x=setTimeout(()=>t.style.display='none',2800)}
+function ok(btn,cardId,msg){btn.textContent='✓ 已完成';btn.className='btn done';if(cardId){const c=document.getElementById(cardId);c.style.opacity=.45;const b=c.querySelector('.head b');}toast(msg)}
+</script>
+</body>
+</html>

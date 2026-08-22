@@ -1,7 +1,7 @@
 /**
  * P1 主甲板·舰桥（F3：真实 API 接线版；PRD P1-①②③ 逐条对账）
  *  - 左栏 ConversationList：📌 置顶（守夜战队频道/昨夜战报）+ 待办（审批请求 badge）+ 任务线程（状态点实时）+ 问答
- *  - 中栏 MessageFlow：系统分隔线 → 交接班卡（P1E3，三计数与 P3 强一致 F4.4）→ KPI 投影（一店一档 history_curve 真实数据）
+ *  - 中栏 MessageFlow：系统分隔线 → 交接班卡（P1E3，三计数与 P3 强一致 F4.4）→ KPI 投影（一企一档 history_curve 真实数据）
  *    → 巡检雷达推送（P1E4，一键派单接 inspection.dispatch；无异常显「昨夜一切正常」）
  *  - 右栏：档案 chips / 夜班班组状态卡 / 在线成员人机混编（P1E6）/ 渠道巡检状态
  *  - 底部：航线设定台（P1E1，Enter/启航→threads.dispatch；含糊→反问不建任务 F3.2）+ 快捷目标（P1E7，F3.5 酒店 6 条）
@@ -35,19 +35,20 @@ interface ThreadRow {
 }
 interface Me { identity: { plan: string; name: string; role: string }; capabilities: { quest: boolean; nightShift: boolean; inspection: boolean } }
 interface ArchiveShape {
+  brand?: string;
   property?: { name: string; city: string; rooms: number; star: string };
-  history_curve?: Record<string, { occ: number; adr: number; revpar: number }>;
+  history_curve?: Record<string, { occ: number; adr: number; revpar: number; plays?: number; completion?: number; fans?: number }>;
 }
 interface ProfileResp { archive: ArchiveShape; stage: string | null; name: string }
 
-/** 酒店 6 快捷目标（F3.5 原文：调价建议/回复评价/经营复盘/更新首图/对账说明/差评审批；行业 Bundle 预置） */
+/** 视频创作 6 快捷目标（行业 Bundle 预置：选题/脚本/评论/排期/合规/渲染） */
 const QUICK_GOALS = [
-  { label: "调价建议", text: "给出明天大床房的调价建议", preset: "pricing-agent" },
-  { label: "回复评价", text: "起草最新差评的回复", preset: "review-agent" },
-  { label: "经营复盘", text: "本周经营复盘（入住率/均价/RevPAR）", preset: "reconcile-agent" },
-  { label: "更新首图", text: "检查并更新飞猪渠道首图", preset: "content-agent" },
-  { label: "对账说明", text: "昨夜对账差异说明", preset: "reconcile-agent" },
-  { label: "差评审批", text: "汇总待审批的差评回复", preset: "review-agent" },
+  { label: "选题拆解", text: "拆解本周同类目爆款选题，给我 3 个可拍方向", preset: "trend-researcher" },
+  { label: "起草脚本", text: "为「保温杯种草片」起草一版 3 镜脚本", preset: "scriptwriter" },
+  { label: "评论分流", text: "把抖音评论区差评按三级分流并起草回复", preset: "comment-operator" },
+  { label: "今日发布排期", text: "排一下今天各账号的发布排期", preset: "publish-operator" },
+  { label: "素材合规检查", text: "检查待发素材的合规风险（功效宣称/版权）", preset: "field-inspector" },
+  { label: "渲染进度", text: "汇报当前渲染队列进度与预计完成时间", preset: "render-operator" },
 ];
 
 const THREAD_DOT: Record<string, string> = {
@@ -120,7 +121,7 @@ export default function P1() {
     : night?.run?.status === "running" ? "cruising"
       : night?.run?.status === "paused" ? "paused" : "ready";
 
-  // KPI 投影（一店一档 history_curve 真实数据；最新月 vs 上月；截至=档案口径月末）
+  // KPI 投影（一企一档 history_curve 真实数据；最新月 vs 上月；截至=档案口径月末；字段缺失优雅兜底 0）
   const kpis = useMemo(() => {
     const curve = profile?.archive?.history_curve;
     if (!curve) return [];
@@ -128,16 +129,19 @@ export default function P1() {
     const cur = curve[months[months.length - 1]!]!;
     const prev = months.length > 1 ? curve[months[months.length - 2]!]! : null;
     const pct = (a: number, b?: number) => (b ? Math.round(((a - b) / b) * 1000) / 10 : undefined);
+    const plays = cur.plays ?? 0;
+    const completion = cur.completion ?? 0;
+    const fans = cur.fans ?? 0;
     return [
-      { name: "OCC 入住率", value: `${Math.round(cur.occ * 100)}%`, delta: pct(cur.occ, prev?.occ) },
-      { name: "ADR 平均房价", value: `¥${cur.adr}`, delta: pct(cur.adr, prev?.adr) },
-      { name: "REVPAR", value: `¥${cur.revpar}`, delta: pct(cur.revpar, prev?.revpar) },
+      { name: "播放量", value: plays >= 10000 ? `${(plays / 10000).toFixed(1)}w` : `${plays}`, delta: pct(plays, prev?.plays) },
+      { name: "完播率", value: `${Math.round(completion * 100)}%`, delta: pct(completion, prev?.completion) },
+      { name: "涨粉数", value: `${fans}`, delta: pct(fans, prev?.fans) },
       { name: "巡检正常项", value: insp ? `${insp.okCount}/${insp.totalChecks}` : "—", delta: undefined },
     ];
   }, [profile, insp]);
 
   /* ---------- 派遣（P1E1：含糊→反问不建任务 F3.2；成功→完成后态新线程顶部 0/y 蓝呼吸 F3.4） ---------- */
-  const dispatch = useCallback(async (text: string, presetKey = "pricing-agent") => {
+  const dispatch = useCallback(async (text: string, presetKey = "trend-researcher") => {
     if (!text.trim()) return;
     setDispatchState("routing");
     setClarify(null);
@@ -218,13 +222,14 @@ export default function P1() {
       <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">上下文 · CONTEXT</div>
       {/* 档案 chips */}
       <div className="mb-3 rounded-lg border border-line bg-card p-3">
-        <div className="mb-1.5 text-caption font-bold text-holo">一店一档</div>
-        {profile?.archive?.property && (
+        <div className="mb-1.5 text-caption font-bold text-holo">一企一档</div>
+        {(profile?.archive?.property || profile?.archive?.brand) && (
           <div className="flex flex-wrap gap-1.5">
             {[
-              profile.archive.property.name, profile.archive.property.city,
-              `${profile.archive.property.rooms} 间`, profile.archive.property.star,
-              profile.stage ? `阶段：${profile.stage}` : null,
+              profile?.archive?.brand ?? null,
+              profile?.archive?.property?.name ?? null, profile?.archive?.property?.city ?? null,
+              profile?.archive?.property ? `${profile.archive.property.rooms} 间` : null, profile?.archive?.property?.star ?? null,
+              profile?.stage ? `阶段：${profile.stage}` : null,
             ].filter(Boolean).map((c) => (
               <span key={c as string} className="rounded border border-holo/35 bg-holo/5 px-1.5 py-0.5 text-micro text-holo">{c}</span>
             ))}
@@ -265,7 +270,7 @@ export default function P1() {
       {/* 渠道巡检状态 */}
       {me?.capabilities.inspection !== false && (
         <div className="rounded-lg border border-line bg-card p-3">
-          <div className="mb-1.5 text-caption font-bold text-holo">渠道巡检</div>
+          <div className="mb-1.5 text-caption font-bold text-holo">平台巡检</div>
           <div className="font-orb text-h2 font-bold text-ink">{insp ? `${insp.okCount}/${insp.totalChecks}` : "—"}</div>
           <div className="text-micro text-ink3">
             正常项/总数{insp?.lastRunAt ? ` · 最近 ${new Date(insp.lastRunAt).toTimeString().slice(0, 5)}` : ""}
@@ -303,7 +308,7 @@ export default function P1() {
           <div className="flex-1 space-y-3.5">
             <SystemDivider
               time={new Date().toTimeString().slice(0, 5)}
-              summary={`云栖酒店 · ${me?.identity.name ?? ""} 已上线（演示身份 MEM-001）`}
+              summary={`${profile?.archive?.brand ?? "视频经理 · 演示工作室"} · ${me?.identity.name ?? ""} 已上线（演示身份 MEM-V01 陈主理）`}
             />
 
             {/* P1E3 交接班卡（夜班未启用 → 空态「去配置」F4.8） */}
@@ -322,7 +327,7 @@ export default function P1() {
               )
             )}
 
-            {/* KPI 全息仪表（一店一档 history_curve 投影；截至时间必显 §5.7） */}
+            {/* KPI 全息仪表（一企一档 history_curve 投影；截至时间必显 §5.7） */}
             <div className="grid grid-cols-4 gap-2.5">
               {kpis.map((k) => (
                 <KpiGauge key={k.name} name={k.name} value={k.value} delta={k.delta} asOf="月末档案" stale={!!error} />
@@ -402,7 +407,7 @@ export default function P1() {
           <DispatchBar
             state={dispatchState}
             value={draft}
-            chips={[profile?.archive?.property?.name ?? "云栖酒店", `阶段：${profile?.stage ?? "—"}`]}
+            chips={[profile?.archive?.brand ?? "视频经理 · 演示工作室", `阶段：${profile?.stage ?? "—"}`]}
             onCancelRoute={() => setDispatchState(draft ? "typing" : "empty")}
             onChange={(v) => { setDraft(v); setDispatchState(v ? "typing" : "empty"); }}
             onSubmit={() => void dispatch(draft)}

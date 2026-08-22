@@ -70,8 +70,8 @@ export default function P5() {
       ruleId: `R${maxId + 1}`,
       name: text.length > 24 ? `${text.slice(0, 24)}…` : text,
       level: "review", // 新规默认必审（只可加严纪律 L2.1：不从 auto 起步）
-      objectTypes: ["room_price"],
-      actions: ["price.adjust"],
+      objectTypes: ["publish_quota"],
+      actions: ["publish.post"],
       when: "true",
     });
     setReport(null);
@@ -115,7 +115,7 @@ export default function P5() {
       ))}
       <div className="rounded-lg border border-line bg-card p-3">
         <div className="text-caption font-bold text-holo">生效范围</div>
-        <div className="mt-1 text-caption text-ink2">本店规则 {localCount} 条 + 基线 {baselineCount} 条 🔒 集团强制</div>
+        <div className="mt-1 text-caption text-ink2">本工作室规则 {localCount} 条 + 基线 {baselineCount} 条 🔒 公司/MCN 强制</div>
         <div className="mt-0.5 text-micro text-ink3">单调守卫：只可加严不可放宽（L2.1/F2.3）</div>
       </div>
     </>
@@ -137,7 +137,7 @@ export default function P5() {
               value={nlText}
               onChange={(e) => setNlText(e.target.value)}
               rows={2}
-              placeholder="如：飞猪大床房周末不能低于 ¥420"
+              placeholder="如：抖音单日发布不得超过 5 条"
               className="w-full rounded-lg border border-line bg-bg800 px-2.5 py-2 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
             />
             <button
@@ -215,7 +215,7 @@ export default function P5() {
         {!ready ? (
           <><SkeletonBlock lines={2} h={40} /><SkeletonBlock lines={6} /></>
         ) : activeRules.length === 0 ? (
-          <EmptyState icon="🛡" title="本店暂无自定义群规" hint="仅出厂基线生效 🔒（L2.1 单调守卫不可放宽）" />
+          <EmptyState icon="🛡" title="本工作室暂无自定义群规" hint="仅出厂基线生效 🔒（L2.1 单调守卫不可放宽）" />
         ) : (
           <div className="space-y-2">
             {activeRules.map((r) => (
@@ -224,7 +224,7 @@ export default function P5() {
                   <FenceLight
                     level={levelOf(r)}
                     name={`${r.rule_id} ${r.name}`}
-                    desc={`${r.workspace_id === "*" ? "基线包" : "本店"} ${r.version} · ${(r.match_spec.actions ?? []).join("/")}`}
+                    desc={`${r.workspace_id === "*" ? "基线包" : "本工作室"} ${r.version} · ${(r.match_spec.actions ?? []).join("/")}`}
                     baseline={r.is_baseline}
                   />
                 </div>

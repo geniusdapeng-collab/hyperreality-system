@@ -243,7 +243,7 @@ export default function P9() {
                       title={`需介入：${ev.who.id} · ${ev.decision.action}${ev.object.id ? `（${ev.object.id}）` : ""}`}
                       source={ev.object.type}
                       onDispatch={() => {
-                        void trpc.inspection.dispatch.mutate({ anomalyEventId: ev.event_id, presetKey: "reconcile-agent" })
+                        void trpc.inspection.dispatch.mutate({ anomalyEventId: ev.event_id, presetKey: "comment-operator" })
                           .then(() => setBanner({ level: "info", text: "已派单：以异常事件唤起业务 Agent，处理结果回链（F9.3）" }))
                           .catch(() => setBanner({ level: "warn", text: "该事件非巡检异常类，转 P4 决断队列处理" }));
                       }}

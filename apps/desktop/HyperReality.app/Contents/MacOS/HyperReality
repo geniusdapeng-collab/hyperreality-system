@@ -1,17 +1,17 @@
 #!/bin/bash
 # ============================================================
-# WorkLoom 织元 · macOS 桌面启动器（W2 / D16）
+# HyperReality 织元 · macOS 桌面启动器（W2 / D16）
 # 首启自愈：依赖全自带（Node 24 + Postgres.app 17+pgvector），
 # 用户侧唯一授权 = Gatekeeper「Control+点按→打开」一次；
 # 其余全部自动完成（装配→初始化→迁移→种子→起服务→开浏览器）。
-# 兼容 macOS 自带 bash 3.2；日志：~/Library/Logs/WorkLoom/
+# 兼容 macOS 自带 bash 3.2；日志：~/Library/Logs/HyperReality/
 # ============================================================
 set -u
 
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 RESOURCES="$(cd "$SELF_DIR/../Resources" && pwd)"
-SUPPORT="$HOME/Library/Application Support/WorkLoom"
-LOGDIR="$HOME/Library/Logs/WorkLoom"
+SUPPORT="$HOME/Library/Application Support/HyperReality"
+LOGDIR="$HOME/Library/Logs/HyperReality"
 LOG="$LOGDIR/launch-$(date +%Y%m%d-%H%M%S).log"
 RUNTIME="$SUPPORT/runtime"
 PGDATA="$SUPPORT/pgdata"
@@ -26,11 +26,11 @@ mkdir -p "$SUPPORT" "$LOGDIR"
 exec >>"$LOG" 2>&1
 
 say() { printf '%s %s\n' "$(date +%H:%M:%S)" "$1"; }
-die() { say "❌ $1"; [ "$SMOKE" = "1" ] || osascript -e "display dialog \"WorkLoom 启动中止：$1\n\n日志：$LOG\" buttons {\"好\"} default button 1 with icon caution" >/dev/null 2>&1; exit 1; }
+die() { say "❌ $1"; [ "$SMOKE" = "1" ] || osascript -e "display dialog \"HyperReality 启动中止：$1\n\n日志：$LOG\" buttons {\"好\"} default button 1 with icon caution" >/dev/null 2>&1; exit 1; }
 # ditto 为 macOS 专属；Linux 兼容层（沙箱冒烟用）回落 cp -a
 copy() { if command -v ditto >/dev/null 2>&1; then ditto "$1" "$2"; else cp -a "$1" "$2"; fi }
 
-say "== WorkLoom 织元 · 启动（日志 ${LOG}）=="
+say "== HyperReality 织元 · 启动（日志 ${LOG}）=="
 
 # ---------- 0. 装配：首启把运行时载荷复制到可写支持目录 ----------
 PAYLOAD_VER="$(cat "$RESOURCES/runtime/VERSION" 2>/dev/null || echo unknown)"
@@ -93,13 +93,13 @@ fi
 if [ ! -f "$SUPPORT/.bootstrapped" ]; then
   say "→ 首航引导：数据库迁移 + 演示数据种子…"
   (cd "$RUNTIME" && "$TSX" --env-file=.env scripts/migrate.ts) || die "数据库迁移失败"
-  (cd "$RUNTIME" && "$TSX" --env-file=.env scripts/seed.ts) || die "演示数据种子失败"
+  (cd "$RUNTIME" && "$TSX" --env-file=.env scripts/seed-video.ts) || die "演示数据种子失败"
   touch "$SUPPORT/.bootstrapped"
   say "✅ 首航引导完成"
 fi
 
 # ---------- 4. 起服务：server(8787) + web preview(5173) ----------
-port_busy $SERVER_PORT && die "端口 $SERVER_PORT 被占用——请先退出旧实例（或执行 pkill -f WorkLoom）"
+port_busy $SERVER_PORT && die "端口 $SERVER_PORT 被占用——请先退出旧实例（或执行 pkill -f HyperReality）"
 port_busy $WEB_PORT && die "端口 $WEB_PORT 被占用"
 (cd "$RUNTIME/apps/server" && "$TSX" --env-file="$RUNTIME/.env" src/index.ts >>"$LOGDIR/server.log" 2>&1) &
 PID_SERVER=$!
@@ -135,6 +135,6 @@ if [ "$SMOKE" = "1" ]; then
   say "== SMOKE 模式：健康检查通过，退出 =="
   exit 0
 fi
-say "== 主甲板已就绪 http://localhost:$WEB_PORT （在程序坞退出 WorkLoom 即停止全部服务）=="
+say "== 主甲板已就绪 http://localhost:$WEB_PORT （在程序坞退出 HyperReality 即停止全部服务）=="
 open "http://localhost:$WEB_PORT"
 wait

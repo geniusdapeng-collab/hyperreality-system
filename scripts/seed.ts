@@ -1,5 +1,6 @@
 /**
  * A5 · 演示种子数据（PRD V2.5 P 章示例场景：云栖酒店）
+ * ⚠️ 底座回归专用·酒店演示集，客户演示请用 seed-video.ts / demo-video.ts
  * 用法：pnpm db:seed（读取 .env；幂等，可重复执行）
  *
  * 内容：demo 租户 / 云栖酒店工作区 / 3 人类成员 / 7 Agent preset 实例 /

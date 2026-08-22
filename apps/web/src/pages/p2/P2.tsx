@@ -56,7 +56,7 @@ function receiptOf(ev: Ev): ReceiptState {
 }
 
 /** 写类动作前缀（完成后态「仅只读分析」判定；与网关同源口径） */
-const WRITE_PREFIX = ["price.adjust", "order.refund", "review.reply", "content.draft", "content.publish", "refund.apply", "trigger."];
+const WRITE_PREFIX = ["render.submit", "publish.post", "comment.reply", "script.update", "trigger."];
 
 export default function P2() {
   const { threadId = "" } = useParams();
@@ -145,7 +145,7 @@ export default function P2() {
     setBanner({ level: "info", text: "追问已沿本线程上下文入列（F3.6），执行中…" });
     setComposer("");
     try {
-      await trpc.threads.run.mutate({ threadId: thread.id, goal: composer, presetKey: thread.agent_id ?? "pricing-agent" });
+      await trpc.threads.run.mutate({ threadId: thread.id, goal: composer, presetKey: thread.agent_id ?? "director" });
     } finally {
       await load();
     }
@@ -238,7 +238,7 @@ export default function P2() {
               {thread.status !== "completed" && thread.status !== "failed" && (
                 <button
                   type="button"
-                  onClick={() => void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, presetKey: thread.agent_id ?? "pricing-agent" }).then(load)}
+                  onClick={() => void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, presetKey: thread.agent_id ?? "director" }).then(load)}
                   className="cursor-pointer rounded-md border border-gline bg-gold/8 px-3 py-1 text-caption font-bold text-gold hover:bg-gold/15"
                 >
                   ▶ 执行/续跑（replay 幂等 H-5）
@@ -262,7 +262,7 @@ export default function P2() {
             <div className="flex gap-2">
               <button type="button" onClick={() => setBanner({ level: "info", text: "已转需介入：人工接管通道开启（E1 联调卡接强制隔离）" })}
                 className="cursor-pointer rounded-md border border-alert/60 bg-alert/10 px-3 py-1.5 text-caption font-bold text-alert">转人工</button>
-              <button type="button" onClick={() => thread && void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, presetKey: thread.agent_id ?? "pricing-agent" }).then(load)}
+              <button type="button" onClick={() => thread && void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, presetKey: thread.agent_id ?? "director" }).then(load)}
                 className="cursor-pointer rounded-md border border-warn/50 bg-warn/10 px-3 py-1.5 text-caption font-bold text-warn">降级重试</button>
               <button type="button" onClick={() => setBanner({ level: "info", text: "回滚=逆向补偿事件序列（F1.6 append-only），E1 联调卡接线" })}
                 className="cursor-pointer rounded-md border border-holo/40 bg-holo/8 px-3 py-1.5 text-caption font-bold text-holo">回滚</button>
@@ -306,7 +306,7 @@ export default function P2() {
                       key={ev.event_id}
                       sender={ev.who.id}
                       version={ev.who.version ?? ""}
-                      action="经营参谋·应答"
+                      action="创作参谋·应答"
                       eventId={ev.event_id}
                       receipt={receiptOf(ev)}
                       credits={ev.model_trace?.credits}

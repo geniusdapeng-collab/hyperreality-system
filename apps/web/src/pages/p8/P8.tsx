@@ -84,7 +84,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 const ROLE_SCOPE: Record<string, string> = {
   owner: "紧急制动 · 航道立法 · 船员任免（规则手册 §3.1 舰长三权）",
-  manager: "跨店继承与审计 · 审批",
+  manager: "跨账号/多工作室继承与审计 · 审批",
   readonly: "只读视图 · 无写入口（E2.6）",
   group: "集团视角",
   channel: "渠道接入",
@@ -260,7 +260,7 @@ function RosterHome() {
       <div className="mb-1.5 rounded-lg border border-line bg-card px-3 py-2.5">
         <div className="text-caption font-bold text-ink">Agent 船员 · {agents.length} preset</div>
         <div className="mt-0.5 text-micro text-ink3">
-          workloom-hotel 装配 · {data?.nightWindow.open ? `夜班窗口内 ${onlineAgents} 名在线` : "夜班窗口外 · 待命"}
+          hyperreality-ai-video 装配 · {data?.nightWindow.open ? `夜班窗口内 ${onlineAgents} 名在线` : "夜班窗口外 · 待命"}
         </div>
       </div>
       <div className="rounded-lg border border-line bg-card px-3 py-2.5 text-micro leading-relaxed text-ink3">
@@ -325,7 +325,7 @@ function RosterHome() {
             </div>
 
             <div className="mb-2 text-[11px] tracking-[.2em] text-ink3">
-              Agent 船员 · {agents.length} preset（workloom-hotel 装配）· 夜班窗口 {data?.nightWindow.range} 自动上线
+              Agent 船员 · {agents.length} preset（hyperreality-ai-video 装配）· 夜班窗口 {data?.nightWindow.range} 自动上线
             </div>
             <div className="grid grid-cols-3 gap-3">
               {agents.map((a) => <AgentCard key={a.id} a={a} onOpen={(id) => nav(`/p8/agent/${encodeURIComponent(id)}`)} />)}

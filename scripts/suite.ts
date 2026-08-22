@@ -1229,7 +1229,7 @@ h("D15-② 流水线：扫描不过连提案都进不了", async () => {
 h("D15-② 流水线：提案 → 双人复核 → 完成上架全链路", async () => {
   const { proposePublish, reviewPublish, completePublish } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-pub-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','workloom-hotel','上架测试','1.0.0','干净描述','[]','干净正文',false)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','hyperreality-ai-video','上架测试','1.0.0','干净描述','[]','干净正文',false)`, [skillId]);
   const p = await proposePublish(app, gw, scope, { skillId, skillName: "上架测试", body: "干净正文", description: "干净描述", by: "MEM-001" });
   assert(!p.deduped, "提案成功");
   const r1 = await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-002", gesture: "approve" });
@@ -1249,7 +1249,7 @@ h("D15-② 流水线：提案 → 双人复核 → 完成上架全链路", async
 h("D15-② 流水线：提案人禁止自批", async () => {
   const { proposePublish, reviewPublish } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-self-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','workloom-hotel','自批测试','1.0.0','d','[]','b',false)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','hyperreality-ai-video','自批测试','1.0.0','d','[]','b',false)`, [skillId]);
   const p = await proposePublish(app, gw, scope, { skillId, skillName: "自批测试", body: "干净正文", description: "", by: "MEM-001" });
   let threw = false;
   try { await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-001", gesture: "approve" }); } catch { threw = true; }
@@ -1260,7 +1260,7 @@ h("D15-② 流水线：提案人禁止自批", async () => {
 h("D15-② 流水线：驳回必填原因 + 重复复核幂等", async () => {
   const { proposePublish, reviewPublish } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-rej-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','workloom-hotel','驳回测试','1.0.0','d','[]','b',false)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','hyperreality-ai-video','驳回测试','1.0.0','d','[]','b',false)`, [skillId]);
   const p = await proposePublish(app, gw, scope, { skillId, skillName: "驳回测试", body: "干净正文", description: "", by: "MEM-001" });
   let noReason = false;
   try { await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-002", gesture: "reject" }); } catch { noReason = true; }
@@ -1275,7 +1275,7 @@ h("D15-② 流水线：驳回必填原因 + 重复复核幂等", async () => {
 h("D15-④ 吊销：吊销技能禁止新安装（kill switch）", async () => {
   const { revokeSkill, installSkill } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-rev-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','吊销测试','1.0.0','d','[]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','吊销测试','1.0.0','d','[]','b',true)`, [skillId]);
   await revokeSkill(app, gw, scope, { skillId, reason: "发现恶意行为", by: "MEM-001" });
   let threw = false;
   try { await installSkill(app, gw, scope, { skillId, by: "MEM-001" }); } catch (err) { threw = String((err as Error).message).includes("吊销"); }
@@ -1287,7 +1287,7 @@ h("D15-④ 吊销：装配围栏并集排除吊销技能", async () => {
   const { revokeSkill, installSkill, resolveAgentFenceBindings } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-revasm-${SFX}`;
   // 绑定用 R5：种子安装行（skill-revenue-manager）快照含 R1/R2，用 R2 会被种子行干扰
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','装配吊销','1.0.0','d','["R5"]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','装配吊销','1.0.0','d','["R5"]','b',true)`, [skillId]);
   await installSkill(app, gw, scope, { skillId, by: "MEM-001" });
   const ag = await qApp<{ id: string }>(`SELECT id FROM agents WHERE workspace_id=$1 AND preset_key='content-agent'`, [scope.workspaceId]);
   const before = await resolveAgentFenceBindings(app, scope, ag.rows[0]!.id);
@@ -1303,7 +1303,7 @@ h("D15-④ 吊销：装配围栏并集排除吊销技能", async () => {
 h("D15-④ 吊销：重复吊销幂等", async () => {
   const { revokeSkill } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-rev2-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','重复吊销','1.0.0','d','[]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','重复吊销','1.0.0','d','[]','b',true)`, [skillId]);
   const r1 = await revokeSkill(app, gw, scope, { skillId, reason: "第一次", by: "MEM-001" });
   const r2 = await revokeSkill(app, gw, scope, { skillId, reason: "第二次", by: "MEM-001" });
   eq(r1.deduped, false, "首次生效");
@@ -1314,7 +1314,7 @@ h("D15-④ 吊销：重复吊销幂等", async () => {
 h("D15-⑤ 版本通道：安装记版本快照，升版后可检出更新", async () => {
   const { installSkill, listSkillUpdates, uninstallSkill } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-ver-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','版本通道','1.0.0','d','[]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','版本通道','1.0.0','d','[]','b',true)`, [skillId]);
   await installSkill(app, gw, scope, { skillId, by: "MEM-001" });
   eq((await listSkillUpdates(app, scope)).filter((u) => u.skillId === skillId).length, 0, "同版无更新提示");
   await qApp(`UPDATE skills SET version='1.1.0' WHERE id=$1`, [skillId]);

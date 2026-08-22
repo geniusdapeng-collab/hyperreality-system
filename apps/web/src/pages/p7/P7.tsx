@@ -50,7 +50,7 @@ export default function P7() {
   const [wizardErr, setWizardErr] = useState("");
   const [draft, setDraft] = useState({
     slug: "", displayName: "", version: "0.1.0", changelog: "",
-    fenceRef: "hotel-baseline/v1", ownerMemberNo: "MEM-001",
+    fenceRef: "ai-video-baseline/v1", ownerMemberNo: "MEM-V01",
   });
 
   const load = useCallback(async (silent = false, slug?: string | null) => {
@@ -124,7 +124,7 @@ export default function P7() {
       const r = await trpc.bundles.createDraft.mutate(draft) as { eventId: string; slug: string };
       setWizardOpen(false);
       setBanner({ level: "info", text: `行业草稿「${draft.displayName}」已创建（草稿态不进分发 §2.3，留痕 ${r.eventId}）——填充五槽后过校验即可激活` });
-      setDraft({ slug: "", displayName: "", version: "0.1.0", changelog: "", fenceRef: "hotel-baseline/v1", ownerMemberNo: "MEM-001" });
+      setDraft({ slug: "", displayName: "", version: "0.1.0", changelog: "", fenceRef: "ai-video-baseline/v1", ownerMemberNo: "MEM-V01" });
       await load(true, r.slug);
       setSelectedSlug(r.slug);
     } catch (e) {
@@ -194,7 +194,7 @@ export default function P7() {
           <>
             {/* infobar（原型口径）：当前 profile · 装配计数 · 底座零改动 */}
             <div className="mb-4 rounded-lg border border-line bg-card px-3.5 py-2.5 text-caption text-ink2">
-              🚀 当前 profile：<b className="font-mono text-holo">workloom-{data.activeSlug}</b>
+              🚀 当前 profile：<b className="font-mono text-holo">hyperreality-{data.activeSlug}</b>
               {" "}· 装配 <b className="text-goldhi">{data.profiles.find((p) => p.slug === data.activeSlug)?.filledCount ?? 0}/6</b>
               {" "}· 底座代码零改动（Bundle = npm 包 §2.3）
             </div>
@@ -211,7 +211,7 @@ export default function P7() {
                   }`}
                 >
                   <div className="flex items-center gap-2 text-body font-bold text-ink2">
-                    <span className="font-mono">workloom-{p.slug}</span>
+                    <span className="font-mono">hyperreality-{p.slug}</span>
                     {p.status === "active" && <span className="rounded border border-go/50 px-1 py-px text-micro text-go">当前</span>}
                     {p.status === "draft" && <span className="rounded border border-[#CD8B5A]/50 px-1 py-px text-micro text-[#CD8B5A]">草稿 · 不进分发</span>}
                     {!p.canActivate && <span className="rounded border border-alert/50 px-1 py-px text-micro text-alert">校验未过</span>}
@@ -242,7 +242,7 @@ export default function P7() {
                   </label>
                   <label className="text-caption text-ink3">显示名
                     <input value={draft.displayName} onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
-                      placeholder="如 WorkLoom for Retail" className="mt-1 w-full rounded-md border border-line bg-bg px-2.5 py-1.5 text-body text-ink outline-none focus:border-gline" />
+                      placeholder="如 HyperReality for MCN" className="mt-1 w-full rounded-md border border-line bg-bg px-2.5 py-1.5 text-body text-ink outline-none focus:border-gline" />
                   </label>
                   <label className="text-caption text-ink3">版本
                     <input value={draft.version} onChange={(e) => setDraft({ ...draft, version: e.target.value })}
@@ -414,7 +414,7 @@ export default function P7() {
                   onClick={() => void activate(selected.slug)}
                   title={selected.canActivate ? "" : "F2.10：校验未全绿，拒绝激活"}
                   className="cursor-pointer rounded-md gold-grad px-4 py-2 text-caption font-black text-ongold disabled:cursor-not-allowed disabled:opacity-40">
-                  🚀 激活 workloom-{selected.slug}
+                  🚀 激活 hyperreality-{selected.slug}
                 </button>
               </div>
             )}

@@ -78,7 +78,7 @@ export function wizardSteps(ctx: WizardContext): WizardStatus[] {
 
 export type DeliveryStep =
   | "assets"      // ①资产生成（createBundleDraft）
-  | "archive"     // ②一店一档初始化（必填基础信息）
+  | "archive"     // ②一企一档（品牌档案）初始化（必填基础信息）
   | "authz"       // ③系统授权（凭据走L4 Patch注入，不进事件明文）
   | "fences"      // ④围栏确认（只紧不松+dry-run回放）
   | "precheck"    // ⑤装配检查单（任一红灯禁止激活）
