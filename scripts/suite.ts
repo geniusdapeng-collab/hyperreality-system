@@ -2304,6 +2304,12 @@ function defineE2E(): void {
   });
 }
 
+  h2("captain.theater 经营剧场聚合态（P0 首页数据源）", async () => {
+    const { data } = await api<{ result?: { data?: { mode?: string; satellites?: unknown[]; ticker?: unknown[] } } }>("/trpc/captain.theater", { token: tokenOwner });
+    assert(data.result?.data?.mode, "治理态可读");
+    assert((data.result?.data?.satellites ?? []).length >= 5, "员工卫星群 ≥5");
+    assert(Array.isArray(data.result?.data?.ticker), "实况流在场");
+  });
   /* R 域 E2E：数字CEO 端点 */
   h2("captain.state 治理状态可读（宪章+分层+条款清单）", async () => {
     const { data } = await api<{ result?: { data?: { charter?: { mode?: string }; requiredClauses?: string[] } } }>("/trpc/captain.state", { token: tokenOwner });

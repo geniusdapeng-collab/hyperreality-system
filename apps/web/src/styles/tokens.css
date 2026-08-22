@@ -135,3 +135,12 @@
     border-color: var(--color-line);
   }
 }
+
+/* P0 经营剧场动画 */
+@keyframes holo-spin { from { transform: rotateX(68deg) rotateZ(0deg); } to { transform: rotateX(68deg) rotateZ(360deg); } }
+@keyframes holo-core-pulse { 0%,100% { opacity: .75; } 50% { opacity: 1; } }
+.holo-core { animation: holo-core-pulse 2.6s ease-in-out infinite; transform-origin: center; }
+.holo-scan { animation: holo-scan-move 3.4s linear infinite; }
+@keyframes holo-scan-move { 0% { transform: translateY(30px); opacity: 0; } 15% { opacity: .8; } 85% { opacity: .8; } 100% { transform: translateY(120px); opacity: 0; } }
+@keyframes sat-pulse { 0%,100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.35); opacity: 1; } }
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
