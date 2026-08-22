@@ -11,7 +11,9 @@ echo "⚠️  将删除本地 workloom 库全部数据（append-only 事件库�
 case "${1:-}" in --yes|-y) ;; *) [ -t 0 ] && { read -r -p "确认继续？[y/N] " a; [ "$a" = "y" ] || exit 0; } ;; esac
 
 DB_URL=$(grep -E '^DATABASE_URL=' .env | cut -d= -f2-)
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+# docker 通道仅在容器真实存在时启用；否则回退本机 psql（D24 修复：有 docker 守护进程但无 workloom-im-pg 容器时不再误走 docker exec）
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 \
+   && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'workloom-im-pg'; then
   docker exec workloom-im-pg psql postgres://postgres:workloom@localhost:5432/workloom -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 else
   psql "$DB_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"

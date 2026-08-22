@@ -551,7 +551,8 @@ async function main(): Promise<void> {
   console.log(`✓ Agent 实例 ×${presets.length}（含只读 preset：巡检/竞对，L9.1）`);
 
   // 一店一档（槽①；forbidden 双写：archive 内 + 独立列，L1.6）
-  const archive = yunqiArchive();
+  // dataMode=simulated：落地向导（D24）横幅事实源——种子库即「全模拟运行态」，向导启用真实模式后翻转
+  const archive = { ...yunqiArchive(), dataMode: "simulated" };
   await q(
     `INSERT INTO profiles (workspace_id, tenant_id, industry, archive, forbidden, pii_vault)
      VALUES ($1,$2,'hotel',$3,$4,NULL)

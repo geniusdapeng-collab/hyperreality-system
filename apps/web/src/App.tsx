@@ -12,6 +12,7 @@ import P7 from "./pages/p7/P7";
 import P8 from "./pages/p8/P8";
 import P10 from "./pages/p10/P10";
 import DevMatrix from "./pages/dev/DevMatrix";
+import Onboarding from "./pages/onboarding/Onboarding";
 import { Bridge } from "./shell/Bridge";
 
 /** 阶段三路由：页面自包 Bridge（注入真实左右栏）；/dev 矩阵保持壳内平铺 */
@@ -32,6 +33,7 @@ export default function App() {
       <Route path="/p8" element={<P8 />} />
       <Route path="/p8/agent/:agentId" element={<P8 />} />
       <Route path="/p10" element={<P10 />} />
+      <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/dev" element={<Bridge><DevMatrix /></Bridge>} />
       <Route path="*" element={<P0 />} />
     </Routes>

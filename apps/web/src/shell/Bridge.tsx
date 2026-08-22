@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { EmergencyBrake, NightStatusPill } from "../components/hud";
+import { SimBanner } from "../components/SimBanner";
 import { PlanSwitcher } from "./PlanSwitcher";
 
 /** 星野背景（氛围层；永不遮挡信息、不影响 G10 首屏口径——§7 动效纪律） */
@@ -112,6 +113,9 @@ export function Bridge({
             {!community && <NightStatusPill onClick={() => { window.location.href = "/p9"; }} />}
             {!community && <EmergencyBrake />}
           </header>
+
+          {/* 模拟数据横幅（D24：模拟态/mock 模型常显，引导落地向导接入真实数据） */}
+          <SimBanner />
 
           {/* IM 三栏（§4.1：236px 左｜弹性中｜264px 右；栏间 1px 全息青细线=border-line） */}
           <div className="flex min-h-[640px]">

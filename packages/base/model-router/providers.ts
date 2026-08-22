@@ -54,16 +54,19 @@ export class MockProvider implements ModelProvider {
   }
 }
 
-/** OpenAI 兼容 Provider（F6.6：chat 内部强制出站脱敏，插件不可绕过） */
+/** OpenAI 兼容 Provider（F6.6：chat 内部强制出站脱敏，插件不可绕过；apiKey 为空适配免 key 网关/本地代理） */
 export class OpenAiCompatibleProvider implements ModelProvider {
   constructor(
     public readonly modelId: string,
-    private readonly cfg: { baseUrl: string; apiKey: string },
+    private readonly cfg: { baseUrl: string; apiKey?: string },
   ) {}
+  private authHeaders(): Record<string, string> {
+    return this.cfg.apiKey ? { authorization: `Bearer ${this.cfg.apiKey}` } : {};
+  }
   async healthy(): Promise<boolean> {
     try {
       const res = await fetch(`${this.cfg.baseUrl}/models`, {
-        headers: { authorization: `Bearer ${this.cfg.apiKey}` },
+        headers: this.authHeaders(),
         signal: AbortSignal.timeout(5_000),
       });
       return res.ok;
@@ -76,7 +79,7 @@ export class OpenAiCompatibleProvider implements ModelProvider {
     const masked = messages.map((m) => ({ ...m, content: maskDeep(m.content).value }));
     const res = await fetch(`${this.cfg.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${this.cfg.apiKey}` },
+      headers: { "content-type": "application/json", ...this.authHeaders() },
       body: JSON.stringify({ model: this.modelId, messages: masked, temperature: 0.2 }),
     });
     if (!res.ok) throw new Error(`模型调用失败：HTTP ${res.status}`);
@@ -92,12 +95,12 @@ export class OpenAiCompatibleProvider implements ModelProvider {
   }
 }
 
-/** 按 .env 装配默认提供方集（mock | deepseek | moonshot | zhipu | openai） */
+/** 按 .env 装配默认提供方集（mock | deepseek | moonshot | zhipu | openai；apiKey 可空=免 key 网关） */
 export function providerFromEnv(modelId: string): ModelProvider {
   const p = process.env.LLM_PROVIDER ?? "mock";
   if (p === "mock") return new MockProvider(modelId);
   const baseUrl = process.env.LLM_BASE_URL;
   const apiKey = process.env.LLM_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error(`LLM_PROVIDER=${p} 但缺少 LLM_BASE_URL/LLM_API_KEY`);
-  return new OpenAiCompatibleProvider(modelId, { baseUrl, apiKey });
+  if (!baseUrl) throw new Error(`LLM_PROVIDER=${p} 但缺少 LLM_BASE_URL`);
+  return new OpenAiCompatibleProvider(modelId, { baseUrl, apiKey: apiKey || undefined });
 }

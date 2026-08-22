@@ -9,6 +9,7 @@
  *      复用种子，业务数据不依赖种子行、不跨用例污染；失败不中断，末尾汇总报告。
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer, type Server } from "node:http";
 import pg from "pg";
 import { routeIntent, ruleBasedRoute, LlmIntentClassifier, type IntentClassifier } from "@workloom/runtime";
 import { runQuest } from "@workloom/runtime";
@@ -2339,6 +2340,83 @@ function defineE2E(): void {
     const { data: sc } = await api<{ result?: { data?: { decisions?: number; briefings?: number } } }>("/trpc/captain.scorecard", { token: tokenOwner });
     assert(sc.result?.data && typeof sc.result.data.briefings === "number", "成绩单可读");
   });
+
+/* ---- D24 落地向导 E2E：模拟态横幅事实源 → 真实模型装配 → ask 真实推理 → 真实模式 ---- */
+let llmStub: Server | null = null;
+const STUB_PORT = 8791;
+h2("onboarding.status 全模拟运行态（横幅事实源：simulated + mock）", async () => {
+  const { data } = await api<{ result?: { data?: { dataMode?: string; llm?: { real?: boolean }; workspace?: { events?: number; agents?: number } } } }>("/trpc/onboarding.status", { token: tokenOwner });
+  eq(data.result?.data?.dataMode, "simulated", "种子库默认模拟态");
+  eq(data.result?.data?.llm?.real, false, "默认 mock 模型");
+  assert((data.result?.data?.workspace?.events ?? 0) > 0, "开箱即有事件数据（运行态）");
+  assert((data.result?.data?.workspace?.agents ?? 0) >= 5, "数字团队在场");
+});
+h2("onboarding.saveLlmConfig 真实试调 → 落盘生效（OpenAI 兼容 stub 实证）", async () => {
+  // 本地 OpenAI 兼容 stub：应答携带动态标记（时间戳+随机串），证明非确定性模板
+  llmStub = createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/v1/chat/completions") {
+      let body = "";
+      req.on("data", (c) => { body += c; });
+      req.on("end", () => {
+        const mark = `E2E-LLM-MARK-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({
+          choices: [{ message: { content: `在线确认 ${mark}` } }],
+          usage: { prompt_tokens: body.length, completion_tokens: 20 },
+        }));
+      });
+    } else {
+      res.writeHead(404); res.end();
+    }
+  });
+  await new Promise<void>((r) => llmStub!.listen(STUB_PORT, "127.0.0.1", () => r()));
+  const { data } = await api<{ result?: { data?: { ok?: boolean; real?: boolean } }; error?: { message?: string } }>("/trpc/onboarding.saveLlmConfig", {
+    method: "POST", token: tokenOwner,
+    body: { provider: "e2e-stub", baseUrl: `http://127.0.0.1:${STUB_PORT}/v1`, apiKey: "sk-e2e-dummy-1234567890", model: "stub-real-1" },
+  });
+  eq(data.result?.data?.ok, true, `保存成功（${data.error?.message ?? ""}）`);
+  const { data: st } = await api<{ result?: { data?: { llm?: { real?: boolean; model?: string } } } }>("/trpc/onboarding.status", { token: tokenOwner });
+  eq(st.result?.data?.llm?.real, true, "status 实时反映真实装配（无需重启）");
+  eq(st.result?.data?.llm?.model, "stub-real-1", "模型号就位");
+});
+h2("onboarding 装配后 ask 问询走真实推理（via=llm + 动态应答）", async () => {
+  const { data } = await api<{ result?: { data?: { mode?: string; answer?: string } } }>("/trpc/threads.dispatch", {
+    method: "POST", token: tokenManager, body: { title: "现在待审批有几项？" },
+  });
+  eq(data.result?.data?.mode, "ask", "路由 ask");
+  assert((data.result?.data?.answer ?? "").includes("E2E-LLM-MARK"), "应答来自真实模型 round-trip（非模板）");
+  const ev = await qApp<{ n: string }>(
+    `SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='ask.answer' AND payload->'decision'->'params'->>'via'='llm'`,
+    [scope.workspaceId],
+  );
+  assert(Number(ev.rows[0]!.n) >= 1, "ask.answer via=llm 留痕");
+});
+h2("onboarding 还原 mock 装配（套件环境复位）", async () => {
+  const { data } = await api<{ result?: { data?: { ok?: boolean } } }>("/trpc/onboarding.saveLlmConfig", {
+    method: "POST", token: tokenOwner, body: { provider: "mock", baseUrl: "", apiKey: "", model: "" },
+  });
+  eq(data.result?.data?.ok, true, "mock 还原");
+  if (llmStub) { await new Promise<void>((r) => llmStub!.close(() => r())); llmStub = null; }
+  const { data: st } = await api<{ result?: { data?: { llm?: { real?: boolean } } } }>("/trpc/onboarding.status", { token: tokenOwner });
+  eq(st.result?.data?.llm?.real, false, "status 复位 mock");
+});
+h2("onboarding 经营主体写入 + 启用真实模式（横幅熄灭）→ 复位模拟态", async () => {
+  const { data } = await api<{ result?: { data?: { ok?: boolean } } }>("/trpc/onboarding.setupWorkspace", {
+    method: "POST", token: tokenOwner, body: { displayName: "云栖酒店", industry: "hotel", note: "E2E 向导验收" },
+  });
+  eq(data.result?.data?.ok, true, "主体档案写入");
+  const { data: act } = await api<{ result?: { data?: { dataMode?: string } } }>("/trpc/onboarding.activateRealMode", { method: "POST", token: tokenOwner });
+  eq(act.result?.data?.dataMode, "real", "真实模式激活");
+  const { data: st } = await api<{ result?: { data?: { dataMode?: string } } }>("/trpc/onboarding.status", { token: tokenOwner });
+  eq(st.result?.data?.dataMode, "real", "status 反映 real（横幅熄灭条件达成）");
+  const ev = await qApp<{ n: string }>(
+    `SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='onboarding.real_mode_activated'`,
+    [scope.workspaceId],
+  );
+  assert(Number(ev.rows[0]!.n) >= 1, "切换留痕");
+  // 复位：套件出口保持种子模拟态（事件保留，append-only 纪律）
+  await qApp(`UPDATE profiles SET archive=jsonb_set(archive,'{dataMode}','"simulated"'::jsonb) WHERE workspace_id=$1`, [scope.workspaceId]);
+});
 
 
 /* ================= R 域 · 数字CEO（D21） ================= */

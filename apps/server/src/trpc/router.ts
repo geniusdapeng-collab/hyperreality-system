@@ -9,6 +9,8 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { getAppPool, getGatewayPool, getOwnerPool } from "@workloom/db";
 import {
   getCapabilities,
@@ -29,7 +31,7 @@ import {
 } from "@workloom/base/review-console";
 import { routeIntent, runAsk, runQuest } from "@workloom/runtime";
 import { LlmIntentClassifier, type IntentClassifier } from "@workloom/runtime";
-import { providerFromEnv } from "@workloom/base/model-router";
+import { providerFromEnv, OpenAiCompatibleProvider } from "@workloom/base/model-router";
 import {
   loadCharter, parseCharter, transition, defaultCharter,
   runBriefingBeat, runQueueBeat, runDeviationBeat, runBreakerBeat, buildScorecard,
@@ -110,6 +112,248 @@ const systemRouter = router({
       db,
       time: new Date().toISOString(),
     };
+  }),
+});
+
+/* ================= 落地向导（D24：模拟运行态 → 真实经营 切换面） =================
+ * 契约：首次安装开箱即为「全模拟运行态」（种子数据 + mock 模型），P0/舰桥横幅常显提示；
+ * 向导四步（自检 → 真实大模型 → 经营主体 → 启用真实模式）尽量自动化：
+ *  - saveLlmConfig 真实试调通过才落盘（.env 四变量 + process.env + 清缓存，全链即时真实化）
+ *  - activateRealMode 翻转 profiles.archive.dataMode（simulated→real），横幅熄灭
+ * 全程五元事件留痕；API Key 只记掩码后 4 位（L6.2 同纪律）。
+ */
+
+/** 仓库根 .env 定位（cwd 可能是 apps/server 或仓库根；向上找 pnpm-workspace.yaml） */
+function locateEnvFile(): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    if (existsSync(join(dir, "pnpm-workspace.yaml"))) return join(dir, ".env");
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return join(process.cwd(), ".env");
+}
+
+/** 四 env 写回 .env（保留其他行）+ 同步 process.env + 清 LLM 缓存（全链即时生效，无需重启） */
+function persistLlmEnv(cfg: { provider: string; baseUrl: string; apiKey: string; model: string }): void {
+  const file = locateEnvFile();
+  const lines = existsSync(file) ? readFileSync(file, "utf8").split("\n") : [];
+  const set = (k: string, v: string) => {
+    const i = lines.findIndex((l) => l.startsWith(`${k}=`));
+    if (i >= 0) lines[i] = `${k}=${v}`;
+    else lines.push(`${k}=${v}`);
+    process.env[k] = v;
+  };
+  set("LLM_PROVIDER", cfg.provider);
+  set("LLM_BASE_URL", cfg.baseUrl);
+  set("LLM_API_KEY", cfg.apiKey);
+  set("LLM_MODEL", cfg.model);
+  writeFileSync(file, lines.filter((l, i) => l !== "" || i < lines.length - 1).join("\n"));
+  cachedLlmCall = undefined; // 复位装配缓存（见 llmCall()/intentClassifier()）
+  cachedClassifier = undefined;
+}
+
+/** LLM 装配状态（真实=非 mock 且 baseUrl 齐备；apiKey 可空=免 key 网关） */
+function llmAssembly(): { provider: string; model: string; baseUrl: string; real: boolean } {
+  const provider = process.env.LLM_PROVIDER ?? "mock";
+  const baseUrl = process.env.LLM_BASE_URL ?? "";
+  return {
+    provider,
+    model: process.env.LLM_MODEL ?? "",
+    baseUrl,
+    real: provider !== "mock" && baseUrl.length > 0,
+  };
+}
+
+/** 真实试调探针（落地向导「测试连接」：真实 round-trip 通过才允许保存） */
+async function probeLlm(cfg: { baseUrl: string; apiKey?: string; model: string }): Promise<{ reply: string; latencyMs: number }> {
+  const provider = new OpenAiCompatibleProvider(cfg.model, { baseUrl: cfg.baseUrl, apiKey: cfg.apiKey || undefined });
+  const t0 = Date.now();
+  const res = await Promise.race([
+    provider.chat([{ role: "user", content: "你是企业经营系统的数字员工。请用一句中文回答：你已在线，可以开始工作。" }]),
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error("模型响应超时（25s）")), 25_000)),
+  ]);
+  if (!res.text.trim()) throw new Error("模型返回为空");
+  return { reply: res.text.trim().slice(0, 200), latencyMs: Date.now() - t0 };
+}
+
+const onboardingRouter = router({
+  /** 运行态总览（P0 横幅/落地向导同一事实源）：数据模式 + LLM 装配 + 工作区规模 */
+  status: protectedProcedure.query(async ({ ctx }) => {
+    const scope = scopeOf(ctx.identity);
+    const app = getAppPool();
+    const client = await app.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+      const prof = await client.query<{ data_mode: string | null }>(
+        `SELECT archive->>'dataMode' AS data_mode FROM profiles WHERE workspace_id=$1`,
+        [scope.workspaceId],
+      );
+      const ws = await client.query<{ name: string }>(`SELECT name FROM workspaces WHERE id=$1`, [scope.workspaceId]);
+      const n = async (sql: string) => Number((await client.query<{ n: string }>(sql, [scope.workspaceId])).rows[0]?.n ?? 0);
+      const [events, members, agents, memories] = await Promise.all([
+        n(`SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1`),
+        n(`SELECT count(*)::text AS n FROM members WHERE workspace_id=$1`),
+        n(`SELECT count(*)::text AS n FROM agents WHERE workspace_id=$1`),
+        n(`SELECT count(*)::text AS n FROM org_memory WHERE workspace_id=$1`),
+      ]);
+      await client.query("COMMIT");
+      return {
+        // 缺省按模拟态处理（种子库/历史库均无标记时横幅常显，宁可多提示不可漏提示）
+        dataMode: (prof.rows[0]?.data_mode ?? "simulated") as "simulated" | "real",
+        llm: llmAssembly(),
+        workspace: { name: ws.rows[0]?.name ?? "", events, members, agents, memories },
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }),
+
+  /** 第①步：真实大模型「测试连接」（真实 round-trip；不落盘、不留痕 key） */
+  testLlm: writeProcedure
+    .input(z.object({
+      baseUrl: z.string().url().min(1),
+      apiKey: z.string().max(200).default(""),
+      model: z.string().min(1).max(80),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const r = await probeLlm(input);
+        return { ok: true as const, ...r };
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
+    }),
+
+  /** 第①步保存：真实试调通过 → 写 .env 四变量 + 即时生效 + 事件留痕（key 只记掩码；provider=mock 为还原操作，免实测） */
+  saveLlmConfig: writeProcedure
+    .input(z.object({
+      provider: z.string().min(1).max(40),
+      baseUrl: z.string().max(200).default(""),
+      apiKey: z.string().max(200).default(""),
+      model: z.string().max(80).default(""),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      if (input.provider !== "mock") {
+        if (!z.string().url().safeParse(input.baseUrl).success || !input.model) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "真实模型装配需要合法的 baseUrl 与 model" });
+        }
+        try {
+          await probeLlm({ baseUrl: input.baseUrl, apiKey: input.apiKey, model: input.model }); // 真实试调不过 → 拒绝保存（不落半残配置）
+        } catch (err) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `模型实测未通过，未保存：${err instanceof Error ? err.message : err}` });
+        }
+      }
+      persistLlmEnv(input);
+      await gatewayAppend(getGatewayPool(), {
+        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
+      }, {
+        who: { type: "human", id: ctx.identity.memberNo },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "workspace", id: scope.workspaceId },
+        decision: {
+          action: "onboarding.llm_configured",
+          params: {
+            provider: input.provider, base_url: input.baseUrl, model: input.model,
+            key_mask: input.apiKey ? `***${input.apiKey.slice(-4)}` : "(免 key 网关)",
+          },
+          after: { real: input.provider !== "mock" },
+          basis: ["落地向导：真实大模型装配（实测通过后写回 .env 四变量，全链即时生效）"],
+        },
+        rule_impact: [],
+        model_trace: { model_id: "human-operator", tier: "standard" },
+      });
+      return { ok: true, real: input.provider !== "mock" };
+    }),
+
+  /** 第②步：经营主体信息（工作区名 + 行业 + 简介 → 档案；事件留痕） */
+  setupWorkspace: writeProcedure
+    .input(z.object({
+      displayName: z.string().min(1).max(60),
+      industry: z.string().min(1).max(40),
+      note: z.string().max(300).default(""),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      const app = getAppPool();
+      const client = await app.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        await client.query(`UPDATE workspaces SET name=$2, industry=$3 WHERE id=$1`, [scope.workspaceId, input.displayName, input.industry]);
+        await client.query(
+          `UPDATE profiles SET archive = jsonb_set(archive, '{business}', $2::jsonb), industry=$3, updated_at=now() WHERE workspace_id=$1`,
+          [scope.workspaceId, JSON.stringify({ name: input.displayName, note: input.note, onboarded_at: new Date().toISOString() }), input.industry],
+        );
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        client.release();
+      }
+      await gatewayAppend(getGatewayPool(), {
+        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
+      }, {
+        who: { type: "human", id: ctx.identity.memberNo },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "workspace", id: scope.workspaceId },
+        decision: {
+          action: "onboarding.workspace_profile",
+          params: { name: input.displayName, industry: input.industry, note: input.note },
+          after: {},
+          basis: ["落地向导：经营主体信息写入一店一档（archive.business）"],
+        },
+        rule_impact: [],
+        model_trace: { model_id: "human-operator", tier: "standard" },
+      });
+      return { ok: true };
+    }),
+
+  /** 第③步：启用真实模式（dataMode simulated→real；横幅熄灭；事件留痕。模拟期事件保留为「演示期」历史，可经 reset.sh 整库重建清空） */
+  activateRealMode: writeProcedure.mutation(async ({ ctx }) => {
+    const scope = scopeOf(ctx.identity);
+    const app = getAppPool();
+    const client = await app.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+      await client.query(
+        `UPDATE profiles SET archive = jsonb_set(archive, '{dataMode}', '"real"'::jsonb), updated_at=now() WHERE workspace_id=$1`,
+        [scope.workspaceId],
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+    await gatewayAppend(getGatewayPool(), {
+      ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
+    }, {
+      who: { type: "human", id: ctx.identity.memberNo },
+      context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+      object: { type: "workspace", id: scope.workspaceId },
+      decision: {
+        action: "onboarding.real_mode_activated",
+        params: { from: "simulated", to: "real" },
+        after: { dataMode: "real" },
+        basis: ["落地向导收官：切换真实经营模式，模拟数据横幅熄灭；此后经营动作即真实数据"],
+      },
+      rule_impact: [],
+      model_trace: { model_id: "human-operator", tier: "standard" },
+    });
+    return { ok: true, dataMode: "real" as const };
   }),
 });
 
@@ -2006,6 +2250,7 @@ const captainRouter = router({
 
 export const appRouter = router({
   system: systemRouter,
+  onboarding: onboardingRouter,
   auth: authRouter,
   members: membersRouter,
   threads: threadsRouter,

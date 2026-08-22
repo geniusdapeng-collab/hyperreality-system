@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { SimBanner } from "../../components/SimBanner";
 
 /* ================= 类型 ================= */
 interface Satellite { id: string; presetKey: string; name: string; grade: string }
@@ -251,6 +252,9 @@ export default function P0() {
         <a href="/p1" className="rounded border border-line px-2 py-0.5 text-[11px] text-ink2 no-underline hover:border-gline">工作台</a>
         <a href="/p21" className="rounded border border-gline px-2 py-0.5 text-[11px] text-gold no-underline">董事长视图</a>
       </header>
+
+      {/* 模拟数据横幅（D24：引导落地向导接入真实数据与真实大模型） */}
+      <SimBanner />
 
       {/* 舞台 */}
       <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4">

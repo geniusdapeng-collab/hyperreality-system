@@ -133,6 +133,42 @@ async function gatherFacts(app: pg.Pool, scope: Scope, question: string): Promis
   return (customFactProvider ?? defaultAskFactProvider)(app, scope, question);
 }
 
+/**
+ * 联网实时检索事实面（ASK_WEB_SEARCH=1 开启）：Bing 公开 RSS（keyless、零依赖、实时网页结果）。
+ * 失败静默降级（不阻塞问询；检索源标注，供 model_trace 溯源）。
+ */
+export async function webSearchFacts(question: string): Promise<AskFactResult> {
+  const facts: AskFact[] = [];
+  const sources: string[] = [];
+  try {
+    const q = encodeURIComponent(question.slice(0, 60));
+    const res = await fetch(`https://www.bing.com/search?q=${q}&format=rss&count=5`, {
+      signal: AbortSignal.timeout(5_000),
+      headers: { "user-agent": "WorkLoom/1.0 (+ask-web-facts)" },
+      redirect: "follow",
+    });
+    if (!res.ok) return { facts, sources };
+    const xml = await res.text();
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 3);
+    for (const m of items) {
+      const pick = (tag: string) => {
+        const mm = m[1]!.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
+        return (mm?.[1] ?? "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, "").trim();
+      };
+      const title = pick("title");
+      const desc = pick("description");
+      const link = pick("link");
+      if (title && desc) {
+        facts.push({ label: `联网检索 · ${title.slice(0, 40)}`, value: desc.slice(0, 160) });
+        sources.push(`bing:${link.slice(0, 80)}`);
+      }
+    }
+  } catch {
+    /* 网络异常 → 无联网事实，静默降级 */
+  }
+  return { facts, sources };
+}
+
 /** mock 口径的确定性合成（数字全真，文案模板） */
 function composeAnswer(question: string, facts: AskFact[]): string {
   const lines = facts.map((f) => `· ${f.label}：${f.value}`);
@@ -153,6 +189,12 @@ export async function runAsk(
   input: { threadId: string; goal: string; presetKey: string; llmCall?: (prompt: string) => Promise<string> },
 ): Promise<AskResult> {
   const { facts, sources } = await gatherFacts(app, scope, input.goal);
+  // 联网实时检索（ASK_WEB_SEARCH=1）：与库内事实合并，供模型合成
+  if ((process.env.ASK_WEB_SEARCH ?? "") === "1") {
+    const web = await webSearchFacts(input.goal);
+    facts.push(...web.facts);
+    sources.push(...web.sources);
+  }
 
   let answer: string;
   let via: "llm" | "rule" = "rule";
