@@ -260,8 +260,8 @@ async function main() {
   }
   console.log(`✓ 数码员工 ×${presets.length}（制作班组 21 + 经营班组 4）`);
 
-  // 一企一档
-  const archive = studioArchive();
+  // 一企一档（dataMode=simulated：D24 落地向导横幅事实源——种子库即「全模拟运行态」，向导启用真实模式后翻转）
+  const archive = { ...studioArchive(), dataMode: "simulated" };
   await q(
     `INSERT INTO profiles (workspace_id, tenant_id, industry, archive, forbidden, pii_vault)
      VALUES ($1,$2,'ai-video',$3,$4,NULL)

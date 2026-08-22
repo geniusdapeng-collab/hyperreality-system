@@ -39,7 +39,7 @@ export default function Onboarding() {
 
   // 步骤③表单
   const [bizName, setBizName] = useState("");
-  const [industry, setIndustry] = useState("酒店民宿");
+  const [industry, setIndustry] = useState("AI 视频内容制作");
   const [note, setNote] = useState("");
   const [bizDone, setBizDone] = useState(false);
 
