@@ -1,6 +1,6 @@
 <div align="center">
 
-# 视频经理 · VideoManager
+# HyperReality · AI视频制作智能经营系统
 
 **AI视频制作智能经营系统 —— 人与 AI 协作的视频内容经营 Workspace**
 

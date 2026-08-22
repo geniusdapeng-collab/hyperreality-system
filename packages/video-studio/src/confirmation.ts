@@ -1,8 +1,8 @@
 /**
  * confirmation.ts —— 确认门桥：把 vendor 的 7 个人工确认门挂到宿主审批实现
  *
- * vendor/supermickey/scripts/confirmation-waiter.js 已打「videomanager 融合桥」补丁：
- * 运行期读取 globalThis.__VM_CONFIRMATION_HANDLER__，存在即改走宿主处理器。
+ * vendor/supermickey/scripts/confirmation-waiter.js 已打「hyperreality 融合桥」补丁：
+ * 运行期读取 globalThis.__HR_CONFIRMATION_HANDLER__，存在即改走宿主处理器。
  * 本模块提供类型安全的注入/摘除方法。
  */
 
@@ -12,15 +12,15 @@ export type ConfirmationHandler = (req: GateRequest) => Promise<GateVerdict>;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __VM_CONFIRMATION_HANDLER__: ConfirmationHandler | undefined;
+  var __HR_CONFIRMATION_HANDLER__: ConfirmationHandler | undefined;
 }
 
 /** 注入审批处理器（返回摘除函数，便于一个项目运行结束后清理） */
 export function installConfirmationHandler(handler: ConfirmationHandler): () => void {
-  globalThis.__VM_CONFIRMATION_HANDLER__ = handler;
+  globalThis.__HR_CONFIRMATION_HANDLER__ = handler;
   return () => {
-    if (globalThis.__VM_CONFIRMATION_HANDLER__ === handler) {
-      delete globalThis.__VM_CONFIRMATION_HANDLER__;
+    if (globalThis.__HR_CONFIRMATION_HANDLER__ === handler) {
+      delete globalThis.__HR_CONFIRMATION_HANDLER__;
     }
   };
 }

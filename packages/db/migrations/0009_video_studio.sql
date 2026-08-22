@@ -1,5 +1,5 @@
 -- ============================================================================
--- VideoManager · 0009_video_studio.sql
+-- HyperReality · 0009_video_studio.sql
 -- 视频工作室数据模型扩展（docs/fusion-design.md §5）：asset-cms / publish-rpa /
 -- social-listening 三个新增底座包的落库表。
 -- 口径：全部带 workspace_id + RLS 行级隔离（模仿 0001；越权返回空 L7.1）；

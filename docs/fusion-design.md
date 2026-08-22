@@ -1,4 +1,4 @@
-# 视频经理（VideoManager）· 融合设计
+# 视频经理（HyperReality）· 融合设计
 
 > SuperMickey 制作能力 × WorkLoom 人机协作底座 = AI视频制作智能经营系统
 > 依据：`docs/supermickey-decomposition-map.md`（拆解台账）｜状态：已确认决策 v1.1
@@ -7,7 +7,7 @@
 
 | 项 | 决策 |
 |---|---|
-| 仓库 | `videomanager`（中文名「视频经理」），私有，建在 geniusdapeng-collab 下 |
+| 仓库 | `hyperreality`（中文名「视频经理」），私有，建在 geniusdapeng-collab 下 |
 | 复刻 | 保留 workloom-im 完整 git 历史 |
 | 渲染 | 产出**渲染脚本**入 CMS「脚本管理」模块：版本管理 + 工作台 MD 展示 + 本地编辑；支持批量自动提交 Seedance / 手动点击渲染 / 全自动化任务（渲染→发布→监控连锁） |
 | 发布 | **全平台电脑模拟人工上传（RPA）**：抖音 / TikTok / 小红书 / 视频号 / B站 / YouTube |

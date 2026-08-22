@@ -4,7 +4,7 @@
  * 职责：
  *  1. 内存 run 注册表（runId → 运行投影），studio.start 异步启动不阻塞 tRPC 响应
  *  2. onApproval：确认门 → gatewayAppendOnClient 落门动作事件 + INSERT approvals（pending）
- *     → 轮询审批状态（VM_APPROVAL_POLL_MS / VM_APPROVAL_TIMEOUT_MS）→ 映射 GateVerdict
+ *     → 轮询审批状态（HR_APPROVAL_POLL_MS / HR_APPROVAL_TIMEOUT_MS）→ 映射 GateVerdict
  *  3. onEvent：pipeline.* 生命周期事件经 gatewayAppend 落五元事件库
  *  4. LLM engine：WorkloomLLMEngine.fromEnv()；为 null 拒绝启动（禁止静默降级，vendor 纪律）
  *
@@ -25,20 +25,20 @@ import {
   type GateKey,
   type GateVerdict,
   type RunInput,
-} from "@videomanager/video-studio";
+} from "@hyperreality/video-studio";
 
 /* ================= 可配项（环境变量） ================= */
 
 /** 审批等待上限（默认 2 小时；超时 → { approved:false, fatal:'timeout' }） */
-const APPROVAL_TIMEOUT_MS = Number(process.env.VM_APPROVAL_TIMEOUT_MS ?? 7_200_000);
+const APPROVAL_TIMEOUT_MS = Number(process.env.HR_APPROVAL_TIMEOUT_MS ?? 7_200_000);
 /** 审批状态轮询间隔（默认 2s） */
-const APPROVAL_POLL_MS = Number(process.env.VM_APPROVAL_POLL_MS ?? 2_000);
+const APPROVAL_POLL_MS = Number(process.env.HR_APPROVAL_POLL_MS ?? 2_000);
 /** 流水线总截止（透传 vendor STORMAXE_TOTAL_DEADLINE_MS 口径，默认 1 小时） */
 const TOTAL_DEADLINE_MS = Number(process.env.VM_TOTAL_DEADLINE_MS ?? 3_600_000);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 /** 运行产物根（checkpoints/characters/confirmations）：默认仓库根 .vm-work/ */
-const WORK_DIR = process.env.VM_WORK_DIR ?? path.resolve(here, "../../../..", ".vm-work");
+const WORK_DIR = process.env.HR_WORK_DIR ?? path.resolve(here, "../../../..", ".vm-work");
 
 /** 工作器系统身份（事件归因；网关段① human/system 无额外校验） */
 const WORKER_ACTOR = { id: "video-studio", type: "system" } as const;

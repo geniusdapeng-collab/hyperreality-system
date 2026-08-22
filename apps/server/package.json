@@ -17,7 +17,7 @@
   "dependencies": {
     "@hono/node-server": "2.1.1",
     "@trpc/server": "11.18.0",
-    "@videomanager/video-studio": "workspace:*",
+    "@hyperreality/video-studio": "workspace:*",
     "@workloom/base": "workspace:*",
     "@workloom/db": "workspace:*",
     "@workloom/runtime": "workspace:*",

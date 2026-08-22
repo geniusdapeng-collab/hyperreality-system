@@ -19,11 +19,11 @@ describe("确认门桥", () => {
   it("注入处理器后可被 vendor 桥读取，摘除后还原", async () => {
     const handler = autoApproveHandler();
     const uninstall = installConfirmationHandler(handler);
-    expect(globalThis.__VM_CONFIRMATION_HANDLER__).toBe(handler);
+    expect(globalThis.__HR_CONFIRMATION_HANDLER__).toBe(handler);
     const verdict = await handler({ type: "prd", content: "# PRD", runId: "r1" });
     expect(verdict.approved).toBe(true);
     uninstall();
-    expect(globalThis.__VM_CONFIRMATION_HANDLER__).toBeUndefined();
+    expect(globalThis.__HR_CONFIRMATION_HANDLER__).toBeUndefined();
   });
 });
 

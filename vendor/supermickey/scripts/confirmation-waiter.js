@@ -49,16 +49,16 @@ async function waitForExternalConfirmation(opts) {
   const shouldAbort = typeof opts.shouldAbort === 'function' ? opts.shouldAbort : () => false;
   const log = typeof opts.log === 'function' ? opts.log : (...a) => console.log(...a);
 
-  // ── 【videomanager 融合桥】────────────────────────────────────────────
-  // 当宿主（packages/video-studio）通过 globalThis.__VM_CONFIRMATION_HANDLER__
+  // ── 【hyperreality 融合桥】────────────────────────────────────────────
+  // 当宿主（packages/video-studio）通过 globalThis.__HR_CONFIRMATION_HANDLER__
   // 注入审批处理器时，确认门改走 WorkLoom review-console 审批原生消息：
   // 处理器签名 async ({ type, content, runId, shouldAbort }) =>
   //   { approved: boolean, reason?: string, suggestions?: string[] }
   // 未注入时保持原始文件轮询行为不变（vendor 可独立运行）。
-  const vmHandler = globalThis.__VM_CONFIRMATION_HANDLER__;
+  const vmHandler = globalThis.__HR_CONFIRMATION_HANDLER__;
   if (typeof vmHandler === 'function') {
     const startedAt = Date.now();
-    log(`[videomanager] 确认门「${type}」已转交 IM 审批卡（run_id=${runId || 'n/a'}）`);
+    log(`[hyperreality] 确认门「${type}」已转交 IM 审批卡（run_id=${runId || 'n/a'}）`);
     const result = await vmHandler({ type, content, runId, shouldAbort });
     return {
       approved: result && result.approved === true,
@@ -68,7 +68,7 @@ async function waitForExternalConfirmation(opts) {
       ...(result && result.fatal ? { fatal: result.fatal } : {})
     };
   }
-  // ── 【videomanager 融合桥 完】────────────────────────────────────────
+  // ── 【hyperreality 融合桥 完】────────────────────────────────────────
 
   // 【DXB-fix】onPoll 必须由 opts 解构，否则轮询循环引用裸变量抛 ReferenceError，
   // 导致确认门崩溃、流程绕过人工确认、上游创意主题字段断流（全 undefined）
