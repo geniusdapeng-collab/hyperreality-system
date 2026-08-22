@@ -36,6 +36,7 @@ import {
   loadCharter, parseCharter, transition, defaultCharter,
   runBriefingBeat, runQueueBeat, runDeviationBeat, runBreakerBeat, buildScorecard,
   runOutcomeReviewBeat, runHrReviewBeat, runBoardPackBeat, runOrgScanBeat, applyReplacement,
+  buildFloor,
   type CeoTransition,
 } from "@workloom/base/captain";
 import {
@@ -2221,8 +2222,16 @@ const captainRouter = router({
          FROM biz_events WHERE workspace_id=$1 ORDER BY seq DESC LIMIT 14`,
         [scope.workspaceId],
       );
+      const ind = await client.query<{ industry: string | null }>(
+        `SELECT industry FROM profiles WHERE workspace_id=$1`, [scope.workspaceId],
+      );
       await client.query("COMMIT");
       const gradeMap = Object.fromEntries(grades.rows.map((g) => [g.agent_id, g.grade]));
+      // D25 数字职场：行业场景包 + 员工状态派生（独立聚合，故障不阻塞剧场主数据）
+      let floor: unknown = null;
+      try {
+        floor = await buildFloor(getAppPool(), scope, ind.rows[0]?.industry ?? null);
+      } catch { floor = null; }
       return {
         mode: charter.mode,
         ceoName: charter.identity.name,
@@ -2232,6 +2241,7 @@ const captainRouter = router({
           : null,
         satellites: agents.rows.map((a) => ({ id: a.id, presetKey: a.preset_key, name: a.name, grade: gradeMap[a.id] ?? "正常" })),
         ticker: events.rows,
+        floor,
       };
     } catch (err) {
       await client.query("ROLLBACK").catch(() => undefined);

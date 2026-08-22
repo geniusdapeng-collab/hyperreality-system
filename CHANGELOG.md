@@ -2,6 +2,19 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [1.9.2] - 2026-08-23 · 数字职场（D25-α）：等距 2.5D 办公区
+
+### 新增
+
+- **数字职场视图（P0 双视图，默认职场）**：等距 2.5D 办公区 Canvas 渲染（零素材程序化绘制）——员工五态实时动画：working=工位打字（屏幕字符滚动）/ blocked=遇阻踱步+「!」气泡 / asking=**走到 CEO 指挥台举手+聚光灯，点开原地三手势（批准/驳回后走回工位）** / celebrating=跳跃+彩带粒子 / idle=休息角待命；disabled 工位清空名牌变灰。顶栏 [职场|舞台] 切换（localStorage 记忆），舞台=保留 D23 全息卫星群（升旗仪式），职场=日常巡逻。
+- **`packages/base/captain/floor`**：员工状态派生（全部只读 SQL 实时派生，动作即数据；优先级 asking>blocked>celebrating>working>idle）+ 场景包体系（声明式 JSON：地板/工位锚点/道具/CEO 指挥台/休息角/入口/主题色；`registerFloorSceneProvider()` 行业挂钩 + `bundles/<industry>/floor-scene.json` 磁盘约定 + 通用办公室兜底）。
+- **行业场景包**：`bundles/hotel/floor-scene.json`（酒店前厅：前台柜台/房态看板/行李车/大堂吧）；片场包随 hyper 仓推广落地。
+- **theater 端点扩展** `floor` 段（场景+员工态一次给齐；独立聚合故障不阻塞剧场主数据；行业值读取并入 RLS 事务，修复无 GUC 直查恒空）。
+
+### 门禁验证
+
+- ✅ suite 436/436（新增 V 域 8 条：场景兜底/注册优先/五态派生逐态/优先级/工位映射不越界，专属探针员工隔离近窗污染）· demo 44/44 · typecheck 全绿 · verify-chain 一致 · 浏览器实拍：职场五态同框 + 请示举手→原地批准→走回工位完整闭环
+
 ## [1.9.1] - 2026-08-22 · 落地向导（D24）：模拟运行态 → 真实经营
 
 ### 新增
