@@ -1,0 +1,29 @@
+{
+  "id": "studio-set",
+  "name": "HyperReality · 片场",
+  "theme": { "floorA": "#26262e", "floorB": "#16161c", "wall": "#3a3a48", "accent": "#e8a2ff", "night": false },
+  "grid": { "w": 8, "h": 8 },
+  "stations": [
+    { "id": "st-1", "x": 1.5, "y": 2.2, "kind": "desk" },
+    { "id": "st-2", "x": 3.0, "y": 1.8, "kind": "desk" },
+    { "id": "st-3", "x": 5.8, "y": 2.4, "kind": "monitor" },
+    { "id": "st-4", "x": 6.4, "y": 3.6, "kind": "monitor" },
+    { "id": "st-5", "x": 2.0, "y": 4.4, "kind": "desk" },
+    { "id": "st-6", "x": 4.6, "y": 4.6, "kind": "desk" },
+    { "id": "st-7", "x": 6.2, "y": 5.4, "kind": "bench" },
+    { "id": "st-8", "x": 3.2, "y": 5.8, "kind": "desk" }
+  ],
+  "props": [
+    { "kind": "greenscreen", "x": 4.0, "y": 0.9, "label": "绿幕" },
+    { "kind": "camera", "x": 3.2, "y": 2.0, "label": "摄影机" },
+    { "kind": "light", "x": 2.2, "y": 1.2 },
+    { "kind": "light", "x": 5.2, "y": 1.4 },
+    { "kind": "clapper", "x": 6.8, "y": 1.0, "label": "场记板" },
+    { "kind": "plant", "x": 0.8, "y": 6.8 },
+    { "kind": "sofa", "x": 1.5, "y": 6.2, "label": "审片室" },
+    { "kind": "coffee", "x": 2.5, "y": 6.6 }
+  ],
+  "ceoDesk": { "x": 4.2, "y": 0.5 },
+  "lounge": { "x": 1.7, "y": 6.3 },
+  "entrance": { "x": 7.4, "y": 7.2 }
+}
