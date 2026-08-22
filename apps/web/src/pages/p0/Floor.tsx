@@ -57,15 +57,19 @@ export function FloorView({
   const floorRef = useRef(floor);
   floorRef.current = floor;
 
-  /* 目标点位计算 */
+  /* 目标点位计算（同工位多名员工按 id hash 微偏移站位；无工位溢出者才去休息角） */
   const targetOf = (a: FloorAgent, scene: FloorScene): { x: number; y: number } => {
     const st = scene.stations.find((s) => s.id === a.stationId);
+    const jx = ((hash(a.id) % 5) - 2) * 0.16, jy = ((hash(a.id) % 3) - 1) * 0.18;
     switch (a.state) {
-      case "asking": return { x: scene.ceoDesk.x + 0.1, y: scene.ceoDesk.y + 1.1 };
-      case "blocked": return st ? { x: st.x, y: st.y + 0.7 } : { x: scene.grid.w / 2, y: scene.grid.h / 2 };
-      case "idle": return { x: scene.lounge.x + (hash(a.id) % 10) / 14 - 0.35, y: scene.lounge.y + (hash(a.id) % 6) / 12 - 0.25 };
+      case "asking": return { x: scene.ceoDesk.x + 0.1 + jx, y: scene.ceoDesk.y + 1.1 + jy };
+      case "blocked": return st ? { x: st.x + jx, y: st.y + 0.7 + jy } : { x: scene.grid.w / 2, y: scene.grid.h / 2 };
+      case "idle":
+        return st
+          ? { x: st.x + jx * 1.4, y: st.y + 0.55 + jy }
+          : { x: scene.lounge.x + (hash(a.id) % 10) / 14 - 0.35, y: scene.lounge.y + (hash(a.id) % 6) / 12 - 0.25 };
       case "disabled": return { x: scene.entrance.x, y: scene.entrance.y };
-      default: return st ? { x: st.x, y: st.y } : { x: scene.lounge.x, y: scene.lounge.y };
+      default: return st ? { x: st.x + jx, y: st.y + jy * 0.5 } : { x: scene.lounge.x + jx * 2, y: scene.lounge.y + jy * 2 };
     }
   };
 

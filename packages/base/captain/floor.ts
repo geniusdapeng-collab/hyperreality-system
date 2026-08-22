@@ -192,11 +192,11 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
     const celebSet = new Set(celebrating.map((r) => r.actor));
     const lastBy = new Map(lastActions.map((r) => [r.actor, r.action]));
 
-    // 工位分配：按 preset 顺序映射场景 stations（超出部分进休息角）
+    // 工位分配：按 preset 顺序循环映射场景 stations（人数超工位时共站，前端按 id 微偏移站位）
     const usable = scene.stations;
     const out: FloorAgent[] = [];
     agents.forEach((a, i) => {
-      const station = i < usable.length ? usable[i]! : null;
+      const station = usable.length ? usable[i % usable.length]! : null;
       const last = lastBy.get(a.preset_key) ?? "";
       if (a.status === "disabled") {
         out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "disabled", stationId: null, currentThread: null, pendingTier: null, approvalId: null, statusLine: "已离任" });
