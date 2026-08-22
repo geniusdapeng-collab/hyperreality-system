@@ -17,7 +17,11 @@
     "./wizard": "./wizard/index.ts",
     "./asset-cms": "./asset-cms/index.ts",
     "./publish-rpa": "./publish-rpa/index.ts",
-    "./social-listening": "./social-listening/index.ts"
+    "./social-listening": "./social-listening/index.ts",
+    "./captain": {
+      "types": "./captain/index.ts",
+      "default": "./captain/index.ts"
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

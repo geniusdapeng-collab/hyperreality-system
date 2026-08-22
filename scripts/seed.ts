@@ -171,6 +171,26 @@ function loadSkills(): SkillDoc[] {
 function yunqiArchive(): Record<string, unknown> {
   return {
     property: { name: WS_NAME, city: "杭州", rooms: 86, star: "四钻" },
+    // 数字CEO 宪章（D21，演示：董事长已完成深度授权 → 试用期第 2 天）
+    charter: {
+      version: 1,
+      mode: "trial",
+      identity: { name: "公司CEO", persona: "稳健经营型" },
+      autonomy: { price_band: [0.85, 1.15], procurement_cap: 5000, campaign_cap: 2000 },
+      escalate: ["修改保底价/安全禁区相关", "单月累计让利超上限", "围栏规则放宽（任何放宽）", "新渠道/新平台上线", "对外公开承诺（赔偿/免费/声明）", "宪章变更"],
+      briefing: { daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" },
+      circuit_breaker: { window_days: 14, kpi_floor: { occ: 0.7 }, tightened: false },
+      grant: {
+        event_id: "E-GRANT-DEMO01", granted_by: "MEM-001",
+        granted_at: new Date(Date.now() - 9 * 86400e3).toISOString(),
+        disclosure_version: "risk-v1",
+        clauses: ["自主调价", "自主采购", "自主对外回复", "试用降档规则", "AI 非法律责任主体·授权人承担经营决策责任"],
+        shadow_days: 3, trial_days: 7,
+        trial_ends_at: new Date(Date.now() + 5 * 86400e3).toISOString(),
+        retain_until: null,
+      },
+      updated_at: new Date().toISOString(),
+    },
     brand_guideline: {
       tone: "真诚克制，不夸大、不承诺档案外补偿",
       banned_words: ["最低价全网保证", "百分百满意"],
@@ -608,6 +628,11 @@ async function main(): Promise<void> {
   const triggers = [
     { id: "tg-inspection-0700", name: "每日 07:00 只读巡检", kind: "cron", schedule: "0 7 * * *", action: { dispatch: "inspection-agent", template: "inspection.daily" } },
     { id: "tg-night-2200", name: "夜班 22:00 战队出征", kind: "cron", schedule: "0 22 * * *", action: { dispatch: "night-shift", template: "night.run.start" } },
+    // 数字CEO 节拍（D21：CEO Loop；调度器消费前经治理守卫校验 charter.mode）
+    { id: "tg-ceo-brief-0830", name: "公司CEO 晨报 08:30", kind: "cron", schedule: "30 8 * * *", action: { beat: "daily" } },
+    { id: "tg-ceo-queue-2h", name: "公司CEO 裁决巡检 2h", kind: "cron", schedule: "7 */2 * * *", action: { beat: "queue" } },
+    { id: "tg-ceo-deviation", name: "公司CEO 目标偏差扫描", kind: "cron", schedule: "15 */4 * * *", action: { beat: "deviation" } },
+    { id: "tg-ceo-breaker", name: "公司CEO 自治熔断巡检", kind: "cron", schedule: "45 23 * * *", action: { beat: "breaker" } },
   ];
   for (const t of triggers) {
     await q(
@@ -616,7 +641,7 @@ async function main(): Promise<void> {
       [t.id, WS_ID, t.name, t.kind, t.schedule, JSON.stringify(t.action)],
     );
   }
-  console.log("✓ 触发器 ×2（巡检 07:00 / 夜班 22:00）");
+  console.log("✓ 触发器 ×6（巡检/夜班 + 公司CEO 节拍 ×4）");
 
   // 演示线程（P1/P2 有数据可投影）
   const threads = [

@@ -38,6 +38,7 @@ async function inTx<T>(
 import type { BusinessEvent } from "@workloom/shared";
 import { executeTool } from "./tools.js";
 import { assemblePreset, type AssembledPreset } from "./assembly.js";
+import { loadCharter, routeTier, type ApprovalTier } from "@workloom/base/captain";
 
 /* ================= 计划（任务规格） ================= */
 
@@ -350,12 +351,20 @@ export async function runQuest(
           rule_impact: verdict.impacts,
         });
         const aprId = `apr-${ev.eventId.toLowerCase()}`;
+        // D21 五级审批路由：按宪章裁定 tier（L2 公司CEO / L3 集团CEO / L4 董事长）
+        const charter = await loadCharter(app, scope);
+        const tier: ApprovalTier = routeTier(charter, {
+          action: step.action, params: step.params,
+          priceCtx: { afterPrice: Number(step.params.price ?? NaN) || undefined, basePrice: Number((step.before as Record<string, unknown> | undefined)?.price ?? NaN) || undefined },
+          amountCtx: { amount: Number(step.params.amount ?? NaN) || undefined },
+        });
         await c.query(
-          `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot)
-           VALUES ($1,$2,$3,$4,'inapp','pending',$5)
+          `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+           VALUES ($1,$2,$3,$4,'inapp','pending',$5,$6)
            ON CONFLICT (event_id, channel) DO NOTHING`,
           [aprId, scope.tenantId, scope.workspaceId, ev.eventId,
-            JSON.stringify({ before: null, after: step.params, expires_at: new Date(Date.now() + 24 * 3600e3).toISOString() })],
+            JSON.stringify({ before: step.before ?? null, after: step.params, action: step.action, params: step.params, expires_at: new Date(Date.now() + 24 * 3600e3).toISOString() }),
+            tier],
         );
         await c.query(
           `UPDATE threads SET status='pending_review', updated_at=now() WHERE id=$1 AND workspace_id=$2`,

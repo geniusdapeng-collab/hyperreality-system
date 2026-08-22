@@ -355,3 +355,11 @@ npm 最新 rc.7（latest）/ rc.8（next），与锁定 rc.8 一致——**无�
 - **变更面实测 diff（rc.8→rc.1）**：CLI 聚合包 `lib/*.js` 与 config/presets 字节一致；README 仅链接修正；变更集中在全家桶子包统一 bump（语义化小版本线）。
 - **动作**：vendor/dsh 换基线 rc.1（integrity `sha512-HVauMT0F…DcZz0w==` 与 registry 逐字符一致 ✅）；dsh-gate pin 0.1.1-rc.1 + 独立 lock 更新 + node-pty 重建；README 中英版本引用同步。
 - **门禁实测**（在酒店版主线同变更实测）：E6 dsh-gate 全绿（用例一全链 37 条验链 ✅ + H-5 kill -9 崩溃重放零重复 ✅）；typecheck 6/6 · base 174/174 · runtime 12/12。
+
+
+## 数字CEO 内核实施登记（2026-08-22，D21）
+
+- 新增 packages/base/captain（charter/router/briefing/loop/scorecard，~900 行）+ 0009 迁移（approvals+tier）+ server captainRouter（state/grant/transit/runBeat/briefings/scorecard）+ P21 董事长视图 + 种子宪章（试用态）与 4 节拍触发器。
+- 套件 392→405（R 域 13 条：状态机/路由/降档/依据链/晨报/裁决/守卫/影子/熔断/到期 + 3 条 E2E）。
+- 实测：浏览器 P21 渲染+节拍交互 ✓；裁决保守上浮语义 ✓（无判据 8 件全上浮 L4）。
+- 门禁：typecheck 6/6 · base 188/188 · runtime 15/15 · suite 405/405 · demo 43/43 · verify-chain 一致。

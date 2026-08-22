@@ -19,6 +19,7 @@ import {
   upsertMemory, searchMemories, getMemorySources, transitionMemory, recordMemoryUsage, MockEmbedder,
 } from "@workloom/base/workdata";
 import { judge, evalCondition, type RuntimeRule } from "@workloom/base/fence-engine";
+import { parseCharter, transition, routeTier, buildMemo, runBriefingBeat, runQueueBeat, runBreakerBeat, loadCharter, effectiveAutonomy } from "@workloom/base/captain";
 import {
   decide, batchApprove, listQueue, expireSweep, validateGesture, assertApproverRole, ApprovalError,
 } from "@workloom/base/review-console";
@@ -2300,6 +2301,181 @@ function defineE2E(): void {
     assert(tid, "建任务");
     const { data: g } = await api<{ result?: { data?: { id?: string; status?: string } } }>(`/trpc/threads.get?input=${encodeURIComponent(JSON.stringify({ threadId: tid }))}`, { token: tokenManager });
     eq(g.result?.data?.id, tid, "详情可查");
+  });
+}
+
+  /* R 域 E2E：数字CEO 端点 */
+  h2("captain.state 治理状态可读（宪章+分层+条款清单）", async () => {
+    const { data } = await api<{ result?: { data?: { charter?: { mode?: string }; requiredClauses?: string[] } } }>("/trpc/captain.state", { token: tokenOwner });
+    assert(data.result?.data?.charter?.mode, "宪章可读");
+    assert((data.result?.data?.requiredClauses ?? []).length === 5, "五条必确认条款");
+  });
+  h2("captain.grant 条款不全被拒（§12.2 逐项确认强制）", async () => {
+    const { data } = await api<{ error?: { data?: { httpStatus?: number } } }>("/trpc/captain.grant", {
+      method: "POST", token: tokenOwner,
+      body: { clauses: ["自主调价"], autonomy: { price_band: [0.85, 1.15], procurement_cap: 5000, campaign_cap: 2000 }, shadowDays: 3, trialDays: 7, identityConfirmed: true },
+    });
+    eq(data.error?.data?.httpStatus, 400, "缺条款 400");
+  });
+  h2("captain.runBeat 晨报节拍 + briefings/scorecard 可读", async () => {
+    const { data } = await api<{ result?: { data?: { eventId?: string; via?: string } } }>("/trpc/captain.runBeat", { method: "POST", token: tokenOwner, body: { beat: "daily" } });
+    assert(data.result?.data?.eventId, "晨报事件落库");
+    const { data: bl } = await api<{ result?: { data?: unknown[] } }>("/trpc/captain.briefings?input=" + encodeURIComponent(JSON.stringify({ limit: 3 })), { token: tokenOwner });
+    assert((bl.result?.data ?? []).length >= 1, "简报列表非空");
+    const { data: sc } = await api<{ result?: { data?: { decisions?: number; briefings?: number } } }>("/trpc/captain.scorecard", { token: tokenOwner });
+    assert(sc.result?.data && typeof sc.result.data.briefings === "number", "成绩单可读");
+  });
+
+
+/* ================= R 域 · 数字CEO（D21） ================= */
+{
+  const RC = C("R");
+  const getArchive = async () => (await qApp<{ archive: Record<string, unknown> }>(`SELECT archive FROM profiles WHERE workspace_id=$1`, [scope.workspaceId])).rows[0]!.archive;
+  const restoreArchive = async (arc: unknown) => qApp(`UPDATE profiles SET archive=$2::jsonb WHERE workspace_id=$1`, [scope.workspaceId, JSON.stringify(arc)]);
+  const setCharter = async (ch: unknown) => qApp(`UPDATE profiles SET archive=jsonb_set(archive,'{charter}',$2::jsonb) WHERE workspace_id=$1`, [scope.workspaceId, JSON.stringify(ch)]);
+  const countEvents = async (action: string) =>
+    Number((await qApp<{ n: string }>(`SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'=$2`, [scope.workspaceId, action])).rows[0]!.n);
+
+  RC("默认宪章 disabled（默认关闭铁律）", () => {
+    eq(parseCharter(undefined).mode, "disabled", "空档 disabled");
+    eq(parseCharter({ mode: "bogus" }).mode, "disabled", "脏档兜底 disabled");
+  });
+
+  RC("治理状态机全路径与非法迁移拒绝（§12.1）", () => {
+    let c = transition(parseCharter(undefined), { kind: "grant", grant: { event_id: "E-G", granted_by: "M", granted_at: new Date().toISOString(), disclosure_version: "risk-v1", clauses: ["a"], shadow_days: 3, trial_days: 7, trial_ends_at: null, retain_until: null } });
+    eq(c.mode, "shadow", "grant→shadow");
+    c = transition(c, { kind: "advance" });
+    eq(c.mode, "trial", "advance→trial");
+    c = transition(c, { kind: "expire" });
+    eq(c.mode, "suspended", "到期→suspended（不自动续期）");
+    c = transition(c, { kind: "keep_long" });
+    eq(c.mode, "active", "keep_long→active");
+    c = transition(c, { kind: "revoke" });
+    eq(c.mode, "suspended", "一键撤回→suspended");
+    let threw = false;
+    try { transition(parseCharter(undefined), { kind: "advance" }); } catch { threw = true; }
+    assert(threw, "未授权跳级被拒");
+  });
+
+  RC("五级审批路由（生产宪章实战）", async () => {
+    const ch = await loadCharter(app, scope);
+    eq(routeTier(ch, { action: "price.adjust", params: {}, priceCtx: { afterPrice: 480, basePrice: 458 } }), "l2_captain", "带内 L2");
+    eq(routeTier(ch, { action: "price.adjust", params: {}, priceCtx: { afterPrice: 600, basePrice: 458 } }), "l4_chairman", "带外 L4");
+    eq(routeTier(ch, { action: "fence.patch", params: {}, isFenceWiden: true }), "l4_chairman", "围栏放宽一律 L4");
+    eq(routeTier(ch, { action: "inventory.transfer", params: {}, crossWorkspace: true }), "l3_fleet", "跨区 L3");
+    // 种子为 trial：降档后采购上限 2500
+    const eff = effectiveAutonomy(ch);
+    eq(eff.procurement_cap, 2500, "试用降档生效（5000→2500）");
+  });
+
+  RC("依据链强制：空 basis 请示单拒生成（治理 §九.3）", () => {
+    let threw = false;
+    try { buildMemo({ title: "t", situation: "s", options: [], recommendation: "r", basis: [] }); } catch { threw = true; }
+    assert(threw, "空 basis 拒绝");
+  });
+
+  RC("晨报节拍：生成 ceo.briefing 事件（治理态可用）", async () => {
+    const arc = await getArchive();
+    try {
+      const before = await countEvents("ceo.briefing");
+      const r = await runBriefingBeat(app, scope, "daily");
+      assert(r.eventId, "简报事件落库");
+      eq(await countEvents("ceo.briefing"), before + 1, "事件 +1");
+      assert(["rule", "llm"].includes(r.via), "via 留痕");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("L2 裁决节拍：带内批准 / 贴边上浮 L4（公司CEO 自主闭环）", async () => {
+    const arc = await getArchive();
+    // 种子 pending 审批行状态备份（裁决节拍会消费全量 L2 队列，用例后恢复，不跨用例污染）
+    const seedPending = (await qApp<{ approval_id: string }>(`SELECT approval_id FROM approvals WHERE workspace_id=$1 AND status='pending'`, [scope.workspaceId])).rows.map((r) => r.approval_id);
+    try {
+      const mk = async (id: string, price: number) => qApp(
+        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
+        [id, scope.tenantId, scope.workspaceId, `E-${id}`, JSON.stringify({ action: "price.adjust", params: { price }, base_price: 458 })]);
+      await mk(`apr-r05a-${SFX}`, 480);
+      await mk(`apr-r05b-${SFX}`, 397); // 0.867 贴边
+      const r = await runQueueBeat(app, scope);
+      assert(r.decided >= 1 && r.escalated >= 1, `裁决 ${r.decided} 上浮 ${r.escalated}`);
+      const a = await qApp<{ status: string }>(`SELECT status FROM approvals WHERE approval_id=$1`, [`apr-r05a-${SFX}`]);
+      eq(a.rows[0]!.status, "approved", "带内批准");
+      const b = await qApp<{ tier: string }>(`SELECT tier FROM approvals WHERE approval_id=$1`, [`apr-r05b-${SFX}`]);
+      eq(b.rows[0]!.tier, "l4_chairman", "贴边上浮 L4");
+      assert((await countEvents("ceo.decision")) >= 2, "ceo.decision 留痕");
+    } finally {
+      await restoreArchive(arc);
+      // 恢复种子审批行（裁决副作用回滚）+ 清理本用例审批行
+      for (const id of seedPending) {
+        await qApp(
+          `UPDATE approvals SET status='pending', tier='l2_captain', gesture=NULL, decided_by=NULL, decided_at=NULL,
+             snapshot = snapshot - 'ceo_escalated' - 'ceo_rationale' WHERE approval_id=$1`,
+          [id],
+        );
+      }
+      await qApp(`DELETE FROM approvals WHERE approval_id IN ($1,$2)`, [`apr-r05a-${SFX}`, `apr-r05b-${SFX}`]);
+    }
+  });
+
+  RC("治理守卫：disabled 全静默（触发器消费前置校验）", async () => {
+    const arc = await getArchive();
+    try {
+      const ch = parseCharter(undefined); // disabled
+      await setCharter(ch);
+      const q = await runQueueBeat(app, scope);
+      assert(q.skipped?.includes("disabled"), "disabled 裁决静默");
+      const b = await runBriefingBeat(app, scope, "daily");
+      assert(b.skipped?.includes("disabled"), "disabled 简报静默");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("影子模式：完整推理但不落审批状态（dry_run 留痕）", async () => {
+    const arc = await getArchive();
+    try {
+      const ch = transition(parseCharter(undefined), { kind: "grant", grant: { event_id: "E-G2", granted_by: "M", granted_at: new Date().toISOString(), disclosure_version: "risk-v1", clauses: ["a"], shadow_days: 3, trial_days: 7, trial_ends_at: null, retain_until: null } });
+      await setCharter(ch);
+      await qApp(
+        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
+        [`apr-r08-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r08-${SFX}`, JSON.stringify({ action: "price.adjust", params: { price: 480 }, base_price: 458 })]);
+      await runQueueBeat(app, scope);
+      const st = await qApp<{ status: string }>(`SELECT status FROM approvals WHERE approval_id=$1`, [`apr-r08-${SFX}`]);
+      eq(st.rows[0]!.status, "pending", "影子期审批不落状态");
+      const dry = await qApp<{ n: string }>(`SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='ceo.decision' AND payload->'decision'->'params'->>'dry_run'='true'`, [scope.workspaceId]);
+      assert(Number(dry.rows[0]!.n) >= 1, "影子决策 dry_run 留痕");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("自治熔断：KPI 跌破下限 → 收紧一档 + 事件留痕", async () => {
+    const arc = await getArchive();
+    try {
+      await gatewayAppend(gw, { ...scope, actor: { id: "suite", type: "agent" }, sessionId: "suite-r09" }, {
+        who: { type: "agent", id: "suite" },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "store", id: "yunqi" },
+        decision: { action: "store.daily.summary", after: { occ: 0.62, adr: 480, revpar: 298 }, basis: ["R-09 熔断注入"] },
+        rule_impact: [], model_trace: { model_id: "suite", tier: "standard" },
+      });
+      const r = await runBreakerBeat(app, scope);
+      assert(r.tripped && r.tightened, "熔断触发并收紧");
+      const ch = await loadCharter(app, scope);
+      eq(ch.autonomy.procurement_cap, 2500, "上限收紧一档（5000→2500）");
+      assert((await countEvents("ceo.circuit_breaker")) >= 1, "熔断事件留痕");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("到期自动降级：trial 过期 → suspended + mode_change 事件", async () => {
+    const arc = await getArchive();
+    try {
+      const ch = await loadCharter(app, scope);
+      ch.grant!.trial_ends_at = new Date(Date.now() - 1000).toISOString();
+      await setCharter(ch);
+      const before = await countEvents("captain.mode_change");
+      await runBriefingBeat(app, scope, "daily");
+      const after = await loadCharter(app, scope);
+      eq(after.mode, "suspended", "到期降级仅汇报");
+      eq(await countEvents("captain.mode_change"), before + 1, "降级留痕");
+    } finally { await restoreArchive(arc); }
   });
 }
 
