@@ -10,7 +10,7 @@
  * 演示走查：?demo=p1_loading|p1_empty|p1_community 强制状态态（仅演示，数据接线不变）
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { Bridge } from "../../shell/Bridge";
 import {
@@ -41,14 +41,14 @@ interface ArchiveShape {
 }
 interface ProfileResp { archive: ArchiveShape; stage: string | null; name: string }
 
-/** 视频创作 6 快捷目标（行业 Bundle 预置：选题/脚本/评论/排期/合规/渲染） */
-const QUICK_GOALS = [
+/** 视频创作 6 快捷目标（行业 Bundle 预置：选题/脚本/评论/排期/合规/渲染；渲染进度直跳 P10 片库） */
+const QUICK_GOALS: Array<{ label: string; text: string; preset: string; to?: string }> = [
   { label: "选题拆解", text: "拆解本周同类目爆款选题，给我 3 个可拍方向", preset: "trend-researcher" },
   { label: "起草脚本", text: "为「保温杯种草片」起草一版 3 镜脚本", preset: "scriptwriter" },
   { label: "评论分流", text: "把抖音评论区差评按三级分流并起草回复", preset: "comment-operator" },
   { label: "今日发布排期", text: "排一下今天各账号的发布排期", preset: "publish-operator" },
   { label: "素材合规检查", text: "检查待发素材的合规风险（功效宣称/版权）", preset: "field-inspector" },
-  { label: "渲染进度", text: "汇报当前渲染队列进度与预计完成时间", preset: "render-operator" },
+  { label: "渲染进度", text: "汇报当前渲染队列进度与预计完成时间", preset: "render-operator", to: "/p10" },
 ];
 
 const THREAD_DOT: Record<string, string> = {
@@ -57,6 +57,7 @@ const THREAD_DOT: Record<string, string> = {
 };
 
 export default function P1() {
+  const nav = useNavigate();
   const [params] = useSearchParams();
   const demo = params.get("demo"); // 演示走查强制态（数据接线不变）
 
@@ -396,7 +397,7 @@ export default function P1() {
                 <button
                   key={g.label}
                   type="button"
-                  onClick={() => void dispatch(g.text, g.preset)}
+                  onClick={() => (g.to ? nav(g.to) : void dispatch(g.text, g.preset))}
                   className="cursor-pointer rounded-md border border-line bg-card px-2.5 py-1 text-caption text-ink2 transition-colors hover:border-gline hover:text-gold"
                 >
                   ⚡ {g.label}

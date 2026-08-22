@@ -8,6 +8,7 @@ import P5 from "./pages/p5/P5";
 import P6 from "./pages/p6/P6";
 import P7 from "./pages/p7/P7";
 import P8 from "./pages/p8/P8";
+import P10 from "./pages/p10/P10";
 import DevMatrix from "./pages/dev/DevMatrix";
 import { Bridge } from "./shell/Bridge";
 
@@ -26,6 +27,7 @@ export default function App() {
       <Route path="/p7" element={<P7 />} />
       <Route path="/p8" element={<P8 />} />
       <Route path="/p8/agent/:agentId" element={<P8 />} />
+      <Route path="/p10" element={<P10 />} />
       <Route path="/dev" element={<Bridge><DevMatrix /></Bridge>} />
       <Route path="*" element={<P1 />} />
     </Routes>
