@@ -19,7 +19,7 @@ import {
   upsertMemory, searchMemories, getMemorySources, transitionMemory, recordMemoryUsage, MockEmbedder,
 } from "@workloom/base/workdata";
 import { judge, evalCondition, type RuntimeRule } from "@workloom/base/fence-engine";
-import { parseCharter, transition, routeTier, buildMemo, runBriefingBeat, runQueueBeat, runBreakerBeat, loadCharter, effectiveAutonomy, buildScorecard } from "@workloom/base/captain";
+import { parseCharter, transition, routeTier, buildMemo, runBriefingBeat, runQueueBeat, runBreakerBeat, loadCharter, effectiveAutonomy, buildScorecard, runOutcomeReviewBeat, runHrReviewBeat, runBoardPackBeat, runOrgScanBeat } from "@workloom/base/captain";
 import {
   decide, batchApprove, listQueue, expireSweep, validateGesture, assertApproverRole, ApprovalError,
 } from "@workloom/base/review-console";
@@ -2638,6 +2638,167 @@ function defineE2E(): void {
       await restoreArchive(arc);
       await qApp(`DELETE FROM approvals WHERE approval_id=$1`, [`apr-r20-${SFX}`]);
     }
+  });
+
+  /* —— 第三轮：V2 升级（D22 决策中枢/员工管理/董事会包/扩编/反馈） —— */
+
+  RC("三级分流实战：微决策直批 / 不可逆→重大→试用态上浮（D22 三条件）", async () => {
+    const arc = await getArchive();
+    try {
+      await qApp(
+        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain'), ($6,$2,$3,$7,'inapp','pending',$8,'l2_captain')
+         ON CONFLICT (event_id, channel) DO NOTHING`,
+        [`apr-r21a-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r21a-${SFX}`, JSON.stringify({ action: "price.adjust", params: { price: 480 }, base_price: 458 }),
+         `apr-r21b-${SFX}`, `E-apr-r21b-${SFX}`, JSON.stringify({ action: "order.refund", params: { amount: 500 } })]);
+      const r = await runQueueBeat(app, scope);
+      const a = (await qApp<{ status: string }>(`SELECT status FROM approvals WHERE approval_id=$1`, [`apr-r21a-${SFX}`])).rows[0]!;
+      const b = (await qApp<{ tier: string }>(`SELECT tier FROM approvals WHERE approval_id=$1`, [`apr-r21b-${SFX}`])).rows[0]!;
+      eq(a.status, "approved", "微决策直批");
+      eq(b.tier, "l4_chairman", "退款（不可逆→重大）试用态上浮 L4");
+      assert((r.tiers?.micro ?? 0) >= 1 && (r.tiers?.major ?? 0) >= 1, "分级统计留痕");
+    } finally {
+      await restoreArchive(arc);
+      await qApp(`DELETE FROM approvals WHERE approval_id IN ($1,$2)`, [`apr-r21a-${SFX}`, `apr-r21b-${SFX}`]);
+    }
+  });
+
+  RC("重大决策六步管线：产物含方案/红队/围栏校验（memo 依据链完整）", async () => {
+    const arc = await getArchive();
+    try {
+      await qApp(
+        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
+        [`apr-r22-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r22-${SFX}`, JSON.stringify({ action: "order.refund", params: { amount: 5000 } })]);
+      await runQueueBeat(app, scope);
+      const ev = await qApp<{ payload: Record<string, unknown> }>(
+        `SELECT payload FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='ceo.decision' AND payload->'decision'->'params'->>'approval_id'=$2 ORDER BY seq DESC LIMIT 1`,
+        [scope.workspaceId, `apr-r22-${SFX}`]);
+      const after = ((ev.rows[0]!.payload.decision as Record<string, unknown>).after ?? {}) as Record<string, unknown>;
+      const analysis = (after.analysis ?? {}) as { options?: Array<{ critic: string; fenceOk: boolean }> };
+      assert((analysis.options?.length ?? 0) >= 2, "多方案生成 ≥2");
+      assert(analysis.options!.every((o) => typeof o.critic === "string" && o.critic.length > 0), "红队意见齐全");
+    } finally {
+      await restoreArchive(arc);
+      await qApp(`DELETE FROM approvals WHERE approval_id=$1`, [`apr-r22-${SFX}`]);
+    }
+  });
+
+  RC("命中率回测：到期决策日记 → decision.outcome + 成绩单命中率", async () => {
+    const arc = await getArchive();
+    try {
+      // 注入一个到期的决策日记 + 基线 KPI
+      await gatewayAppend(gw, { ...scope, actor: { id: "company-ceo", type: "agent" }, sessionId: "suite-r23" }, {
+        who: { type: "agent", id: "company-ceo" },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "company_ceo", id: scope.workspaceId },
+        decision: { action: "ceo.decision", params: { approval_id: "apr-x", verdict: "approve", expected: { metric: "occ_hold", target: 0.7, review_at: new Date(Date.now() - 1000).toISOString(), note: "t" } }, after: {}, basis: ["R23 注入"] },
+        rule_impact: [], model_trace: { model_id: "suite", tier: "standard" },
+      });
+      await gatewayAppend(gw, { ...scope, actor: { id: "suite", type: "agent" }, sessionId: "suite-r23" }, {
+        who: { type: "agent", id: "suite" },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "store", id: "yunqi" },
+        decision: { action: "store.daily.summary", after: { occ: 0.72, adr: 480, revpar: 346 }, basis: ["R23 KPI"] },
+        rule_impact: [], model_trace: { model_id: "suite", tier: "standard" },
+      });
+      const r = await runOutcomeReviewBeat(app, scope);
+      assert(r.reviewed >= 1, `回测 ${r.reviewed} 件`);
+      const oc = await qApp<{ n: string }>(`SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='decision.outcome' AND payload->'decision'->'params'->>'verdict'='命中'`, [scope.workspaceId]);
+      assert(Number(oc.rows[0]!.n) >= 1, "0.72/0.7≥95% → 命中");
+      const sc = await buildScorecard(app, scope);
+      assert(sc.hitRate !== null && sc.hitRate > 0, "命中率入成绩单");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("周度绩效评议：种子员工全员出评议事件（hr.review 留痕）", async () => {
+    const arc = await getArchive();
+    try {
+      const before = await countEvents("hr.review");
+      const r = await runHrReviewBeat(app, scope);
+      assert(r.reviewed >= 5, `评议 ${r.reviewed} 人`);
+      eq(await countEvents("hr.review"), before + r.reviewed, "评议事件逐人留痕");
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("汰换重生全链：连续辅导→提案 L4→批准→旧停新上（基因重组）", async () => {
+    const arc = await getArchive();
+    const badId = `agt-bad-${SFX}`;
+    try {
+      // 造一个断点频发的差员工 + 上期已辅导
+      await qApp(`INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status) VALUES ($1,$2,'bad-worker','测试差员工','v1','specialist',false,'[]','[]','ready') ON CONFLICT (id) DO NOTHING`, [badId, scope.workspaceId]);
+      for (let i = 0; i < 4; i++) {
+        await gatewayAppend(gw, { ...scope, actor: { id: badId, type: "agent" }, sessionId: "suite-r25" }, {
+          who: { type: "agent", id: badId },
+          context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+          object: { type: "task", id: `t-${i}` },
+          decision: { action: "incident.detected", params: { kind: "test" }, after: {}, basis: ["R25 断点注入"] },
+          rule_impact: [], model_trace: { model_id: "suite", tier: "standard" },
+        });
+      }
+      await gatewayAppend(gw, { ...scope, actor: { id: "company-ceo", type: "agent" }, sessionId: "suite-r25" }, {
+        who: { type: "agent", id: "company-ceo" },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "company_ceo", id: scope.workspaceId },
+        decision: { action: "hr.review", params: { agent_id: badId, grade: "辅导" }, after: {}, basis: ["R25 上期辅导"] },
+        rule_impact: [], model_trace: { model_id: "suite", tier: "standard" },
+      });
+      const r = await runHrReviewBeat(app, scope);
+      eq(r.replacementProposals >= 1, true, "连续辅导 → 汰换提案");
+      const apr = (await qApp<{ approval_id: string; snapshot: Record<string, unknown> }>(`SELECT approval_id, snapshot FROM approvals WHERE tier='l4_chairman' AND snapshot->>'kind'='hr.replacement' ORDER BY approval_id DESC LIMIT 1`)).rows[0]!;
+      // 董事长批准 → applyReplacement
+      const { applyReplacement } = await import("@workloom/base/captain");
+      const design = (apr.snapshot as { design: never }).design;
+      const applied = await applyReplacement(app, scope, design, badId);
+      const old = (await qApp<{ status: string }>(`SELECT status FROM agents WHERE id=$1`, [badId])).rows[0]!;
+      eq(old.status, "disabled", "旧员工停用");
+      const nu = (await qApp<{ n: string }>(`SELECT count(*)::text AS n FROM agents WHERE id=$1`, [applied.newAgentId])).rows[0]!;
+      eq(Number(nu.n), 1, "新员工上岗");
+      assert((await countEvents("hr.replacement_applied")) >= 1, "汰换执行留痕");
+      await qApp(`DELETE FROM agents WHERE id IN ($1,$2)`, [badId, applied.newAgentId]);
+      await qApp(`DELETE FROM approvals WHERE approval_id=$1`, [apr.approval_id]);
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("月度董事会包：五段式齐全 + 宪章提案在场", async () => {
+    const arc = await getArchive();
+    try {
+      const r = await runBoardPackBeat(app, scope);
+      assert(r.eventId, "董事会包落库");
+      const ev = await qApp<{ payload: Record<string, unknown> }>(`SELECT payload FROM biz_events WHERE event_id=$1`, [r.eventId]);
+      const text = String((((ev.rows[0]!.payload.decision as Record<string, unknown>).after) as Record<string, unknown>).text ?? "");
+      for (const seg of ["经营概览", "决策质量", "团队", "宪章修订提案", "下月重点"]) {
+        assert(text.includes(seg), `五段式缺 ${seg}`);
+      }
+    } finally { await restoreArchive(arc); }
+  });
+
+  RC("扩编扫描：积压场景 → 招聘提案 L4；健康场景 → 不出提案", async () => {
+    const arc = await getArchive();
+    try {
+      // 造积压：12 条 pending L2
+      for (let i = 0; i < 12; i++) {
+        await qApp(
+          `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+           VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
+          [`apr-r27-${i}-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r27-${i}-${SFX}`, JSON.stringify({ action: "misc.op", params: {} })]);
+      }
+      const r = await runOrgScanBeat(app, scope);
+      assert(r.proposal, "积压 ≥10 → 出招聘提案");
+      const l4 = await qApp<{ n: string }>(`SELECT count(*)::text AS n FROM approvals WHERE workspace_id=$1 AND tier='l4_chairman' AND snapshot->>'kind'='org.hiring'`, [scope.workspaceId]);
+      assert(Number(l4.rows[0]!.n) >= 1, "提案进 L4 请示");
+      for (let i = 0; i < 12; i++) await qApp(`DELETE FROM approvals WHERE approval_id=$1`, [`apr-r27-${i}-${SFX}`]);
+      await qApp(`DELETE FROM approvals WHERE workspace_id=$1 AND snapshot->>'kind'='org.hiring'`, [scope.workspaceId]);
+      // 健康态前置：临时补齐六域覆盖员工（隔离用例环境差，防交叉污染）
+      for (const pk of ["pricing-agent", "customer-service", "ota-operations", "inventory-procurement", "night-shift", "content-marketing"]) {
+        await qApp(`INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status) VALUES ($1,$2,$3,$4,'v1','specialist',false,'[]','[]','ready') ON CONFLICT (id) DO NOTHING`, [`agt-cov-${pk}-${SFX}`, scope.workspaceId, pk, pk]);
+      }
+      const r2 = await runOrgScanBeat(app, scope);
+      eq(r2.proposal, false, "健康态不出提案");
+      for (const pk of ["pricing-agent", "customer-service", "ota-operations", "inventory-procurement", "night-shift", "content-marketing"]) {
+        await qApp(`DELETE FROM agents WHERE id=$1`, [`agt-cov-${pk}-${SFX}`]);
+      }
+    } finally { await restoreArchive(arc); }
   });
 
   RC("到期自动降级：trial 过期 → suspended + mode_change 事件", async () => {

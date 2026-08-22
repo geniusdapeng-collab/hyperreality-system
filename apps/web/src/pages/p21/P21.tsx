@@ -51,6 +51,9 @@ interface ChairmanItem {
 interface Scorecard {
   decisions: number; briefings: number; initiatives: number;
   escalatedToChairman: number; breakerTrips: number; shadowDecisions: number;
+  hitRate: number | null;
+  outcomeCounts: { hit: number; miss: number; fail: number };
+  tierCounts: Record<string, number>;
 }
 
 const MODE_LABEL: Record<CeoMode, string> = {
@@ -94,6 +97,11 @@ export default function P21() {
     setMsg(`状态迁移 → ${MODE_LABEL[r.mode]}`);
     await load();
   };
+  const feedback = async (eventId: string, signal: "up" | "down") => {
+    await trpc.captain.feedback.mutate({ eventId, signal });
+    setMsg(`已记录您的${signal === "up" ? "点赞" : "点踩"}（入组织记忆，影响后续决策）`);
+  };
+
   const decide = async (approvalId: string, gesture: "approve" | "reject") => {
     await trpc.approvals.decide.mutate({ approvalId, gesture });
     setMsg(`请示 ${approvalId} 已${gesture === "approve" ? "批准" : "驳回"}（三手势写回，全链留痕）`);
@@ -144,7 +152,12 @@ export default function P21() {
             <div className="rounded-lg border border-line bg-card p-3 text-xs text-ink2">
               <div className="mb-1 text-[11px] tracking-[.2em] text-ink3">成绩单（30 天）</div>
               裁决 {score.decisions} · 简报 {score.briefings} · 立项 {score.initiatives}<br />
-              谨慎上浮 {score.escalatedToChairman} · 熔断 {score.breakerTrips} · 影子决策 {score.shadowDecisions}
+              谨慎上浮 {score.escalatedToChairman} · 熔断 {score.breakerTrips} · 影子决策 {score.shadowDecisions}<br />
+              <b className="text-gold">命中率 {score.hitRate === null ? "样本积累中" : `${(score.hitRate * 100).toFixed(0)}%`}</b>
+              {score.outcomeCounts.hit + score.outcomeCounts.miss + score.outcomeCounts.fail > 0 && (
+                <span className="text-ink3">（中{score.outcomeCounts.hit}/偏{score.outcomeCounts.miss}/打脸{score.outcomeCounts.fail}）</span>
+              )}<br />
+              <span className="text-ink3">分级 微{score.tierCounts.micro ?? 0}·常{score.tierCounts.standard ?? 0}·重{score.tierCounts.major ?? 0}</span>
             </div>
           )}
         </div>
@@ -153,7 +166,7 @@ export default function P21() {
         <div className="space-y-2">
           <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">节拍控制台</div>
           <div className="rounded-lg border border-line bg-card p-3 text-xs">
-            {["daily|晨报", "queue|L2 裁决", "deviation|偏差扫描", "breaker|熔断巡检", "weekly|周经营会"].map((x) => {
+            {["daily|晨报", "queue|L2 裁决", "deviation|偏差扫描", "breaker|熔断巡检", "outcome|命中率回测", "hr|绩效评议", "board|董事会包", "orgscan|扩编扫描", "weekly|周经营会"].map((x) => {
               const [k, label] = x.split("|") as [string, string];
               return (
                 <button key={k} onClick={() => void beat(k)}
@@ -277,6 +290,12 @@ export default function P21() {
                 {text && <pre className="whitespace-pre-wrap text-xs leading-relaxed text-ink2">{text}</pre>}
                 {action === "ceo.decision" && (
                   <div className="text-xs text-ink2">{JSON.stringify(after.memo ?? after, null, 1).slice(0, 300)}</div>
+                )}
+                {(action === "ceo.decision" || action === "initiative.launch") && (
+                  <div className="mt-1.5 flex gap-2">
+                    <button onClick={() => void feedback(b.event_id, "up")} className="rounded border border-go/40 px-2 py-0.5 text-[11px] text-go hover:bg-go/10">👍 赞</button>
+                    <button onClick={() => void feedback(b.event_id, "down")} className="rounded border border-warn/40 px-2 py-0.5 text-[11px] text-warn hover:bg-warn/10">👎 踩</button>
+                  </div>
                 )}
               </div>
             );
