@@ -15,7 +15,18 @@ const BASE = `http://localhost:${PORT}`;
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const RUN = `e2e-${Date.now().toString(36)}`;
 const DEV_C_SECRET = "workloom-c-dev-secret-change-me";
-const DB_URL = "postgres://postgres:workloom@localhost:5432/workloom_im";
+// 仓库无关的 DB 解析：优先环境变量，其次读仓库根 .env（vitest 不自动加载），最后回退 workloom
+import { readFileSync } from "node:fs";
+function resolveDbUrl(): string {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  try {
+    const env = readFileSync(new URL("../../../../.env", import.meta.url), "utf-8");
+    const m = env.match(/^DATABASE_URL=(.+)$/m);
+    if (m?.[1]?.trim()) return m[1].trim();
+  } catch { /* 无 .env 回退 */ }
+  return "postgres://postgres:workloom@localhost:5432/workloom";
+}
+const DB_URL = resolveDbUrl();
 
 let server: ChildProcess;
 let db: pg.Client;
@@ -109,7 +120,7 @@ afterAll(async () => {
     // 清理本套件写入的知识库文档（防评测/演示环境污染——基线文档保留）
     try {
       const pg = (await import("pg")).default;
-      const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://postgres:workloom@localhost:5432/workloom_im" });
+      const pool = new pg.Pool({ connectionString: DB_URL });
       await pool.query(`DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog'))`);
       await pool.query(`DELETE FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog')`);
       await pool.end();
