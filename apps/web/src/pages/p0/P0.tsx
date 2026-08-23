@@ -250,7 +250,7 @@ export default function P0() {
 
       {/* 顶栏（极简） */}
       <header className="relative z-20 flex items-center gap-3 px-4 py-2.5">
-        <span className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text font-bold text-transparent">WorkLoom</span>
+        <span className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text font-bold text-transparent">视频经理</span>
         <span className="text-xs text-ink3">经营剧场 · {data?.ceoName ?? "公司CEO"}</span>
         <span className="flex-1" />
         {msg && <span className="text-xs text-go">{msg}</span>}

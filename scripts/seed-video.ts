@@ -19,6 +19,9 @@ import YAML from "yaml";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { safeParseBusinessEvent } from "@workloom/shared";
+// 哈希链统一生产口径（events.ts 的 canonicalJson/eventHash），与 seed.ts 同一纪律
+import { eventHash } from "@workloom/base/workdata";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -26,6 +29,9 @@ const BUNDLE_DIR = join(REPO_ROOT, "bundles/ai-video");
 
 const DATABASE_URL =
   process.env.DATABASE_URL ?? "postgres://postgres:workloom@localhost:5432/workloom";
+const GATEWAY_URL =
+  process.env.DATABASE_GATEWAY_URL ??
+  "postgres://workloom_gateway:workloom_dev_gateway@localhost:5432/workloom";
 
 /* ================= 固定演示标识（幂等键） ================= */
 
@@ -437,6 +443,215 @@ async function main() {
     [WS_ID],
   );
   console.log("✓ 演示项目 vp-demo-001：3 镜渲染脚本 + 2 条素材");
+
+  /* ================= 运行态剧本（饱满演示运行态：事件链/线程/审批/夜班/指标/评论/商单） ================= */
+
+  // —— 演示线程（P1/P2 投影） ——
+  const threads = [
+    { id: "T-V01", title: "保温杯种草片·三镜渲染", mode: "quest", status: "running", done: 14, total: 19, agent: "agt-director", by: "MEM-V01" },
+    { id: "T-V02", title: "抖音评论区差评分流", mode: "agent", status: "pending_review", done: 3, total: 5, agent: "agt-comment-operator", by: "MEM-V02" },
+    { id: "T-V03", title: "早八点账号战报", mode: "ask", status: "completed", done: 5, total: 5, agent: "agt-metrics-watcher", by: "MEM-V01" },
+  ];
+  for (const t of threads) {
+    await q(
+      `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, progress_done, progress_total, created_by, agent_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO NOTHING`,
+      [t.id, TENANT_ID, WS_ID, t.title, t.mode, t.status, t.done, t.total, t.by, t.agent],
+    );
+  }
+  console.log(`✓ 演示线程 ×${threads.length}（running / pending_review / completed）`);
+
+  // —— 夜班班次（昨夜：✓14 ◆2 ▲1，清晨决策包已生成） ——
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const runDate = yesterday.toISOString().slice(0, 10);
+  await q(
+    `INSERT INTO night_runs (id, workspace_id, run_date, status, fence_snapshot_version, candidate_count, stats, started_at, package_event_id)
+     VALUES ($1,$2,$3,'package_generated',$4,14,$5,$6,NULL)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      `nr-${runDate}`, WS_ID, runDate, FENCE_VERSION,
+      JSON.stringify({ done: 14, pending: 2, alerts: 1, note: "评论分流 47 条 / 数据采集 12 轮 / 谷时渲染 S00 完成 / 早八点战报已生成" }),
+      new Date(yesterday.setHours(22, 0, 0, 0)).toISOString(),
+    ],
+  );
+  console.log("✓ 夜班班次（✓14 ◆2 ▲1，清晨决策包已生成）");
+
+  // —— 账号指标时序（近 7 天 × 2 账号） ——
+  const metricRows: unknown[][] = [];
+  for (let d = 7; d >= 1; d--) {
+    const day = new Date(); day.setDate(day.getDate() - d); day.setHours(20, 0, 0, 0);
+    const base = 140000 + (7 - d) * 26000;
+    metricRows.push([WS_ID, "douyin", "@星芒好物", null, day.toISOString(), base, Math.round(base * 0.031), Math.round(base * 0.012), Math.round(base * 0.008), 420 + (7 - d) * 130]);
+    metricRows.push([WS_ID, "xiaohongshu", "@星芒好物研究所", null, day.toISOString(), Math.round(base * 0.22), Math.round(base * 0.011), Math.round(base * 0.02), Math.round(base * 0.006), 96 + (7 - d) * 22]);
+  }
+  // id 为自增 bigint：按（platform+account_id+captured_at）幂等——已存在同日快照则跳过
+  for (const m of metricRows) {
+    await q(
+      `INSERT INTO account_metrics (workspace_id, platform, account_id, video_id, captured_at, plays, likes, comments, shares, conversions)
+       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+       WHERE NOT EXISTS (SELECT 1 FROM account_metrics WHERE workspace_id=$1 AND platform=$2 AND account_id=$3 AND captured_at=$5)`,
+      m as never,
+    );
+  }
+  console.log(`✓ 账号指标时序 ×${metricRows.length}（7 天 × 2 账号）`);
+
+  // —— 评论与回复（17 条：夸赞自动回/咨询待审/危机告警/敏感隔离） ——
+  const cmts = [
+    ...Array.from({ length: 12 }, (_, i) => ({ id: `cm-p${i}`, intent: "praise", body: ["这个颜值真的绝了，已下单！", "保温杯质感超出预期", "跟着博主买准没错"][i % 3], auto: true })),
+    { id: "cm-q1", intent: "query", body: "真的能保温 24 小时吗？求实测", auto: false },
+    { id: "cm-q2", intent: "query", body: "316 和 304 不锈钢有啥区别？", auto: false },
+    { id: "cm-c1", intent: "crisis", body: "用了两周杯盖有点漏水，怎么回事？？", auto: false },
+    { id: "cm-s1", intent: "other", body: "（含不当言论，已隔离）", auto: false },
+    { id: "cm-s2", intent: "other", body: "（疑似引流广告，已隔离）", auto: false },
+  ];
+  for (const [i, c] of cmts.entries()) {
+    await q(
+      `INSERT INTO comments (id, workspace_id, platform, account_id, video_id, platform_comment_id, author, text, intent, route_level, status, collected_at)
+       VALUES ($1,$2,'douyin','@星芒好物','vid-s01',$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO NOTHING`,
+      [
+        c.id, WS_ID, `pc-${c.id}`, `user_${i}`, c.body, c.intent,
+        c.intent === "praise" ? "auto" : c.intent === "other" ? "block" : "review",
+        c.auto ? "replied" : c.intent === "other" ? "blocked" : "pending_review",
+        new Date(Date.now() - i * 47 * 60000).toISOString(),
+      ],
+    );
+    if (c.auto) {
+      await q(
+        `INSERT INTO comment_replies (id, workspace_id, comment_id, text, channel, status, receipt, created_by, created_at)
+         VALUES ($1,$2,$3,'谢谢喜欢～记得装温水先温杯，保温更久哦🧡','auto','sent','{"delivered":true}','agt-comment-operator',$4) ON CONFLICT (id) DO NOTHING`,
+        [`cr-${c.id}`, WS_ID, c.id, new Date(Date.now() - i * 47 * 60000 + 300000).toISOString()],
+      );
+    }
+  }
+  console.log(`✓ 评论 ×${cmts.length}（夸赞自动回 12 / 咨询待审 2 / 危机告警 1 / 敏感隔离 2）`);
+
+  // —— 渲染任务（S00 完成 / S01 排队 / S02 排队）+ 成本台账 ——
+  await q(
+    `INSERT INTO render_jobs (id, workspace_id, project_id, script_id, script_version, task_id, cost, status, result_url)
+     VALUES
+       ('rj-s00',$1,'vp-demo-001','rs-demo-s00-v1',1,'sd-task-88210',1.8,'done','https://example.invalid/clips/s00.mp4'),
+       ('rj-s01',$1,'vp-demo-001','rs-demo-s01-v1',1,'sd-task-88211',2.1,'submitted',NULL),
+       ('rj-s02',$1,'vp-demo-001','rs-demo-s02-v1',1,'sd-task-88212',2.6,'submitted',NULL)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID],
+  );
+  for (const [i, b] of [
+    ["bl-s00", "vp-demo-001", "E01", "S00", "render", 1.8],
+    ["bl-s01", "vp-demo-001", "E01", "S01", "render", 2.1],
+    ["bl-s02", "vp-demo-001", "E01", "S02", "render", 2.6],
+  ].entries()) {
+    await q(
+      `INSERT INTO budget_ledger (workspace_id, project_id, episode, shot_id, cost_kind, amount, idempotency_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (workspace_id, idempotency_key) DO NOTHING`,
+      [WS_ID, b[1], b[2], b[3], b[4], b[5], `seed-${b[0]}`],
+    );
+  }
+  console.log("✓ 渲染任务 ×3 + 成本台账 ×3（S00 已交付 / S01·S02 排队）");
+
+  // —— 商单样本（履约中 ×1 + 报价请示 ×1） ——
+  await q(
+    `INSERT INTO deal_orders (id, workspace_id, brand, contact, amount, quote_band, channel, lead_comment_id, project_id, status, payment_terms, created_by)
+     VALUES
+       ('do-demo-001',$1,'星芒家居','王 PR',88000,'[0.9,1.2]','dm',NULL,'vp-demo-001','fulfilling','{"net30":true}','agt-deal-manager'),
+       ('do-demo-002',$1,'山岚户外','陈媒介',45000,'[0.9,1.2]','dm',NULL,NULL,'quoting','{}','agt-deal-manager')
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID],
+  );
+  await q(
+    `INSERT INTO deal_milestones (id, workspace_id, order_id, kind, due_at, status, created_by)
+     VALUES
+       ('dm-001',$1,'do-demo-001','draft_v1',$2,'done','agt-deal-manager'),
+       ('dm-002',$1,'do-demo-001','acceptance',$3,'pending','agt-deal-manager'),
+       ('dm-003',$1,'do-demo-001','payment',$4,'pending','agt-deal-manager')
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, new Date(Date.now() - 86400e3).toISOString(), new Date(Date.now() + 2 * 86400e3).toISOString(), new Date(Date.now() + 25 * 86400e3).toISOString()],
+  );
+  console.log("✓ 商单样本 ×2（履约中 ¥88,000 / 报价请示中 ¥45,000）");
+
+  // —— 五元事件链（gateway 角色写入；100 条，60% 落夜班窗口） ——
+  const gw = new pg.Client({ connectionString: GATEWAY_URL });
+  await gw.connect();
+  await gw.query("SELECT set_config('app.tenant_id', $1, false)", [TENANT_ID]);
+  await gw.query("SELECT set_config('app.workspace_id', $1, false)", [WS_ID]);
+
+  const agentWho = (key: string) => {
+    const p = presets.find((x) => x.preset_key === key);
+    return { type: "agent" as const, id: key, version: p?.version ?? "v1.0" };
+  };
+  const now = Date.now();
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const times: Date[] = [];
+  for (let i = 0; i < 100; i++) {
+    let t: number;
+    if (i % 5 < 3) {
+      const ns = new Date(dayStart); ns.setDate(ns.getDate() - 1); ns.setHours(22, 0, 0, 0);
+      const ne = new Date(dayStart); ne.setHours(8, 30, 0, 0);
+      t = ns.getTime() + ((i * 7919) % 1000) / 1000 * (ne.getTime() - ns.getTime());
+    } else {
+      t = dayStart.getTime() - 86400e3 + ((i * 104729) % 1000) / 1000 * (now - (dayStart.getTime() - 86400e3));
+    }
+    times.push(new Date(t));
+  }
+  times.sort((a, b) => a.getTime() - b.getTime());
+
+  const EVENT_BASE_V = 6600;
+  const mkEvent = (i: number, time: Date) => {
+    const id = `E-${EVENT_BASE_V + i}`;
+    const scene = i % 10;
+    const ctx = { tenant_id: TENANT_ID, workspace_id: WS_ID, time: time.toISOString(), stage: "stable", store: WS_NAME };
+    const receipt = { synced: true, snapshot_uri: `data/snapshots/${id.toLowerCase()}.png`, verified_at: new Date(time.getTime() + 45000).toISOString() };
+    const mt = { model_id: "mock-video-001", tier: "standard", window: time.getHours() >= 22 || time.getHours() < 8 ? "off-peak" : "peak", credits: 1 };
+    switch (scene) {
+      case 0: return { event_id: id, who: agentWho("render-operator"), context: ctx, object: { type: "render_job", id: "rj-s01", label: "S01 通勤痛点" }, decision: { action: "render.submit", after: { taskId: "sd-task-88211", cost: 2.1 }, basis: ["G8 审批通过（E-6605）", "谷时窗口费率 ≤20%"] }, rule_impact: [{ rule_id: "G8", version: FENCE_VERSION, result: "pass" }], receipt, model_trace: mt };
+      case 1: return { event_id: id, who: agentWho("comment-operator"), context: ctx, object: { type: "comment", id: `cm-p${i % 12}`, label: "夸赞评论" }, decision: { action: "comment.reply", after: { mode: "auto" }, basis: ["G10a 夸赞/感谢类自动回复"] }, rule_impact: [{ rule_id: "G10a", version: FENCE_VERSION, result: "pass" }], receipt, model_trace: mt };
+      case 2: return { event_id: id, who: agentWho("metrics-watcher"), context: ctx, object: { type: "account_metric", id: `am-dy-${(i % 7) + 1}`, label: "抖音账号快照" }, decision: { action: "metrics.collect", after: { plays: 328000, finishes: 0.384 }, basis: ["每 2h 定时采集"] }, rule_impact: [], receipt, model_trace: mt };
+      case 3: return { event_id: id, who: agentWho("publish-operator"), context: ctx, object: { type: "publish_task", id: "pt-douyin-001", label: "保温杯切片·抖音" }, decision: { action: "publish.execute", after: { platform: "douyin", url: "https://example.invalid/p/001" }, basis: ["G9 审批通过", "模拟人工节奏"] }, rule_impact: [{ rule_id: "G9", version: FENCE_VERSION, result: "pass" }], receipt, model_trace: mt };
+      case 4: return { event_id: id, who: agentWho("captain"), context: ctx, object: { type: "video_project", id: "vp-demo-001", label: "星芒保温杯种草片" }, decision: { action: "ceo.decision", after: { tier: "l2_captain", topic: "发布排期错峰调整", expected: "黄金时段 CTR +8%" }, basis: ["宪章自治边界内", "近 7 日 20:00 档 CTR 最高"] }, rule_impact: [], receipt, model_trace: mt };
+      case 5: return { event_id: id, who: agentWho("captain"), context: ctx, object: { type: "workspace", id: WS_ID, label: WS_NAME }, decision: { action: "ceo.briefing", after: { text: "董事长，早报已备：昨日我裁决 14 件（L2 下沉率 86%），全平台播放 32.8w（▲18.2%）；2 件谨慎上浮请您定——年度商单框架、Dou+ 加投超营销上限。试用期第 2 天，边界降一档执行中。" }, basis: ["CEO Loop 日频晨报 08:30"] }, rule_impact: [], receipt, model_trace: mt };
+      case 6: return { event_id: id, who: agentWho("creative-planner"), context: ctx, object: { type: "theme", id: "theme-001", label: "早八地铁烫嘴实录" }, decision: { action: "theme.confirm", after: { approved: true }, basis: ["G2 审批通过", "情报档案 E-6601 证据锚点"] }, rule_impact: [{ rule_id: "G2", version: FENCE_VERSION, result: "pass" }], receipt, model_trace: mt };
+      case 7: return { event_id: id, who: agentWho("prompt-fuser"), context: ctx, object: { type: "prompt_package", id: "pp-s01", label: "S01 镜头提示词包" }, decision: { action: "prompt.confirm", after: { approved: true, score: 4.6 }, basis: ["G6 审批通过", "导演评审 5 维 4.5/5"] }, rule_impact: [{ rule_id: "G6", version: FENCE_VERSION, result: "pass" }], receipt, model_trace: mt };
+      case 8: return { event_id: id, who: agentWho("metrics-watcher"), context: ctx, object: { type: "account_metric", id: "alert-001", label: "小红书收藏率告警" }, decision: { action: "threshold.check", after: { level: "P1", metric: "save_rate", drop: "1.8%→0.9%" }, basis: ["阈值 1.2% drop_ratio 触发"] }, rule_impact: [], receipt, model_trace: mt };
+      default: return { event_id: id, who: agentWho("comment-operator"), context: ctx, object: { type: "comment", id: "cm-c1", label: "漏水投诉评论" }, decision: { action: "comment.escalate", after: { level: "review+alert" }, basis: ["G10c 负面/投诉必审+告警"] }, rule_impact: [{ rule_id: "G10c", version: FENCE_VERSION, result: "review" }], receipt, model_trace: mt };
+    }
+  };
+
+  const lastHash = await gw.query(`SELECT hash FROM biz_events WHERE tenant_id=$1 ORDER BY seq DESC LIMIT 1`, [TENANT_ID]);
+  let prevHash = (lastHash.rows[0]?.hash as string) ?? "GENESIS";
+  const sessionOf = (scene: number) => (scene === 0 || scene === 6 || scene === 7 ? "T-V01" : scene === 1 || scene === 9 ? "T-V02" : scene === 5 || scene === 2 || scene === 8 ? "T-V03" : null);
+  let inserted = 0;
+  for (let i = 1; i <= 100; i++) {
+    const ev = mkEvent(i, times[i - 1] as Date);
+    const checked = safeParseBusinessEvent(ev);
+    if (!checked.success) throw new Error(`种子事件 ${ev.event_id} 未过校验：${checked.error.message}`);
+    const payload = JSON.stringify(checked.data);
+    const hash = eventHash(prevHash, checked.data);
+    const res = await gw.query(
+      `INSERT INTO biz_events (event_id, tenant_id, workspace_id, session_id, payload, prev_hash, hash, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (tenant_id, event_id) DO NOTHING RETURNING seq`,
+      [ev.event_id, TENANT_ID, WS_ID, sessionOf(i % 10), payload, prevHash, hash, (ev.context as { time: string }).time],
+    );
+    if (res.rowCount && res.rowCount > 0) { prevHash = hash; inserted++; }
+  }
+  console.log(`✓ 五元事件链 ×${inserted}（哈希链续接，可验链）`);
+
+  // —— 待批请示（P4 决断队列 / P21 董事长视图 / 剧场聚光灯） ——
+  const approvalsSeed = [
+    { aid: "apr-v-001", eid: `E-${EVENT_BASE_V + 10}`, tier: "l2_captain", title: "提交渲染任务", snapshot: { title: "S01 镜提交渲染", action: "render.submit", params: { shotId: "S01", estimate_credits: 3, estimate_cost: 2.1 }, gate: "G8", ceo_rationale: "导演评审 4.5/5 已通过，谷时窗口成本最优", contentMd: "# 渲染请示 · S01\n\n预计消耗 3 积分（约 ¥2.1），谷时窗口。" } },
+    { aid: "apr-v-002", eid: `E-${EVENT_BASE_V + 20}`, tier: "l4_chairman", title: "签订年度框架商单", snapshot: { title: "签订年度框架商单 · 需要你拍板", action: "deal.quote", params: { brand: "星芒家居", amount: 88000, term: "12个月" }, gate: "G15", ceo_rationale: "报价已按 deal-flow 完成锚定，履约排期与产能无冲突，建议批准——金额超采购上限，谨慎上浮请您定。" } },
+    { aid: "apr-v-003", eid: `E-${EVENT_BASE_V + 30}`, tier: "l4_chairman", title: "Dou+ 加投 ¥3,000", snapshot: { title: "Dou+ 加投 ¥3,000 · 需要你拍板", action: "ads.boost", params: { video: "通勤痛点切片", amount: 3000, window: "24h" }, gate: "G12", ceo_rationale: "切片正处推荐池爬升期（4.1w→12.6w），加投 ROI 预估 1:3.2；但超试用期营销上限，请您定。" } },
+  ];
+  for (const a of approvalsSeed) {
+    await q(
+      `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot)
+       VALUES ($1,$2,$3,$4,'inapp','pending',$5,$6)
+       ON CONFLICT (event_id, channel) DO NOTHING`,
+      [a.aid, TENANT_ID, WS_ID, a.eid, a.tier, JSON.stringify(a.snapshot)],
+    );
+  }
+  console.log("✓ 待批请示 ×3（L2 渲染 ×1 + L4 董事长 ×2）");
+
+  await gw.end();
+  console.log("✓ 运行态剧本完成（剧场/职场/晨报/实况/审批/评论/商单全量有数）");
 
   await owner.end();
   console.log("\n视频经理演示种子完成。下一步：pnpm dev 后在舰桥查看（ws-video 工作区）。");
