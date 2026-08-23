@@ -2,6 +2,25 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [1.9.3] - 2026-08-23 · 融合审计（D26）：大版本耦合面深测与修复
+
+### 修复（审计实证）
+
+- **floor blocked 派生认不出真实熔断（P1）**：原查询依赖不存在的事件形态（action 后缀 `.blocked` / `decision.ruleResult.level`），真实裁决写在 `rule_impact[].result='blocked'`——修复后夜班 R2 熔断等真实拦截在职场显示踱步员工（浏览器实拍验证）。
+- **floor celebrating 监听不存在的 action（P1）**：`quest.completed/night.package_generated` 无生产者——改为双通道：近窗 `threads.closed_at`（agent_id 归属）+ 真实事件（`night.package.deliver/ceo.board_pack/task.complete`）。
+- **宪章并发读改写竞争（P2）**：grant/transit 的 load→transition→save 无锁互踩会留下 from/to 失真留痕——加进程内串行锁 withCharterLock。
+- **Floor.tsx 点击遮挡与运行时泄漏（P2×2）**：hitbox 改逆序命中（上层优先）；员工离场（汰换）即清理动画运行时。
+- **chairmanQueue 截断口径**：队列 LIMIT 20，互洽断言按 min(count,20) 校准；LLM 装配进程级全局补部署口径注释（一进程一工作区）。
+
+### 新增（W 域融合回归 ×9，suite 436→445）
+
+- 服务层：theater×floor 一致性（场景包命中/全员覆盖）· 请示全链（举手→裁决→回位→留痕）· 熔断/庆祝真实形态（审计修复的回归锚）
+- HTTP E2E：LLM stub 装配后 runBeat via=llm · **开箱运行态断言**（卫星≥5/实况≥10/前厅场景/开箱即举手/人人有工位有状态语/横幅数据源）· activateRealMode 融合 · P21 三端点互洽 · LLM 降级链（死端拒绝→mock 兜底不断链）
+
+### 门禁验证
+
+- ✅ suite 445/445 · demo 44/44 · typecheck 全绿 · vitest 150 · verify-chain 一致 · 浏览器四视图走查（职场/舞台/P21 触发晨报联动剧场语音气泡/落地向导）
+
 ## [1.9.2] - 2026-08-23 · 数字职场（D25-α）：等距 2.5D 办公区
 
 ### 新增

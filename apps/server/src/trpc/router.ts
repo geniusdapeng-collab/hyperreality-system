@@ -136,7 +136,9 @@ function locateEnvFile(): string {
   return join(process.cwd(), ".env");
 }
 
-/** 四 env 写回 .env（保留其他行）+ 同步 process.env + 清 LLM 缓存（全链即时生效，无需重启） */
+/** 四 env 写回 .env（保留其他行）+ 同步 process.env + 清 LLM 缓存（全链即时生效，无需重启）
+ * 注意（D26 审计#5）：LLM 装配为进程级全局——部署口径是「一进程一工作区」（local-first 单店），
+ * 多工作区共享进程时全租户共用同一装配；按工作区留痕仅为审计归属，不构成隔离。 */
 function persistLlmEnv(cfg: { provider: string; baseUrl: string; apiKey: string; model: string }): void {
   const file = locateEnvFile();
   const lines = existsSync(file) ? readFileSync(file, "utf8").split("\n") : [];
@@ -1904,6 +1906,14 @@ const RISK_DISCLOSURE_VERSION = "risk-v1";
 /** 深度授权必确认条款（§12.2 第②步，逐条勾选缺一不可） */
 const REQUIRED_CLAUSES = ["自主调价", "自主采购", "自主对外回复", "试用降档规则", "AI 非法律责任主体·授权人承担经营决策责任"];
 
+/** 宪章读写串行锁（D26 审计#6：grant/transit 为 load→transition→save 读改写，并发互踩会留下 from/to 失真的留痕） */
+let charterLock: Promise<unknown> = Promise.resolve();
+function withCharterLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = charterLock.then(fn, fn);
+  charterLock = run.catch(() => undefined);
+  return run;
+}
+
 async function saveCharter(app: ReturnType<typeof getAppPool>, scope: { tenantId: string; workspaceId: string }, charter: unknown): Promise<void> {
   const client = await app.connect();
   try {
@@ -1967,6 +1977,7 @@ const captainRouter = router({
       if (missing.length) throw new TRPCError({ code: "BAD_REQUEST", message: `授权条款未全部确认：${missing.join("、")}` });
       if (!input.identityConfirmed) throw new TRPCError({ code: "BAD_REQUEST", message: "未完成身份核验（§12.2 第⑤步）" });
       const app = getAppPool();
+      return withCharterLock(async () => {
       const charter = await loadCharter(app, scope);
       const grantEventId = `E-GRANT-${Date.now().toString(36).toUpperCase()}`;
       const next = transition({ ...charter, autonomy: input.autonomy }, {
@@ -1994,6 +2005,7 @@ const captainRouter = router({
         model_trace: { model_id: "human-chairman", tier: "standard" },
       });
       return { mode: next.mode, grantEventId };
+      });
     }),
 
   /** 治理迁移：advance/expire/keep_long/keep_until/revoke/close（§12.1 状态机） */
@@ -2002,6 +2014,7 @@ const captainRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       const app = getAppPool();
+      return withCharterLock(async () => {
       const charter = await loadCharter(app, scope);
       const t: CeoTransition = input.kind === "keep_until"
         ? { kind: "keep_until", until: input.until ?? new Date(Date.now() + 30 * 86400e3).toISOString() }
@@ -2029,6 +2042,7 @@ const captainRouter = router({
         model_trace: { model_id: "human-chairman", tier: "standard" },
       });
       return { mode: next.mode };
+      });
     }),
 
   /** 手动触发节拍（演示/调度共用入口）：briefing/queue/deviation/breaker */

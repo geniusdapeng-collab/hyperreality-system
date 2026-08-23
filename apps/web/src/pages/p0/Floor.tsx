@@ -181,7 +181,11 @@ export function FloorView({
       ctx.fillStyle = "#ffd98a"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
       ctx.fillText(ceoName, cd.sx, cd.sy + 14);
 
-      /* 员工：更新目标 + 插值走位 */
+      /* 员工：更新目标 + 插值走位（先清理已离场员工的运行时，防泄漏） */
+      const alive = new Set(floorRef.current.agents.map((a) => a.id));
+      for (const id of [...actors.current.keys()]) {
+        if (!alive.has(id)) actors.current.delete(id);
+      }
       hitboxes.current = [];
       const list = floorRef.current.agents;
       const sorted = [...list].sort((a, b) => { // 远的先画（遮挡）
@@ -248,11 +252,11 @@ export function FloorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ceoName]);
 
-  /* 点击：命中员工 → 请示卡 / 绩效卡 */
+  /* 点击：命中员工 → 请示卡 / 绩效卡（绘制顺序远→近，点击逆序=上层优先） */
   const onClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    for (const h of hitboxes.current) {
+    for (const h of [...hitboxes.current].reverse()) {
       if ((mx - h.sx) ** 2 + (my - h.sy) ** 2 < h.r ** 2 * 2.2) {
         const agent = floorRef.current.agents.find((a) => a.id === h.id);
         if (!agent) return;

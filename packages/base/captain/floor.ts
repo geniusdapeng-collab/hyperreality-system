@@ -151,25 +151,30 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
       [scope.workspaceId],
     )).rows;
 
-    // 近 30 分钟遇阻：异常/驳回/熔断（actor=preset_key）
+    // 近 30 分钟遇阻：围栏熔断（rule_impact 含 result=blocked，与全库裁决同构）/失败/异常/驳回（actor=preset_key）
     const blocked = (await client.query<{ actor: string; action: string }>(
       `SELECT DISTINCT payload->'who'->>'id' AS actor, payload->'decision'->>'action' AS action
        FROM biz_events
        WHERE workspace_id=$1 AND created_at > now() - interval '30 minutes'
-         AND (payload->'decision'->>'action' LIKE '%.blocked'
+         AND (payload->'rule_impact' @> jsonb_build_array(jsonb_build_object('result', 'blocked'))
            OR payload->'decision'->>'action' LIKE '%.failed'
            OR payload->'decision'->>'action' LIKE 'anomaly.%'
-           OR payload->'decision'->'ruleResult'->>'level' = 'block'
+           OR payload->'decision'->>'action' = 'inspect.anomaly'
            OR payload->'decision'->'params'->>'gesture' = 'reject')`,
       [scope.workspaceId],
     )).rows;
 
-    // 近 10 分钟庆祝：线程完成/夜班包/董事会包
-    const celebrating = (await client.query<{ actor: string; action: string }>(
+    // 近 10 分钟庆祝：线程完成（threads.closed_at 近窗，agent_id 归属）+ 夜班包/董事会包交付
+    const celebThreads = (await client.query<{ agent_id: string }>(
+      `SELECT DISTINCT agent_id FROM threads
+       WHERE workspace_id=$1 AND agent_id IS NOT NULL AND closed_at > now() - interval '10 minutes'`,
+      [scope.workspaceId],
+    )).rows;
+    const celebEvents = (await client.query<{ actor: string; action: string }>(
       `SELECT DISTINCT payload->'who'->>'id' AS actor, payload->'decision'->>'action' AS action
        FROM biz_events
        WHERE workspace_id=$1 AND created_at > now() - interval '10 minutes'
-         AND payload->'decision'->>'action' IN ('quest.completed','agent.completed','night.package_generated','ceo.board_pack','task.complete')`,
+         AND payload->'decision'->>'action' IN ('night.package.deliver','ceo.board_pack','task.complete')`,
       [scope.workspaceId],
     )).rows;
 
@@ -189,7 +194,9 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
     const askingBy = new Map<string, typeof asking[number]>();
     for (const r of asking) if (!askingBy.has(r.actor)) askingBy.set(r.actor, r);
     const blockedSet = new Set(blocked.map((r) => r.actor));
-    const celebSet = new Set(celebrating.map((r) => r.actor));
+    // 庆祝双通道：事件 actor（preset_key）+ 近窗完成线程的 agent_id
+    const celebSet = new Set(celebEvents.map((r) => r.actor));
+    const celebAgentIds = new Set(celebThreads.map((r) => r.agent_id));
     const lastBy = new Map(lastActions.map((r) => [r.actor, r.action]));
 
     // 工位分配：按 preset 顺序循环映射场景 stations（人数超工位时共站，前端按 id 微偏移站位）
@@ -211,7 +218,7 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
         out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "blocked", stationId: station?.id ?? null, currentThread: null, pendingTier: null, approvalId: null, statusLine: `遇阻：${last}` });
         return;
       }
-      if (celebSet.has(a.preset_key)) {
+      if (celebSet.has(a.preset_key) || celebAgentIds.has(a.id)) {
         out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "celebrating", stationId: station?.id ?? null, currentThread: null, pendingTier: null, approvalId: null, statusLine: `刚完成：${last}` });
         return;
       }
