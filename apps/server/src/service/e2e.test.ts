@@ -76,8 +76,34 @@ async function trpc(proc: string, opts: { input?: unknown; token?: string; metho
   return { status: res.status, data: body.result?.data ?? null, error: body.error ?? null };
 }
 
+/** 与 C 端网关同一工作区解析口径（SERVICE_C_WORKSPACE_ID ?? 酒店回归域优先 ?? 首个工作区），多工作区仓库（如视频版）下保证 B/C 同域 */
+function serviceCWorkspaceId(): string | null {
+  if (process.env.SERVICE_C_WORKSPACE_ID) return process.env.SERVICE_C_WORKSPACE_ID;
+  try {
+    const env = readFileSync(new URL("../../../../.env", import.meta.url), "utf-8");
+    const m = env.match(/^SERVICE_C_WORKSPACE_ID=(.+)$/m);
+    if (m?.[1]?.trim()) return m[1].trim();
+  } catch { /* 无 .env 回退 */ }
+  return null;
+}
+
+async function resolveWorkspaceSlug(): Promise<string> {
+  const pg = (await import("pg")).default;
+  const pool = new pg.Pool({ connectionString: DB_URL });
+  try {
+    const wsId = serviceCWorkspaceId();
+    if (wsId) {
+      const r = await pool.query(`SELECT slug FROM workspaces WHERE id=$1`, [wsId]);
+      if (r.rows[0]?.slug) return String(r.rows[0].slug);
+    }
+    const r = await pool.query(`SELECT slug FROM workspaces ORDER BY (slug='yunqi-hotel') DESC, created_at LIMIT 1`);
+    return String(r.rows[0]?.slug ?? "yunqi-hotel");
+  } finally { await pool.end(); }
+}
+
 async function loginAs(memberNo: string): Promise<string> {
-  const r = await trpc("auth.loginAs", { input: { workspaceSlug: "yunqi-hotel", memberNo }, method: "mutation" });
+  const workspaceSlug = await resolveWorkspaceSlug();
+  const r = await trpc("auth.loginAs", { input: { workspaceSlug, memberNo }, method: "mutation" });
   expect(r.error).toBeNull();
   return (r.data as { token: string }).token;
 }
