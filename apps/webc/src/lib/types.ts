@@ -17,9 +17,11 @@ export interface BusinessCard {
   data: Record<string, unknown>;
 }
 
+export type TicketKind = "delivery" | "repair" | "complaint" | "other" | "service_request" | "consult";
+
 export interface Ticket {
   id: string;
-  kind: "delivery" | "repair" | "complaint" | "other";
+  kind: TicketKind | (string & {});
   title: string;
   /** 英文机读态（created/assigned/processing/done/closed） */
   status: string;

@@ -1,17 +1,18 @@
 import { useState } from "react";
+import { getConfig } from "../lib/config";
 import type { Citation, MemberInfo, Order } from "../lib/types";
 import { StatusChip, formatTime } from "./common";
 
-/** AI 答案下方的引用来源卡（可展开） */
+/** AI 答案下方的引用来源卡（可展开/收起） */
 export function CitationCard({ citations }: { citations: Citation[] }) {
   const [open, setOpen] = useState(false);
   if (citations.length === 0) return null;
   return (
-    <div className="mt-2 rounded-xl border border-holo/30 bg-holo/5">
+    <div className="mt-2 animate-fadein rounded-xl border border-holo/30 bg-holo/5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3 py-2 text-left"
+        className="pressable flex w-full items-center justify-between px-3 py-2 text-left"
       >
         <span className="flex items-center gap-1.5 text-[11px] text-holo">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -20,10 +21,10 @@ export function CitationCard({ citations }: { citations: Citation[] }) {
           </svg>
           引用来源 · {citations.length} 条
         </span>
-        <span className={`text-holo transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        <span className={`text-holo transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
       {open && (
-        <div className="space-y-2 border-t border-holo/20 px-3 py-2">
+        <div className="animate-fadein space-y-2 border-t border-holo/20 px-3 py-2">
           {citations.map((c, i) => (
             <div key={i} className="rounded-lg bg-bg900/60 p-2">
               <p className="text-[11px] font-medium text-holo">
@@ -41,7 +42,7 @@ export function CitationCard({ citations }: { citations: Citation[] }) {
 /** 订单业务卡 */
 export function OrderCard({ order }: { order: Order }) {
   return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-gline bg-card">
+    <div className="mt-2 animate-fadein overflow-hidden rounded-xl border border-gline bg-card">
       <div className="flex items-center justify-between bg-gold/10 px-3 py-1.5">
         <span className="text-[11px] font-medium text-gold">我的订单</span>
         <span className="font-mono text-[10px] text-ink3">{order.id}</span>
@@ -68,7 +69,7 @@ export function OrderCard({ order }: { order: Order }) {
 /** 会员业务卡 */
 export function MemberCard({ member }: { member: MemberInfo }) {
   return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-gline bg-gradient-to-br from-bg700 to-bg800">
+    <div className="mt-2 animate-fadein overflow-hidden rounded-xl border border-gline bg-gradient-to-br from-bg700 to-bg800">
       <div className="flex items-center justify-between px-3 pt-3">
         <span className="flex items-center gap-1.5 text-[13px] font-semibold text-gold">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -92,7 +93,7 @@ export function MemberCard({ member }: { member: MemberInfo }) {
 /** 目录业务卡（房型价格等 catalog 列表） */
 export function CatalogCard({ items }: { items: Array<{ sku?: string; name: string; priceYuan?: number }> }) {
   return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-gline bg-card">
+    <div className="mt-2 animate-fadein overflow-hidden rounded-xl border border-gline bg-card">
       <div className="bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold">房型与价格</div>
       <div className="divide-y divide-line/60 px-3">
         {items.map((it, i) => (
@@ -111,7 +112,7 @@ export function CatalogCard({ items }: { items: Array<{ sku?: string; name: stri
 /** 低置信度转人工工单卡 */
 export function TicketNoticeCard({ title }: { title: string }) {
   return (
-    <div className="mt-2 flex items-start gap-2.5 rounded-xl border border-warn/40 bg-warn/10 p-3">
+    <div className="mt-2 flex animate-fadein items-start gap-2.5 rounded-xl border border-warn/40 bg-warn/10 p-3">
       <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warn/20 text-warn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -156,7 +157,9 @@ export function ServiceNoticeCard({
         <p className="text-[13px] font-medium text-ink">{title}</p>
         {detail && <p className="mt-1 text-[11px] leading-relaxed text-ink2">{detail}</p>}
       </div>
-      <div className="border-t border-line px-3 py-1.5 text-[10px] text-ink3">星芒好物 · AI 服务前台</div>
+      <div className="border-t border-line px-3 py-1.5 text-[10px] text-ink3">
+        {getConfig().brandName} · AI 服务前台
+      </div>
     </div>
   );
 }

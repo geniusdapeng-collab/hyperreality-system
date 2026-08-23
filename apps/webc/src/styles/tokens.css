@@ -1,5 +1,5 @@
 /**
- * 云栖酒店 C 端「AI 服务前台」设计令牌
+ * C 端「AI 服务前台」设计令牌（默认主题：深空底 #0a1230 + 暗金 #e9b558，可在 service-front.config.json 换色）
  * 与 B 端舰桥同族视觉：深空底 #0a1230 + 酒店金 #e9b558
  * Tailwind v4 令牌制：只写 @theme，无 tailwind.config.js
  */
@@ -38,6 +38,11 @@
 
   --animate-typing: typing-dot 1.2s ease-in-out infinite;
   --animate-sheen: sheen 2.6s ease-in-out infinite;
+  --animate-fadein: fade-up 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: node-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-skeleton: skeleton-shimmer 1.6s ease-in-out infinite;
+  --animate-tabin: tab-in 0.24s ease-out both;
+  --animate-pulse-ring: pulse-ring 1.8s ease-out infinite;
 }
 
 @keyframes typing-dot {
@@ -47,6 +52,26 @@
 @keyframes sheen {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes node-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+@keyframes tab-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgb(233 181 88 / 0.5); }
+  100% { box-shadow: 0 0 0 9px rgb(233 181 88 / 0); }
 }
 
 html,
@@ -67,7 +92,8 @@ body {
   width: 100%;
   max-width: 390px;
   margin: 0 auto;
-  min-height: 100dvh;
+  height: var(--app-height, 100dvh);
+  min-height: var(--app-height, 100dvh);
   display: flex;
   flex-direction: column;
   background: var(--color-bg800);
@@ -76,7 +102,8 @@ body {
 }
 @media (min-width: 431px) {
   .phone-shell {
-    min-height: min(100dvh - 32px, 844px);
+    height: min(var(--app-height, 100dvh) - 32px, 844px);
+    min-height: min(var(--app-height, 100dvh) - 32px, 844px);
     margin-top: 16px;
     margin-bottom: 16px;
     border-radius: 28px;
@@ -90,6 +117,36 @@ body {
 }
 .no-scrollbar {
   scrollbar-width: none;
+}
+
+/* 骨架屏：金调流光 */
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    rgb(96 140 255 / 0.08) 25%,
+    rgb(233 181 88 / 0.14) 50%,
+    rgb(96 140 255 / 0.08) 75%
+  );
+  background-size: 400px 100%;
+  animation: var(--animate-skeleton);
+}
+
+/* haptic 风格按压态：缩放 + 快速回弹 */
+.pressable {
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.16s ease, border-color 0.16s ease;
+}
+.pressable:active {
+  transform: scale(0.96);
+}
+
+/* 下拉刷新指示 */
+.pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: height 0.18s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

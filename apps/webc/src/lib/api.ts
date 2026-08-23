@@ -1,4 +1,5 @@
 /** API 层：baseURL=/c，Bearer token；失败时抛错由调用方降级为演示数据 */
+import { getConfig } from "./config";
 import type {
   ChatResponse,
   MemberInfo,
@@ -47,7 +48,11 @@ export async function ensureSession(): Promise<{ token: string; user: SessionUse
     const res = await fetch(`${BASE}/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel: "h5", openid: getOpenid(), nickname: "星芒客户" }),
+      body: JSON.stringify({
+        channel: "h5",
+        openid: getOpenid(),
+        nickname: `${getConfig().brandName}宾客`,
+      }),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { token: string; user: SessionUser };
@@ -89,7 +94,7 @@ export const api = {
   orders: () => request<{ orders: Order[]; demo?: boolean }>("/orders"),
   member: () => request<MemberInfo>("/member"),
   createTicket: (body: {
-    kind: "delivery" | "repair" | "complaint" | "other";
+    kind: string;
     title: string;
     payload: Record<string, unknown>;
   }) => request<Ticket>("/tickets", { method: "POST", body: JSON.stringify(body) }),

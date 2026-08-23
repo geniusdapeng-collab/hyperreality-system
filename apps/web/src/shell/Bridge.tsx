@@ -112,6 +112,7 @@ export function Bridge({
             <span className="flex-1" />
             <PlanSwitcher onPlan={setPlan} />
             <LiveTicker />
+            <a href="/p22" className="rounded border border-line px-2 py-0.5 text-[11px] text-ink2 no-underline hover:border-gline">🛎 服务前台</a>
             <a href="/p21" className="rounded border border-gline px-2 py-0.5 text-[11px] text-gold no-underline hover:bg-card">董事长视图</a>
             {!community && <NightStatusPill onClick={() => { window.location.href = "/p9"; }} />}
             {!community && <EmergencyBrake />}

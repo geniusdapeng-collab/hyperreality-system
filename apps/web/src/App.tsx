@@ -3,6 +3,7 @@ import P1 from "./pages/p1/P1";
 import P2 from "./pages/p2/P2";
 import P9 from "./pages/p9/P9";
 import P21 from "./pages/p21/P21";
+import P22 from "./pages/p22/P22";
 import P0 from "./pages/p0/P0";
 import P3 from "./pages/p3/P3";
 import P4 from "./pages/p4/P4";
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/p2/:threadId" element={<P2 />} />
       <Route path="/p9" element={<P9 />} />
       <Route path="/p21" element={<P21 />} />
+      <Route path="/p22" element={<P22 />} />
       <Route path="/p3" element={<P3 />} />
       <Route path="/p4" element={<P4 />} />
       <Route path="/p5" element={<P5 />} />
