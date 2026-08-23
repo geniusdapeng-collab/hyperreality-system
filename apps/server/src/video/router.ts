@@ -28,15 +28,17 @@ import {
 import { judge, type RuntimeRule } from "@workloom/base/fence-engine";
 import { PlatformSchema } from "@workloom/base/publish-rpa";
 import { protectedProcedure, router, scopeOf, writeProcedure } from "../trpc/context.js";
+import { accountingRouter } from "./accounting.js";
+import { dealRouter } from "./deal.js";
 import { getRun, startRun, StudioWorkerError } from "./studio-worker.js";
 
 interface Scope { tenantId: string; workspaceId: string }
 
 /** pg.Pool 结构类型（server 不直接依赖 @types/pg，从 db 包入口推导） */
-type AppPool = ReturnType<typeof getAppPool>;
+export type AppPool = ReturnType<typeof getAppPool>;
 
 /** 装载生效围栏规则（与 packages/runtime/src/loop.ts loadActiveRules 同口径：工作区 + '*' 基线） */
-async function loadActiveRules(
+export async function loadActiveRules(
   app: AppPool,
   scope: Scope,
 ): Promise<{ rules: RuntimeRule[]; defaultLevel: "auto" | "review" | "block" }> {
@@ -72,10 +74,10 @@ async function loadActiveRules(
 
 /** pg QueryResultRow 同形约束（server 不直接依赖 @types/pg；any 值位与 pg 原生一致） */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type QueryRow = { [column: string]: any };
+export type QueryRow = { [column: string]: any };
 
 /** scoped 只读（L7.1：RLS + workspace 谓词双保险，越权返回空） */
-async function scopedQuery<T extends QueryRow>(
+export async function scopedQuery<T extends QueryRow>(
   app: AppPool,
   scope: Scope,
   sql: string,
@@ -494,4 +496,6 @@ export const videoRouter = router({
   publish: publishRouter,
   metrics: metricsRouter,
   comments: commentsRouter,
+  deal: dealRouter,
+  accounting: accountingRouter,
 });

@@ -2245,6 +2245,84 @@ const captainRouter = router({
   scorecard: protectedProcedure.query(async ({ ctx }) => {
     return buildScorecard(getAppPool(), scopeOf(ctx.identity));
   }),
+
+  /**
+   * 晨会交接单投影：captain loop 无现成夜班计划投影函数，按约定读
+   * night_runs（最近班次）+ triggers（enabled 派遣模板）聚合。
+   * 无夜班数据 → nightRun null + mock:true 明确标注（Mock 兜底，不伪造）。
+   */
+  handoffPlan: protectedProcedure.query(async ({ ctx }) => {
+    const scope = scopeOf(ctx.identity);
+    const app = getAppPool();
+    const client = await app.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      const run = await client.query<{
+        id: string; run_date: string; status: string; candidate_count: number;
+        stats: Record<string, unknown>; fence_snapshot_version: string | null; started_at: string | null;
+      }>(
+        `SELECT id, run_date, status, candidate_count, stats, fence_snapshot_version, started_at
+         FROM night_runs WHERE workspace_id=$1 ORDER BY run_date DESC, created_at DESC LIMIT 1`,
+        [scope.workspaceId],
+      );
+      const triggers = await client.query<{
+        id: string; name: string; kind: string; schedule: string; action: Record<string, unknown>;
+      }>(
+        `SELECT id, name, kind, schedule, action FROM triggers
+         WHERE workspace_id=$1 AND enabled=true ORDER BY id`,
+        [scope.workspaceId],
+      );
+      const briefing = await client.query<{ text: string | null; created_at: string }>(
+        `SELECT payload->'decision'->'after'->>'text' AS text, created_at
+         FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='ceo.briefing'
+         ORDER BY seq DESC LIMIT 1`,
+        [scope.workspaceId],
+      );
+      await client.query("COMMIT");
+      const nightRun = run.rows[0] ?? null;
+      return {
+        nightRun,
+        triggers: triggers.rows,
+        latestBriefing: briefing.rows[0] ?? null,
+        mock: nightRun === null,
+        note: nightRun === null
+          ? "无夜班班次数据，交接单为 Mock 兜底投影（triggers 为实时读取，nightRun 置空标注）"
+          : null,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }),
+
+  /** 晨会交接确认：董事长确认接手夜班计划 → captain.handoff_confirmed 事件留痕 */
+  handoffConfirm: writeProcedure
+    .input(z.object({
+      runDate: z.string().min(1),
+      note: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      const r = await gatewayAppend(getGatewayPool(), {
+        ...scope, actor: { id: ctx.identity.memberNo, type: "human" },
+        sessionId: `ceo-handoff-${scope.workspaceId}`,
+      }, {
+        who: { type: "human", id: ctx.identity.memberNo },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "company_ceo", id: scope.workspaceId },
+        decision: {
+          action: "captain.handoff_confirmed",
+          params: { run_date: input.runDate },
+          after: { note: input.note ?? null },
+          basis: [`晨会交接确认：董事长确认接手 ${input.runDate} 夜班计划（交接单投影见 captain.handoffPlan）`],
+        },
+        rule_impact: [],
+      });
+      return { ok: true, eventId: r.eventId };
+    }),
 });
 
 

@@ -7,3 +7,5 @@
  */
 export * from "./metrics.js";
 export * from "./comments.js";
+export * from "./normalize.js";
+export * from "./accounting.js";
