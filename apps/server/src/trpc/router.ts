@@ -95,6 +95,7 @@ import {
   recheckBundle,
 } from "@workloom/base/bundles";
 import { videoRouter } from "../video/router.js";
+import { serviceRouter } from "../service/router.js";
 
 /** system router：健康检查（公开） */
 const systemRouter = router({
@@ -2367,6 +2368,7 @@ export const appRouter = router({
   bundles: bundlesRouter,
   video: videoRouter,
   captain: captainRouter,
+  service: serviceRouter,
 });
 
 export type AppRouter = typeof appRouter;

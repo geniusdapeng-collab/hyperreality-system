@@ -5,11 +5,16 @@
  *      本卡只保证「起得来、握得上、查得到 DB」。
  */
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { appRouter } from "./trpc/router.js";
 import { createContext } from "./trpc/context.js";
+import { serviceGateway } from "./service/gateway.js";
 
 const app = new Hono();
 
@@ -36,6 +41,18 @@ app.all("/trpc/*", async (c) => {
 });
 
 const port = Number(process.env.SERVER_PORT ?? 8787);
+
+/** C 端公开网关（AI 服务前台；独立于员工 tRPC，c-token 鉴权 + 限流） */
+app.route("/c", serviceGateway);
+
+/** apps/webc 静态托管（C 端小程序/H5 演示壳；dist 不存在则跳过不报错） */
+const webcDist = join(dirname(fileURLToPath(import.meta.url)), "../../webc/dist");
+if (existsSync(webcDist)) {
+  app.use("/app/c/*", serveStatic({ root: webcDist, rewriteRequestPath: (p) => p.replace(/^\/app\/c/, "") || "/" }));
+  app.get("/app/c", (c) => c.redirect("/app/c/"));
+  console.log(`apps/webc 静态托管已挂载：/app/c → ${webcDist}`);
+}
+
 serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`WorkLoom IM 底座 server 已启动：http://localhost:${info.port}（tRPC: /trpc/*）`);
+  console.log(`WorkLoom IM 底座 server 已启动：http://localhost:${info.port}（tRPC: /trpc/*，C 端网关: /c/*）`);
 });

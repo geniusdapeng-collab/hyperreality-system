@@ -1,10 +1,11 @@
 /**
- * 落地向导（D24）——从「全模拟运行态」到「真实经营」的四步自动流程
+ * 落地向导（D24）——从「全模拟运行态」到「真实经营」的五步自动流程
  *
  * ① 环境自检（自动跑：DB/事件库/模型/数据模式）
  * ② 真实大模型（预设一键填 → 真实试调 → 通过才保存；保存即全链即时真实化，无需重启）
  * ③ 经营主体（名称/行业/简介 → 一店一档）
  * ④ 启用真实模式（翻转 dataMode，横幅熄灭；模拟期数据保留为「演示期」历史）
+ * ⑤ AI 服务前台（可选）：官网抓取建知识库 / 文档入库 / 试营业测试问 / 生成 C 端入口
  *
  * 设计纪律：每一步都可跳过但状态如实回显；所有写操作经 onboarding.* 端点五元事件留痕。
  */
@@ -20,7 +21,7 @@ const PROVIDERS: Array<{ key: string; label: string; baseUrl: string; model: str
   { key: "custom", label: "自定义（OpenAI 兼容网关）", baseUrl: "", model: "" },
 ];
 
-const STEPS = ["环境自检", "真实大模型", "经营主体", "启用真实模式"] as const;
+const STEPS = ["环境自检", "真实大模型", "经营主体", "启用真实模式", "AI 服务前台"] as const;
 
 export default function Onboarding() {
   const [st, setSt] = useState<OnboardingStatus | null>(null);
@@ -115,9 +116,58 @@ export default function Onboarding() {
     try {
       await trpc.onboarding.activateRealMode.mutate();
       await reload();
-      setDone(true);
+      setStep(4);
     } catch (e) { setErr((e as Error).message); }
     finally { setActivating(false); }
+  };
+
+  // —— ⑤ AI 服务前台（可选）——
+  const [siteUrl, setSiteUrl] = useState("");
+  const [siteBusy, setSiteBusy] = useState(false);
+  const [siteResult, setSiteResult] = useState<{ entryCount: number; degraded?: boolean } | null>(null);
+  const [docTitle, setDocTitle] = useState("");
+  const [docMd, setDocMd] = useState("");
+  const [docBusy, setDocBusy] = useState(false);
+  const [docResult, setDocResult] = useState<{ version: number; chunks: number } | null>(null);
+  const [testQ, setTestQ] = useState("");
+  const [testBusy, setTestBusy] = useState(false);
+  const [testHits, setTestHits] = useState<Array<{ documentTitle: string; heading: string; content: string; score: number }> | null>(null);
+
+  const ensureCollection = async (): Promise<string> => {
+    const r = await trpc.service.kb.listCollections.query();
+    const first = (r.collections as Array<{ id: string }>)[0];
+    if (first) return first.id;
+    const r2 = (await trpc.service.kb.createCollection.mutate({ name: "企业知识库", description: "落地向导初始化" })) as { collection: { id: string } };
+    return r2.collection.id;
+  };
+
+  const crawlSite = async () => {
+    setSiteBusy(true); setErr("");
+    try {
+      const reg = (await trpc.service.kb.registerSite.mutate({ url: siteUrl.trim() })) as { sourceId: string };
+      const r = (await trpc.service.kb.crawlNow.mutate({ sourceId: reg.sourceId })) as { entryCount: number; degraded?: boolean };
+      setSiteResult(r);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSiteBusy(false); }
+  };
+
+  const addDoc = async () => {
+    setDocBusy(true); setErr("");
+    try {
+      const collectionId = await ensureCollection();
+      const r = (await trpc.service.kb.upsertDocument.mutate({ collectionId, title: docTitle.trim(), sourceKind: "manual", contentMd: docMd })) as { version: number; chunks: number };
+      setDocResult(r);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setDocBusy(false); }
+  };
+
+  const runTest = async () => {
+    setTestBusy(true); setErr("");
+    try {
+      const r = await trpc.service.kb.search.query({ query: testQ.trim(), limit: 3 });
+      setTestHits(r.hits as Array<{ documentTitle: string; heading: string; content: string; score: number }>);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setTestBusy(false); }
   };
 
   const inputCls = "w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none placeholder:text-ink3 focus:border-gline";
@@ -247,6 +297,69 @@ export default function Onboarding() {
           </div>
         )}
 
+        {/* ⑤ AI 服务前台（可选） */}
+        {step === 4 && !done && (
+          <div className="space-y-4 rounded-xl border border-gline bg-panel/70 p-5">
+            <div className="text-sm font-bold text-gold">启用 AI 服务前台（ToBToC · 可选）</div>
+            <div className="text-xs leading-relaxed text-ink2">
+              为您的客户（C 端）配一个 7×24 的 AI 客服前台：知识库问答（带引用、不臆造）、订单/会员查询、服务工单流转与结果推送。入口为小程序级 H5：<code className="text-holo">/app/c</code>。
+            </div>
+
+            {/* 渠道 */}
+            <div className="flex gap-2 text-[11px]">
+              {["微信小程序", "支付宝小程序", "H5 网页（已就绪）"].map((c, i) => (
+                <span key={c} className={`rounded border px-2 py-1 ${i === 2 ? "border-go/50 text-go" : "border-line text-ink3"}`}>{c}</span>
+              ))}
+            </div>
+
+            {/* 官网抓取建库 */}
+            <div className="space-y-2 rounded-lg border border-line p-3">
+              <div className="text-xs font-bold text-ink">① 官网自动建库（抓取 → 结构化 → 每日扫描更新，变更必审）</div>
+              <div className="flex gap-2">
+                <input className={inputCls} placeholder="企业官网 URL，如 https://www.example.com" value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} />
+                <button className={btnCls} disabled={siteBusy || !siteUrl.trim()} onClick={() => void crawlSite()}>{siteBusy ? "抓取中……" : "抓取建库"}</button>
+              </div>
+              {siteResult && (
+                <div className="text-xs text-go">✓ 已结构化抽取 {siteResult.entryCount} 条知识入库{siteResult.degraded ? "（无 LLM key，降级直存）" : ""}，已进入待审列表。</div>
+              )}
+            </div>
+
+            {/* 文档入库 */}
+            <div className="space-y-2 rounded-lg border border-line p-3">
+              <div className="text-xs font-bold text-ink">② 或直接上传政策/手册内容（Markdown 粘贴即可）</div>
+              <input className={inputCls} placeholder="文档标题，如《住客服务须知》" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} />
+              <textarea className={`${inputCls} h-24`} placeholder="# 服务政策
+## 退换货
+……" value={docMd} onChange={(e) => setDocMd(e.target.value)} />
+              <div className="text-right">
+                <button className={btnCls} disabled={docBusy || !docTitle.trim() || !docMd.trim()} onClick={() => void addDoc()}>{docBusy ? "入库中……" : "解析入库"}</button>
+              </div>
+              {docResult && <div className="text-xs text-go">✓ 已入库 v{docResult.version}，自动切分 {docResult.chunks} 个知识块。</div>}
+            </div>
+
+            {/* 试营业测试问 */}
+            <div className="space-y-2 rounded-lg border border-line p-3">
+              <div className="text-xs font-bold text-ink">③ 试营业：问一句，看命中与依据</div>
+              <div className="flex gap-2">
+                <input className={inputCls} placeholder="测试问题，如：退房时间是几点？" value={testQ} onChange={(e) => setTestQ(e.target.value)} />
+                <button className={btnCls} disabled={testBusy || !testQ.trim()} onClick={() => void runTest()}>{testBusy ? "检索中……" : "试一句"}</button>
+              </div>
+              {testHits && (testHits.length === 0 ? (
+                <div className="text-xs text-amber-300">未命中——真实问答时 AI 将诚实拒答并自动生成工单转专人，不臆造。</div>
+              ) : testHits.map((h, i) => (
+                <div key={i} className="rounded border border-line bg-card px-2.5 py-1.5 text-[11px] text-ink2">
+                  <b className="text-holo">{h.documentTitle} · {h.heading}</b>（相关度 {h.score.toFixed(2)}）<br />{h.content.slice(0, 80)}
+                </div>
+              )))}
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button className="text-xs text-ink3 underline" onClick={() => setDone(true)}>暂不配置，稍后在知识中台配置</button>
+              <button className={btnCls} onClick={() => setDone(true)}>完成，进入经营剧场 →</button>
+            </div>
+          </div>
+        )}
+
         {/* 完成 */}
         {done && (
           <div className="space-y-4 rounded-xl border border-go/50 bg-go/5 p-6 text-center">
@@ -256,7 +369,10 @@ export default function Onboarding() {
               横幅已熄灭，切换全程已留痕（onboarding.real_mode_activated）。<br />
               数字团队将继续以真实身份为您工作——回剧场看看。
             </div>
-            <a href="/" className="inline-block rounded-lg border border-gline bg-gold/10 px-5 py-2 text-sm text-gold no-underline hover:bg-gold/20">回到经营剧场 →</a>
+            <div className="flex items-center justify-center gap-3">
+              <a href="/" className="inline-block rounded-lg border border-gline bg-gold/10 px-5 py-2 text-sm text-gold no-underline hover:bg-gold/20">回到经营剧场 →</a>
+              <a href="/app/c" target="_blank" className="inline-block rounded-lg border border-holo/40 bg-holo/10 px-5 py-2 text-sm text-holo no-underline hover:bg-holo/20">打开 C 端服务前台 ↗</a>
+            </div>
           </div>
         )}
       </div>

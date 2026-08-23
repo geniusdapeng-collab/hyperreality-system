@@ -1,0 +1,103 @@
+/**
+ * 云栖酒店 C 端「AI 服务前台」设计令牌
+ * 与 B 端舰桥同族视觉：深空底 #0a1230 + 酒店金 #e9b558
+ * Tailwind v4 令牌制：只写 @theme，无 tailwind.config.js
+ */
+@import "tailwindcss";
+
+@theme {
+  /* 深空底（移动端页面 → 卡片 → 浮层） */
+  --color-bg950: #04060f;
+  --color-bg900: #050a1a;
+  --color-bg800: #0a1230;
+  --color-bg700: #121e45;
+  /* 酒店金（行动/奖励/会员）+ 金高光 + 金底文字 */
+  --color-gold: #e9b558;
+  --color-gold2: #d69a3a;
+  --color-goldhi: #ffe0a3;
+  --color-ongold: #2a1500;
+  /* 全息青（信息/引用证据） */
+  --color-holo: #45e0ff;
+  --color-holo2: #2fa8ff;
+  /* 语义色 */
+  --color-go: #3dffb2;
+  --color-warn: #ffc24d;
+  --color-alert: #ff5470;
+  /* 文字三级 */
+  --color-ink: #eaf1ff;
+  --color-ink2: #9db2dc;
+  --color-ink3: #5e7099;
+  /* 卡片与描线 */
+  --color-card: rgb(13 22 52 / 0.72);
+  --color-line: rgb(96 140 255 / 0.22);
+  --color-gline: rgb(233 181 88 / 0.45);
+
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-orb: "Orbitron", "JetBrains Mono", ui-monospace, monospace;
+
+  --animate-typing: typing-dot 1.2s ease-in-out infinite;
+  --animate-sheen: sheen 2.6s ease-in-out infinite;
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes sheen {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-bg950);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* 手机壳：390px 居中（桌面预览时带机身边框观感） */
+.phone-shell {
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg800);
+  position: relative;
+  overflow: hidden;
+}
+@media (min-width: 431px) {
+  .phone-shell {
+    min-height: min(100dvh - 32px, 844px);
+    margin-top: 16px;
+    margin-bottom: 16px;
+    border-radius: 28px;
+    border: 1px solid var(--color-line);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.6);
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

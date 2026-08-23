@@ -653,6 +653,97 @@ async function main() {
   await gw.end();
   console.log("✓ 运行态剧本完成（剧场/职场/晨报/实况/审批/评论/商单全量有数）");
 
+  // ============ AI 服务前台 · 星芒好物 C 端运行态 ============
+  const svcQ = (text: string, params: unknown[]) => owner.query(text, params);
+  await svcQ(
+    `INSERT INTO c_users (id, workspace_id, channel, openid, nickname, member_id, created_at)
+     VALUES ('cu-chenxiaoyu', $1, 'wechat-mini', 'openid-chenxiaoyu', '陈小予', 'M-XM-6688', $2)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, new Date(Date.now() - 15 * 86400000).toISOString()],
+  );
+  await svcQ(
+    `INSERT INTO kb_collections (id, workspace_id, name, description)
+     VALUES ('kbc-after-sale', $1, '售后服务政策', '星芒好物退换货、质保与物流政策')
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID],
+  );
+  const afterSaleMd = `# 星芒好物售后服务政策\n\n## 退换货\n签收后 7 天无理由退换（保温杯需未使用、包装完好）；质量问题 30 天内免费换新。\n\n## 质保\n保温杯整机质保 2 年，杯盖密封圈等易损件 1 年免费补发。\n\n## 物流\n默认顺丰，16:00 前下单当日发；新疆西藏时效 +3 天。`;
+  await svcQ(
+    `INSERT INTO kb_documents (id, workspace_id, collection_id, title, source_kind, version, status, content_md, hash, created_at)
+     VALUES ('kbd-after-sale', $1, 'kbc-after-sale', '售后服务政策', 'manual', 1, 'active', $2, 'seed-hash-aftersale', $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, afterSaleMd, new Date(Date.now() - 10 * 86400000).toISOString()],
+  );
+  const asChunks: [number, string, string][] = [
+    [0, '退换货', '签收后 7 天无理由退换（保温杯需未使用、包装完好）；质量问题 30 天内免费换新。'],
+    [1, '质保', '保温杯整机质保 2 年，杯盖密封圈等易损件 1 年免费补发。'],
+    [2, '物流', '默认顺丰，16:00 前下单当日发；新疆西藏时效 +3 天。'],
+  ];
+  for (const [idx, heading, content] of asChunks) {
+    await svcQ(
+      `INSERT INTO kb_chunks (workspace_id, document_id, chunk_index, heading, content)
+       SELECT $1,'kbd-after-sale',$2,$3,$4
+       WHERE NOT EXISTS (SELECT 1 FROM kb_chunks WHERE document_id='kbd-after-sale' AND chunk_index=$2)`,
+      [WS_ID, idx, heading, content],
+    );
+  }
+  await svcQ(
+    `INSERT INTO c_conversations (id, workspace_id, c_user_id, channel, status, created_at, last_message_at)
+     VALUES ('cv-xm-001', $1, 'cu-chenxiaoyu', 'wechat-mini', 'open', $2, $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, new Date(Date.now() - 5 * 3600000).toISOString(), new Date(Date.now() - 5 * 3600000 + 60000).toISOString()],
+  );
+  const xmMsgs: [string, string, string, number, string, number][] = [
+    ['user', '保温杯用了两周就不保温了，能换吗？', '', 0, '[]', 0],
+    ['assistant', '【质保】可以。保温杯整机质保 2 年，不保温属质量问题，30 天内免费换新。我可以直接为您生成换新工单，您看可以吗？', 'kb_qa', 0.94, JSON.stringify([{ documentTitle: '售后服务政策', heading: '质保', content: '整机质保 2 年，质量问题 30 天内免费换新。' }]), 23],
+  ];
+  for (let i = 0; i < xmMsgs.length; i++) {
+    const m = xmMsgs[i]!;
+    await svcQ(
+      `INSERT INTO c_messages (workspace_id, conversation_id, role, content, intent, confidence, citations, latency_ms, created_at)
+       SELECT $1,'cv-xm-001',$2,$3,$4,$5,$6::jsonb,$7,$8
+       WHERE NOT EXISTS (SELECT 1 FROM c_messages WHERE conversation_id='cv-xm-001' AND content=$3)`,
+      [WS_ID, m[0], m[1], m[2] || null, m[3] || null, m[4], m[5] || null, new Date(Date.now() - 5 * 3600000 + i * 30000).toISOString()],
+    );
+  }
+  const xmTickets: [string, string, string, string, string, string, string | null, number][] = [
+    ['tck-xm-001', 'cu-chenxiaoyu', 'cv-xm-001', 'repair', '保温杯不保温·申请换新', 'processing', 'high', '售后部', 5],
+    ['tck-xm-002', 'cu-chenxiaoyu', null, 'other', '发票补开（订单 XM-20771）', 'done', 'normal', '财务部', 26],
+  ];
+  for (const t of xmTickets) {
+    await svcQ(
+      `INSERT INTO c_tickets (id, workspace_id, c_user_id, conversation_id, kind, title, payload, status, priority, dept, sla_due_at, result, idempotency_key, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'{}',$7,$8,$9,$10,$11,$12,$13,$13)
+       ON CONFLICT (id) DO NOTHING`,
+      [t[0], WS_ID, t[1], t[2], t[3], t[4], t[5], t[6], t[7],
+       new Date(Date.now() + 4 * 3600000).toISOString(),
+       t[5] === 'done' ? JSON.stringify({ text: '电子发票已发送至您的微信卡包，请查收。', rating: { score: 5 } }) : null,
+       `seed-${t[0]}`, new Date(Date.now() - t[8] * 3600000).toISOString()],
+    );
+  }
+  const xmTl: [string, string, string, string, string, number][] = [
+    ['tck-xm-001', 'create', 'c_user', 'cu-chenxiaoyu', '对话中确认换新', 300],
+    ['tck-xm-001', 'assign', 'agent', 'agt-service-desk', '智能分派 → 售后部', 299],
+    ['tck-xm-001', 'start', 'staff', '售后-小赵', '已核对订单，安排换新发出', 240],
+    ['tck-xm-002', 'create', 'c_user', 'cu-chenxiaoyu', '自助提交', 1560],
+    ['tck-xm-002', 'complete', 'staff', '财务-小钱', '电子发票已开具并推送', 1500],
+  ];
+  for (const e of xmTl) {
+    await svcQ(
+      `INSERT INTO c_ticket_events (workspace_id, ticket_id, action, actor_type, actor_id, detail, created_at)
+       SELECT $1,$2,$3,$4,$5,$6::jsonb,$7
+       WHERE NOT EXISTS (SELECT 1 FROM c_ticket_events WHERE ticket_id=$2 AND action=$3 AND actor_id=$4)`,
+      [WS_ID, e[0], e[1], e[2], e[3], JSON.stringify({ note: e[4] }), new Date(Date.now() - e[5] * 60000).toISOString()],
+    );
+  }
+  await svcQ(
+    `INSERT INTO c_notifications (workspace_id, c_user_id, channel, kind, payload, driver, status, created_at)
+     SELECT $1,'cu-chenxiaoyu','wechat-mini','ticket.accepted',$2::jsonb,'mock','delivered',$3
+     WHERE NOT EXISTS (SELECT 1 FROM c_notifications WHERE c_user_id='cu-chenxiaoyu' AND kind='ticket.accepted')`,
+    [WS_ID, JSON.stringify({ text: '您的换新工单「保温杯不保温·申请换新」已受理，售后部处理中。', mock: true }), new Date(Date.now() - 299 * 60000).toISOString()],
+  );
+  console.log("✓ AI 服务前台运行态（星芒好物）：用户/售后政策知识库/会话/工单×2/时间线/通知");
+
   await owner.end();
   console.log("\n视频经理演示种子完成。下一步：pnpm dev 后在舰桥查看（ws-video 工作区）。");
 }

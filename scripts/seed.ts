@@ -816,6 +816,152 @@ async function main(): Promise<void> {
     throw new Error(`验收失败：期望 ${EVENT_COUNT} 条且完整率 100%（实际 ${check.rowCount} 条 / ${(rate * 100).toFixed(1)}%）`);
   }
 
+  // ============ AI 服务前台 · 运行态剧本（ToBToC：C 端客服全域） ============
+  const svcQ = (text: string, params: unknown[]) => gw.query(text, params);
+
+  // C 端用户（会员绑定 + 纯游客各一）
+  await svcQ(
+    `INSERT INTO c_users (id, workspace_id, channel, openid, nickname, member_id, created_at)
+     VALUES
+       ('cu-zhangwei', $1, 'wechat-mini', 'openid-zhangwei', '张伟', 'M-GOLD-10086', $2),
+       ('cu-xiaoli', $1, 'h5', 'fp-xiaoli-8f3a', '住客小李', NULL, $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, new Date(Date.now() - 30 * 86400000).toISOString(), new Date(Date.now() - 2 * 86400000).toISOString()],
+  );
+
+  // 知识库第二集合：商品与服务目录（送物/餐饮/SPA）+ 官网来源登记
+  await svcQ(
+    `INSERT INTO kb_collections (id, workspace_id, name, description)
+     VALUES ('kbc-service-catalog', $1, '商品与服务目录', '送物清单、餐饮、康体 SPA 等服务与价格')
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID],
+  );
+  const catalogMd = `# 商品与服务目录\n\n## 免费送物清单\n矿泉水（每日 2 瓶免费）、牙刷套装、梳子、剃须刀、拖鞋、充电器借用。\n\n## 收费送物\n面膜 28 元/片、红酒 128 元/瓶、生日蛋糕 168 元/个（需提前 2 小时预约）。\n\n## 餐饮\n中西自助早餐 68 元/位（住店会员免费）；云栖轩中餐厅 11:00-21:00；客房送餐至 23:00。\n\n## 康体\n恒温泳池 07:00-22:00（住客免费）；SPA 60 分钟 398 元起，需预约。`;
+  await svcQ(
+    `INSERT INTO kb_documents (id, workspace_id, collection_id, title, source_kind, source_url, version, status, content_md, hash, created_at)
+     VALUES ('kbd-service-catalog', $1, 'kbc-service-catalog', '商品与服务目录', 'manual', NULL, 1, 'active', $2, 'seed-hash-catalog', $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, catalogMd, new Date(Date.now() - 20 * 86400000).toISOString()],
+  );
+  const catChunks: [number, string, string][] = [
+    [0, '免费送物清单', '矿泉水（每日 2 瓶免费）、牙刷套装、梳子、剃须刀、拖鞋、充电器借用。'],
+    [1, '收费送物', '面膜 28 元/片、红酒 128 元/瓶、生日蛋糕 168 元/个（需提前 2 小时预约）。'],
+    [2, '餐饮', '中西自助早餐 68 元/位（住店会员免费）；云栖轩中餐厅 11:00-21:00；客房送餐至 23:00。'],
+    [3, '康体', '恒温泳池 07:00-22:00（住客免费）；SPA 60 分钟 398 元起，需预约。'],
+  ];
+  for (const [idx, heading, content] of catChunks) {
+    await svcQ(
+      `INSERT INTO kb_chunks (workspace_id, document_id, chunk_index, heading, content)
+       SELECT $1,'kbd-service-catalog',$2,$3,$4
+       WHERE NOT EXISTS (SELECT 1 FROM kb_chunks WHERE document_id='kbd-service-catalog' AND chunk_index=$2)`,
+      [WS_ID, idx, heading, content],
+    );
+  }
+  await svcQ(
+    `INSERT INTO kb_sources (id, workspace_id, url, fingerprint, last_crawled_at, schedule_cron, status)
+     VALUES ('kbs-official-site', $1, 'https://www.yunqi-hotel.example', 'fp-a91c', $2, '0 3 * * *', 'active')
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, new Date(Date.now() - 86400000).toISOString()],
+  );
+
+  // 会话 1：会员张伟——退房时间问答（高置信带引用）
+  await svcQ(
+    `INSERT INTO c_conversations (id, workspace_id, c_user_id, channel, status, created_at, last_message_at)
+     VALUES ('cv-seed-001', $1, 'cu-zhangwei', 'wechat-mini', 'open', $2, $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, new Date(Date.now() - 26 * 3600000).toISOString(), new Date(Date.now() - 26 * 3600000 + 90000).toISOString()],
+  );
+  const conv1Msgs: [string, string, string, number, string, number][] = [
+    ['user', '退房时间是几点？会员能延迟吗？', '', 0, '[]', 0],
+    ['assistant', '【退房时间】本店标准退房时间为每日中午 12:00 前。您是金卡会员，可免费延迟至 14:00 退房。', 'kb_qa', 0.95, JSON.stringify([{ documentTitle: '云栖酒店住客服务须知', heading: '退房时间', content: '标准退房时间 12:00，会员可延迟至 14:00。' }]), 24],
+    ['user', '早餐几点开始？收费吗？', '', 0, '[]', 0],
+    ['assistant', '【早餐】中西自助早餐 07:00-10:30 供应，68 元/位；住店会员免费。地点：一层云栖餐厅。', 'kb_qa', 0.93, JSON.stringify([{ documentTitle: '云栖酒店住客服务须知', heading: '早餐', content: '早餐 07:00-10:30，会员免费。' }]), 21],
+  ];
+  for (let i = 0; i < conv1Msgs.length; i++) {
+    const m = conv1Msgs[i]!;
+    await svcQ(
+      `INSERT INTO c_messages (workspace_id, conversation_id, role, content, intent, confidence, citations, latency_ms, created_at)
+       SELECT $1,'cv-seed-001',$2,$3,$4,$5,$6::jsonb,$7,$8
+       WHERE NOT EXISTS (SELECT 1 FROM c_messages WHERE conversation_id='cv-seed-001' AND content=$3)`,
+      [WS_ID, m[0], m[1], m[2] || null, m[3] || null, m[4], m[5] || null, new Date(Date.now() - 26 * 3600000 + i * 30000).toISOString()],
+    );
+  }
+
+  // 会话 2：住客小李——送物请求转工单 + 投诉建单
+  await svcQ(
+    `INSERT INTO c_conversations (id, workspace_id, c_user_id, channel, status, created_at, last_message_at)
+     VALUES ('cv-seed-002', $1, 'cu-xiaoli', 'h5', 'open', $2, $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [WS_ID, new Date(Date.now() - 3 * 3600000).toISOString(), new Date(Date.now() - 3 * 3600000 + 120000).toISOString()],
+  );
+  const conv2Msgs: [string, string, string, number, string, number][] = [
+    ['user', '房间空调好像不制冷，能找人看看吗？8306', '', 0, '[]', 0],
+    ['assistant', '很抱歉给您带来不便。我已为您生成维修工单，工程部会尽快上门处理，进度会实时通知您。', 'service_request', 0.91, '[]', 28],
+  ];
+  for (let i = 0; i < conv2Msgs.length; i++) {
+    const m = conv2Msgs[i]!;
+    await svcQ(
+      `INSERT INTO c_messages (workspace_id, conversation_id, role, content, intent, confidence, citations, latency_ms, created_at)
+       SELECT $1,'cv-seed-002',$2,$3,$4,$5,$6::jsonb,$7,$8
+       WHERE NOT EXISTS (SELECT 1 FROM c_messages WHERE conversation_id='cv-seed-002' AND content=$3)`,
+      [WS_ID, m[0], m[1], m[2] || null, m[3] || null, m[4], m[5] || null, new Date(Date.now() - 3 * 3600000 + i * 40000).toISOString()],
+    );
+  }
+
+  // 工单 ×3（三种状态）+ 流转时间线
+  const tickets: [string, string, string | null, string, string, string, string, string | null, string | null, number][] = [
+    ['tck-seed-001', 'cu-xiaoli', 'cv-seed-002', 'repair', '8306 空调不制冷', 'processing', 'high', '工程部', '王师傅', 2],
+    ['tck-seed-002', 'cu-zhangwei', null, 'delivery', '送两瓶矿泉水到 1208', 'assigned', 'normal', '客房部', null, 1],
+    ['tck-seed-003', 'cu-xiaoli', null, 'complaint', '隔壁房间深夜噪音扰民', 'done', 'high', '值班经理', '刘经理', 20],
+  ];
+  for (const t of tickets) {
+    await svcQ(
+      `INSERT INTO c_tickets (id, workspace_id, c_user_id, conversation_id, kind, title, payload, status, priority, dept, assignee, sla_due_at, result, idempotency_key, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'{}',$7,$8,$9,$10,$11,$12,$13,$14,$14)
+       ON CONFLICT (id) DO NOTHING`,
+      [t[0], WS_ID, t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8],
+       new Date(Date.now() + 2 * 3600000).toISOString(),
+       t[5] === 'done' ? JSON.stringify({ text: '已与隔壁房客沟通并提醒静音，赠送您一份果盘致歉。', rating: { score: 5 } }) : null,
+       `seed-${t[0]}`, new Date(Date.now() - t[9] * 3600000 / 10).toISOString()],
+    );
+  }
+  const tl: [string, string, string, string, string, number][] = [
+    ['tck-seed-001', 'create', 'c_user', 'cu-xiaoli', '用户对话中建单', 180],
+    ['tck-seed-001', 'assign', 'agent', 'agt-service-desk', '智能分派 → 工程部', 179],
+    ['tck-seed-001', 'start', 'staff', '王师傅', '已接单，携带工具前往 8306', 95],
+    ['tck-seed-002', 'create', 'c_user', 'cu-zhangwei', '服务台自助提交', 60],
+    ['tck-seed-002', 'assign', 'agent', 'agt-service-desk', '智能分派 → 客房部', 59],
+    ['tck-seed-003', 'create', 'c_user', 'cu-xiaoli', '投诉类必建单', 480],
+    ['tck-seed-003', 'assign', 'agent', 'agt-service-desk', '智能分派 → 值班经理', 479],
+    ['tck-seed-003', 'start', 'staff', '刘经理', '现场处理中', 460],
+    ['tck-seed-003', 'complete', 'staff', '刘经理', '已沟通提醒并赠果盘致歉', 430],
+    ['tck-seed-003', 'rate', 'c_user', 'cu-xiaoli', '满意度 5 星', 400],
+  ];
+  for (const e of tl) {
+    await svcQ(
+      `INSERT INTO c_ticket_events (workspace_id, ticket_id, action, actor_type, actor_id, detail, created_at)
+       SELECT $1,$2,$3,$4,$5,$6::jsonb,$7
+       WHERE NOT EXISTS (SELECT 1 FROM c_ticket_events WHERE ticket_id=$2 AND action=$3 AND actor_id=$4)`,
+      [WS_ID, e[0], e[1], e[2], e[3], JSON.stringify({ note: e[4] }), new Date(Date.now() - e[5] * 60000).toISOString()],
+    );
+  }
+
+  // 推送箱：受理 + 办结通知（仿服务通知）
+  const notifs: [string, string, string, string, number][] = [
+    ['ntf-seed-001', 'cu-xiaoli', 'ticket.accepted', '您的维修工单「8306 空调不制冷」已受理，工程部王师傅处理中。', 170],
+    ['ntf-seed-002', 'cu-xiaoli', 'ticket.completed', '您的投诉工单「隔壁房间深夜噪音扰民」已办结：已与隔壁房客沟通提醒，并赠果盘致歉。欢迎评价。', 425],
+    ['ntf-seed-003', 'cu-zhangwei', 'ticket.accepted', '您的送物工单「送两瓶矿泉水到 1208」已受理，客房部将尽快送达。', 55],
+  ];
+  for (const n of notifs) {
+    await svcQ(
+      `INSERT INTO c_notifications (workspace_id, c_user_id, channel, kind, payload, driver, status, created_at)
+       SELECT $1,$2,'h5',$3,$4::jsonb,'mock','delivered',$5
+       WHERE NOT EXISTS (SELECT 1 FROM c_notifications WHERE c_user_id=$2 AND kind=$3 AND payload->>'text'=$6)`,
+      [WS_ID, n[1], n[2], JSON.stringify({ text: n[3], mock: true }), new Date(Date.now() - n[4] * 60000).toISOString(), n[3]],
+    );
+  }
+  console.log("✓ AI 服务前台运行态：C 端用户×2 / 知识库集合×2+官网源 / 会话×2 / 工单×3（全状态+时间线）/ 通知×3");
+
   await gw.end();
   console.log("种子数据完成 ✅（云栖酒店演示数据集就绪）");
 }
