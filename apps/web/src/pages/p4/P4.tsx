@@ -18,19 +18,26 @@ import {
   TriGestureBar,
   type Gesture,
 } from "../../components/hud";
+import { actionLabel, agentOfApproval } from "../../components/hud/gateAgentMap";
 
 interface BizEvent {
   event_id: string;
   who: { id: string; version?: string };
   object: { type: string; id?: string };
-  decision: { action: string; before?: unknown; after?: unknown; memory_refs?: string[] };
+  decision: { action: string; before?: unknown; after?: unknown; memory_refs?: string[]; basis?: string[] };
   rule_impact: Array<{ rule_id: string; version: string; result: string }>;
   model_trace?: { model_id: string; tier?: string; window?: string; credits?: number };
   receipt?: { synced?: boolean };
 }
 interface ApprovalRow {
   approval_id: string; event_id: string; channel: string; status: string;
-  snapshot: { before?: unknown; after?: unknown; expires_at?: string; high_risk?: boolean };
+  snapshot: {
+    before?: unknown; after?: unknown; expires_at?: string; high_risk?: boolean;
+    /** 依据链（治理 §九.3；存在即可展开渲染） */
+    basis?: string[]; contentMd?: string;
+    /** 成本预估（渲染类快照可能携带；缺则「待估算」） */
+    estimate_credits?: number; estimate_cost?: string;
+  };
   created_at: string;
   event?: BizEvent;
 }
@@ -53,6 +60,7 @@ export default function P4() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ level: "alert" | "warn" | "info"; text: string } | null>(null);
   const [batchArmed, setBatchArmed] = useState(false);
+  const [basisOpen, setBasisOpen] = useState(false); // 依据链展开（选中项切换时收起）
 
   const load = useCallback(async () => {
     try {
@@ -75,6 +83,8 @@ export default function P4() {
     return () => clearInterval(t);
   }, [load]);
 
+  useEffect(() => setBasisOpen(false), [selectedId]);
+
   const canApprove = role !== "readonly";
   const pending = approvals.filter((a) => a.status === "pending");
   const decided = approvals.filter((a) => a.status !== "pending" && a.status !== "expired");
@@ -86,6 +96,17 @@ export default function P4() {
     edited: approvals.filter((a) => a.status === "edited").length,
     rejected: approvals.filter((a) => a.status === "rejected").length,
   }), [approvals]);
+
+  /* ---------- 审批拟人化（请示语气）：门 → 主理员工（gateAgentMap 常量表） ---------- */
+  const hostAgent = selected ? agentOfApproval(selected) : null;
+  const hostAction = selected?.event ? actionLabel(selected.event.decision.action) : "提交审批事项";
+  const isRenderCard = !!selected && (
+    (selected.event?.decision.action ?? "").startsWith("render.") ||
+    selected.snapshot.estimate_credits !== undefined || selected.snapshot.estimate_cost !== undefined
+  );
+  /** 依据链（snapshot 优先，事件 decision.basis 兜底；存在即可展开） */
+  const basisLines = selected?.snapshot.basis ?? selected?.event?.decision.basis ?? [];
+  const basisMd = selected?.snapshot.contentMd ?? null;
 
   const gesture = useCallback(async (a: ApprovalRow, g: Gesture) => {
     if (g === "reject") {
@@ -139,7 +160,7 @@ export default function P4() {
                   }`}>{tier}</span>
                 </div>
                 <div className="mt-1 text-body text-ink2">
-                  {a.event ? `${a.event.who.id} · ${a.event.decision.action}` : a.event_id}
+                  {a.event ? `${agentOfApproval(a).name} · ${actionLabel(a.event.decision.action)}` : a.event_id}
                 </div>
                 {isConflict(a) && <div className="mt-0.5 text-micro text-alert">⚠ 快照冲突（E5.3）</div>}
               </button>
@@ -245,20 +266,68 @@ export default function P4() {
           <EmptyState icon="◆" title="选中左侧待办项" hint="单击队列条目展开原生审批卡" />
         ) : (
           <div className="space-y-3.5">
-            {/* 原生审批卡（桌面详情版） */}
+            {/* 原生审批卡（桌面详情版 · 请示语气：员工向你请示） */}
             <div className="rounded-msg border border-warn/40 bg-card p-4">
               <div className="mb-2.5 flex items-center gap-2">
-                <span className="text-h2 font-bold text-warn">◆ 舰长决断 · {selected.status === "pending" ? "待审" : selected.status}</span>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gold/60 bg-gold/10 text-caption font-bold text-goldhi">
+                  {(hostAgent?.name ?? "值").slice(0, 1)}
+                </span>
+                <span className="text-h2 font-bold text-warn">
+                  {hostAgent?.name ?? "值班 Agent"} 向你请示：{hostAction}
+                </span>
                 <EventIdChip id={selected.event_id} />
                 <span className={`rounded border px-1.5 py-0.5 text-micro ${
                   tierOf(selected) === "双人" ? "border-need/50 text-need" : tierOf(selected) === "必审" ? "border-warn/50 text-warn" : "border-line text-ink3"
                 }`}>{tierOf(selected)}</span>
-                {selected.event && (
-                  <span className="font-mono text-micro text-ink3">
-                    来源 {selected.event.who.id} · {selected.event.decision.action}
-                  </span>
-                )}
+                <span className="font-mono text-micro text-ink3">
+                  {selected.status === "pending" ? "待审" : selected.status}
+                  {hostAgent?.gate ? ` · ${hostAgent.gate} 门` : ""}
+                </span>
               </div>
+
+              {/* 成本预估区（渲染类卡片；数据缺时显「待估算」） */}
+              {isRenderCard && (
+                <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-gline bg-gold/5 px-3 py-2">
+                  <span className="text-caption font-bold text-gold">成本预估</span>
+                  <span className="font-mono text-caption text-ink2">
+                    预计额度 <b className="font-orb text-gold">
+                      {selected.snapshot.estimate_credits ?? selected.event?.model_trace?.credits ?? "待估算"}
+                    </b>{selected.snapshot.estimate_credits ?? selected.event?.model_trace?.credits ? " 积分" : ""}
+                  </span>
+                  <span className="font-mono text-caption text-ink2">
+                    预计费用 <b className="font-orb text-gold">{selected.snapshot.estimate_cost ?? "待估算"}</b>
+                  </span>
+                  {selected.event?.model_trace?.window && (
+                    <span className="font-mono text-micro text-ink3">窗口 {selected.event.model_trace.window}</span>
+                  )}
+                </div>
+              )}
+
+              {/* 依据链（可展开；snapshot.contentMd/basis 存在即渲染，治理 §九.3） */}
+              {(basisLines.length > 0 || basisMd) && (
+                <div className="mb-3 rounded-lg border border-line bg-bg800/40">
+                  <button
+                    type="button"
+                    onClick={() => setBasisOpen((v) => !v)}
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-caption font-bold text-holo"
+                  >
+                    <span>{basisOpen ? "▾" : "▸"}</span>
+                    依据链（{basisLines.length > 0 ? `${basisLines.length} 条依据` : "正文快照"}）
+                  </button>
+                  {basisOpen && (
+                    <div className="space-y-1.5 border-t border-line px-3 py-2.5">
+                      {basisLines.map((b) => (
+                        <div key={b} className="flex gap-2 text-caption text-ink2">
+                          <span className="text-holo2">◆</span>{b}
+                        </div>
+                      ))}
+                      {basisMd && (
+                        <pre className="max-h-56 overflow-auto rounded border border-line bg-bg900/70 p-2.5 font-mono text-caption whitespace-pre-wrap text-ink2">{basisMd}</pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* P4E1 diff 对照表（前删线 → 后高亮；命中规则随行） */}
               <div className="mb-3 grid grid-cols-2 gap-2.5">

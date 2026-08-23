@@ -27,6 +27,7 @@ import {
   SystemDivider,
   type NightPillState,
 } from "../../components/hud";
+import { HostAgent } from "../../components/hud/HostAgent";
 
 /* ---------- 类型（与 server router 对齐） ---------- */
 interface ThreadRow {
@@ -284,11 +285,14 @@ export default function P1() {
   return (
     <Bridge left={left} right={right}>
       <div className="flex min-h-full flex-col">
-        <div className="mb-3 flex items-baseline gap-3">
+        <div className="mb-3 flex items-center gap-3">
           <h2 className="text-h1 font-black tracking-wider">主甲板 · 舰桥</h2>
           <span className="text-[11px] tracking-[.2em] text-ink3">
             P1 · MAIN DECK{isCommunity ? " · 社区版" : ""}{demo ? ` · demo=${demo}` : ""}
           </span>
+          <span className="flex-1" />
+          {/* 本页主理员工（主甲板=总导演；点击 → P8 员工档案） */}
+          <HostAgent presetKey="director" fallbackName="总导演" />
         </div>
 
         {error && (

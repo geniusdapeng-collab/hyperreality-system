@@ -9,6 +9,8 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { EmergencyBrake, NightStatusPill } from "../components/hud";
+import { LiveTicker } from "../components/hud/LiveTicker";
+import { StarRing } from "../components/star-ring/StarRing";
 import { SimBanner } from "../components/SimBanner";
 import { PlanSwitcher } from "./PlanSwitcher";
 
@@ -109,6 +111,7 @@ export function Bridge({
             </span>
             <span className="flex-1" />
             <PlanSwitcher onPlan={setPlan} />
+            <LiveTicker />
             <a href="/p21" className="rounded border border-gline px-2 py-0.5 text-[11px] text-gold no-underline hover:bg-card">董事长视图</a>
             {!community && <NightStatusPill onClick={() => { window.location.href = "/p9"; }} />}
             {!community && <EmergencyBrake />}
@@ -159,6 +162,9 @@ export function Bridge({
           </div>
         </div>
       </div>
+
+      {/* 星环 StarRing：全局 Ask 入口（所有页面生效；⌘K 唤起，双击进 /p0 剧场） */}
+      <StarRing />
     </div>
   );
 }
