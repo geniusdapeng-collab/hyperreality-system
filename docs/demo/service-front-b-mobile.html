@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>云栖酒店 · 服务前台掌上战报 B 端移动演示（镜像 P3 范式）</title>
+<style>
+/* ===== 设计令牌：tokens.css 逐值（深空底 #0a1230 + 暗金 #e9b558 + 全息青细线） ===== */
+:root{
+  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
+  --gold:#e9b558; --gold2:#d69a3a; --goldhi:#ffe0a3; --ongold:#2a1500;
+  --holo:#45e0ff; --holo2:#2fa8ff;
+  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470;
+  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
+  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(233,181,88,.45);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.orb{font-family:"Orbitron","JetBrains Mono",ui-monospace,monospace}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.pressable{transition:transform .16s cubic-bezier(.34,1.56,.64,1)}
+.pressable:active{transform:scale(.96)}
+@keyframes wl-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.pulse{animation:wl-pulse 1.6s ease-in-out infinite}
+.fadein{animation:fadeUp .35s both}
+.gold-grad{background:linear-gradient(135deg,var(--gold),var(--gold2))}
+
+/* ===== 演示控制条 ===== */
+.demo-bar{max-width:430px;margin:0 auto;padding:10px 14px 0;display:flex;flex-wrap:wrap;gap:6px}
+.demo-bar a{font-size:11px;color:var(--ink3);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+.demo-bar a.on{color:var(--gold);border-color:var(--gline);background:rgba(233,181,88,.08)}
+.demo-bar .src{width:100%;font-size:10px;color:var(--ink3);margin-top:2px}
+.demo-bar .src b{color:var(--holo);font-weight:400;font-family:"JetBrains Mono",monospace}
+
+/* ===== 手机壳（P3 §4.2 真机框镜像：375px · 44px 圆角） ===== */
+.phone{width:375px;margin:10px auto 30px;border-radius:44px;border:1px solid var(--line);background:var(--bg900);box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+.phone-notch{display:flex;justify-content:center;border-bottom:1px solid var(--line);background:rgba(4,6,15,.8);padding:8px 0}
+.phone-notch span{width:64px;height:6px;border-radius:99px;background:var(--bg700)}
+.body{padding:14px;display:flex;flex-direction:column;gap:12px;min-height:640px;padding-bottom:8px}
+
+.view{display:none;flex-direction:column;gap:12px}
+.view.on{display:flex}
+
+/* ===== 底 Tab ===== */
+.tabbar{display:flex;border-top:1px solid var(--line);background:var(--bg950);padding:8px 4px 12px}
+.tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--ink3);padding:4px 0}
+.tabbar button.on{color:var(--gold)}
+.tabbar .ic{font-size:17px}
+
+/* ===== 组件 ===== */
+.card{border-radius:16px;border:1px solid var(--line);background:var(--card);padding:14px}
+.chip{display:inline-block;border-radius:4px;border:1px solid;padding:1px 6px;font-size:10px}
+.chip-go{border-color:rgba(61,255,178,.4);color:var(--go)}
+.chip-warn{border-color:rgba(255,194,77,.4);color:var(--warn)}
+.chip-holo{border-color:rgba(69,224,255,.4);color:var(--holo)}
+.chip-gold{border-color:var(--gline);color:var(--goldhi)}
+.chip-line{border-color:var(--line);color:var(--ink3)}
+.chip-alert{border-color:rgba(255,84,112,.4);color:var(--alert)}
+.count-btn{border-radius:12px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:10px 8px;text-align:center}
+.count-btn.on{border-color:var(--gline);background:rgba(233,181,88,.08)}
+.count-btn .n{font-family:"Orbitron","JetBrains Mono",monospace;font-size:28px;font-weight:700}
+.count-btn .l{margin-top:2px;font-size:10px;color:var(--ink2)}
+.act-btn{min-height:44px;border-radius:12px;border:1px solid;font-size:13.5px;font-weight:700;padding:0 12px}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:80;border-radius:99px;border:1px solid var(--gline);background:var(--bg800);padding:8px 18px;font-size:12px;color:var(--goldhi);box-shadow:0 8px 30px rgba(0,0,0,.5);animation:fadeUp .25s both}
+.banner{border-radius:12px;border:1px solid rgba(61,255,178,.4);background:rgba(61,255,178,.06);padding:8px 12px;font-size:12px;color:var(--go);display:flex;align-items:center;gap:8px}
+.banner.warn{border-color:rgba(255,194,77,.4);background:rgba(255,194,77,.06);color:var(--warn)}
+.route-tag{font-size:9px;color:var(--ink3);font-family:"JetBrains Mono",monospace;opacity:.8}
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <a href="#report" data-v="report">战报</a><a href="#tickets" data-v="tickets">工单</a><a href="#kb" data-v="kb">知识库</a><a href="#me" data-v="me">我的</a>
+  <div class="src" id="srcLine"></div>
+</div>
+
+<div class="phone">
+  <div class="phone-notch"><span></span></div>
+  <div class="body">
+
+    <!-- ============ 战报（apps/web/src/pages/p3/P3.tsx 范式 + P22 stats 投影） ============ -->
+    <section class="view" id="v-report">
+      <div style="display:flex;align-items:center;gap:8px">
+        <a style="font-size:11px;color:var(--holo);text-decoration:none;cursor:pointer" onclick="toast('返回主甲板（/）')">← 主甲板</a>
+        <span style="font-size:16px;font-weight:900">服务前台 · 掌上战报</span>
+        <span style="font-size:10px;letter-spacing:.2em;color:var(--ink3)">P3 范式</span>
+      </div>
+      <div class="route-tag">镜像：apps/web/src/pages/p3/P3.tsx（战报体系）· 数据 P22 stats.overview + scripts/eval</div>
+      <div id="bannerBox"></div>
+
+      <!-- 今日服务概览（P3E1 三栏计数头范式，点击筛选） -->
+      <div class="card">
+        <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13.5px;font-weight:900;color:var(--goldhi)">✦ 今日服务概览</span>
+          <span class="mono" style="font-size:10px;color:var(--holo)">2026-08-24</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <button class="count-btn pressable" onclick="countTap(this,'会话')"><div class="n" style="color:var(--holo)">2</div><div class="l">今日会话</div></button>
+          <button class="count-btn pressable" onclick="countTap(this,'问答')"><div class="n" style="color:var(--holo)">4</div><div class="l">问答量</div></button>
+          <button class="count-btn pressable" onclick="countTap(this,'完结率')"><div class="n" style="color:var(--go)">33%</div><div class="l">完结率</div></button>
+        </div>
+        <div style="margin-top:8px;text-align:center" class="mono"><span style="font-size:10px;color:var(--ink3)">有据率 100% · 首答 19ms · 评测四维全 100%（scripts/eval）</span></div>
+      </div>
+
+      <!-- 服务预警（SLA 超时；P22 insights alert 范式） -->
+      <div class="card" style="border-color:rgba(255,84,112,.5);background:rgba(255,84,112,.06)">
+        <div style="margin-bottom:4px;font-size:13.5px;font-weight:700;color:var(--alert)">▲ 服务预警 · SLA 超时风险</div>
+        <div style="font-size:11px;line-height:1.7;color:var(--ink2)">工单 <span class="mono" style="color:var(--holo)">tck-seed-001</span>「8306 空调不制冷」高优先级处理中已 3 小时，距 SLA 截止（08/24 02:32）不足 18 小时未办结将升级——请催办工程部王师傅。</div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="act-btn pressable" style="flex:1;border-color:rgba(255,84,112,.55);color:var(--alert)" onclick="toast('已催办 王师傅（pushMessage mock:true）')">催办处理人</button>
+          <button class="act-btn pressable" style="flex:1;border-color:var(--gline);color:var(--goldhi)" onclick="location.hash='tickets'">去工单台 →</button>
+        </div>
+      </div>
+
+      <!-- 晨会汇报卡（昨夜工单量/满意度；seed c_tickets×3 + rate 5 星） -->
+      <div class="card" style="border-color:var(--gline)">
+        <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13.5px;font-weight:900;color:var(--goldhi)">☀ 晨会汇报卡</span>
+          <span class="mono" style="font-size:10px;color:var(--ink3)">昨夜 22:00–08:00</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+          <div><div class="orb" style="font-size:22px;font-weight:700;color:var(--holo)">3</div><div style="font-size:10px;color:var(--ink2);margin-top:2px">昨夜工单量</div></div>
+          <div><div class="orb" style="font-size:22px;font-weight:700;color:var(--gold)">5</div><div style="font-size:10px;color:var(--ink2);margin-top:2px">满意度均分</div></div>
+          <div><div class="orb" style="font-size:22px;font-weight:700;color:var(--go)">0</div><div style="font-size:10px;color:var(--ink2);margin-top:2px">SLA 已超时</div></div>
+        </div>
+        <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px;font-size:11px;line-height:1.8;color:var(--ink2)">
+          · 维修 1 单（8306 空调，处理中）· 送物 1 单（已分派客房部）· 投诉 1 单（已办结，住客五星评价）<br>
+          · 问答有据率 100%——回答均带知识引用，不臆造；评测质量 4.77 / 5
+        </div>
+        <button class="act-btn pressable gold-grad" style="width:100%;margin-top:10px;border:none;color:var(--ongold)" onclick="toast('晨会汇报已推送至管理群（mock:true）')">一键推送晨会汇报</button>
+      </div>
+    </section>
+
+    <!-- ============ 工单（P22 ticketsSection 移动重排；待办两条可处理） ============ -->
+    <section class="view" id="v-tickets">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;font-weight:900">待办工单</span>
+        <span class="chip chip-warn">2 条待处理</span>
+      </div>
+      <div class="route-tag">镜像：apps/web/src/pages/p22/P22.tsx ticketsSection · 数据 scripts/seed.ts c_tickets</div>
+      <div id="tkList" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div class="card" style="border-style:dashed;text-align:center;padding:18px">
+        <div style="font-size:11px;color:var(--ink3)">已办结 1 单：tck-seed-003「隔壁房间深夜噪音扰民」· 满意度 ★★★★★</div>
+      </div>
+    </section>
+
+    <!-- ============ 知识库（P22 kbSection 移动重排） ============ -->
+    <section class="view" id="v-kb">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;font-weight:900">知识中台</span>
+        <span class="chip chip-warn" id="kbPend">待审 1</span>
+      </div>
+      <div class="route-tag">镜像：apps/web/src/pages/p22/P22.tsx kbSection · 数据 scripts/seed.ts kb_collections×2</div>
+      <div class="card">
+        <div style="font-size:13.5px;font-weight:700">📚 住客服务知识库</div>
+        <div style="margin-top:2px;font-size:10px;color:var(--ink3)">酒店前台常见问题与服务说明（演示种子）</div>
+        <div style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:12px">云栖酒店住客服务须知</div><div style="font-size:10px;color:var(--ink3)">手工录入 · v1 · 切块 4</div></div>
+          <span class="chip chip-go">active</span>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:13.5px;font-weight:700">🛎 商品与服务目录</div>
+        <div style="margin-top:2px;font-size:10px;color:var(--ink3)">送物清单、餐饮、康体 SPA 等服务与价格</div>
+        <div style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:12px">商品与服务目录</div><div style="font-size:10px;color:var(--ink3)">手工录入 · v1 · 切块 4</div></div>
+          <span class="chip chip-go">active</span>
+        </div>
+      </div>
+      <!-- 待审批准（P22 pendingReviews + approveDocument 镜像） -->
+      <div class="card" id="pendCard" style="border-color:rgba(255,194,77,.35)">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="font-size:16px">📝</span>
+          <div style="flex:1">
+            <div style="font-size:12.5px;font-weight:700;color:var(--warn)">待审 · 官网抓取文档</div>
+            <div style="margin-top:2px;font-size:11px;color:var(--ink2)">官网抓取 · 云栖酒店服务与设施页 <span class="mono" style="font-size:10px;color:var(--ink3)">v1</span></div>
+            <div style="margin-top:2px;font-size:10px;color:var(--ink3)">来源 https://www.yunqi-hotel.example · 定时 0 3 * * *</div>
+          </div>
+        </div>
+        <button class="act-btn pressable" style="width:100%;margin-top:10px;border-color:rgba(61,255,178,.5);color:var(--go)" onclick="approve()">✓ 批准生效（kb.publish）</button>
+      </div>
+      <div class="card">
+        <div style="font-size:11px;font-weight:700;color:var(--holo)">🔎 试检索</div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <input id="q" value="退房时间是几点？" style="flex:1;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--bg950);padding:0 12px;font-size:12.5px;color:var(--ink);outline:none">
+          <button class="act-btn pressable gold-grad" style="min-height:38px;border:none;color:var(--ongold)" onclick="doSearch()">检索</button>
+        </div>
+        <div id="hits" style="margin-top:8px"></div>
+      </div>
+    </section>
+
+    <!-- ============ 我的 ============ -->
+    <section class="view" id="v-me">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px;font-weight:900">我的</span></div>
+      <div class="route-tag">镜像：apps/web/src/shell/Bridge.tsx 顶栏身份 + NightStatusPill</div>
+      <div class="card" style="border-color:var(--gline)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:48px;height:48px;border-radius:99px;border:1px solid var(--gline);background:rgba(233,181,88,.12);display:flex;align-items:center;justify-content:center" class="orb"><span style="font-size:16px;color:var(--gold)">刘</span></div>
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600">刘经理</div>
+            <div style="margin-top:2px;font-size:11px;color:var(--ink2)">值班经理 · 服务前台管理</div>
+          </div>
+          <span class="chip chip-gold">owner</span>
+        </div>
+      </div>
+      <button class="card pressable" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px" onclick="toast('进入守夜战队频道（P9）')">
+        <span class="pulse" style="width:8px;height:8px;border-radius:99px;background:var(--holo);box-shadow:0 0 10px var(--holo)"></span>
+        <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--holo)">守夜战队 · 巡航中</div><div style="font-size:10px;color:var(--ink3)">22:00–08:00 · 并行 ×4</div></div>
+        <span style="color:var(--ink3)">›</span>
+      </button>
+      <button class="card pressable" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px" onclick="toast('打开 PC 舰桥 /p22（演示：见 service-front-b-pc.html）')">
+        <span style="font-size:16px">🖥</span>
+        <div style="flex:1"><div style="font-size:12.5px">PC 舰桥 · 服务前台</div><div style="font-size:10px;color:var(--ink3)">知识中台 / 工单台 / 服务报表</div></div>
+        <span style="color:var(--ink3)">›</span>
+      </button>
+      <button class="card pressable" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px" onclick="toast('C 端 H5 /app/c（演示：见 service-front-c.html）')">
+        <span style="font-size:16px">🛎</span>
+        <div style="flex:1"><div style="font-size:12.5px">C 端服务前台入口</div><div style="font-size:10px;color:var(--ink3)">H5 已就绪 · 微信/支付宝待配置</div></div>
+        <span style="color:var(--ink3)">›</span>
+      </button>
+      <div class="card" style="text-align:center;padding:18px">
+        <div style="font-size:11px;color:var(--ink3)">WorkLoom · 云栖酒店<br>企业 Agent IM · AI 服务前台</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 底 Tab -->
+  <nav class="tabbar">
+    <button data-v="report" onclick="location.hash='report'"><span class="ic">📊</span>战报</button>
+    <button data-v="tickets" onclick="location.hash='tickets'"><span class="ic">🎫</span>工单</button>
+    <button data-v="kb" onclick="location.hash='kb'"><span class="ic">📚</span>知识库</button>
+    <button data-v="me" onclick="location.hash='me'"><span class="ic">👤</span>我的</button>
+  </nav>
+</div>
+
+<script>
+function toast(msg){
+  const t=document.createElement("div");t.className="toast";t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),2400);
+}
+function banner(level,text){
+  document.getElementById("bannerBox").innerHTML=`<div class="banner ${level} fadein"><span style="flex:1">${text}</span><button style="color:inherit;font-size:11px" onclick="this.parentElement.remove()">好</button></div>`;
+}
+function countTap(el,name){
+  document.querySelectorAll(".count-btn").forEach(b=>b.classList.remove("on"));
+  el.classList.add("on");
+  toast(`已筛选：${name}（与 P22 服务报表同口径）`);
+}
+
+/* ===== 路由 ===== */
+const VIEWS=["report","tickets","kb","me"];
+const SRC={
+  report:"镜像：apps/web/src/pages/p3/P3.tsx 战报范式 · 数据 P22 stats.overview + scripts/eval",
+  tickets:"镜像：apps/web/src/pages/p22/P22.tsx ticketsSection · /p22?tab=tickets 移动重排",
+  kb:"镜像：apps/web/src/pages/p22/P22.tsx kbSection · /p22?tab=kb 移动重排",
+  me:"镜像：apps/web/src/shell/Bridge.tsx 顶栏身份 + NightStatusPill"
+};
+function route(){
+  const h=location.hash.replace("#","")||"report";
+  const v=VIEWS.includes(h)?h:"report";
+  VIEWS.forEach(k=>document.getElementById("v-"+k).classList.toggle("on",k===v));
+  document.querySelectorAll(".tabbar button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
+  document.querySelectorAll(".demo-bar a").forEach(a=>a.classList.toggle("on",a.dataset.v===v));
+  document.getElementById("srcLine").innerHTML=`当前视图 <b>#${v}</b> — ${SRC[v]}`;
+}
+window.addEventListener("hashchange",route);
+
+/* ===== 待办工单（seed tck-seed-001/002，状态机可点翻转） ===== */
+const TICKETS=[
+  {id:"tck-seed-001",kind:"报修",title:"8306 空调不制冷",status:"processing",priority:"high",dept:"工程部",assignee:"王师傅",meta:"对话中建单 · 智能分派 → 工程部 · 王师傅已接单"},
+  {id:"tck-seed-002",kind:"送物",title:"送两瓶矿泉水到 1208",status:"assigned",priority:"normal",dept:"客房部",assignee:null,meta:"服务台自助提交 · 智能分派 → 客房部"}
+];
+const S_LABEL={created:"新建",assigned:"已分派",processing:"处理中",done:"已办结"};
+function sChip(s){const c=s==="done"?"chip-go":s==="processing"?"chip-holo":s==="assigned"?"chip-gold":"chip-line";return `<span class="chip ${c}">${S_LABEL[s]}</span>`;}
+function renderTk(){
+  const box=document.getElementById("tkList");
+  const todo=TICKETS.filter(t=>t.status!=="done");
+  if(!todo.length){box.innerHTML=`<div class="card" style="text-align:center;padding:24px"><div style="font-size:13px;font-weight:700;color:var(--go)">✓ 待办已清空</div><div style="margin-top:4px;font-size:11px;color:var(--ink2)">全部工单已办结，结果已 pushMessage 通知 C 端</div></div>`;return;}
+  box.innerHTML=todo.map(t=>{
+    const acts=[];
+    if(t.status==="assigned")acts.push(`<button class="act-btn pressable" style="flex:1;border-color:rgba(69,224,255,.4);color:var(--holo)" onclick="advance('${t.id}')">▶ 开始处理</button>`);
+    acts.push(`<button class="act-btn pressable" style="flex:1;border-color:rgba(61,255,178,.5);color:var(--go)" onclick="complete('${t.id}')">✓ 办结</button>`);
+    return `<div class="card fadein">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="mono" style="font-size:10px;color:var(--ink3)">${t.id}</span>
+        ${sChip(t.status)}
+        <span class="chip chip-line">${t.kind}</span>
+        ${t.priority!=="normal"?`<span class="chip chip-alert">${t.priority}</span>`:""}
+      </div>
+      <div style="margin-top:6px;font-size:13.5px;font-weight:500">${t.title}</div>
+      <div style="margin-top:4px;font-size:10px;line-height:1.6;color:var(--ink3)">${t.meta}</div>
+      <div style="margin-top:10px;display:flex;gap:8px">${acts.join("")}</div>
+    </div>`;
+  }).join("");
+}
+function advance(id){
+  const t=TICKETS.find(x=>x.id===id);t.status="processing";
+  renderTk();banner("info",`工单 ${id} 开始处理（assigned → processing 状态机断言）`);
+}
+function complete(id){
+  const t=TICKETS.find(x=>x.id===id);t.status="done";
+  renderTk();banner("info",`工单 ${id} 已办结——结果已 pushMessage 通知 C 端（mock:true）`);
+}
+
+/* ===== 知识库待审批准 + 试检索 ===== */
+function approve(){
+  document.getElementById("pendCard").innerHTML=`<div style="text-align:center;padding:8px"><div style="font-size:12.5px;font-weight:700;color:var(--go)">✓ 已批准生效</div><div style="margin-top:4px;font-size:10px;line-height:1.6;color:var(--ink3)">文档状态/五元事件/approvals 审批行 三写同一 COMMIT（kb.publish，D16）</div></div>`;
+  document.getElementById("kbPend").textContent="待审 0";
+  banner("info","「官网抓取 · 云栖酒店服务与设施页」v1 已批准生效，进入检索索引");
+}
+function doSearch(){
+  const q=document.getElementById("q").value.trim();if(!q)return;
+  let hits=null;
+  if(q.includes("退房"))hits=[["住客服务须知 · 退房时间","标准退房时间 12:00，会员可延迟至 14:00。",0.92]];
+  else if(q.includes("早餐"))hits=[["住客服务须知 · 早餐时间","自助早餐 7:00-10:00，一楼全日制餐厅。",0.90],["商品与服务目录 · 餐饮","中西自助早餐 68 元/位（住店会员免费）。",0.86]];
+  else if(q.includes("送物")||q.includes("矿泉"))hits=[["商品与服务目录 · 免费送物清单","矿泉水（每日 2 瓶免费）、牙刷套装、梳子等。",0.91]];
+  const box=document.getElementById("hits");
+  if(!hits){box.innerHTML=`<div style="font-size:10px;color:var(--warn)">无命中——可考虑补充知识文档</div>`;return;}
+  box.innerHTML=hits.map(h=>`<div class="fadein" style="border-radius:8px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:8px;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--ink2)">${h[0]}</span><span class="orb" style="color:var(--holo)">${h[2].toFixed(2)}</span></div>
+    <div style="margin-top:2px;font-size:10px;line-height:1.6;color:var(--ink3)">${h[1]}</div></div>`).join("");
+}
+
+route();renderTk();
+</script>
+</body>
+</html>

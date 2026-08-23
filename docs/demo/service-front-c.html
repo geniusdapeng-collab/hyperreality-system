@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>云栖酒店 · AI 服务前台 C 端演示（镜像 apps/webc）</title>
+<style>
+/* ===== 设计令牌：逐值镜像 apps/webc/src/styles/tokens.css（深空底 #0a1230 + 暗金 #e9b558） ===== */
+:root{
+  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
+  --gold:#e9b558; --gold2:#d69a3a; --goldhi:#ffe0a3; --ongold:#2a1500;
+  --holo:#45e0ff; --holo2:#2fa8ff;
+  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470;
+  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
+  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(233,181,88,.45);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.orb{font-family:"Orbitron","JetBrains Mono",ui-monospace,monospace}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit}
+.pressable{transition:transform .16s cubic-bezier(.34,1.56,.64,1)}
+.pressable:active{transform:scale(.96)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tabIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes typingDot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+@keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(233,181,88,.5)}100%{box-shadow:0 0 0 9px rgba(233,181,88,0)}}
+@keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+.fadein{animation:fadeUp .38s cubic-bezier(.22,1,.36,1) both}
+.tabin{animation:tabIn .24s ease-out both}
+.pop{animation:pop .45s cubic-bezier(.34,1.56,.64,1) both}
+
+/* ===== 演示控制条（非产品界面：标注镜像出处） ===== */
+.demo-bar{max-width:430px;margin:0 auto;padding:10px 14px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.demo-bar .src{font-size:10px;color:var(--ink3);width:100%;margin-top:2px}
+.demo-bar .src b{color:var(--holo);font-weight:400;font-family:"JetBrains Mono",monospace}
+.demo-bar a{font-size:11px;color:var(--ink3);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+.demo-bar a.on{color:var(--gold);border-color:var(--gline);background:rgba(233,181,88,.08)}
+
+/* ===== 手机壳（tokens.css .phone-shell 镜像：390px 居中） ===== */
+.shell{width:390px;height:min(812px,calc(100vh - 100px));margin:10px auto 30px;border-radius:28px;border:1px solid var(--line);
+  box-shadow:0 24px 80px rgba(0,0,0,.6);background:var(--bg800);display:flex;flex-direction:column;overflow:hidden;position:relative}
+/* 微信小程序胶囊位状态栏 */
+.statusbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 4px;font-size:12px;color:var(--ink)}
+.capsule{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.capsule span{padding:3px 10px;font-size:12px;color:var(--ink2)}
+.capsule span+span{border-left:1px solid var(--line)}
+.batt{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink2)}
+
+.view{display:none;flex:1;flex-direction:column;min-height:0}
+.view.on{display:flex}
+.scroll{flex:1;overflow-y:auto;min-height:0}
+.scroll::-webkit-scrollbar{display:none}
+
+/* ===== 底 Tab（App.tsx nav 镜像） ===== */
+.tabnav{display:flex;border-top:1px solid var(--line);background:var(--bg900);padding:6px 0 10px}
+.tabnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;color:var(--ink3);font-size:10px}
+.tabnav button.on{color:var(--gold)}
+.tabnav svg{width:22px;height:22px}
+.badge{position:absolute;top:-3px;right:-8px;min-width:14px;height:14px;border-radius:99px;background:var(--alert);color:#fff;font-size:8.5px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 3px}
+
+/* ===== PageHeader（common.tsx 镜像） ===== */
+.phead{position:sticky;top:0;z-index:5;height:52px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:rgba(10,18,48,.9);backdrop-filter:blur(8px);padding:0 16px}
+.phead h1{font-size:17px;font-weight:600}
+.phead .rt{font-size:12px;color:var(--ink2)}
+
+/* ===== 通用卡件 ===== */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.chip{display:inline-block;border-radius:99px;border:1px solid;padding:1px 8px;font-size:10px}
+.chip-go{border-color:rgba(61,255,178,.5);background:rgba(61,255,178,.1);color:var(--go)}
+.chip-gold{border-color:rgba(233,181,88,.5);background:rgba(233,181,88,.1);color:var(--gold)}
+.chip-holo{border-color:rgba(69,224,255,.5);background:rgba(69,224,255,.1);color:var(--holo)}
+.gold-btn{width:100%;height:44px;border-radius:99px;background:var(--gold);color:var(--ongold);font-size:14px;font-weight:500}
+.gold-btn:disabled{opacity:.4}
+.route-tag{font-size:9px;color:var(--ink3);font-family:"JetBrains Mono",monospace;padding:4px 16px 0;opacity:.8}
+
+/* ===== 对话页（ChatPage.tsx 镜像） ===== */
+.welcome{border-bottom:1px solid var(--line);background:linear-gradient(to bottom,rgba(18,30,69,.6),var(--bg800));padding:14px 16px 12px}
+.qchip{flex-shrink:0;border-radius:99px;border:1px solid var(--gline);background:var(--card);padding:6px 12px;font-size:12px;color:var(--goldhi)}
+.msg-user{max-width:80%;border-radius:16px;border-bottom-right-radius:4px;background:var(--gold);color:var(--ongold);padding:10px 14px;font-size:13.5px;line-height:1.6}
+.msg-ai{max-width:82%;border-radius:16px;border-top-left-radius:4px;border:1px solid var(--line);background:var(--card);padding:10px 14px;font-size:13.5px;line-height:1.6}
+.avatar{width:28px;height:28px;border-radius:99px;border:1px solid var(--gline);background:rgba(233,181,88,.1);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:2px}
+.cursor{display:inline-block;width:6px;height:14px;background:var(--gold);vertical-align:middle;margin-left:2px;animation:typingDot 1s infinite}
+.cite{margin-top:8px;border-radius:12px;border:1px solid rgba(69,224,255,.3);background:rgba(69,224,255,.05);overflow:hidden}
+.cite-head{width:100%;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:11px;color:var(--holo)}
+.cite-body{border-top:1px solid rgba(69,224,255,.2);padding:8px 12px;display:none}
+.cite.open .cite-body{display:block;animation:fadeUp .3s both}
+.cite-item{border-radius:8px;background:rgba(5,10,26,.6);padding:8px}
+.cite-item p:first-child{font-size:11px;font-weight:500;color:var(--holo)}
+.cite-item p:last-child{font-size:11px;line-height:1.6;color:var(--ink2);margin-top:4px}
+.tnotice{margin-top:8px;display:flex;gap:10px;align-items:flex-start;border-radius:12px;border:1px solid rgba(255,194,77,.4);background:rgba(255,194,77,.1);padding:12px}
+.tnotice .ic{width:28px;height:28px;border-radius:99px;background:rgba(255,194,77,.2);color:var(--warn);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+.ordercard{margin-top:8px;border-radius:12px;border:1px solid var(--gline);background:var(--card);overflow:hidden}
+.ordercard .hd{display:flex;justify-content:space-between;background:rgba(233,181,88,.1);padding:6px 12px;font-size:11px;color:var(--gold)}
+.inputbar{border-top:1px solid var(--line);background:var(--bg800);padding:10px 12px 14px;display:flex;gap:8px}
+.inputbar input{flex:1;height:40px;border-radius:99px;border:1px solid var(--line);background:var(--bg900);padding:0 16px;font-size:13.5px;color:var(--ink);outline:none}
+.inputbar input:focus{border-color:var(--gline)}
+.inputbar button{height:40px;border-radius:99px;background:var(--gold);color:var(--ongold);padding:0 16px;font-size:13px;font-weight:500}
+.typing{display:flex;align-items:center;gap:8px;padding-left:36px;font-size:11px;color:var(--ink3)}
+.typing i{width:6px;height:6px;border-radius:99px;background:var(--gold);animation:typingDot 1.2s infinite;display:inline-block}
+
+/* ===== 服务大厅（ServicePage.tsx 镜像） ===== */
+.svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
+.svc-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;border-radius:16px;border:1px solid var(--line);background:var(--card);padding:16px;text-align:left}
+.svc-card .ic{width:40px;height:40px;border-radius:12px;background:rgba(233,181,88,.1);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600}
+.svc-card .t{font-size:14px;font-weight:500;color:var(--ink)}
+.svc-card .d{font-size:11px;line-height:1.6;color:var(--ink3)}
+.svc-card .s{margin-top:auto;font-size:10px;color:var(--gold)}
+.form-field{margin-bottom:16px}
+.form-field span{display:block;font-size:12px;color:var(--ink2);margin-bottom:6px}
+.form-field input,.form-field textarea{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg900);padding:12px 14px;font-size:13.5px;color:var(--ink);outline:none;resize:none}
+.form-field input:focus,.form-field textarea:focus{border-color:var(--gline)}
+
+/* ===== 工单页（TicketsPage.tsx 镜像） ===== */
+.tk-card{width:100%;border-radius:16px;border:1px solid var(--line);background:var(--card);padding:14px;text-align:left}
+.tl-node{position:relative;display:flex;gap:12px;padding-bottom:20px}
+.tl-node .dot{width:10px;height:10px;border-radius:99px;background:var(--line);margin-top:5px;flex-shrink:0}
+.tl-node:last-child .dot{background:var(--gold);animation:pulseRing 1.8s ease-out infinite}
+.tl-node .bar{position:absolute;left:4.5px;top:16px;bottom:0;width:1px;background:var(--line)}
+.tl-node:last-child .bar{display:none}
+/* 评价弹层 */
+.sheet-mask{position:absolute;inset:0;z-index:20;background:rgba(4,6,15,.7);backdrop-filter:blur(2px)}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;border-radius:24px 24px 0 0;border-top:1px solid var(--gline);background:var(--bg800);padding:20px 20px 26px;animation:fadeUp .3s both}
+.star{width:34px;height:34px}
+.star path{fill:none;stroke:var(--ink3);stroke-width:1.5}
+.star.on path{fill:var(--gold);stroke:var(--gold)}
+
+/* ===== 消息页（MessagesPage.tsx 镜像） ===== */
+.notice{border-radius:12px;border:1px solid var(--line);background:var(--card);overflow:hidden}
+.notice .hd{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:8px 12px;font-size:11px}
+.notice .bd{padding:10px 12px}
+.notice .ft{border-top:1px solid var(--line);padding:6px 12px;font-size:10px;color:var(--ink3)}
+.udot{width:6px;height:6px;border-radius:99px;background:var(--alert);display:inline-block;margin-right:5px}
+
+/* ===== 我的（MePage.tsx 镜像） ===== */
+.member-card{border-radius:16px;border:1px solid var(--gline);background:linear-gradient(135deg,var(--bg700),var(--bg800),var(--bg900));padding:16px;overflow:hidden}
+.bchip{border-radius:99px;background:rgba(233,181,88,.1);padding:4px 10px;font-size:10.5px;color:var(--goldhi)}
+.row-card{width:100%;display:flex;align-items:center;justify-content:space-between;border-radius:16px;border:1px solid var(--line);background:var(--card);padding:14px 16px;text-align:left}
+</style>
+</head>
+<body>
+
+<!-- 演示控制条：视图 ↔ 生产路由对照 -->
+<div class="demo-bar" id="demoBar">
+  <a href="#chat" data-v="chat">对话</a><a href="#service" data-v="service">服务</a><a href="#tickets" data-v="tickets">工单</a><a href="#messages" data-v="messages">消息</a><a href="#me" data-v="me">我的</a>
+  <div class="src" id="srcLine"></div>
+</div>
+
+<div class="shell">
+  <!-- 微信小程序胶囊位状态栏 -->
+  <div class="statusbar">
+    <span class="mono">20:24</span>
+    <div class="capsule"><span>⋯</span><span>⊙</span></div>
+  </div>
+
+  <!-- ============ 对话（apps/webc/src/pages/ChatPage.tsx） ============ -->
+  <section class="view" id="v-chat">
+    <div class="welcome">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <h1 style="font-size:17px;font-weight:600">云栖酒店 <span style="color:var(--gold)">· AI 服务前台</span></h1>
+          <p style="margin-top:4px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink2)">
+            <span style="width:6px;height:6px;border-radius:99px;background:var(--go);display:inline-block"></span>小栖在线 · 平均 1 分钟响应
+          </p>
+        </div>
+        <div class="avatar orb" style="width:40px;height:40px;font-size:15px;margin:0">栖</div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;overflow-x:auto" class="scroll-x">
+        <button class="qchip pressable" onclick="chipSend('帮我查一下我的订单')">查订单</button>
+        <button class="qchip pressable" onclick="goService('delivery')">送物服务</button>
+        <button class="qchip pressable" onclick="goService('repair')">维修报修</button>
+        <button class="qchip pressable" onclick="chipSend('早餐几点开始？停车和退房怎么安排？')">常见问题</button>
+      </div>
+    </div>
+    <div class="scroll" id="chatFlow" style="padding:12px 16px"></div>
+    <div class="inputbar">
+      <input id="chatInput" placeholder="请输入您的需求…" onkeydown="if(event.key==='Enter')sendMsg()">
+      <button class="pressable" onclick="sendMsg()">发送</button>
+    </div>
+  </section>
+
+  <!-- ============ 服务大厅（apps/webc/src/pages/ServicePage.tsx） ============ -->
+  <section class="view" id="v-service">
+    <div class="phead"><h1 id="svcTitle">服务大厅</h1><button class="rt" id="svcBack" style="display:none" onclick="svcHome()">返回</button></div>
+    <div class="route-tag">镜像：apps/webc/src/pages/ServicePage.tsx · 配置驱动 lib/config.ts serviceEntries</div>
+    <!-- home -->
+    <div class="scroll" id="svcHome">
+      <div class="svc-grid">
+        <button class="svc-card pressable fadein" onclick="svcForm('delivery')">
+          <span class="ic">送</span><span class="t">送物服务</span><span class="d">毛巾 / 水 / 牙具等送到房间</span><span class="s">约 15 分钟内送达</span>
+        </button>
+        <button class="svc-card pressable fadein" style="animation-delay:.06s" onclick="svcForm('repair')">
+          <span class="ic">修</span><span class="t">维修报修</span><span class="d">设施故障一键报修</span><span class="s">约 30 分钟内上门</span>
+        </button>
+        <button class="svc-card pressable fadein" style="animation-delay:.12s" onclick="svcForm('complaint')">
+          <span class="ic">诉</span><span class="t">投诉建议</span><span class="d">您的意见让我们更好</span><span class="s">值班经理 2 小时内回复</span>
+        </button>
+        <button class="svc-card pressable fadein" style="animation-delay:.18s" onclick="svcForm('other')">
+          <span class="ic">他</span><span class="t">其他需求</span><span class="d">更多个性化服务</span><span class="s">服务专员 30 分钟内响应</span>
+        </button>
+      </div>
+    </div>
+    <!-- form -->
+    <div class="scroll" id="svcForm" style="display:none;padding:16px">
+      <div style="display:flex;align-items:center;gap:8px;border-radius:12px;border:1px solid var(--gline);background:rgba(233,181,88,.05);padding:10px 12px;font-size:12px;color:var(--goldhi);margin-bottom:16px">
+        <span id="svcFormIcon" style="width:24px;height:24px;border-radius:8px;background:rgba(233,181,88,.15);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">修</span>
+        <span id="svcFormMeta">工单类型已预填：维修报修 · 约 30 分钟内上门</span>
+      </div>
+      <label class="form-field"><span>标题 *</span><input id="svcTitle2" placeholder="例如：空调制冷效果差"></label>
+      <label class="form-field"><span>详细描述</span><textarea id="svcDesc" rows="4" placeholder="补充数量、时间、具体情况等"></textarea></label>
+      <label class="form-field"><span>房间号</span><input id="svcRoom" placeholder="例如 1208" inputmode="numeric"></label>
+    </div>
+    <div id="svcSubmitBar" style="display:none;border-top:1px solid var(--line);padding:12px 16px 16px">
+      <button class="gold-btn pressable" onclick="svcSubmit()">提交工单</button>
+    </div>
+    <!-- done -->
+    <div class="scroll" id="svcDone" style="display:none">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 32px;text-align:center">
+        <div class="pop" style="width:64px;height:64px;border-radius:99px;border:1px solid rgba(61,255,178,.5);background:rgba(61,255,178,.1);display:flex;align-items:center;justify-content:center">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3dffb2" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h2 style="margin-top:16px;font-size:17px;font-weight:600">工单已提交</h2>
+        <p class="mono" style="margin-top:8px;font-size:13px;color:var(--gold)" id="svcDoneId">tck-seed-004</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--ink2)" id="svcDoneMeta">维修报修 · 约 30 分钟内上门</p>
+        <button class="gold-btn pressable" style="margin-top:32px" onclick="svcHome()">返回服务大厅</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 工单（apps/webc/src/pages/TicketsPage.tsx） ============ -->
+  <section class="view" id="v-tickets">
+    <div class="phead"><h1 id="tkTitle">我的工单</h1><button class="rt" id="tkBack" style="display:none" onclick="tkList()">返回</button></div>
+    <div class="route-tag">镜像：apps/webc/src/pages/TicketsPage.tsx · 数据 scripts/seed.ts 工单×3（tck-seed-001/002/003）</div>
+    <div class="scroll" id="tkList" style="padding:16px">
+      <div style="display:flex;flex-direction:column;gap:12px" id="tkCards"></div>
+    </div>
+    <div class="scroll" id="tkDetail" style="display:none;padding:16px"></div>
+    <!-- 满意度评价弹层（TicketDetail rateOpen 镜像） -->
+    <div id="rateMask" class="sheet-mask" style="display:none" onclick="closeRate()"></div>
+    <div id="rateSheet" class="sheet" style="display:none">
+      <div style="width:40px;height:4px;border-radius:99px;background:var(--line);margin:0 auto 16px"></div>
+      <h3 style="text-align:center;font-size:15px;font-weight:600;color:var(--goldhi)">服务满意度评价</h3>
+      <p style="margin-top:4px;text-align:center;font-size:11px;color:var(--ink3)">工单 tck-seed-003 已完成，请为本次服务打分</p>
+      <div style="margin-top:16px;display:flex;justify-content:center;gap:12px" id="stars"></div>
+      <textarea id="rateComment" rows="2" placeholder="补充您的感受（选填）" style="margin-top:16px;width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg900);padding:10px 12px;font-size:12.5px;color:var(--ink);outline:none;resize:none"></textarea>
+      <button class="gold-btn pressable" style="margin-top:12px" id="rateBtn" onclick="submitRate()" disabled>提交评价</button>
+    </div>
+  </section>
+
+  <!-- ============ 消息（apps/webc/src/pages/MessagesPage.tsx） ============ -->
+  <section class="view" id="v-messages">
+    <div class="phead"><h1>消息通知</h1></div>
+    <div class="route-tag">镜像：apps/webc/src/pages/MessagesPage.tsx · 数据 scripts/seed.ts 通知×3（ntf-seed-001/002/003）</div>
+    <div class="scroll" style="padding:16px">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="notice fadein">
+          <div class="hd"><span style="color:var(--holo);font-weight:500">工单受理通知</span><span style="font-size:10px;color:var(--ink3)"><span class="udot"></span>8/23 23:37</span></div>
+          <div class="bd"><p style="font-size:13px;font-weight:500">送物工单已受理</p><p style="margin-top:4px;font-size:11px;line-height:1.6;color:var(--ink2)">您的送物工单「送两瓶矿泉水到 1208」已受理，客房部将尽快送达。</p></div>
+          <div class="ft">云栖酒店 · AI 服务前台</div>
+        </div>
+        <div class="notice fadein" style="animation-delay:.05s">
+          <div class="hd"><span style="color:var(--holo);font-weight:500">工单受理通知</span><span style="font-size:10px;color:var(--ink3)"><span class="udot"></span>8/23 21:42</span></div>
+          <div class="bd"><p style="font-size:13px;font-weight:500">维修工单已受理</p><p style="margin-top:4px;font-size:11px;line-height:1.6;color:var(--ink2)">您的维修工单「8306 空调不制冷」已受理，工程部王师傅处理中。</p></div>
+          <div class="ft">云栖酒店 · AI 服务前台</div>
+        </div>
+        <div class="notice fadein" style="animation-delay:.1s">
+          <div class="hd"><span style="color:var(--go);font-weight:500">工单完成通知</span><span style="font-size:10px;color:var(--ink3)">8/23 17:15</span></div>
+          <div class="bd"><p style="font-size:13px;font-weight:500">投诉工单已办结</p><p style="margin-top:4px;font-size:11px;line-height:1.6;color:var(--ink2)">您的投诉工单「隔壁房间深夜噪音扰民」已办结：已与隔壁房客沟通提醒，并赠果盘致歉。欢迎评价。</p></div>
+          <div class="ft">云栖酒店 · AI 服务前台</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 我的（apps/webc/src/pages/MePage.tsx） ============ -->
+  <section class="view" id="v-me">
+    <div class="phead"><h1>我的</h1></div>
+    <div class="route-tag">镜像：apps/webc/src/pages/MePage.tsx · 数据 scripts/seed.ts c_users「张伟」金卡 M-GOLD-10086</div>
+    <div class="scroll" style="padding:16px;display:flex;flex-direction:column;gap:16px">
+      <div class="member-card">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="avatar orb" style="width:48px;height:48px;font-size:16px;margin:0;background:rgba(233,181,88,.15)">张</div>
+            <div>
+              <p style="font-size:15px;font-weight:600">张伟</p>
+              <p style="margin-top:2px;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gold)">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3L12 14.1 7.2 16.6l.9-5.3L4.3 7.6l5.3-.8L12 2z"/></svg>金卡会员
+              </p>
+            </div>
+          </div>
+          <div style="text-align:right"><p class="orb" style="font-size:20px;color:var(--goldhi)">2680</p><p style="font-size:10px;color:var(--ink3)">当前积分</p></div>
+        </div>
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid rgba(233,181,88,.25);padding-top:12px">
+          <span class="bchip">免费双人早餐</span><span class="bchip">延迟退房至 14:00</span><span class="bchip">客房免费升级（视房态）</span><span class="bchip">积分 1.2 倍累积</span>
+        </div>
+      </div>
+      <div class="row-card">
+        <div><p style="font-size:13px">身份绑定</p><p style="margin-top:2px;font-size:11px;color:var(--ink3)">会员号 M-GOLD-10086</p></div>
+        <span class="chip chip-go" style="padding:4px 10px;font-size:11px">已绑定</span>
+      </div>
+      <button class="row-card pressable" onclick="location.hash='chat'">
+        <div><p style="font-size:13px">历史会话</p><p style="margin-top:2px;font-size:11px;color:var(--ink3)">继续与 AI 前台小栖的对话</p></div>
+        <span style="color:var(--ink3)">›</span>
+      </button>
+      <div class="row-card">
+        <div><p style="font-size:13px">联系客服</p><p style="margin-top:2px;font-size:11px;color:var(--ink3)">400-800-1234</p></div>
+        <span style="width:32px;height:32px;border-radius:99px;background:rgba(69,224,255,.1);color:var(--holo);display:flex;align-items:center;justify-content:center">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </span>
+      </div>
+      <div class="card" style="padding:16px">
+        <p style="font-size:13px;font-weight:500">近期订单</p>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--ink2)">云栖酒店豪华大床房 · 2 晚</span><span style="color:var(--ink3)">已入住</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--ink2)">云端行政套房 · 1 晚</span><span style="color:var(--ink3)">已完成</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 底 Tab（App.tsx TAB_LABELS 镜像） -->
+  <nav class="tabnav">
+    <button data-v="chat" onclick="location.hash='chat'"><span style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>对话</button>
+    <button data-v="service" onclick="location.hash='service'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 1 1-2.83-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>服务</button>
+    <button data-v="tickets" onclick="location.hash='tickets'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>工单</button>
+    <button data-v="messages" onclick="location.hash='messages'"><span style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="badge">2</span></span>消息</button>
+    <button data-v="me" onclick="location.hash='me'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+  </nav>
+</div>
+
+<script>
+/* ================= 路由（App.tsx hash 直达镜像） ================= */
+const VIEWS = ["chat","service","tickets","messages","me"];
+const SRC = {
+  chat:"镜像：apps/webc/src/pages/ChatPage.tsx · /app/c#chat · 会话 scripts/seed.ts cv-seed-001/002",
+  service:"镜像：apps/webc/src/pages/ServicePage.tsx · /app/c#service",
+  tickets:"镜像：apps/webc/src/pages/TicketsPage.tsx · /app/c#tickets",
+  messages:"镜像：apps/webc/src/pages/MessagesPage.tsx · /app/c#messages",
+  me:"镜像：apps/webc/src/pages/MePage.tsx · /app/c#me"
+};
+function route(){
+  const h = location.hash.replace("#","") || "chat";
+  const v = VIEWS.includes(h) ? h : "chat";
+  VIEWS.forEach(k => document.getElementById("v-"+k).classList.toggle("on", k===v));
+  document.querySelectorAll(".tabnav button").forEach(b => b.classList.toggle("on", b.dataset.v===v));
+  document.querySelectorAll(".demo-bar a").forEach(a => a.classList.toggle("on", a.dataset.v===v));
+  document.getElementById("srcLine").innerHTML = "当前视图 <b>/app/c#"+v+"</b> — "+SRC[v];
+  if(v==="chat") setTimeout(()=>{ const f=document.getElementById("chatFlow"); f.scrollTop=f.scrollHeight; },50);
+}
+window.addEventListener("hashchange", route);
+
+/* ================= 对话页（ChatPage 打字机镜像；数据 seed cv-seed-001/002） ================= */
+const flow = document.getElementById("chatFlow");
+let typing = null;
+function scrollBottom(){ flow.scrollTop = flow.scrollHeight; }
+function addTime(t){ flow.insertAdjacentHTML("beforeend", `<div style="display:flex;justify-content:center;padding:4px 0"><span style="border-radius:99px;background:rgba(18,30,69,.7);padding:2px 10px;font-size:10px;color:var(--ink3)">${t}</span></div>`); }
+function addUser(text){
+  flow.insertAdjacentHTML("beforeend", `<div class="fadein" style="display:flex;justify-content:flex-end;margin-bottom:12px"><div class="msg-user">${text}</div></div>`);
+  scrollBottom();
+}
+function typewriter(el, text, done){
+  let i = 0;
+  const cur = '<span class="cursor"></span>';
+  const tm = setInterval(()=>{
+    i = Math.min(text.length, i+2);
+    el.innerHTML = text.slice(0,i) + (i<text.length?cur:"");
+    scrollBottom();
+    if(i>=text.length){ clearInterval(tm); el.textContent = text; done && done(); }
+  }, 28);
+}
+function addAi(text, extras){
+  const id = "ai"+Math.random().toString(36).slice(2,8);
+  flow.insertAdjacentHTML("beforeend", `<div class="fadein" style="display:flex;gap:8px;margin-bottom:12px"><div class="avatar">栖</div><div style="max-width:82%"><div class="msg-ai" id="${id}"></div><div class="extras"></div></div></div>`);
+  const el = document.getElementById(id);
+  const box = el.parentElement.querySelector(".extras");
+  typewriter(el, text, ()=>{ if(extras) extras(box); scrollBottom(); });
+}
+function citeCard(items){
+  return `<div class="cite fadein"><button class="cite-head pressable" onclick="this.parentElement.classList.toggle('open')"><span>📖 引用来源 · ${items.length} 条</span><span>▾</span></button><div class="cite-body">${items.map(c=>`<div class="cite-item"><p>《${c.doc}》 · ${c.head}</p><p>${c.content}</p></div>`).join("")}</div></div>`;
+}
+function ticketNotice(title){
+  return `<div class="tnotice fadein"><span class="ic">🔔</span><div><p style="font-size:12px;font-weight:500;color:var(--warn)">已为您转专人处理</p><p style="margin-top:2px;font-size:11px;line-height:1.6;color:var(--ink2)">${title}</p></div></div>`;
+}
+function actionBar(){
+  return `<div style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:11px"><span style="color:var(--ink3)">没解决？</span><button class="pressable" style="border-radius:99px;border:1px solid var(--line);padding:4px 10px;color:var(--ink2)" onclick="escalate()">转工单</button><button class="pressable" style="border-radius:99px;border:1px solid var(--line);padding:4px 10px;color:var(--ink2)" onclick="escalate()">转人工</button></div>`;
+}
+function orderCard(){
+  return `<div class="ordercard fadein"><div class="hd"><span>我的订单</span><span class="mono" style="font-size:10px;color:var(--ink3)">ORD-20260820-001</span></div><div style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center"><p style="font-size:13px;font-weight:500">云栖酒店豪华大床房 · 2 晚</p><span class="chip chip-gold">已入住</span></div><div style="margin-top:6px;display:flex;justify-content:space-between;font-size:11px;color:var(--ink2)"><span>豪华大床房 · 入住 2026-08-22</span><span class="orb" style="font-size:13px;color:var(--gold)">¥1376</span></div></div></div>`;
+}
+function thinking(cb){
+  const id = "th"+Math.random().toString(36).slice(2,8);
+  flow.insertAdjacentHTML("beforeend", `<div class="typing" id="${id}" style="margin-bottom:12px"><span><i></i> <i style="animation-delay:.2s"></i> <i style="animation-delay:.4s"></i></span>小栖正在思考…</div>`);
+  scrollBottom();
+  setTimeout(()=>{ document.getElementById(id).remove(); cb(); }, 900);
+}
+/* 关键词应答（lib/demo.ts demoChatAnswer + seed 会话口径） */
+function answer(text){
+  if(/订单|预订|入住/.test(text)){
+    addAi("为您查到以下订单，当前入住的是 8 月 22 日的豪华大床房，共 2 晚。如需续住或变更，请告诉我。", b=>{
+      b.insertAdjacentHTML("beforeend", citeCard([{doc:"云栖酒店预订政策",head:"订单查询与变更",content:"住客可凭手机号或会员号查询全部有效订单；入住当日 18:00 前可免费变更一次。"}]) + orderCard() + actionBar());
+    });
+  } else if(/会员|积分|权益/.test(text)){
+    addAi("您当前是金卡会员，积分 2680。金卡权益包含免费双早、延迟退房至 14:00 等。", b=>{
+      b.insertAdjacentHTML("beforeend", citeCard([{doc:"云栖酒店会员手册",head:"金卡权益",content:"金卡会员享免费双人早餐、延迟退房至 14:00、积分 1.2 倍累积。"}]) + actionBar());
+    });
+  } else if(/退房|早餐|停车|wifi|wi-fi/i.test(text)){
+    addAi("【退房时间】本店标准退房时间为每日中午 12:00 前。您是金卡会员，可免费延迟至 14:00 退房。早餐位于一层云栖餐厅 07:00-10:30，住店会员免费；住客停车免费。", b=>{
+      b.insertAdjacentHTML("beforeend", citeCard([
+        {doc:"云栖酒店住客服务须知",head:"退房时间",content:"标准退房时间 12:00，会员可延迟至 14:00。"},
+        {doc:"云栖酒店住客服务须知",head:"早餐",content:"早餐 07:00-10:30，会员免费。"}
+      ]) + actionBar());
+    });
+  } else if(/空调|制冷|不冷|维修|报修|8306/.test(text)){
+    addAi("很抱歉给您带来不便。我已为您生成维修工单，工程部会尽快上门处理，进度会实时通知您。", b=>{
+      b.insertAdjacentHTML("beforeend", ticketNotice('工单 tck-seed-001「8306 空调不制冷」已受理') + actionBar());
+    });
+  } else {
+    addAi("这个问题我还在学习中，已为您转专人处理，稍后会有服务员与您联系。您也可以直接描述需要的服务。", b=>{
+      b.insertAdjacentHTML("beforeend", ticketNotice("该问题已记录并转交服务专员跟进。") + actionBar());
+    });
+  }
+}
+function chipSend(t){ addTime("现在"); addUser(t); thinking(()=>answer(t)); }
+function sendMsg(){
+  const inp = document.getElementById("chatInput");
+  const t = inp.value.trim(); if(!t) return;
+  inp.value = ""; addTime("现在"); addUser(t); thinking(()=>answer(t));
+}
+function escalate(){ addAi("已为您创建工单，服务专员会尽快与您联系。您也可以在「工单」页查看进度。", b=>{ b.insertAdjacentHTML("beforeend", ticketNotice("工单已受理")); }); }
+function goService(kind){ location.hash = "service"; svcForm(kind); }
+
+/* ================= 服务大厅（ServicePage 状态机镜像） ================= */
+const SVC = {
+  delivery:{t:"送物服务",icon:"送",sla:"约 15 分钟内送达",ph:"例如：补充两瓶矿泉水"},
+  repair:{t:"维修报修",icon:"修",sla:"约 30 分钟内上门",ph:"例如：空调制冷效果差"},
+  complaint:{t:"投诉建议",icon:"诉",sla:"值班经理 2 小时内回复",ph:"请描述您的意见"},
+  other:{t:"其他需求",icon:"他",sla:"服务专员 30 分钟内响应",ph:"请描述您的需求"}
+};
+let svcKind = "repair";
+function svcShow(el){
+  ["svcHome","svcForm","svcDone"].forEach(id=>document.getElementById(id).style.display="none");
+  document.getElementById("svcSubmitBar").style.display="none";
+  el.style.display="flex"; el.style.flexDirection="column";
+}
+function svcHome(){
+  document.getElementById("svcTitle").textContent="服务大厅";
+  document.getElementById("svcBack").style.display="none";
+  svcShow(document.getElementById("svcHome"));
+}
+function svcForm(kind){
+  svcKind = kind; const s = SVC[kind];
+  document.getElementById("svcTitle").textContent = s.t;
+  document.getElementById("svcBack").style.display="block";
+  document.getElementById("svcFormIcon").textContent = s.icon;
+  document.getElementById("svcFormMeta").textContent = `工单类型已预填：${s.t} · ${s.sla}`;
+  document.getElementById("svcTitle2").placeholder = s.ph;
+  document.getElementById("svcTitle2").value = kind==="repair" ? "8306 空调不制冷" : "";
+  document.getElementById("svcRoom").value = kind==="repair" ? "8306" : "";
+  const f = document.getElementById("svcForm"); svcShow(f);
+  document.getElementById("svcSubmitBar").style.display="block";
+}
+function svcSubmit(){
+  const s = SVC[svcKind];
+  document.getElementById("svcDoneId").textContent = "tck-seed-00"+(4+Math.floor(Math.random()*5));
+  document.getElementById("svcDoneMeta").textContent = `${s.t} · ${s.sla}`;
+  svcShow(document.getElementById("svcDone"));
+}
+
+/* ================= 工单页（TicketsPage 镜像；seed 工单×3 + 时间线） ================= */
+const TICKETS = [
+  { id:"tck-seed-001", kind:"维修报修", title:"8306 空调不制冷", status:"处理中", chip:"chip-gold", time:"8/23 21:32", sla:"预计响应：8/24 02:32 前",
+    tl:[["工单已提交，AI 前台已受理","我 · 8/23 21:32"],["智能分派 → 工程部","agt-service-desk · 8/23 21:33"],["已接单，携带工具前往 8306","王师傅 · 8/23 22:57"]] },
+  { id:"tck-seed-002", kind:"送物服务", title:"送两瓶矿泉水到 1208", status:"已受理", chip:"chip-holo", time:"8/23 23:32", sla:"预计响应：8/24 02:32 前",
+    tl:[["服务台自助提交","我 · 8/23 23:32"],["智能分派 → 客房部","agt-service-desk · 8/23 23:33"]] },
+  { id:"tck-seed-003", kind:"投诉建议", title:"隔壁房间深夜噪音扰民", status:"已完成", chip:"chip-go", time:"8/23 16:32", sla:"", rated:true,
+    tl:[["投诉类必建单","我 · 8/23 16:32"],["智能分派 → 值班经理","agt-service-desk · 8/23 16:33"],["现场处理中","刘经理 · 8/23 16:52"],["已沟通提醒并赠果盘致歉","刘经理 · 8/23 17:22"],["满意度 5 星","我 · 8/23 17:52"]] }
+];
+function tkList(){
+  document.getElementById("tkTitle").textContent="我的工单";
+  document.getElementById("tkBack").style.display="none";
+  document.getElementById("tkDetail").style.display="none";
+  document.getElementById("tkList").style.display="block";
+  document.getElementById("tkCards").innerHTML = TICKETS.map((t,i)=>`
+    <button class="tk-card pressable fadein" style="animation-delay:${i*0.05}s" onclick="tkOpen('${t.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:var(--ink3)">${t.kind}</span><span class="chip ${t.chip}">${t.status}</span></div>
+      <p style="margin-top:6px;font-size:13.5px;font-weight:500">${t.title}</p>
+      <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:10px;color:var(--ink3)"><span class="mono">${t.id}</span><span>${t.time}</span></div>
+    </button>`).join("");
+}
+function tkOpen(id){
+  const t = TICKETS.find(x=>x.id===id);
+  document.getElementById("tkTitle").textContent="工单详情";
+  document.getElementById("tkBack").style.display="block";
+  document.getElementById("tkList").style.display="none";
+  const d = document.getElementById("tkDetail"); d.style.display="block";
+  d.innerHTML = `
+    <div class="card fadein" style="padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:var(--ink3)">${t.kind}</span><span class="chip ${t.chip}">${t.status}</span></div>
+      <p style="margin-top:6px;font-size:15px;font-weight:600">${t.title}</p>
+      <p class="mono" style="margin-top:6px;font-size:11px;color:var(--ink3)">${t.id}</p>
+      ${t.sla?`<p style="margin-top:4px;font-size:11px;color:var(--gold)">${t.sla}</p>`:""}
+    </div>
+    <h3 style="margin:20px 0 8px;font-size:12px;font-weight:500;color:var(--ink2)">处理进度（每 10s 自动刷新）</h3>
+    <div>${t.tl.map((n,i)=>`
+      <div class="tl-node fadein" style="animation-delay:${i*0.12}s">
+        <span class="bar"></span><span class="dot"></span>
+        <div style="flex:1"><p style="font-size:12.5px">${n[0]}</p><p style="margin-top:2px;font-size:10px;color:var(--ink3)">${n[1]}</p></div>
+      </div>`).join("")}
+    </div>
+    ${t.status==="已完成" && t.rated ? `<div class="card fadein" style="margin-top:8px;padding:14px;text-align:center"><p style="font-size:12px;color:var(--goldhi)">我的评价</p><p style="margin-top:6px;color:var(--gold);font-size:18px;letter-spacing:4px">★★★★★</p><p style="margin-top:6px;font-size:11px;color:var(--ink2)">响应很快，果盘很贴心，谢谢刘经理。</p></div>` : ""}
+    ${t.status==="已完成" && !t.rated ? `<button class="pressable" style="margin-top:8px;width:100%;height:44px;border-radius:99px;border:1px solid var(--gline);background:rgba(233,181,88,.1);color:var(--gold);font-size:13.5px;font-weight:500" onclick="openRate()">评价本次服务</button><p id="ratedTip" style="display:none;margin-top:12px;text-align:center;font-size:12px;color:var(--go)">感谢您的评价，期待再次为您服务。</p>` : ""}
+  `;
+  d.scrollTop = 0;
+}
+/* 五星评价交互 */
+let score = 0;
+function openRate(){
+  score = 0; renderStars();
+  document.getElementById("rateComment").value = "";
+  document.getElementById("rateBtn").disabled = true;
+  document.getElementById("rateMask").style.display="block";
+  document.getElementById("rateSheet").style.display="block";
+}
+function closeRate(){
+  document.getElementById("rateMask").style.display="none";
+  document.getElementById("rateSheet").style.display="none";
+}
+function renderStars(){
+  document.getElementById("stars").innerHTML = [1,2,3,4,5].map(n=>
+    `<button class="pressable" onclick="score=${n};renderStars()"><svg class="star ${n<=score?'on':''}" viewBox="0 0 24 24"><path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3L12 14.1 7.2 16.6l.9-5.3L4.3 7.6l5.3-.8L12 2z"/></svg></button>`).join("");
+  document.getElementById("rateBtn").disabled = score===0;
+}
+function submitRate(){
+  closeRate();
+  const tip = document.getElementById("ratedTip");
+  if(tip){ tip.style.display="block"; tip.classList.add("fadein"); }
+}
+
+/* ================= 首屏 seeded 会话流（cv-seed-001 退房时间 + cv-seed-002 8306 建单） ================= */
+function seedChat(){
+  addTime("8/23 21:05");
+  addUser("退房时间是几点？会员能延迟吗？");
+  addAi("【退房时间】本店标准退房时间为每日中午 12:00 前。您是金卡会员，可免费延迟至 14:00 退房。", b=>{
+    b.insertAdjacentHTML("beforeend", citeCard([{doc:"云栖酒店住客服务须知",head:"退房时间",content:"标准退房时间 12:00，会员可延迟至 14:00。"}]) + actionBar());
+    addTime("8/23 21:32");
+    addUser("房间空调好像不制冷，能找人看看吗？8306");
+    addAi("很抱歉给您带来不便。我已为您生成维修工单，工程部会尽快上门处理，进度会实时通知您。", b2=>{
+      b2.insertAdjacentHTML("beforeend", ticketNotice('工单 tck-seed-001「8306 空调不制冷」已受理') + actionBar());
+    });
+  });
+}
+route(); tkList(); seedChat();
+</script>
+</body>
+</html>

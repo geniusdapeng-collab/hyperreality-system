@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkLoom · 云栖酒店 — 服务前台 B 端 PC 演示（镜像 P22 + Bridge）</title>
+<style>
+/* ===== 设计令牌：B 端 tokens.css 色板 + 统一暗金 #e9b558（C 端同族） ===== */
+:root{
+  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
+  --nebula:#241b4d; --nebula2:#3a2a6e;
+  --gold:#e9b558; --gold2:#d69a3a; --goldhi:#ffe0a3; --ongold:#2a1500;
+  --holo:#45e0ff; --holo2:#2fa8ff;
+  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470; --need:#b45cff;
+  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
+  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(233,181,88,.45);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh;overflow-x:hidden}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace;white-space:nowrap}
+.orb{font-family:"Orbitron","JetBrains Mono",ui-monospace,monospace}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit}
+::selection{background:rgba(233,181,88,.35)}
+@keyframes drift{from{transform:translateY(0)}to{transform:translateY(-50px)}}
+@keyframes wl-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.pulse{animation:wl-pulse 1.6s ease-in-out infinite}
+.fadein{animation:fadeUp .3s both}
+.gold-grad{background:linear-gradient(135deg,var(--gold),var(--gold2))}
+
+/* ===== 星野背景（Bridge.StarField 镜像） ===== */
+.stars{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.stars .nebula{position:absolute;inset:0;animation:drift 90s linear infinite alternate;
+  background:radial-gradient(60% 45% at 18% 8%,rgba(36,27,77,.55),transparent 70%),
+             radial-gradient(50% 40% at 85% 20%,rgba(58,42,110,.38),transparent 70%),
+             radial-gradient(70% 50% at 50% 110%,rgba(36,27,77,.45),transparent 70%)}
+.stars .dots{position:absolute;inset:0;animation:drift 90s linear infinite alternate;
+  background-image:radial-gradient(1px 1px at 12% 22%,rgba(234,241,255,.8) 50%,transparent 51%),
+    radial-gradient(1px 1px at 34% 68%,rgba(234,241,255,.5) 50%,transparent 51%),
+    radial-gradient(1.5px 1.5px at 57% 15%,rgba(69,224,255,.6) 50%,transparent 51%),
+    radial-gradient(1px 1px at 72% 47%,rgba(234,241,255,.7) 50%,transparent 51%),
+    radial-gradient(1px 1px at 88% 78%,rgba(234,241,255,.45) 50%,transparent 51%),
+    radial-gradient(1.5px 1.5px at 25% 88%,rgba(233,181,88,.5) 50%,transparent 51%),
+    radial-gradient(1px 1px at 45% 40%,rgba(234,241,255,.55) 50%,transparent 51%),
+    radial-gradient(1px 1px at 66% 90%,rgba(234,241,255,.6) 50%,transparent 51%),
+    radial-gradient(1px 1px at 94% 10%,rgba(234,241,255,.5) 50%,transparent 51%),
+    radial-gradient(1.5px 1.5px at 8% 55%,rgba(69,224,255,.4) 50%,transparent 51%)}
+
+/* ===== 演示控制条 ===== */
+.demo-bar{position:relative;z-index:50;max-width:1180px;margin:0 auto;padding:12px 0 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.demo-bar a{font-size:11px;color:var(--ink3);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+.demo-bar a.on{color:var(--gold);border-color:var(--gline);background:rgba(233,181,88,.08)}
+.demo-bar .src{width:100%;font-size:10px;color:var(--ink3);margin-top:2px}
+.demo-bar .src b{color:var(--holo);font-weight:400;font-family:"JetBrains Mono",monospace}
+
+/* ===== 舰桥框架（Bridge 镜像：1180px + 圆角 20px + 四角金刻度） ===== */
+.bridge{position:relative;width:1180px;margin:12px auto 40px;border-radius:20px;border:1px solid var(--line);
+  background:linear-gradient(to bottom,rgba(10,18,48,.92),rgba(5,10,26,.96));box-shadow:0 30px 80px rgba(0,0,0,.55);overflow:hidden}
+.tick{position:absolute;width:18px;height:18px;border:2px solid var(--gold);z-index:10;pointer-events:none}
+.tick.tl{top:-1px;left:-1px;border-radius:20px 0 0 0;border-right:0;border-bottom:0}
+.tick.tr{top:-1px;right:-1px;border-radius:0 20px 0 0;border-left:0;border-bottom:0}
+.tick.bl{bottom:-1px;left:-1px;border-radius:0 0 0 20px;border-right:0;border-top:0}
+.tick.br{bottom:-1px;right:-1px;border-radius:0 0 20px 0;border-left:0;border-top:0}
+
+/* ===== 顶栏（Bridge .abar 镜像） ===== */
+.abar{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);background:rgba(4,6,15,.9);backdrop-filter:blur(12px);padding:10px 18px}
+.logo{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:900;letter-spacing:.05em}
+.logo .diamond{width:16px;height:16px;transform:rotate(45deg);border-radius:3px;background:linear-gradient(135deg,var(--gold),var(--gold2));box-shadow:0 0 14px rgba(233,181,88,.6)}
+.logo .name{background:linear-gradient(to right,#fff6e3,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.navlink{border-radius:4px;border:1px solid var(--line);padding:2px 8px;font-size:11px;color:var(--ink2);text-decoration:none;cursor:pointer}
+.navlink.gold{border-color:var(--gline);color:var(--gold)}
+.night-pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;border:1px solid rgba(69,224,255,.4);background:rgba(69,224,255,.07);padding:6px 14px;font-size:11.5px}
+.night-pill .dot{width:8px;height:8px;border-radius:99px;background:var(--holo);box-shadow:0 0 10px var(--holo)}
+.brake{display:flex;align-items:center;gap:6px;border-radius:6px;border:1px solid rgba(255,84,112,.55);padding:5px 10px;font-size:11px;color:var(--alert)}
+.sim-banner{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);background:rgba(255,194,77,.06);padding:6px 18px;font-size:11px;color:var(--warn)}
+
+/* ===== 三栏（§4.1：236px 左｜弹性中｜264px 右） ===== */
+.cols{display:flex;min-height:720px}
+.col-left{width:236px;border-right:1px solid var(--line);padding:12px}
+.col-right{width:264px;border-left:1px solid var(--line);padding:12px}
+.col-main{flex:1;padding:20px}
+.col-label{margin:0 4px 8px;font-size:11px;letter-spacing:.2em;color:var(--ink3)}
+.lnav{display:block;width:100%;text-align:left;border-radius:8px;border:1px solid var(--line);background:var(--card);padding:10px 12px;margin-bottom:6px}
+.lnav.on{border-color:var(--gline);background:rgba(233,181,88,.06)}
+.lnav .t{font-size:13.5px;color:var(--ink2)}
+.lnav.on .t{color:var(--gold)}
+.lnav .m{margin-top:2px;font-size:10px;color:var(--ink3)}
+.gov-card{border-radius:8px;border:1px solid var(--line);background:var(--card);padding:12px;font-size:11px;line-height:1.7;color:var(--ink3);margin-bottom:10px}
+.gov-card .h{font-size:10px;font-weight:700;color:var(--ink2);margin-bottom:4px}
+
+/* ===== 主区组件 ===== */
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px}
+.chip{display:inline-block;border-radius:4px;border:1px solid;padding:1px 6px;font-size:10px}
+.chip-go{border-color:rgba(61,255,178,.4);color:var(--go)}
+.chip-warn{border-color:rgba(255,194,77,.4);color:var(--warn)}
+.chip-holo{border-color:rgba(69,224,255,.4);color:var(--holo)}
+.chip-gold{border-color:var(--gline);color:var(--goldhi)}
+.chip-line{border-color:var(--line);color:var(--ink3)}
+.chip-alert{border-color:rgba(255,84,112,.4);color:var(--alert)}
+.btn{border-radius:6px;border:1px solid var(--line);padding:3px 10px;font-size:11px;color:var(--ink2)}
+.btn:hover{border-color:rgba(69,224,255,.5)}
+.btn-gold{border-color:var(--gline);color:var(--goldhi);font-weight:700}
+.btn-holo{border-color:rgba(69,224,255,.4);color:var(--holo);font-weight:700}
+.btn-go{border-color:rgba(61,255,178,.5);color:var(--go);font-weight:700}
+.btn-grad{border:none;font-weight:700;color:var(--ongold)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.fchip{border-radius:4px;border:1px solid var(--line);padding:2px 10px;font-size:11px;color:var(--ink3)}
+.fchip.on{border-color:rgba(69,224,255,.6);background:rgba(69,224,255,.1);color:var(--holo)}
+.inp{border-radius:6px;border:1px solid var(--line);background:var(--bg900);padding:6px 10px;font-size:13.5px;color:var(--ink);outline:none}
+.inp:focus{border-color:rgba(69,224,255,.5)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{font-weight:400;color:var(--ink3);font-size:10px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);background:rgba(10,18,48,.6)}
+td{padding:8px 12px;border-bottom:1px solid rgba(96,140,255,.12);color:var(--ink2)}
+tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(10,18,48,.4)}
+.tabbtn{border-radius:6px;padding:6px 14px;font-size:13.5px;font-weight:700;color:var(--ink3);border:1px solid var(--line)}
+.tabbtn.on{border:none;color:var(--ongold)}
+.banner{display:flex;align-items:center;gap:10px;border-radius:8px;border:1px solid rgba(61,255,178,.4);background:rgba(61,255,178,.06);padding:8px 12px;font-size:12px;color:var(--go);margin-bottom:12px}
+.banner.warn{border-color:rgba(255,194,77,.4);background:rgba(255,194,77,.06);color:var(--warn)}
+.metric{border-radius:8px;border:1px solid var(--line);background:var(--card);padding:12px}
+.metric .l{font-size:10px;color:var(--ink3)}
+.metric .v{margin-top:4px;font-family:"Orbitron","JetBrains Mono",monospace;font-size:16px;font-weight:700}
+.metric .h{margin-top:2px;font-size:10px;color:var(--ink3)}
+/* 抽屉（P22 docDrawer / timelineFor 镜像） */
+.mask{position:fixed;inset:0;z-index:60;background:rgba(4,6,15,.6)}
+.drawer{position:fixed;top:0;bottom:0;right:0;z-index:61;width:440px;overflow-y:auto;border-left:1px solid var(--line);background:var(--bg950);padding:16px;box-shadow:-20px 0 60px rgba(0,0,0,.5)}
+.tl-ev{position:relative;border-left:1px solid var(--line);padding:0 0 14px 14px}
+.tl-ev .dot{position:absolute;left:-5px;top:4px;width:8px;height:8px;border-radius:99px;background:var(--ink3)}
+.tl-ev:last-child .dot{background:var(--holo);animation:wl-pulse 1.6s infinite}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:80;border-radius:99px;border:1px solid var(--gline);background:var(--bg800);padding:8px 18px;font-size:12px;color:var(--goldhi);box-shadow:0 8px 30px rgba(0,0,0,.5);animation:fadeUp .25s both}
+</style>
+</head>
+<body>
+<div class="stars"><div class="nebula"></div><div class="dots"></div></div>
+
+<div class="demo-bar">
+  <a href="#kb" data-v="kb">📚 知识库</a><a href="#tickets" data-v="tickets">🎫 工单台</a><a href="#stats" data-v="stats">📊 服务报表</a>
+  <div class="src" id="srcLine"></div>
+</div>
+
+<div class="bridge">
+  <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
+
+  <!-- 顶栏（apps/web/src/shell/Bridge.tsx 镜像） -->
+  <header class="abar">
+    <div class="logo"><span class="diamond"></span><span class="name">WorkLoom</span></div>
+    <span style="font-size:12px;color:var(--ink3)">企业 Agent IM · <b style="color:var(--ink2)">云栖酒店</b></span>
+    <span style="flex:1"></span>
+    <a class="navlink" style="border-color:var(--gline);color:var(--gold)">🛎 服务前台</a>
+    <a class="navlink gold">董事长视图</a>
+    <button class="night-pill" onclick="toast('进入守夜战队频道（P9）')"><span class="dot pulse"></span><b style="color:var(--holo)">守夜战队 · 巡航中</b><span class="mono" style="font-size:10px;color:var(--ink3)">22:00–08:00 · ×4</span></button>
+    <button class="brake" onclick="toast('紧急制动需二次确认（P9 落地，演示态不触发）')">⛔ 紧急制动</button>
+  </header>
+  <div class="sim-banner">⚠ 模拟数据横幅（D24）：当前为演示工作区投影 · 数据全部来自 scripts/seed.ts「AI 服务前台」段 + scripts/eval 评测报告 · 落地向导可接入真实数据</div>
+
+  <div class="cols">
+    <!-- 左栏（P22 left 镜像） -->
+    <aside class="col-left">
+      <div class="col-label">服务前台 · SERVICE DESK</div>
+      <button class="lnav" data-v="kb" onclick="location.hash='kb'"><div class="t">📚 知识中台</div><div class="m" id="mKb">集合 2 · 待审 1</div></button>
+      <button class="lnav" data-v="tickets" onclick="location.hash='tickets'"><div class="t">🎫 工单台</div><div class="m" id="mTk">在列 3</div></button>
+      <button class="lnav" data-v="stats" onclick="location.hash='stats'"><div class="t">📊 服务报表</div><div class="m">会话 2 · 问答 4</div></button>
+      <button class="lnav" style="margin-top:8px" onclick="toast('返回主甲板（/）')"><div class="t" style="font-size:11px;color:var(--ink3)">← 返回主甲板</div></button>
+    </aside>
+
+    <!-- 主区（apps/web/src/pages/p22/P22.tsx 镜像） -->
+    <main class="col-main">
+      <div style="margin-bottom:16px;display:flex;align-items:baseline;gap:12px">
+        <h2 style="font-size:20px;font-weight:900">服务前台</h2>
+        <span style="font-size:11px;color:var(--ink3)">知识中台与工单台 · B 端管理</span>
+        <span class="mono" style="font-size:10px;color:var(--ink3)">trpc.service.*</span>
+      </div>
+
+      <div id="bannerBox"></div>
+
+      <!-- 顶部 C 端入口卡（P22 QrPlaceholder + 渠道状态镜像） -->
+      <div class="card" style="border-color:var(--gline);display:flex;align-items:center;gap:16px;padding:14px;margin-bottom:16px">
+        <svg viewBox="-1 -1 14 14" style="width:84px;height:84px;border-radius:4px;border:1px solid var(--line);background:#eaf1ff;padding:4px" id="qr"></svg>
+        <div style="flex:1">
+          <div style="font-size:13.5px;font-weight:700">🛎 C 端服务前台入口</div>
+          <div style="margin-top:2px;font-size:11px;color:var(--ink2)">小程序级 H5：<a href="service-front-c.html" class="mono" style="color:var(--holo);text-decoration:none">/app/c ↗</a>——知识问答（带引用、不臆造）· 订单/会员查询 · 工单流转与结果推送</div>
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+            <span class="chip chip-go">H5 已就绪</span><span class="chip chip-line">微信小程序 · 待配置</span><span class="chip chip-line">支付宝 · 待配置</span>
+          </div>
+        </div>
+        <a href="service-front-c.html" class="gold-grad" style="border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;color:var(--ongold);text-decoration:none">打开 C 端 ↗</a>
+      </div>
+
+      <!-- 区块 Tab（P22 kb/tickets/stats 镜像） -->
+      <div style="margin-bottom:12px;display:flex;gap:8px;border-bottom:1px solid var(--line);padding-bottom:8px">
+        <button class="tabbtn" data-v="kb" onclick="location.hash='kb'">📚 知识库</button>
+        <button class="tabbtn" data-v="tickets" onclick="location.hash='tickets'">🎫 工单台</button>
+        <button class="tabbtn" data-v="stats" onclick="location.hash='stats'">📊 服务报表</button>
+      </div>
+
+      <!-- ========== 知识库（P22 kbSection 镜像） ========== -->
+      <section id="sec-kb" style="display:none">
+        <div style="margin-bottom:8px;font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--ink2)">知识集合（2）· 数据 scripts/seed.ts kbc-*-welcome / kbc-service-catalog</div>
+        <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <button class="fchip on" data-col="" onclick="setCol(this,'')">全部</button>
+          <button class="fchip" data-col="c1" onclick="setCol(this,'c1')" title="酒店前台常见问题与服务说明（演示种子）">住客服务知识库</button>
+          <button class="fchip" data-col="c2" onclick="setCol(this,'c2')" title="送物清单、餐饮、康体 SPA 等服务与价格">商品与服务目录</button>
+        </div>
+        <div style="margin-bottom:20px;display:flex;gap:8px">
+          <input class="inp" style="width:224px" placeholder="新集合名称（如：餐饮服务）" id="newColName">
+          <input class="inp" style="flex:1" placeholder="描述（可选）">
+          <button class="btn btn-grad gold-grad" style="padding:6px 14px" onclick="createCol()">＋ 新建集合</button>
+        </div>
+
+        <div style="margin-bottom:8px;font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--ink2)" id="docTitle">文档（全部集合）（2）</div>
+        <div class="card" style="overflow:hidden;margin-bottom:20px">
+          <table>
+            <thead><tr><th>标题</th><th>来源</th><th>版本</th><th>状态</th><th>切块数</th><th></th></tr></thead>
+            <tbody id="docRows"></tbody>
+          </table>
+        </div>
+
+        <div style="margin-bottom:8px;font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--ink2)">待审区（pending_review · <span id="pendN">1</span>）</div>
+        <div id="pendBox" style="margin-bottom:20px">
+          <div class="card" style="border-color:rgba(255,194,77,.35);display:flex;align-items:center;gap:12px;padding:10px 14px" id="pendRow">
+            <span style="font-size:16px">📝</span>
+            <div style="flex:1">
+              <div style="font-size:13.5px">官网抓取 · 云栖酒店服务与设施页 <span class="mono" style="font-size:10px;color:var(--ink3)">v1</span></div>
+              <div style="font-size:10px;color:var(--ink3)">官网抓取 · https://www.yunqi-hotel.example · 提交于 2026/8/24 03:00:12（kbs-official-site 定时 0 3 * * *）</div>
+            </div>
+            <button class="btn btn-go" style="padding:6px 12px" onclick="approve()">✓ 批准生效</button>
+          </div>
+          <div style="font-size:10px;color:var(--ink3);margin-top:6px">批准即发布：文档状态/五元事件/approvals 审批行三写同一 COMMIT，联动审批台（围栏动作 kb.publish，D16）。</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:14px">
+            <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--holo)">🌐 官网源（registerSite / crawlNow / diffScan）</div>
+            <div style="display:flex;gap:8px">
+              <input class="inp" style="flex:1" id="siteUrl" value="https://www.yunqi-hotel.example">
+              <button class="btn btn-gold" style="padding:6px 10px" onclick="regSite()">登记</button>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button class="btn btn-holo" id="crawlBtn" onclick="crawl()">⚡ 立即抓取</button>
+              <button class="btn" onclick="toast('指纹比对：官网暂无更新（fp-a91c）')">🔍 检查更新（diffScan）</button>
+            </div>
+            <div class="mono" style="margin-top:6px;font-size:10px;color:var(--ink3)" id="siteIdLine">sourceId: kbs-official-site</div>
+            <div id="siteResult" style="margin-top:6px;border-radius:4px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:6px 8px;font-size:10px;line-height:1.6;color:var(--ink2);display:none"></div>
+          </div>
+          <div class="card" style="padding:14px">
+            <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--holo)">🔎 试检索（search · 混合检索投影）</div>
+            <div style="display:flex;gap:8px">
+              <input class="inp" style="flex:1" id="q" placeholder="如：退房时间是几点？" value="退房时间是几点？" onkeydown="if(event.key==='Enter')doSearch()">
+              <button class="btn btn-grad gold-grad" style="padding:6px 12px" onclick="doSearch()">检索</button>
+            </div>
+            <div id="hits" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:10px;color:var(--ink3)">输入问题试检——命中块带 score（0..1 归一化）</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 工单台（P22 ticketsSection 镜像） ========== -->
+      <section id="sec-tickets" style="display:none">
+        <div style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <span style="margin-right:4px;font-size:11px;font-weight:700;color:var(--ink2)">状态</span>
+          <button class="fchip on" data-s="" onclick="setFStatus(this,'')">全部</button>
+          <button class="fchip" data-s="created" onclick="setFStatus(this,'created')">新建</button>
+          <button class="fchip" data-s="assigned" onclick="setFStatus(this,'assigned')">已分派</button>
+          <button class="fchip" data-s="processing" onclick="setFStatus(this,'processing')">处理中</button>
+          <button class="fchip" data-s="done" onclick="setFStatus(this,'done')">已办结</button>
+          <span style="margin:0 8px;color:var(--line)">|</span>
+          <span style="margin-right:4px;font-size:11px;font-weight:700;color:var(--ink2)">部门</span>
+          <button class="fchip on" data-d="" onclick="setFDept(this,'')">全部</button>
+          <button class="fchip" data-d="客服部" onclick="setFDept(this,'客服部')">客服部</button>
+          <button class="fchip" data-d="工程部" onclick="setFDept(this,'工程部')">工程部</button>
+          <button class="fchip" data-d="客房部" onclick="setFDept(this,'客房部')">客房部</button>
+          <button class="fchip" data-d="前厅部" onclick="setFDept(this,'前厅部')">前厅部</button>
+        </div>
+        <div id="tkRows" style="display:flex;flex-direction:column;gap:8px"></div>
+      </section>
+
+      <!-- ========== 服务报表（P22 statsSection 镜像；scripts/eval/report 真实指标） ========== -->
+      <section id="sec-stats" style="display:none">
+        <div style="margin-bottom:10px;font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--ink2)">今日运营总览（2026-08-24 · c_messages/c_tickets 聚合投影）</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+          <div class="metric"><div class="l">今日会话</div><div class="v" style="color:var(--holo)">2</div></div>
+          <div class="metric"><div class="l">问答量</div><div class="v" style="color:var(--holo)">4</div></div>
+          <div class="metric"><div class="l">平均置信度</div><div class="v">93%</div></div>
+          <div class="metric"><div class="l">有据率（带引用回答）</div><div class="v" style="color:var(--go)">100%</div><div class="h">引用正确率 100.0%（eval）</div></div>
+          <div class="metric"><div class="l">平均首答延迟</div><div class="v">19ms</div><div class="h">评测 p95 33ms · 引擎内部 p95 23ms</div></div>
+          <div class="metric"><div class="l">今日工单</div><div class="v">3</div></div>
+          <div class="metric"><div class="l">工单完结率</div><div class="v" style="color:var(--go)">33%</div></div>
+          <div class="metric"><div class="l">SLA 超时</div><div class="v" style="color:var(--go)">0</div><div class="h">在时限内</div></div>
+          <div class="metric"><div class="l">满意度均分</div><div class="v">5</div><div class="h">C 端办结评价（tck-seed-003 五星）</div></div>
+        </div>
+        <div class="card" style="padding:14px;margin-bottom:12px">
+          <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--holo)">模型链路四维评测（scripts/eval/report/report.md · 2026-08-23）</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <span class="chip chip-go">准确率 100.0%（26/26）</span>
+            <span class="chip chip-go">召回率 100.0%（26/26）</span>
+            <span class="chip chip-go">引用正确率 100.0%</span>
+            <span class="chip chip-go">拒答正确率 100.0%（13/13）</span>
+            <span class="chip chip-holo">耗时 p95 33ms</span>
+            <span class="chip chip-gold">回答质量 4.77 / 5</span>
+          </div>
+        </div>
+        <div class="card" style="padding:14px">
+          <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--holo)">解读</div>
+          <ul style="list-style:none;font-size:11px;line-height:2">
+            <li style="color:var(--go)">· 有据率 100% 达标——回答基本带知识引用，不臆造。</li>
+            <li style="color:var(--go)">· SLA 无超时——工单流转在时限内。</li>
+            <li style="color:var(--ink2)">· 今日工单 3 单，完结率 33%，满意度均分 5。</li>
+            <li style="color:var(--ink2)">· 平均首答延迟 19ms（c_messages 投影）。</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <!-- 右栏（P22 right 镜像） -->
+    <aside class="col-right">
+      <div class="col-label">数据口径 · GOVERNANCE</div>
+      <div class="gov-card">全部数据来自 <span class="mono" style="font-size:10px;color:var(--holo)">trpc.service.*</span>；写操作落五元事件，批准生效联动 approvals 审批台（kb.publish，D16）。</div>
+      <div class="gov-card"><div class="h">待审知识</div><b class="orb" style="font-size:16px;color:var(--warn)" id="govPend">1</b> 篇（pending_review）</div>
+      <div class="gov-card"><div class="h">SLA 超时</div><b class="orb" style="font-size:16px;color:var(--go)">0</b> 单</div>
+      <div class="gov-card"><div class="h">工单状态机</div>新建 → 已分派 → 处理中 → 已办结/已关闭；非法跃迁 409 拒绝（H1/H3）。</div>
+    </aside>
+  </div>
+</div>
+
+<!-- 文档详情抽屉（P22 docDrawer 镜像） -->
+<div id="docMask" class="mask" style="display:none" onclick="closeDoc()"></div>
+<div id="docDrawer" class="drawer" style="display:none"></div>
+
+<!-- 工单时间线抽屉（P22 timelineFor 镜像） -->
+<div id="tlMask" class="mask" style="display:none" onclick="closeTl()"></div>
+<div id="tlDrawer" class="drawer" style="display:none"></div>
+
+<script>
+/* ===== 二维码占位（P22 QrPlaceholder 镜像：SVG 网格） ===== */
+(function(){
+  const cells=[];
+  for(let y=0;y<12;y++)for(let x=0;x<12;x++){
+    const f=(x<4&&y<4)||(x>7&&y<4)||(x<4&&y>7);
+    const on=f?(x%3!==1||y%3!==1):(x*7+y*13)%5<2;
+    if(on)cells.push(`M${x} ${y}h1v1h-1z`);
+  }
+  document.getElementById("qr").innerHTML=`<path d="${cells.join("")}" fill="#0a1230"/>`;
+})();
+
+function toast(msg){
+  const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
+}
+function banner(level, text){
+  document.getElementById("bannerBox").innerHTML=`<div class="banner ${level==='warn'?'warn':''} fadein"><span style="flex:1">${text}</span><button class="btn" onclick="this.parentElement.remove()">知道了</button></div>`;
+}
+
+/* ===== 路由（P22 ?tab= 镜像 → hash 直达） ===== */
+const TABS=["kb","tickets","stats"];
+const SRC={
+  kb:"镜像：apps/web/src/pages/p22/P22.tsx kbSection · /p22?tab=kb · 数据 scripts/seed.ts kb_collections/kb_documents/kb_sources",
+  tickets:"镜像：apps/web/src/pages/p22/P22.tsx ticketsSection · /p22?tab=tickets · 数据 scripts/seed.ts c_tickets×3 + c_ticket_events",
+  stats:"镜像：apps/web/src/pages/p22/P22.tsx statsSection · /p22?tab=stats · 数据 scripts/eval/report（四维 100% · p95 33ms · 4.77/5）"
+};
+function route(){
+  const h=location.hash.replace("#","")||"kb";
+  const v=TABS.includes(h)?h:"kb";
+  TABS.forEach(k=>{
+    document.getElementById("sec-"+k).style.display=k===v?"block":"none";
+    document.querySelectorAll(`.tabbtn[data-v="${k}"]`).forEach(b=>{b.classList.toggle("on",k===v);b.classList.toggle("gold-grad",k===v);});
+    document.querySelectorAll(`.lnav[data-v="${k}"]`).forEach(b=>b.classList.toggle("on",k===v));
+    document.querySelectorAll(`.demo-bar a[data-v="${k}"]`).forEach(a=>a.classList.toggle("on",k===v));
+  });
+  document.getElementById("srcLine").innerHTML=`当前视图 <b>/p22?tab=${v}</b> — ${SRC[v]} · 外壳 apps/web/src/shell/Bridge.tsx`;
+}
+window.addEventListener("hashchange",route);
+
+/* ===== 知识库（P22 kbSection 数据镜像） ===== */
+const DOCS=[
+  {id:"kbd-ws-notice",col:"c1",colName:"住客服务知识库",title:"云栖酒店住客服务须知",src:"手工录入",ver:1,status:"active",chunks:4,
+   preview:[["退房时间","本店标准退房时间为每日中午 12:00 前。如需延迟退房，最晚可延至 14:00，视当日房态免费安排。"],["早餐时间","自助早餐供应时间为每日 7:00 至 10:00，地点在一楼全日制餐厅，住客凭房卡用餐。"],["Wi-Fi","客房与公共区域均覆盖免费 Wi-Fi，网络名 Yunqi-Hotel，密码为房间号后四位。"],["报修与服务","客房设施故障或服务需求，请直接在本小程序留言，客服将在 15 分钟内响应并生成工单跟进。"]]},
+  {id:"kbd-service-catalog",col:"c2",colName:"商品与服务目录",title:"商品与服务目录",src:"手工录入",ver:1,status:"active",chunks:4,
+   preview:[["免费送物清单","矿泉水（每日 2 瓶免费）、牙刷套装、梳子、剃须刀、拖鞋、充电器借用。"],["收费送物","面膜 28 元/片、红酒 128 元/瓶、生日蛋糕 168 元/个（需提前 2 小时预约）。"],["餐饮","中西自助早餐 68 元/位（住店会员免费）；云栖轩中餐厅 11:00-21:00；客房送餐至 23:00。"],["康体","恒温泳池 07:00-22:00（住客免费）；SPA 60 分钟 398 元起，需预约。"]]}
+];
+let activeCol="";
+function setCol(el,c){ activeCol=c; document.querySelectorAll(".fchip[data-col]").forEach(b=>b.classList.toggle("on",b===el)); renderDocs(); }
+function renderDocs(){
+  const list=DOCS.filter(d=>!activeCol||d.col===activeCol);
+  document.getElementById("docTitle").textContent=`文档${activeCol?` · ${DOCS.find(d=>d.col===activeCol).colName}`:"（全部集合）"}（${list.length}）`;
+  document.getElementById("docRows").innerHTML=list.map(d=>`
+    <tr><td>${d.title}</td><td style="color:var(--ink3)">${d.src}</td><td class="mono" style="color:var(--ink3)">v${d.ver}</td>
+    <td><span class="chip ${d.status==='active'?'chip-go':'chip-warn'}">${d.status}</span></td>
+    <td class="orb" style="color:var(--holo)">${d.chunks}</td>
+    <td style="text-align:right"><button class="btn" onclick="openDoc('${d.id}')">详情</button></td></tr>`).join("");
+}
+function createCol(){
+  const n=document.getElementById("newColName").value.trim();
+  if(!n){toast("请输入集合名称");return;}
+  document.getElementById("newColName").value="";
+  banner("info",`已新建集合「${n}」（kb.collection.create 已留痕）`);
+}
+function approve(){
+  document.getElementById("pendBox").innerHTML=`<div style="border-radius:8px;border:1px dashed var(--line);padding:16px;text-align:center;font-size:11px;color:var(--ink3)">暂无待审文档——抓取/录入的文档经批准生效后才进入检索索引（kb.publish）</div>`;
+  document.getElementById("pendN").textContent="0";
+  document.getElementById("govPend").textContent="0";
+  document.getElementById("mKb").textContent="集合 2 · 待审 0";
+  banner("info","「官网抓取 · 云栖酒店服务与设施页」v1 已批准生效——文档状态/五元事件/approvals 审批行 三写同一 COMMIT（围栏动作 kb.publish，审批台可见 D16）");
+}
+function regSite(){ banner("info","已登记抓取源 kbs-official-site——可「立即抓取」入库"); }
+function crawl(){
+  const r=document.getElementById("siteResult"); r.style.display="block";
+  r.textContent="抓取完成：结构化 12 条入知识库（文档 kbd-site-crawl-001；LLM 结构化正常）——已进入待审区 pending_review";
+  banner("info","官网抓取完成，新文档已进入待审区（pending_review）");
+}
+/* 试检索（kb.search 投影：命中块来自 seed kb_chunks） */
+function doSearch(){
+  const q=document.getElementById("q").value.trim(); if(!q)return;
+  const HITS={
+    "退房":[["云栖酒店住客服务须知 · 退房时间","本店标准退房时间为每日中午 12:00 前。如需延迟退房，最晚可延至 14:00，视当日房态免费安排。",0.92],["云栖酒店住客服务须知 · 报修与服务","客房设施故障或服务需求，请直接在本小程序留言，客服将在 15 分钟内响应并生成工单跟进。",0.41]],
+    "早餐":[["云栖酒店住客服务须知 · 早餐时间","自助早餐供应时间为每日 7:00 至 10:00，地点在一楼全日制餐厅，住客凭房卡用餐。",0.90],["商品与服务目录 · 餐饮","中西自助早餐 68 元/位（住店会员免费）；云栖轩中餐厅 11:00-21:00；客房送餐至 23:00。",0.86]],
+    "送物":[["商品与服务目录 · 免费送物清单","矿泉水（每日 2 瓶免费）、牙刷套装、梳子、剃须刀、拖鞋、充电器借用。",0.91],["商品与服务目录 · 收费送物","面膜 28 元/片、红酒 128 元/瓶、生日蛋糕 168 元/个（需提前 2 小时预约）。",0.83]]
+  };
+  let hits=null;
+  for(const k in HITS) if(q.includes(k)){hits=HITS[k];break;}
+  const box=document.getElementById("hits");
+  if(!hits){ box.innerHTML=`<div style="font-size:10px;color:var(--warn)">无命中——可考虑补充知识文档</div>`; return; }
+  box.innerHTML=hits.map(h=>`<div class="fadein" style="border-radius:4px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:6px 8px">
+    <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--ink2)">${h[0]}</span><span class="orb" style="color:var(--holo)">${h[2].toFixed(2)}</span></div>
+    <div style="margin-top:2px;font-size:10px;line-height:1.6;color:var(--ink3)">${h[1]}</div></div>`).join("");
+}
+/* 文档详情抽屉 */
+function openDoc(id){
+  const d=DOCS.find(x=>x.id===id);
+  document.getElementById("docMask").style.display="block";
+  const dr=document.getElementById("docDrawer"); dr.style.display="block";
+  dr.innerHTML=`
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--holo)">文档详情</div>
+      <button class="btn" onclick="closeDoc()">✕ 关闭</button>
+    </div>
+    <h3 style="font-size:13.5px;font-weight:700">${d.title}</h3>
+    <div style="margin-top:6px;display:flex;gap:8px;align-items:center;font-size:10px;color:var(--ink3)">
+      <span class="chip chip-go">${d.status}</span><span class="mono">v${d.ver}</span><span>${d.src}</span><span class="mono">${d.id}</span>
+    </div>
+    <div class="card" style="margin-top:12px;padding:12px">
+      <div style="margin-bottom:6px;font-size:10px;font-weight:700;color:var(--ink2)">内容预览（检索索引投影）</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${d.preview.map(p=>`<div style="border-radius:4px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:6px 8px">
+          <div style="font-size:10px;font-weight:700;color:var(--ink2)">${p[0]}</div>
+          <div style="margin-top:2px;font-size:10px;line-height:1.6;color:var(--ink3)">${p[1]}</div></div>`).join("")}
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn" onclick="closeDoc();banner('warn','「${d.title}」已置为 disabled（即时退出检索索引）')">■ 停用（disabled）</button>
+    </div>`;
+}
+function closeDoc(){ document.getElementById("docMask").style.display="none"; document.getElementById("docDrawer").style.display="none"; }
+
+/* ===== 工单台（P22 ticketsSection 镜像；seed c_tickets×3 + 状态机） ===== */
+const KIND={repair:"报修",delivery:"送物",complaint:"投诉",service_request:"服务请求",consult:"咨询",other:"其他"};
+const TICKETS=[
+  {id:"tck-seed-001",kind:"repair",title:"8306 空调不制冷",status:"processing",priority:"high",dept:"工程部",assignee:"王师傅",sla:"8/24 02:32",rating:null,created:"8/23 21:32"},
+  {id:"tck-seed-002",kind:"delivery",title:"送两瓶矿泉水到 1208",status:"assigned",priority:"normal",dept:"客房部",assignee:null,sla:"8/24 02:32",rating:null,created:"8/23 23:32"},
+  {id:"tck-seed-003",kind:"complaint",title:"隔壁房间深夜噪音扰民",status:"done",priority:"high",dept:"值班经理",assignee:"刘经理",sla:"8/24 00:32",rating:5,created:"8/23 16:32"}
+];
+const TL={
+  "tck-seed-001":[["create","c_user · cu-xiaoli",'{"note":"用户对话中建单"}',"2026/8/23 21:32:00"],["assign","agent · agt-service-desk",'{"note":"智能分派 → 工程部"}',"2026/8/23 21:33:00"],["start","staff · 王师傅",'{"note":"已接单，携带工具前往 8306"}',"2026/8/23 22:57:00"]],
+  "tck-seed-002":[["create","c_user · cu-zhangwei",'{"note":"服务台自助提交"}',"2026/8/23 23:32:00"],["assign","agent · agt-service-desk",'{"note":"智能分派 → 客房部"}',"2026/8/23 23:33:00"]],
+  "tck-seed-003":[["create","c_user · cu-xiaoli",'{"note":"投诉类必建单"}',"2026/8/23 16:32:00"],["assign","agent · agt-service-desk",'{"note":"智能分派 → 值班经理"}',"2026/8/23 16:33:00"],["start","staff · 刘经理",'{"note":"现场处理中"}',"2026/8/23 16:52:00"],["complete","staff · 刘经理",'{"note":"已沟通提醒并赠果盘致歉"}',"2026/8/23 17:22:00"],["rate","c_user · cu-xiaoli",'{"note":"满意度 5 星"}',"2026/8/23 17:52:00"]]
+};
+let fStatus="",fDept="",assignFor=null,completeFor=null;
+const S_LABEL={created:"新建",assigned:"已分派",processing:"处理中",done:"已办结",closed:"已关闭"};
+function sChip(s){
+  const cls=s==="done"?"chip-go":s==="processing"?"chip-holo":s==="assigned"?"chip-gold":"chip-line";
+  return `<span class="chip ${cls}">${S_LABEL[s]}</span>`;
+}
+function setFStatus(el,s){fStatus=s;document.querySelectorAll(".fchip[data-s]").forEach(b=>b.classList.toggle("on",b===el));renderTk();}
+function setFDept(el,d){fDept=d;document.querySelectorAll(".fchip[data-d]").forEach(b=>b.classList.toggle("on",b===el));renderTk();}
+function renderTk(){
+  const list=TICKETS.filter(t=>(!fStatus||t.status===fStatus)&&(!fDept||t.dept===fDept));
+  document.getElementById("mTk").textContent=`在列 ${list.length}`;
+  const box=document.getElementById("tkRows");
+  if(!list.length){box.innerHTML=`<div class="card" style="padding:32px;text-align:center;color:var(--ink3);font-size:12px">🎫 当前过滤下暂无工单<br><span style="font-size:10px">C 端低置信/投诉类会话会自动转工单；调整状态或部门过滤试试</span></div>`;return;}
+  box.innerHTML=list.map(t=>{
+    const acts=[];
+    acts.push(`<button class="btn" onclick="openTl('${t.id}')">时间线</button>`);
+    if(t.status==="created")acts.push(`<button class="btn btn-gold" onclick="assignFor='${t.id}';completeFor=null;renderTk()">分派</button>`);
+    if(t.status==="assigned")acts.push(`<button class="btn btn-holo" onclick="advance('${t.id}')">▶ 开始处理</button>`);
+    if(t.status==="processing"||t.status==="assigned")acts.push(`<button class="btn btn-go" onclick="completeFor='${t.id}';assignFor=null;renderTk()">✓ 办结</button>`);
+    return `<div class="card fadein" style="padding:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="mono" style="font-size:10px;color:var(--ink3)">${t.id}</span>
+        ${sChip(t.status)}
+        <span class="chip chip-line">${KIND[t.kind]}</span>
+        ${t.priority!=="normal"?`<span class="chip chip-alert">${t.priority}</span>`:""}
+        <span style="flex:1"></span>${acts.join("")}
+      </div>
+      <div style="margin-top:6px;font-size:13.5px">${t.title}</div>
+      <div style="margin-top:4px;font-size:10px;color:var(--ink3)">
+        ${t.dept?`部门 ${t.dept}`:"未分派"}${t.assignee?` · 处理人 ${t.assignee}`:""} · SLA ${t.sla}${t.rating!==null?` · 满意度 ${t.rating} 分`:""} · 创建于 ${t.created}
+      </div>
+      ${assignFor===t.id?`<div style="margin-top:8px;display:flex;align-items:center;gap:8px;border-radius:6px;border:1px solid var(--gline);background:rgba(10,18,48,.6);padding:8px 10px">
+        <span style="font-size:10px;color:var(--goldhi)">分派到</span>
+        <select class="inp" style="padding:4px 8px;font-size:11px" id="asDept"><option>客服部</option><option>工程部</option><option>客房部</option><option>前厅部</option></select>
+        <input class="inp" style="width:144px;padding:4px 8px;font-size:11px" placeholder="处理人（可选）" id="asWho">
+        <button class="btn btn-grad gold-grad" style="padding:4px 10px" onclick="doAssign('${t.id}')">确认分派</button>
+        <button class="btn" onclick="assignFor=null;renderTk()">取消</button></div>`:""}
+      ${completeFor===t.id?`<div style="margin-top:8px;display:flex;align-items:center;gap:8px;border-radius:6px;border:1px solid rgba(61,255,178,.4);background:rgba(10,18,48,.6);padding:8px 10px">
+        <span style="font-size:10px;color:var(--go)">处理结果</span>
+        <input class="inp" style="flex:1;padding:4px 8px;font-size:11px" placeholder="如：已上门更换灯泡并确认恢复正常" id="cpResult">
+        <button class="btn btn-go" style="padding:4px 10px" onclick="doComplete('${t.id}')">确认办结</button>
+        <button class="btn" onclick="completeFor=null;renderTk()">取消</button></div>`:""}
+    </div>`;
+  }).join("");
+}
+function doAssign(id){
+  const t=TICKETS.find(x=>x.id===id);
+  t.dept=document.getElementById("asDept").value;
+  const w=document.getElementById("asWho").value.trim(); if(w)t.assignee=w;
+  t.status="assigned";
+  TL[id].push(["assign","agent · agt-service-desk",`{"note":"分派 → ${t.dept}${t.assignee?" / "+t.assignee:""}"}`,"2026/8/24 08:24:00"]);
+  assignFor=null; renderTk();
+  banner("info",`工单 ${id} 已分派 ${t.dept}${t.assignee?" / "+t.assignee:""}`);
+}
+function advance(id){
+  const t=TICKETS.find(x=>x.id===id); t.status="processing";
+  TL[id].push(["start","staff · "+(t.assignee||t.dept),'{"note":"开始处理"}',"2026/8/24 08:24:00"]);
+  renderTk();
+  banner("info",`工单 ${id} 开始处理（assigned → processing 状态机断言）`);
+}
+function doComplete(id){
+  const r=document.getElementById("cpResult").value.trim();
+  if(!r){toast("请填写处理结果");return;}
+  const t=TICKETS.find(x=>x.id===id); t.status="done";
+  TL[id].push(["complete","staff · "+(t.assignee||t.dept),`{"note":"${r}"}`,"2026/8/24 08:24:00"]);
+  completeFor=null; renderTk();
+  banner("info",`工单 ${id} 已办结——结果已 pushMessage 通知 C 端（无真实通道 mock:true）`);
+}
+function openTl(id){
+  const t=TICKETS.find(x=>x.id===id);
+  document.getElementById("tlMask").style.display="block";
+  const dr=document.getElementById("tlDrawer"); dr.style.display="block";
+  dr.innerHTML=`
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--holo)">工单时间线</div>
+      <button class="btn" onclick="closeTl()">✕ 关闭</button>
+    </div>
+    <h3 style="font-size:13.5px;font-weight:700">${t.title}</h3>
+    <div style="margin-top:6px;display:flex;gap:8px;align-items:center;font-size:10px;color:var(--ink3)">${sChip(t.status)}<span class="mono">${t.id}</span><span>${KIND[t.kind]}</span></div>
+    <div style="margin-top:14px">
+      ${TL[id].map(ev=>`<div class="tl-ev"><span class="dot"></span>
+        <div style="font-size:11px;color:var(--ink2)"><b class="mono" style="font-size:10px;color:var(--holo)">${ev[0]}</b><span style="margin-left:6px;font-size:10px;color:var(--ink3)">${ev[1]}</span></div>
+        <div class="mono" style="margin-top:2px;font-size:10px;line-height:1.6;color:var(--ink3);white-space:normal;word-break:break-all">${ev[2]}</div>
+        <div style="margin-top:2px;font-size:10px;color:var(--ink3)">${ev[3]}</div></div>`).join("")}
+    </div>`;
+}
+function closeTl(){ document.getElementById("tlMask").style.display="none"; document.getElementById("tlDrawer").style.display="none"; }
+
+route(); renderDocs(); renderTk();
+</script>
+</body>
+</html>
