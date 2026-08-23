@@ -170,6 +170,24 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
 .seg{display:flex;gap:6px;margin-bottom:10px}
 .seg .btn{min-height:36px;padding:6px}
 .toast{position:absolute;bottom:76px;left:50%;transform:translateX(-50%);background:var(--bg700);border:1px solid var(--gold);color:var(--goldhi);padding:8px 16px;border-radius:10px;font-size:11.5px;display:none;z-index:99;max-width:330px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+/* ---- P0 经营剧场精简首屏（镜像 P0.tsx 舞台态：织元体光核 + 卫星点阵 + 实况字幕一行 + 进工作台） ---- */
+@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes core-breathe{0%,100%{opacity:.65;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
+@keyframes mhspin{to{transform:rotate(360deg)}}
+.mstage{position:relative;border:1px solid var(--line);border-radius:18px;background:#07070d;overflow:hidden;padding:14px 12px 12px;text-align:center;
+  background-image:radial-gradient(60% 45% at 18% 8%,rgba(36,27,77,.5),transparent 70%),radial-gradient(1px 1px at 22% 30%,rgba(234,241,255,.7) 50%,transparent 51%),radial-gradient(1px 1px at 70% 18%,rgba(234,241,255,.5) 50%,transparent 51%),radial-gradient(1.5px 1.5px at 85% 60%,rgba(69,224,255,.5) 50%,transparent 51%),radial-gradient(1px 1px at 40% 80%,rgba(255,181,69,.45) 50%,transparent 51%)}
+.msats{position:relative;height:170px;margin-top:2px}
+.mholo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:110px;height:110px}
+.mholo .core{position:absolute;inset:28px;border-radius:50%;background:radial-gradient(circle at 50% 42%,rgba(255,217,138,.95),rgba(200,162,74,.35) 60%,transparent 75%);animation:core-breathe 2.4s ease-in-out infinite}
+.mholo .ring{position:absolute;border-radius:50%;border:1px solid rgba(200,162,74,.45)}
+.mholo .ring.r0{inset:8px;animation:mhspin 9s linear infinite}
+.mholo .ring.r1{inset:18px;border-color:rgba(200,162,74,.25);animation:mhspin 6s linear infinite reverse}
+.msat{position:absolute;transform:translate(-50%,-50%);text-align:center}
+.msat i{display:block;width:7px;height:7px;border-radius:50%;margin:0 auto}
+.msat em{display:block;font-style:normal;font-size:8px;color:var(--ink3);margin-top:2px;white-space:nowrap}
+.mtick{overflow:hidden;border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
+.mtick .tk{display:inline-block;white-space:nowrap;animation:ticker 24s linear infinite;font-size:10px;color:var(--ink3)}
+.mtick .tk b{color:var(--ink2)}
 .note{font-size:9.5px;color:var(--ink3);margin-top:8px;line-height:1.7}
 .skcat{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
@@ -187,9 +205,9 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
     <div><h1>视频经理 · 移动端</h1><div class="ws">HyperReality · 视频创作工作室</div></div>
   </div>
   <p>这是 <b>陈主理</b>（星芒好物主理人 · MEM-V01）的手机。AI 班组 7×24 在跑，他在手机上只做三件事：<b>看战报、批审批、回评论</b>。</p>
-  <p>👉 点击底部 Tab 切换：<b>战报 / 消息 / 审批 / 片库 / 技能 / 我的</b>，审批卡三手势与回复按钮都可点。底部中央<b>金色星环</b>是全局 Ask 入口（StarRing）：点一下出快捷条+情境快捷钮，双击进 P0 数字职场。</p>
+  <p>👉 开机先落 <b>P0 经营剧场精简首屏</b>（全息 CEO 光核 + 卫星点阵 + 实况字幕），点「进工作台」入 Tab 区：<b>战报 / 消息 / 审批 / 片库 / 技能 / 我的</b>，审批卡三手势与回复按钮都可点。底部中央<b>金色星环</b>是全局 Ask 入口（StarRing）：点一下出快捷条+情境快捷钮，双击回 P0 剧场。</p>
   <div class="src">
-    本 demo 为生产页面镜像：<b>战报=P3 / 消息=P2 / 审批=P4 / 片库=P10 / 技能=P6 / 我的=夜班+触发器投影 / 星环=StarRing</b>。<br>
+    本 demo 为生产页面镜像：<b>开机剧场=P0 / 战报=P3 / 消息=P2 / 审批=P4 / 片库=P10 / 技能=P6 / 我的=夜班+触发器+CEO汇报卡(P21)投影 / 星环=StarRing</b>。<br>
     数据与 PC 端完全同源：vp-demo-001 营销片管线 · <b>33 数码员工 + 3 人类</b> · 围栏 ai-video-baseline/v1（<b>21 条</b>）· 技能广场 231（官方 11，新增 deal-flow / cross-platform-review / ripping-reverse）· 播放 32.8w / 完播 38.4% / 涨粉 +1,204 / 达成 3/5。
   </div>
 </div>
@@ -197,8 +215,26 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
 <div class="phone">
   <div class="notch"><i></i><div class="statusbar"><span>08:30</span><span>📶 🔋</span></div></div>
 
+  <!-- ===== 开机首屏：经营剧场精简版（镜像 P0.tsx 舞台态：全息CEO光核 + 卫星点阵 + 实况字幕一行 + 进工作台） ===== -->
+  <div class="screen on" id="s-stage">
+    <div class="greet"><span class="t1">经营剧场</span><span class="t2">P0 · THEATER · 试用期第 2 天</span></div>
+    <div class="mstage">
+      <div style="font-size:10px;letter-spacing:.25em;color:var(--gold)">织元体 · 公司CEO</div>
+      <div class="msats" id="mSats">
+        <div class="mholo"><span class="ring r0"></span><span class="ring r1"></span><span class="core"></span></div>
+        <!-- 卫星点阵由 JS 注入（33 员代表 12 位 · 点色=绩效态） -->
+      </div>
+      <div style="font-size:11px;color:var(--ink2);line-height:1.8">昨日决策 14 件 · L2 下沉率 86% · <b style="color:var(--goldhi)">2 件 L4 请您定</b></div>
+      <div class="mtick"><span class="tk" id="mTk"></span></div>
+    </div>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn gold" onclick="enterWork()">进工作台</button>
+    </div>
+    <div class="note" style="text-align:center">员工卫星群 · 五态色：表扬绿 / 正常青 / 关注橙 / 辅导红 · 双击星环随时回剧场</div>
+  </div>
+
   <!-- ===== 战报（P3 掌上战报镜像） ===== -->
-  <div class="screen on" id="s-report">
+  <div class="screen" id="s-report">
     <div class="greet"><span class="t1">掌上战报</span><span class="t2">P3 · HANDOFF</span></div>
     <div class="card gold">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -397,6 +433,18 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
       <div class="note mono">围栏快照 ai-video-baseline/v1 · 班次 NR-20260821</div>
       <div style="margin-top:8px"><button class="brake" onclick="toast('🛑 紧急制动：二次确认后全端 ≤60s 生效（G5）')">🛑 紧急制动</button></div>
     </div>
+    <!-- CEO 汇报卡（镜像 P21 董事长视图精简：晨报摘要 + 命中率 + 一键收权） -->
+    <div class="card gold">
+      <div class="pt" style="color:var(--gold)">CEO 汇报 · 试用期第 2 天</div>
+      <div style="font-size:11.5px;color:var(--ink2);line-height:1.8">晨报摘要：播放 32.8w（▲18.2%）· 完播 38.4%；昨日决策 14 件，L2 下沉率 86%；谨慎上浮 2 件请您定（年度商单框架 / Dou+ 加投超上限）。</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <span class="chip gold">命中率 92%</span><span class="chip">中11/偏1/打脸0</span><span class="chip warn">L4 ×2 待批</span>
+      </div>
+      <div class="btnrow">
+        <button class="btn danger" id="mRevoke" onclick="mRevoke()">一键收权（即时仅汇报）</button>
+      </div>
+      <div class="note">captain.transit revoke · 留痕不可篡改 · 收权后可随时重新授权</div>
+    </div>
     <div class="card"><div class="pt">我的班组（33 数码员工 + 3 人类 → P8 · 点员工出五层员工卡）</div>
       <div class="setrow" style="cursor:pointer" onclick="medOpen('总导演','orchestrator v3.0 · 编排工种 · 铂金 LV12','🎬')"><span>制作班组 · 21 人</span><span class="r">总导演/情报五站/剧本/分镜/渲染…</span></div>
       <div class="setrow" style="cursor:pointer" onclick="medOpen('复盘分析师','review-analyst v1.0 · 分析工种 · 黄金','📈')"><span>经营班组 · 12 人（扩编 +8）</span><span class="r">调研/发布/看板/评论/投放/合规/商单/分账…</span></div>
@@ -419,7 +467,7 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
   </div>
 
   <div class="tabbar">
-    <div class="tab on" data-s="report"><span class="ic">📊</span>战报</div>
+    <div class="tab" data-s="report"><span class="ic">📊</span>战报</div>
     <div class="tab" data-s="msg"><span class="ic">💬</span>消息<span class="badge">3</span></div>
     <div class="tab" data-s="appr" style="margin-right:28px"><span class="ic">⚖️</span>审批<span class="badge">2</span></div>
     <div class="tab" data-s="lib" style="margin-left:28px"><span class="ic">🎬</span>片库</div>
@@ -512,6 +560,20 @@ function mRender(f){const list=!f||f==='全部'?MSK:f==='官方'?MSK.filter(s=>s
   document.getElementById('mSkillGrid').innerHTML=list.map(s=>`<div class="cmt" style="cursor:pointer" onclick="toast('装备详情：安装即绑定围栏（F8.2），卸载即撤销（L8.3）· 可 dry-run 预览')"><span class="who">${s[0]} ${s[1]}</span><div class="body">${s[2]}</div><div style="margin-top:5px"><span class="chip go">✓ 已装备</span></div></div>`).join('')||'<div class="note">该分类工艺已收录库中（计数见分类签），示例见「全部」</div>'}
 mRender();function mCat(el,c){document.querySelectorAll('#mSkillCats .chip').forEach(x=>x.classList.remove('gold'));el.classList.add('gold');mRender(c)}
 
+/* ===== P0 剧场首屏：卫星点阵 + 实况字幕（镜像 P0.tsx Satellites / ticker） ===== */
+const MSATS=[["总导演","#6adf8a"],["渲染师小燃","#ffbe6a"],["复盘分析师","#ff8a8a"],["剪辑师","#6adf8a"],["看板官","#8ad8ff"],["评论运营","#8ad8ff"],["发布专员","#ffbe6a"],["调研员","#8ad8ff"],["剧本师","#8ad8ff"],["商单经理","#8ad8ff"],["连贯审查","#8ad8ff"],["提示词工程","#8ad8ff"]];
+MSATS.forEach((s,i)=>{const ang=(i/MSATS.length)*Math.PI*2-Math.PI/2;const rx=86+(i%3)*24,ry=52+(i%2)*16;
+  document.getElementById('mSats').insertAdjacentHTML('beforeend',`<span class="msat" style="left:calc(50% + ${Math.cos(ang)*rx}px);top:calc(50% + ${Math.sin(ang)*ry}px)"><i style="background:${s[1]};box-shadow:0 0 8px ${s[1]}"></i><em>${s[0]}</em></span>`)});
+const MTK=[["提交渲染任务","渲染师小燃"],["CEO 简报","公司CEO"],["竞对采集","情报官·竞品"],["内容发布","发布专员"],["回评价","评论区运营"],["经营快照","数据看板官"]];
+document.getElementById('mTk').innerHTML=[...MTK,...MTK].map(e=>`<span style="margin-right:22px"><b>${e[0]}</b> · ${e[1]}</span>`).join('');
+function enterWork(){document.querySelector('.tab[data-s="report"]').click();toast('已进工作台（战报 P3 · 审批 P4 · 消息 P2）')}
+/* CEO 汇报卡：一键收权（二次确认 · 镜像 captain.transit revoke） */
+let mRevArm=false;
+function mRevoke(){const b=document.getElementById('mRevoke');
+  if(!mRevArm){mRevArm=true;b.textContent='⚠ 再点一次确认收权';return}
+  mRevArm=false;b.textContent='✓ 已收权 · 仅汇报中';b.className='btn done';
+  toast('已收权：数字CEO 即时降级仅汇报（suspended）· 全链留痕，可随时重新授权')}
+
 /* ===== 交互 ===== */
 let mRingOpen=false,mCurTab='report'; // 星环状态（提前声明：hash 直达会先触发 tab.onclick）
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{mCurTab=t.dataset.s;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+t.dataset.s))});
@@ -537,7 +599,9 @@ document.getElementById('mStar').addEventListener('click',()=>{
 document.getElementById('mStar').addEventListener('dblclick',()=>{
   if(mStarTimer){clearTimeout(mStarTimer);mStarTimer=null}
   mRingOpen=false;document.getElementById('mRingBar').classList.remove('open');
-  toast('星环 L3：进 P0 经营剧场 · 数字职场（D25 片场，PC 端视图）');
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-stage'));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  toast('星环 L3：进 P0 经营剧场（织元体全息CEO + 卫星点阵）');
 });
 function mRingChip(c){document.getElementById('mRingInput').value=c;mRingSend()}
 function mRingSend(){
