@@ -3,8 +3,8 @@
 # DSL 求值语义（阶段二 B4 实现）：match 命中后求值 when 表达式（沙箱，禁任意代码 L2.5）；
 #   命中 → 按 level 判定；block 优先于 review 优先于 auto（deny 优先并集求值 E2.2）；
 #   写类动作无任何规则命中 → 按 default_level 处理；求值异常 → 按 block（宁可错杀 E2.1）
-# 审批点矩阵 G1-G10（fusion-design §3 / 拆解台账 §2）
-version: ai-video-baseline/v1
+# 审批点矩阵 G1-G16（fusion-design §3 / 拆解台账 §2；G11-G16 为经营扩展 v2）
+version: ai-video-baseline/v2
 default_level: review
 rules:
   - rule_id: G1
@@ -156,3 +156,65 @@ rules:
       actions: [comment.reply]
     when: "params.intent == 'sensitive'"
     note: 三级分流四级：政治敏感等内容 block，只写「需介入」事件，不自动外发
+
+  # ---- 经营扩展 G11-G16（v2，基线） ----
+
+  - rule_id: G11
+    name: 单剧/单项目算力超预算自动暂停提交
+    level: review
+    is_baseline: true
+    match:
+      object_types: [budget_ledger]
+      actions: [render.submit]
+    when: "context.project_compute_used >= context.project_compute_cap"
+    note: 单项目算力消耗达预算上限自动暂停后续渲染提交；review 人工裁决放行或砍需求，可升级为 block
+
+  - rule_id: G12
+    name: 投放加投必审
+    level: review
+    is_baseline: true
+    match:
+      object_types: [ads_campaign]
+      actions: [ads.boost]
+    when: "true"
+    note: 任何追加投流预算动作必审；涉预算纪律，不可降级为 auto
+
+  - rule_id: G13
+    name: 分账差异超 ±10% 告警
+    level: auto
+    is_baseline: true
+    match:
+      object_types: [settlement_statement]
+      actions: [settlement.reconcile]
+    when: "abs(params.diff_ratio) > 0.10"
+    note: 应结 vs 实结差异超 ±10% 自动告警（不阻断拆分入账）；差异处置建议交主理人
+
+  - rule_id: G14
+    name: 平台送审预检必过
+    level: block
+    is_baseline: true
+    match:
+      object_types: [review_submission]
+      actions: [review.submit]
+    when: "context.precheck_passed != true"
+    note: 发布前三级预检未全绿的稿件禁止送审；任何人不得跳过
+
+  - rule_id: G15
+    name: 商单对外文件必审
+    level: review
+    is_baseline: true
+    match:
+      object_types: [deal_order]
+      actions: [deal.send_external]
+    when: "params.doc_type in ['quote', 'contract', 'closure_report']"
+    note: 报价/合同/结案报告等对外文件必审后外发，不得自动发送
+
+  - rule_id: G16
+    name: 矩阵账号异常登录与防关联违规
+    level: block
+    is_baseline: true
+    match:
+      object_types: [account_metric]
+      actions: [account.login, account.session_bind]
+    when: "context.login_anomaly == true or context.association_risk == true"
+    note: 异常登录（异地/新设备/频繁切换）或防关联违规（共用环境/批量同频操作）直接阻断并告警

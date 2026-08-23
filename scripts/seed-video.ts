@@ -4,8 +4,8 @@
  * 与 scripts/seed.ts（酒店 Bundle）同构，装载：
  *  - 演示租户/工作区（industry: ai-video）
  *  - 人类成员（主理人/运营/剪辑）
- *  - bundles/ai-video 的 25 个数码员工 preset（含 fence_bindings 原样落库）
- *  - ai-video-baseline/v1 基线围栏（G1-G10 + G9a/G9b + G10a-d）
+ *  - bundles/ai-video 的 33 个数码员工 preset（制作 21 + 经营 12；含 fence_bindings 原样落库）
+ *  - ai-video-baseline/v2 基线围栏（G1-G10 系列 15 条 + 经营扩展 G11-G16 共 21 条）
  *  - 8 个官方技能（安装即绑定围栏）
  *  - 一企一档（品牌档案 + forbidden 红线）
  *  - 自动化触发器（每 2h 数据采集 / 早八点战报 / 每 30min 评论采集）
@@ -33,7 +33,7 @@ const TENANT_ID = "tenant-demo";
 const WS_ID = "ws-video";
 const WS_NAME = "视频经理 · 演示工作室";
 const WS_SLUG = "video-studio";
-const FENCE_VERSION = "ai-video-baseline/v1";
+const FENCE_VERSION = "ai-video-baseline/v2";
 
 const MEMBERS = [
   { id: "MEM-V01", name: "陈主理", role: "owner" },
@@ -88,6 +88,18 @@ interface SkillDoc {
   name: string;
   description: string;
   body: string;
+}
+
+/** 管线 YAML 解析校验：管线由 Quest 调度器直接消费 YAML，此处解析计数确保可解析 */
+function loadPipelines(): string[] {
+  const dir = join(BUNDLE_DIR, "pipelines");
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".yml"))
+    .sort()
+    .map((f) => {
+      const doc = YAML.parse(readFileSync(join(dir, f), "utf-8"));
+      return String(doc?.quest ?? f);
+    });
 }
 
 function loadSkills(): SkillDoc[] {
@@ -149,15 +161,20 @@ function loadLibrarySkills(): SkillDoc[] {
 function studioArchive(): Record<string, unknown> {
   return {
     brand: "演示品牌·星芒好物",
-    // 数字CEO 宪章（D21，内容制作行业版，演示：试用期第 2 天）
+    // 数字CEO 宪章（D21，内容行业语义三变体：默认账号制；项目制/合同制模板见 archive.variants）
     charter: {
-      version: 1,
+      version: 2,
       mode: "trial",
       identity: { name: "公司CEO", persona: "内容经营型" },
-      autonomy: { price_band: [0.85, 1.15], procurement_cap: 5000, campaign_cap: 2000 },
-      escalate: ["对外公开承诺（赔偿/免费/声明）", "广告法敏感口径", "围栏规则放宽（任何放宽）", "新平台/新账号上线", "月累计投流超上限", "宪章变更"],
+      autonomy: {
+        publish_per_day_cap: 3,
+        boost_budget_per_post: 500,
+        price_quote_band: [0.9, 1.2],
+        reply_auto_scope: ["夸赞", "感谢"],
+      },
+      escalate: ["对外公开承诺（赔偿/免费/声明）", "广告法敏感口径", "围栏规则放宽（任何放宽）", "新平台/新账号上线", "月累计投流超上限", "低于底价报价让步", "投放加投（G12 必审）", "宪章变更"],
       briefing: { daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" },
-      circuit_breaker: { window_days: 14, kpi_floor: { publish_rate: 0.8 }, tightened: false },
+      circuit_breaker: { window_days: 14, kpi_floor: { completion_rate: 0.25, follower_growth_7d: -0.02 }, tightened: false },
       grant: {
         event_id: "E-GRANT-VDEMO1", granted_by: "MEM-001",
         granted_at: new Date(Date.now() - 9 * 86400e3).toISOString(),
@@ -169,6 +186,21 @@ function studioArchive(): Record<string, unknown> {
       },
       updated_at: new Date().toISOString(),
     },
+    // 宪章变体模板（切换经营模式时整体替换 autonomy/circuit_breaker，grant 六步授权结构不变）
+    variants: [
+      {
+        key: "project",
+        name: "项目制（单剧/单项目核算）",
+        autonomy: { render_budget_per_episode: 300, render_retry_cap: 5 },
+        circuit_breaker: { kpi_floor: { roi_iaa: 0.98, scrap_rate: 0.85 } },
+      },
+      {
+        key: "contract",
+        name: "合同制（商单履约 SLA）",
+        autonomy: { publish_per_day_cap: 2, content_reject_rounds_cap: 3, response_time_slo_hours: 4 },
+        circuit_breaker: { kpi_floor: { sla_hit_rate: 0.9 } },
+      },
+    ],
     platforms: ["douyin", "xiaohongshu", "bilibili", "shipinhao", "tiktok", "youtube"],
     accounts: [
       { platform: "douyin", handle: "@星芒好物", daily_publish_limit: 5 },
@@ -189,8 +221,9 @@ async function main() {
   const presets = loadPresets();
   const fences = loadFences();
   const skillsDocs = loadSkills();
+  const pipelines = loadPipelines();
   console.log(
-    `✓ Bundle 资产读取：${presets.length} preset / ${fences.length} 围栏 / ${skillsDocs.length} 技能`,
+    `✓ Bundle 资产读取：${presets.length} preset / ${fences.length} 围栏 / ${skillsDocs.length} 技能 / ${pipelines.length} 管线（${pipelines.join("、")}）`,
   );
 
   const owner = new pg.Client({ connectionString: DATABASE_URL });
@@ -258,7 +291,7 @@ async function main() {
       ],
     );
   }
-  console.log(`✓ 数码员工 ×${presets.length}（制作班组 21 + 经营班组 4）`);
+  console.log(`✓ 数码员工 ×${presets.length}（制作班组 21 + 经营班组 12）`);
 
   // 一企一档（dataMode=simulated：D24 落地向导横幅事实源——种子库即「全模拟运行态」，向导启用真实模式后翻转）
   const archive = { ...studioArchive(), dataMode: "simulated" };

@@ -1,8 +1,8 @@
 {
   "$id": "workloom://bundles/ai-video/schemas/objects",
-  "description": "视频经理版事件 Object 类型枚举（fusion-design §5：对象枚举行业化）",
+  "description": "视频经理版事件 Object 类型枚举 v2（fusion-design §5：对象枚举行业化；v2 扩展经营侧对象与语义注释）",
   "objects": [
-    { "type": "dossier", "label": "商品情报档案" },
+    { "type": "dossier", "label": "商品情报档案", "note": "情报五站产物；无源不入库，置信度三级 confirmed/reported/inferred 为入库前置闸机（G1）" },
     { "type": "theme", "label": "创意主题" },
     { "type": "insight", "label": "业务需求对齐清单" },
     { "type": "prd", "label": "制作需求书" },
@@ -16,9 +16,21 @@
     { "type": "video_asset", "label": "视频素材" },
     { "type": "final_video", "label": "成片" },
     { "type": "publish_task", "label": "发布任务" },
-    { "type": "account_metric", "label": "账号指标" },
-    { "type": "comment", "label": "评论" },
+    { "type": "account_metric", "label": "账号指标", "note": "账号/视频时序指标（播放/完播/互动/转化）；阈值告警与战报的事实源；G16 复用其登录风控上下文" },
+    { "type": "comment", "label": "评论", "note": "采集原始评论；意图分类 praise/thanks/consult/after_sale/negative/crisis/sensitive 后驱动 G10 三级分流" },
     { "type": "comment_reply", "label": "评论回复" },
-    { "type": "video_project", "label": "视频项目" }
+    { "type": "video_project", "label": "视频项目", "note": "项目主档；算力预算挂项目级 budget_ledger，超预算触发 G11 暂停渲染提交" },
+    { "type": "topic_card", "label": "选题卡", "note": "选题池条目：题材/钩子假设/目标平台/优先级，供内容日历排期引用" },
+    { "type": "content_calendar", "label": "内容日历", "note": "账号级发布排期表：多平台错峰、发布频控（G9b）与排期冲突裁决的载体" },
+    { "type": "platform_variant", "label": "平台变体", "note": "一片多发的平台化产物：画幅/时长/文案/封面按平台口径派生，只改表达不改事实" },
+    { "type": "deal_order", "label": "商单订单", "note": "商单主档：线索→报价→合同→履约→回款全周期；对外文件外发受 G15 必审约束" },
+    { "type": "deal_milestone", "label": "商单履约节点", "note": "brief 确认/初稿/终稿/发布/验收五节点，逾期前 48h 预警" },
+    { "type": "settlement_statement", "note": "分账结算单：应结 vs 实结逐笔比对，差异超 ±10% 触发 G13 告警；比例公开、基数不公开", "label": "分账结算单" },
+    { "type": "ads_campaign", "label": "投放计划", "note": "投流计划主档：消耗/转化阈值监控；加投动作受 G12 必审且不可降级" },
+    { "type": "ads_creative", "label": "投放素材", "note": "投流素材库条目：钩子变体绑定投放数据，连续低效入淘汰清单" },
+    { "type": "creator_collab", "label": "达人合作", "note": "达人合作单：筛选依据/建联记录/Brief/交付验收/效果回填" },
+    { "type": "ip_asset", "label": "版权资产", "note": "音乐/字体/素材/肖像授权台账：授权范围（用途/平台/地域/期限）+ 来源凭证，无凭证禁止使用" },
+    { "type": "review_submission", "label": "送审单", "note": "平台送审载体：三级预检全绿方可提交，未过预检受 G14 阻断；驳回案例回写规则库" },
+    { "type": "budget_ledger", "label": "预算台账", "note": "项目/账号级预算与算力台账：G11 算力超预算暂停、G12 加投必审的计量依据" }
   ]
 }

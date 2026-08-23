@@ -1,6 +1,6 @@
 {
   "$id": "workloom://bundles/ai-video/schemas/stages",
-  "description": "视频经理版项目阶段枚举（fusion-design §5：阶段枚举由行业包定义，阶段判定走确定性代码框架）",
+  "description": "视频经理版阶段枚举 v2（fusion-design §5：阶段枚举由行业包定义，阶段判定走确定性代码框架）；v2 新增账号级生命周期与经营级节奏分区",
   "stages": [
     { "id": "research", "label": "情报采集", "hint": "情报五站运行中，商品档案装订前" },
     { "id": "theme", "label": "创意主题", "hint": "主题/Brief 生成与确认（G2）" },
@@ -8,11 +8,24 @@
     { "id": "prd", "label": "PRD 编制", "hint": "5 段式 PRD，时长唯一权威（G4）" },
     { "id": "production", "label": "预生产设计", "hint": "剧本/场景/片头/视听语言/导演评审（G6）" },
     { "id": "portrait", "label": "定妆照", "hint": "角色/商品定妆照制作与确认（G5）" },
-    { "id": "render", "label": "渲染", "hint": "渲染脚本 CMS 版本管理 + Seedance 提交（G8）" },
+    { "id": "render", "label": "渲染", "hint": "渲染脚本 CMS 版本管理 + Seedance 提交（G8/G11）" },
     { "id": "post", "label": "后期", "hint": "剪辑/字幕/音乐/多版本合成" },
     { "id": "cms", "label": "入库待发", "hint": "成片入 CMS，发布计划编排中" },
     { "id": "published", "label": "已发布", "hint": "RPA 全平台发布完成（G9）" },
     { "id": "watching", "label": "经营监控", "hint": "数据采集/阈值告警/评论分流（G10）" },
     { "id": "archived", "label": "已归档", "hint": "项目结项，素材与事件留档" }
+  ],
+  "account_stages": [
+    { "id": "coldstart", "label": "冷启动", "hint": "新账号起号期：高频测试题材与钩子，关注完播率与互动率基线建立" },
+    { "id": "growth", "label": "成长期", "hint": "已验证题材放量：稳定更新节奏，关注粉丝增长与爆款复制" },
+    { "id": "stable", "label": "稳定期", "hint": "内容节奏与受众稳定：关注完播率/互动率不下滑，防内容老化" },
+    { "id": "monetizing", "label": "变现期", "hint": "商单/投放/分账并行：商单履约（G15）与投流纪律（G12）为重心" },
+    { "id": "matrix", "label": "矩阵期", "hint": "多账号协同：防关联纪律（G16）与跨账号内容差异化为重心" }
+  ],
+  "biz_rhythms": [
+    { "id": "daily", "label": "日节奏", "hint": "早八点战报、评论分流巡检、发布频控与当日排期核对" },
+    { "id": "weekly", "label": "周节奏", "hint": "跨平台复盘周报、素材淘汰清单、选题池补充" },
+    { "id": "monthly", "label": "月节奏", "hint": "分账对账月结、投流预算复盘、IP 授权到期盘点" },
+    { "id": "quarterly", "label": "季节奏", "hint": "宪章授权带复核、围栏阈值回顾（只紧不松）、账号矩阵战略评估" }
   ]
 }
