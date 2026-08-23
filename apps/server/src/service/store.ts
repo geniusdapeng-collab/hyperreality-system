@@ -93,7 +93,7 @@ async function seedDemo(client: SqlClient): Promise<void> {
         `INSERT INTO demo_members (member_id, workspace_id, name, phone, tier, points) VALUES
            ('M-1001',$1,'张伟','13800000001','金卡',2680),
            ('M-1002',$1,'刘芳','13800000002','银卡',860)
-         ON CONFLICT (member_id) DO NOTHING`,
+         ON CONFLICT (workspace_id, member_id) DO NOTHING`,
         [wsId],
       );
       await client.query(
@@ -101,7 +101,7 @@ async function seedDemo(client: SqlClient): Promise<void> {
            ('O-20260820-001',$1,'M-1001','豪华大床房','2026-08-21','2026-08-23',117600,'已确认'),
            ('O-20260818-002',$1,'M-1001','行政双床房','2026-08-18','2026-08-19',68800,'已完成'),
            ('O-20260822-003',$1,'M-1002','山景大床房','2026-08-25','2026-08-26',52800,'已确认')
-         ON CONFLICT (order_id) DO NOTHING`,
+         ON CONFLICT (workspace_id, order_id) DO NOTHING`,
         [wsId],
       );
     }
