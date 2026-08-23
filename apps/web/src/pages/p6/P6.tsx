@@ -5,62 +5,35 @@
  *  - P6E2 官方套件（金边传说·随 Bundle 分发；安装/已安装状态；绑定围栏可见；「已装给谁」→P8）
  *  - P6E3 团队技能（银边）/ 行业共享（铜边 · 已脱敏 ✓ L8.1；调用次数与采纳率公开=F8.5 事件投影）
  *  - P6E4 零代码新建技能「打造新装备」→ /p6/create 三要素向导（F8.3；「不能做什么」自动转围栏声明）
+ *  - 技能广场四环（components/p6/*）：
+ *    ①发现环：技能卡「战斗力」区（调用次数/关联爆款率/上周命中率，skills 遥测投影，缺显「—」）
+ *      + 顶部「适合当前阶段」推荐横条（workspace.profile.stage → 3 个官方技能）
+ *    ②组合环：技能链（爆款种草/合规发布两条样例链，查看步骤 + 编译为管线 toast 占位）
+ *    ③进化环：冷藏区（连续 4 周零命中降权展示，Mock 兜底）+ 进化提案（驳回样本修订建议，批准 toast 占位）
+ *    ④生产环：拉片反推（jenny-loom-research v2 + 上传占位）+ forge 自建入口（沿用 /p6/create）
  * 状态变体：p6 默认 / p6_create 创建；加载骨架 G10；空态仅官方套件+新建入口（F8.1）；
  *   错误态安装拒绝+原因（L8.2/E8.2）；权限态社区版不显行业共享区（F7.2）+ readonly 隐藏全部动作（E2.6 隐藏非置灰）；
  *   完成后态创建成功→团队技能 v1 进版本管理（F8.3）
- * 数据来源：skills router（list/installs/usage=F8.5 投影/forge/dryRun/awareness.*）
+ * 数据来源：skills router（list/installs/usage=F8.5 投影/forge/dryRun/awareness.*）+ workspace.profile（阶段）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { Bridge } from "../../shell/Bridge";
 import { BannerAlert, EmptyState, SkeletonBlock } from "../../components/hud";
+import {
+  RARITY, displayDesc, displayName, skillIcon,
+} from "../../components/p6/skillShared";
+import type { SkillRow, SkillUsage } from "../../components/p6/skillShared";
+import { StageRecommendBar } from "../../components/p6/StageRecommendBar";
+import { SkillChains } from "../../components/p6/SkillChains";
+import { EvolutionZone } from "../../components/p6/EvolutionZone";
+import { ProductionEntry } from "../../components/p6/ProductionEntry";
 
-interface SkillRow {
-  id: string; level: "official" | "team" | "industry"; bundle: string | null;
-  name: string; version: string; description: string;
-  fence_bindings: string[]; desensitized: boolean;
-}
-interface SkillUsage {
-  calls30: number; adopted30: number; rejected30: number; adoptionRate: number | null;
-  rejectReasons: Array<{ reason: string; count: number }>;
-  boundAgents: Array<{ id: string; presetKey: string; name: string }>;
-}
 interface InstallRow { skill_id: string; installed_by: string; installed_at: string }
 interface Suggestion {
   key: string; objectType: string; actionCategory: string;
   count: number; windowDays: number; threshold: number; sampleEventIds: string[];
-}
-
-/** 稀有度视觉口径（§6 设计规范：官方=金 / 团队=银 / 行业共享=铜） */
-const RARITY = {
-  official: { border: "border-gold/60", tag: "传说 · 官方", cls: "text-gold", icon: "✦" },
-  team: { border: "border-[#C0C8E8]/50", tag: "精良 · 团队", cls: "text-[#C0C8E8]", icon: "✧" },
-  industry: { border: "border-[#CD8B5A]/50", tag: "共享 · 行业", cls: "text-[#CD8B5A]", icon: "❖" },
-} as const;
-
-/** 展示名（官方套件 description 首句为中文名，如「收益管理专家。…」；团队/行业直接用 name） */
-function displayName(s: SkillRow): string {
-  const m = /^([^。]{2,12})。/.exec(s.description);
-  return m?.[1] ?? s.name;
-}
-/** 展示描述（去掉首句中文名部分） */
-function displayDesc(s: SkillRow): string {
-  const m = /^[^。]{2,12}。(.+)$/.exec(s.description);
-  return m?.[1] ?? s.description;
-}
-
-/** 技能图标（按名称语义映射，视频创作语境，演示口径） */
-function skillIcon(s: SkillRow): string {
-  if (/脚本|script|brief|shot-prompt/i.test(s.id + s.name)) return "📝";
-  if (/渲染|render/i.test(s.id + s.name)) return "🎬";
-  if (/发布|publish/i.test(s.id + s.name)) return "🚀";
-  if (/评论|comment/i.test(s.id + s.name)) return "💬";
-  if (/素材|material|asset/i.test(s.id + s.name)) return "🗂";
-  if (/选题|情报|research|trend/i.test(s.id + s.name)) return "🎯";
-  if (/定妆|portrait/i.test(s.id + s.name)) return "🎭";
-  if (/复盘|weekly|review/i.test(s.id + s.name)) return "📊";
-  return "🛠";
 }
 
 export default function P6() {
@@ -72,6 +45,7 @@ export default function P6() {
   const [ready, setReady] = useState(false);
   const [role, setRole] = useState("owner");
   const [plan, setPlan] = useState("pro");
+  const [stage, setStage] = useState<string | null>(null); // 工作区阶段（发现环推荐口径）
   const [skills, setSkills] = useState<SkillRow[]>([]);
   const [installs, setInstalls] = useState<InstallRow[]>([]);
   const [usage, setUsage] = useState<Record<string, SkillUsage>>({});
@@ -91,12 +65,13 @@ export default function P6() {
       setSuggSlow(false);
       if (slowTimer.current) clearTimeout(slowTimer.current);
       slowTimer.current = setTimeout(() => setSuggSlow(true), 10_000);
-      const [meR, sk, ins, usg, sug] = await Promise.all([
+      const [meR, sk, ins, usg, sug, wsp] = await Promise.all([
         trpc.members.me.query() as Promise<{ identity: { role: string; plan: string } }>,
         trpc.skills.list.query() as Promise<SkillRow[]>,
         trpc.skills.installs.query() as Promise<InstallRow[]>,
         trpc.skills.usage.query() as Promise<Record<string, SkillUsage>>,
         trpc.skills.awareness.suggestions.query() as Promise<Suggestion[]>,
+        trpc.workspace.profile.query() as Promise<{ stage: string | null }>,
       ]);
       if (slowTimer.current) clearTimeout(slowTimer.current);
       setSuggSlow(false);
@@ -106,6 +81,7 @@ export default function P6() {
       setInstalls(ins);
       setUsage(usg);
       setSuggestions(sug);
+      setStage(wsp.stage);
     } finally {
       setReady(true);
     }
@@ -181,6 +157,9 @@ export default function P6() {
     }
   }, [load]);
 
+  /** 占位动作 toast（技能链编译/进化批准/拉片上传等未上线能力统一走横幅说明，不落库） */
+  const notify = useCallback((text: string) => setBanner({ level: "info", text }), []);
+
   /** 技能卡（装备卡 · 稀有度边框；P6-④ SkillCard） */
   const renderCard = (s: SkillRow) => {
     const r = RARITY[s.level];
@@ -206,6 +185,12 @@ export default function P6() {
             ))}
           </div>
         )}
+        {/* 发现环 · 战斗力区（skills 遥测投影；缺数据显「—」不伪造） */}
+        <div className="mt-2 flex gap-2.5 rounded-lg border border-line/60 bg-bg800/40 px-2 py-1.5 text-micro text-ink3">
+          <span title="近 30 天绑定 Agent 动作投影">⚔ 调用 <b className="font-orb text-holo">{u && u.calls30 > 0 ? u.calls30 : "—"}</b></span>
+          <span title="关联产出进入爆款样本占比（遥测未出数）">🔥 爆款率 <b className="font-orb text-ink2">—</b></span>
+          <span title="上周命中率（遥测未出数）">🎯 周命中 <b className="font-orb text-ink2">—</b></span>
+        </div>
         {/* F8.5 使用看板：调用次数 / 采纳率 / 驳回模式（绑定 Agent 事件投影） */}
         <div className="mt-2 text-micro text-ink3">
           {u && u.calls30 > 0 ? (
@@ -280,6 +265,9 @@ export default function P6() {
             ["#sec-official", "✦ 官方套件", `金边 · ${officials.length}`],
             ["#sec-team", "✧ 团队技能", `银边 · ${teams.length}`],
             ...(showIndustry ? [["#sec-industry", "❖ 行业共享", `铜边 · ${industries.length}`] as const] : []),
+            ["#sec-chains", "⛓ 技能链", "组合环 · 2 条样例"],
+            ["#sec-evolution", "🧬 进化环", "冷藏区 · 提案"],
+            ["#sec-production", "🎞 生产环", "拉片反推 · forge"],
           ].map(([href, label, meta]) => (
             <a
               key={href}
@@ -408,6 +396,16 @@ export default function P6() {
               </div>
             )}
 
+            {/* 发现环①「适合当前阶段」推荐横条（workspace.profile.stage → 3 个官方技能） */}
+            <StageRecommendBar
+              stage={stage}
+              officials={officials}
+              installedSet={installedSet}
+              busy={busy}
+              canManage={canManage}
+              onInstall={(id) => void install(id)}
+            />
+
             {/* 空态（F8.1）：未安装任何技能 → 仅显官方套件 + 新建入口 */}
             {nothingInstalled && (
               <div className="mb-3">
@@ -455,16 +453,20 @@ export default function P6() {
               </>
             )}
 
-            {/* P6E4 零代码新建技能 */}
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => nav("/p6/create")}
-                className="cursor-pointer rounded-md gold-grad px-4 py-2.5 text-body font-bold text-ongold"
-              >
-                🛠 打造新装备（零代码）
-              </button>
-            )}
+            {/* 组合环② 技能链（样例链 · 查看步骤 / 编译为管线占位） */}
+            <div id="sec-chains">
+              <SkillChains skills={skills} onToast={notify} />
+            </div>
+
+            {/* 进化环③ 冷藏区 + 进化提案（驳回样本校准闭环） */}
+            <div id="sec-evolution">
+              <EvolutionZone skills={skills} usage={usage} onToast={notify} />
+            </div>
+
+            {/* 生产环④ 拉片反推 + forge 自建入口（P6E4 沿用 /p6/create） */}
+            <div id="sec-production">
+              <ProductionEntry canManage={canManage} onToast={notify} onForge={() => nav("/p6/create")} />
+            </div>
           </>
         )}
       </div>

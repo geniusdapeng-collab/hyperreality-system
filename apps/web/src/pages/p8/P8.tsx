@@ -7,15 +7,16 @@
  *    夜班窗口 22:00–08:00 内 night_shift preset 自动上线·青脉冲（M4）；
  *    只读 preset 标绿无写工具（L9.1）；加载校验失败标红+原因（F2.10 错误态））
  *  - 加装 preset（P8E3 → P7 舰船换装坞，§2.3 行业 Bundle 分发；非管理员无入口 E2.6 隐藏非置灰）
- *  - 成员档案 p8_agent（P8E1 点击进档案）：身份与归属（Agent ID/版本 who.version 归因必需/工作区/来源 Bundle）/
- *    航道许可围栏授权（P8E1·F2.10 声明对账，悬空标红）/技能包（→P6）/运行约束/
- *    30 天战绩（动作/采纳率/被驳回/积分·峰谷，驳回原因进偏好模式 F1.7）/
- *    发消息·派遣（P8E4：档案页直接建线程 → P2，生成前读档案+阶段+目标三要素 L3.7）/
- *    最近动作事件流（P8E5：who.id 过滤投影，点击进对应任务线程 → P2，可展开决策链路 F1.12）
- * 状态变体：p8 默认 / p8_agent 档案态；加载=成员卡骨架屏（G10）；空态=仅官方 preset 引导（§2.2）；
+ *  - 员工卡（五层活档案 · 侧滑抽屉，components/p8/EmployeeCardDrawer）：
+ *    ①人格层（渐变方块+工种 emoji+人设一句话）②专长层（技能清单+围栏 G 系列章）
+ *    ③状态层（当前任务/今日动作数/在线·夜班中，缺则兜底「待命」）
+ *    ④成绩单层（EMPLOYEE_SCORECARD 六指标行业口径按 preset_key；captain 端点取数，缺省「本周未出评」）
+ *    ⑤记忆层（被驳回样本/校准记录下钻 → P2，缺数据显「暂无」）；操作「@派活」「看记忆」
+ *  - 深链 /p8/agent/:id（P1 HostAgent 跳入）：读参数自动展开对应员工卡，读不到则忽略
+ * 状态变体：p8 默认 / p8_agent 员工卡展开态；加载=成员卡骨架屏（G10）；空态=仅官方 preset 引导（§2.2）；
  *          权限态=非管理员隐藏「加装/派遣」入口（E2.6）；错误态=preset 校验失败卡片标红（F2.10）
- * 数据：roster.list / roster.profile（PRD P8-⑤：成员+preset 注册表投影 + 工时聚合 + who.id 事件流投影；本页无直接写入）
- * 轮询口径（D6）：名册 10s，档案事件流 15s
+ * 数据：roster.list / roster.profile + captain.theater 评议（PRD P8-⑤；本页无直接写入，派遣走 threads.dispatch）
+ * 轮询口径（D6）：名册 10s；员工卡档案细节开卡时拉取
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
@@ -24,11 +25,11 @@ import { Bridge } from "../../shell/Bridge";
 import {
   BannerAlert,
   EmptyState,
-  EventIdChip,
   LevelBadge,
   SkeletonBlock,
   XpBar,
 } from "../../components/hud";
+import { EmployeeCardDrawer } from "../../components/p8/EmployeeCardDrawer";
 
 /* ---------- 类型（与 server roster router 投影对齐） ---------- */
 type Rank = "青铜" | "白银" | "黄金" | "铂金" | "星钻";
@@ -54,25 +55,7 @@ interface RosterList {
   humans: HumanRow[];
   agents: AgentRow[];
 }
-interface Profile {
-  agent: {
-    id: string; presetKey: string; name: string; version: string; kind: string;
-    readonly: boolean; status: string; invalidReason: string | null;
-    description: string; nightShift: boolean; highRisk: boolean;
-    tools: Array<{ name: string; access: string; desc: string }>;
-    writeBack: string[]; constraints: string[];
-  };
-  workspaceName: string; bundle: string;
-  nightWindow: { open: boolean; range: string };
-  fences: Array<{ ruleId: string; name?: string; level?: string; version?: string; isBaseline?: boolean; declared: boolean }>;
-  skills: Array<{ id: string; name: string; level: string; version: string; fence_bindings: string[]; installed: boolean }>;
-  stats: AgentRow["stats"];
-  game: Game;
-  events: Array<{
-    eventId: string; sessionId: string | null; time: string;
-    action: string; objectType: string; ruleResults: string[]; receiptSynced: boolean;
-  }>;
-}
+
 
 /** 角色口径（PRD P8 正文：经营者·审批人 / 只读成员 / 集团 Teams；F5.6 三端一致） */
 const ROLE_LABEL: Record<string, string> = {
@@ -213,8 +196,8 @@ function AgentCard({ a, onOpen }: { a: AgentRow; onOpen: (id: string) => void })
   );
 }
 
-/* ================= 默认态 p8 ================= */
-function RosterHome() {
+/* ================= 默认态 p8（+ 员工卡抽屉深链 p8_agent） ================= */
+function RosterHome({ expandId }: { expandId: string | null }) {
   const nav = useNavigate();
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -248,6 +231,8 @@ function RosterHome() {
   const humans = data?.humans ?? [];
   const agents = data?.agents ?? [];
   const onlineAgents = agents.filter((a) => a.online).length;
+  // 深链 /p8/agent/:id：自动展开对应员工卡；读不到（不存在/未加载）则忽略
+  const expanded = expandId ? (agents.find((a) => a.id === expandId) ?? null) : null;
 
   /* 左栏：名册导航 + 在线概览 */
   const left = (
@@ -346,293 +331,23 @@ function RosterHome() {
             )}
           </>
         )}
-      </div>
-    </Bridge>
-  );
-}
 
-/* ================= 档案态 p8_agent ================= */
-function AgentProfilePage({ agentId }: { agentId: string }) {
-  const nav = useNavigate();
-  const [ready, setReady] = useState(false);
-  const [role, setRole] = useState("owner");
-  const [p, setP] = useState<Profile | null>(null);
-  const [roster, setRoster] = useState<AgentRow[]>([]);
-  const [banner, setBanner] = useState<{ level: "alert" | "warn" | "info"; text: string } | null>(null);
-  // P8E4 发消息·派遣
-  const [goal, setGoal] = useState("");
-  const [sending, setSending] = useState(false);
-
-  const load = useCallback(async () => {
-    await ensureDemoLogin();
-    const [meR, prof, list] = await Promise.all([
-      trpc.members.me.query() as Promise<{ identity: { role: string } }>,
-      trpc.roster.profile.query({ agentId }) as Promise<Profile | null>,
-      trpc.roster.list.query() as Promise<RosterList>,
-    ]);
-    setRole(meR.identity.role);
-    setP(prof);
-    setRoster(list.agents);
-    setReady(true);
-  }, [agentId]);
-
-  useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), 15_000); // 档案事件流 15s（D6）
-    return () => clearInterval(t);
-  }, [load]);
-
-  /** 发消息·派遣（P8E4：档案页直接建线程；生成前读档案+阶段+目标三要素 L3.7；含糊反问不建任务 F3.2） */
-  const dispatch = useCallback(async () => {
-    const title = goal.trim();
-    if (!title || !p) return;
-    setSending(true);
-    try {
-      const r = await trpc.threads.dispatch.mutate({
-        title, presetKey: p.agent.presetKey, runImmediately: false,
-      }) as
-        | { kind: "clarify"; question: string }
-        | { kind: "routed"; threadId: string };
-      if (r.kind === "clarify") {
-        setBanner({ level: "warn", text: `意图含糊，未建任务（F3.2）：${r.question}` });
-      } else {
-        nav(`/p2/${encodeURIComponent(r.threadId)}`); // 建单成功 → P2 任务舱
-      }
-    } finally {
-      setSending(false);
-    }
-  }, [goal, p, nav]);
-
-  const canDispatch = role !== "readonly"; // E2.6：只读成员隐藏派遣入口
-
-  /* 左栏：船员列表（点击切换档案） */
-  const left = (
-    <>
-      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">Agent 船员 · AGENTS</div>
-      {roster.map((a) => (
-        <button
-          key={a.id}
-          type="button"
-          onClick={() => nav(`/p8/agent/${encodeURIComponent(a.id)}`)}
-          className={`mb-1.5 flex w-full cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
-            a.id === agentId ? "border-gline bg-gold/8" : "border-line bg-card hover:border-gline"
-          }`}
-        >
-          <span className="flex h-6 w-6 items-center justify-center rounded border border-line bg-bg700 text-micro font-bold text-ink2">
-            {a.name.slice(0, 1)}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-caption text-ink2">{a.name}</span>
-          <span className="font-mono text-[9.5px] text-ink3">{a.version}</span>
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => nav("/p8")}
-        className="mt-2 w-full cursor-pointer rounded-lg border border-line bg-bg800/50 px-3 py-1.5 text-caption text-ink3 hover:border-gline"
-      >
-        ← 返回名册
-      </button>
-    </>
-  );
-
-  /* 右栏：运行约束 + 写回声明（P8E1 档案字段） */
-  const right = p && (
-    <>
-      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">运行约束 · RUNTIME</div>
-      <div className="space-y-2">
-        <div className="rounded-lg border border-line bg-card p-3 text-micro leading-relaxed text-ink2">
-          <div>· {p.agent.nightShift ? `夜班窗口 ${p.nightWindow.range} 自动上线（M4）` : "非夜班 preset"}</div>
-          <div>· {p.agent.highRisk ? "高危动作逐次授权" : "常规风险档"}</div>
-          <div>· {p.agent.readonly ? "只读 preset · 无写工具（L9.1）" : "对象写锁（F2.7）"}</div>
-          {p.agent.constraints.map((c) => <div key={c}>· {c}</div>)}
-        </div>
-        <div className="rounded-lg border border-line bg-card p-3 text-micro leading-relaxed text-ink2">
-          <b className="text-holo">写回声明</b>
-          {p.agent.writeBack.length === 0 ? (
-            <div className="mt-1 text-ink3">无写回能力（只读）</div>
-          ) : (
-            <div className="mt-1 space-y-0.5 font-mono text-ink3">
-              {p.agent.writeBack.map((w) => <div key={w}>{w}</div>)}
-            </div>
-          )}
-          <div className="mt-1.5 text-ink3">未声明围栏禁写（系统级 F2.10）</div>
-        </div>
-      </div>
-    </>
-  );
-
-  return (
-    <Bridge left={left} right={right}>
-      <div className="flex min-h-full flex-col">
-        {!ready ? (
-          <><SkeletonBlock lines={2} h={40} /><SkeletonBlock lines={8} /></>
-        ) : !p ? (
-          <EmptyState icon="🛰" title="船员不存在或已离舰" hint="返回名册选择其他船员" actionLabel="← 返回名册" onAction={() => nav("/p8")} />
-        ) : (
-          <>
-            <div className="mb-3 flex items-baseline gap-3">
-              <h2 className="text-h1 font-black tracking-wider">
-                船员档案 · {p.agent.name}
-                <span className="ml-2 font-mono text-body font-normal text-holo">{p.agent.version}</span>
-              </h2>
-              <span className="text-[11px] tracking-[.2em] text-ink3">P8E1 · F2.10/F1.7</span>
-            </div>
-
-            {p.agent.status === "invalid" && (
-              <div className="mb-3">
-                <BannerAlert level="alert">
-                  preset 加载校验失败：{p.agent.invalidReason ?? "围栏绑定缺失"}——系统级禁写（F2.10），修复后重新装配
-                </BannerAlert>
-              </div>
-            )}
-            {banner && (
-              <div className="mb-3">
-                <BannerAlert level={banner.level} actionLabel="知道了" onAction={() => setBanner(null)}>{banner.text}</BannerAlert>
-              </div>
-            )}
-
-            {/* 上排三卡：身份与归属 / 航道许可 / 技能包 */}
-            <div className="grid grid-cols-3 gap-3.5">
-              <div className="rounded-msg border border-line bg-card p-3.5">
-                <div className="mb-2 text-caption font-bold text-holo">身份与归属</div>
-                <div className="space-y-1.5 text-caption">
-                  <div className="flex justify-between"><span className="text-ink3">Agent ID</span><span className="font-mono text-holo">{p.agent.id}</span></div>
-                  <div className="flex justify-between"><span className="text-ink3">版本（who.version 归因）</span><span className="font-mono text-ink2">{p.agent.version}</span></div>
-                  <div className="flex justify-between"><span className="text-ink3">工作区</span><span className="text-ink2">{p.workspaceName}</span></div>
-                  <div className="flex justify-between"><span className="text-ink3">来源 Bundle</span><span className="text-ink2">{p.bundle}</span></div>
-                  <div className="flex justify-between"><span className="text-ink3">战队</span><span className="text-ink2">{p.agent.nightShift ? "守夜战队 · 夜班窗口自动上线" : "日常班组"}</span></div>
-                </div>
-                <div className="mt-2.5 border-t border-line/60 pt-2">
-                  <LevelBadge level={p.game.level} rank={p.game.rank} name={p.agent.name} version={p.agent.version} />
-                </div>
-              </div>
-
-              <div className="rounded-msg border border-line bg-card p-3.5">
-                <div className="mb-2 text-caption font-bold text-holo">航道许可 · 围栏授权（F2.10）</div>
-                {p.fences.length === 0 ? (
-                  <div className="text-caption text-ink3">未声明 fence_bindings——系统级禁写，仅只读动作可达</div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {p.fences.map((f) => (
-                      <div key={f.ruleId} className="flex items-center gap-2 text-caption">
-                        <FenceBindingTag ruleId={f.ruleId} />
-                        <span className="min-w-0 flex-1 truncate text-ink2">
-                          {f.declared ? `${f.name} ${f.version}` : "声明悬空：规则不存在"}
-                        </span>
-                        <span className={`shrink-0 text-micro ${f.declared ? "text-go" : "text-alert"}`}>
-                          {f.declared ? `已声明 · ${f.level}${f.isBaseline ? " 🔒" : ""}` : "✗ 标红"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-msg border border-line bg-card p-3.5">
-                <div className="mb-2 text-caption font-bold text-holo">装备 · 技能包</div>
-                {p.skills.length === 0 ? (
-                  <div className="text-caption text-ink3">暂无技能包（→P6 装备库安装）</div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {p.skills.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => nav("/p6")}
-                        title="技能包行 → P6 装备库"
-                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-line bg-bg800/40 px-2.5 py-1.5 text-left text-caption hover:border-gline"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-ink2">🎒 {s.name} <span className="font-mono text-micro text-ink3">v{s.version}</span></span>
-                        <span className={`shrink-0 text-micro ${s.installed ? "text-go" : "text-warn"}`}>
-                          {s.installed ? `已装备 · 绑 ${s.fence_bindings.join("/") || "—"}` : "未安装"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 下排：30 天战绩 + 最近事件流 */}
-            <div className="mt-3.5 grid grid-cols-[1.2fr_1fr] gap-3.5">
-              <div className="rounded-msg border border-line bg-card p-3.5">
-                <div className="mb-2 text-caption font-bold text-holo">30 天战绩（事件投影 · L6.3）</div>
-                <div className="grid grid-cols-4 gap-2.5">
-                  {[
-                    ["动作", String(p.stats.actions30), ""],
-                    ["采纳率", pct(p.stats.adoptionRate), ""],
-                    ["被驳回", String(p.stats.rejected30), ""],
-                    ["能量", p.stats.credits30.toLocaleString(), p.stats.offPeakRatio !== null ? `峰谷 ${pct(p.stats.offPeakRatio)}` : ""],
-                  ].map(([l, v, d]) => (
-                    <div key={l} className="rounded-lg border border-line bg-bg800/40 p-2.5">
-                      <div className="text-micro text-ink3">{l}</div>
-                      <div className="font-orb text-h1 font-bold text-ink">{v}</div>
-                      {d && <div className="text-micro text-gold">{d}</div>}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 text-micro text-ink3">
-                  驳回原因进偏好模式（F1.7）· 账单=事件投影（L6.3）· 无回执动作标「未核实」（E3.7）
-                </div>
-                {/* P8E4 发消息·派遣（E2.6：只读成员隐藏） */}
-                {canDispatch && (
-                  <div className="mt-3">
-                    <textarea
-                      value={goal}
-                      onChange={(e) => setGoal(e.target.value)}
-                      rows={2}
-                      placeholder={`向 ${p.agent.name} 派遣任务（生成前读档案+阶段+目标三要素 L3.7；含糊将反问不建单 F3.2）`}
-                      className="w-full rounded-lg border border-line bg-bg800 px-2.5 py-2 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
-                    />
-                    <button
-                      type="button"
-                      disabled={!goal.trim() || sending}
-                      onClick={() => void dispatch()}
-                      className="mt-2 cursor-pointer rounded-lg gold-grad px-4 py-2 text-caption font-black text-ongold disabled:opacity-40"
-                    >
-                      💬 发消息 · 派遣任务（→P2 任务舱 F3.1）
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-msg border border-line bg-card p-3.5">
-                <div className="mb-2 text-caption font-bold text-holo">最近动作事件流（点击进线程 → P2 · F1.12）</div>
-                {p.events.length === 0 ? (
-                  <div className="text-caption text-ink3">近 30 天无动作留痕</div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {p.events.map((e) => (
-                      <button
-                        key={e.eventId}
-                        type="button"
-                        onClick={() => e.sessionId?.startsWith("T-") && nav(`/p2/${encodeURIComponent(e.sessionId)}`)}
-                        title={e.sessionId ? `进线程 ${e.sessionId} → P2（决策链路 F1.12）` : "无线程上下文"}
-                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg border-l-2 border-line bg-bg800/30 px-2.5 py-1.5 text-left hover:border-l-gold"
-                      >
-                        <EventIdChip id={e.eventId} />
-                        <span className="min-w-0 flex-1 truncate text-caption text-ink2">
-                          {e.action}
-                          {e.ruleResults.length > 0 && <span className="ml-1 text-micro text-warn">{e.ruleResults.join(" ")}</span>}
-                        </span>
-                        <span className={`shrink-0 text-micro ${e.receiptSynced ? "text-go" : "text-warn"}`}>
-                          {e.receiptSynced ? "✓ 回执" : "未核实"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
+        {/* 员工卡（五层活档案 · 侧滑抽屉；深链 /p8/agent/:id 自动展开） */}
+        {expanded && (
+          <EmployeeCardDrawer
+            agent={expanded}
+            nightRange={data?.nightWindow.range ?? "22:00–08:00"}
+            canDispatch={role !== "readonly"}
+            onClose={() => nav("/p8")}
+          />
         )}
       </div>
     </Bridge>
   );
 }
 
-/** P8 入口：/p8 名册；/p8/agent/:agentId 档案态（p8_agent） */
+/** P8 入口：/p8 名册；/p8/agent/:agentId 深链自动展开员工卡（读不到则忽略，留在名册） */
 export default function P8() {
   const { agentId } = useParams<{ agentId: string }>();
-  return agentId ? <AgentProfilePage agentId={agentId} /> : <RosterHome />;
+  return <RosterHome expandId={agentId ?? null} />;
 }
