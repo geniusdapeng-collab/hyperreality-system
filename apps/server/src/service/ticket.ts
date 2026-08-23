@@ -1,15 +1,30 @@
 /**
  * service · 工单（接口对齐 packages/base/service-ticket 签名；表结构为底座迁移版）
- *  - 状态机（底座 CHECK）：created → assigned → processing → done（closed 为关闭终态）
- *  - 幂等：客户端传 idempotencyKey（唯一部分索引）；命中直接返回原工单
+ *  - 状态机（H1/H3）：迁移合法性复用 packages/base/service-ticket 的 assertTicketTransition
+ *    （created→assigned→processing→done→closed，created 可直关）；非法跃迁抛 409 语义错误
+ *  - 幂等（H1/H3）：ON CONFLICT (workspace_id,idempotency_key) DO NOTHING + 回查返回 {deduped:true}
+ *    （删除先查后插竞态窗口）；createTicketOn/assignTicketOn 供网关纳入同一 serviceTx（H2）
  *  - 部门路由表：kind → 默认部门（自动派单）；SLA：sla_due_at 按 kind 时限，超时升级 priority=high + 事件留痕
- *  - 满意度：落 payload.rating（底座表无独立评分列）+ c_ticket_events 'rate' 事件
+ *  - 满意度（L9）：仅 status=done 可评且只可评一次（重复评 409）；评分落 payload.rating + 'rate' 事件
  * 全部读写经 svcQuery/serviceTx（RLS 事务上下文）。
  */
+import type pg from "pg";
+import { assertTicketTransition, TicketTransitionError } from "@workloom/base/service-ticket";
 import { ensureServiceSchema } from "./store.js";
 import { serviceTx, svcQuery } from "./events.js";
 
 export type TicketStatus = "created" | "assigned" | "processing" | "done" | "closed";
+
+/** 带 HTTP 语义的服务层错误（网关按 status 映射响应码） */
+export class ServiceHttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ServiceHttpError";
+  }
+}
 
 export interface Ticket {
   id: string; workspaceId: string; cUserId: string | null; conversationId: string | null;
@@ -27,6 +42,8 @@ export interface TicketEvent {
 /** 部门路由表（kind → 受理部门；可按工作区配置化扩展） */
 export const DEPT_ROUTE: Record<string, string> = {
   complaint: "客服部",
+  repair: "工程部",
+  delivery: "客房部",
   service_request: "客房部",
   consult: "前厅部",
   other: "前厅部",
@@ -35,6 +52,8 @@ export const DEPT_ROUTE: Record<string, string> = {
 /** SLA 时限（小时，按 kind；演示口径） */
 const SLA_HOURS: Record<string, number> = {
   complaint: 4,
+  repair: 2,
+  delivery: 1,
   service_request: 2,
   consult: 8,
   other: 24,
@@ -70,35 +89,84 @@ function eventOf(x: Record<string, unknown>): TicketEvent {
   };
 }
 
-export async function createTicket(input: {
+/** 状态机断言 → 409 语义（TicketTransitionError 转 ServiceHttpError） */
+function assertTransition(from: TicketStatus, to: TicketStatus): void {
+  try {
+    assertTicketTransition(from, to);
+  } catch (err) {
+    if (err instanceof TicketTransitionError) throw new ServiceHttpError(err.message, 409);
+    throw err;
+  }
+}
+
+export interface CreateTicketInput {
   workspaceId: string; cUserId: string; conversationId?: string;
   kind: string; title: string; payload: Record<string, unknown>; idempotencyKey?: string;
-}): Promise<Ticket> {
-  await ensureServiceSchema();
-  if (input.idempotencyKey) {
-    const hit = await svcQuery(
-      input.workspaceId,
-      `SELECT * FROM c_tickets WHERE workspace_id=$1 AND idempotency_key=$2`,
-      [input.workspaceId, input.idempotencyKey],
-    );
-    if (hit[0]) return ticketOf(hit[0]);
-  }
+}
+
+/** 事务内建单（ON CONFLICT 幂等 + 'create' 事件；deduped 命中不落事件） */
+export async function createTicketOn(
+  client: pg.PoolClient,
+  input: CreateTicketInput,
+): Promise<{ ticket: Ticket; deduped: boolean }> {
   const slaHours = SLA_HOURS[input.kind] ?? SLA_HOURS.other!;
-  return serviceTx(input.workspaceId, async (client) => {
-    const r = await client.query(
-      `INSERT INTO c_tickets (id, workspace_id, c_user_id, conversation_id, kind, title, payload, idempotency_key, sla_due_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now() + ($9 || ' hours')::interval) RETURNING *`,
-      [newId("tck"), input.workspaceId, input.cUserId, input.conversationId ?? null, input.kind, input.title,
-       JSON.stringify(input.payload), input.idempotencyKey ?? null, String(slaHours)],
+  const r = await client.query(
+    `INSERT INTO c_tickets (id, workspace_id, c_user_id, conversation_id, kind, title, payload, idempotency_key, sla_due_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now() + ($9 || ' hours')::interval)
+     ON CONFLICT (workspace_id, idempotency_key) DO NOTHING
+     RETURNING *`,
+    [newId("tck"), input.workspaceId, input.cUserId, input.conversationId ?? null, input.kind, input.title,
+     JSON.stringify(input.payload), input.idempotencyKey ?? null, String(slaHours)],
+  );
+  let row = r.rows[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    // 幂等命中：回查原单返回（不重复落流转事件）
+    const cur = await client.query(
+      `SELECT * FROM c_tickets WHERE workspace_id=$1 AND idempotency_key=$2`,
+      [input.workspaceId, input.idempotencyKey ?? null],
     );
-    const row = r.rows[0] as Record<string, unknown>;
-    await client.query(
-      `INSERT INTO c_ticket_events (workspace_id, ticket_id, action, actor_type, actor_id, detail)
-       VALUES ($1,$2,'create','c_user',$3,$4)`,
-      [input.workspaceId, String(row.id), input.cUserId, JSON.stringify({ kind: input.kind, title: input.title })],
-    );
-    return ticketOf(row);
-  });
+    row = cur.rows[0] as Record<string, unknown> | undefined;
+    if (!row) throw new ServiceHttpError("幂等冲突但未查到原单（数据异常）", 500);
+    return { ticket: ticketOf(row), deduped: true };
+  }
+  await client.query(
+    `INSERT INTO c_ticket_events (workspace_id, ticket_id, action, actor_type, actor_id, detail)
+     VALUES ($1,$2,'create','c_user',$3,$4)`,
+    [input.workspaceId, String(row.id), input.cUserId, JSON.stringify({ kind: input.kind, title: input.title })],
+  );
+  return { ticket: ticketOf(row), deduped: false };
+}
+
+export async function createTicket(input: CreateTicketInput): Promise<{ ticket: Ticket; deduped: boolean }> {
+  await ensureServiceSchema();
+  return serviceTx(input.workspaceId, async (client) => createTicketOn(client, input));
+}
+
+/** 事务内派单（created→assigned 状态机断言 + 'assign' 事件） */
+export async function assignTicketOn(
+  client: pg.PoolClient,
+  input: { workspaceId: string; ticketId: string; dept?: string; assignee?: string },
+): Promise<Ticket> {
+  const cur = await client.query(
+    `SELECT * FROM c_tickets WHERE workspace_id=$1 AND id=$2 FOR UPDATE`,
+    [input.workspaceId, input.ticketId],
+  );
+  const row = cur.rows[0] as Record<string, unknown> | undefined;
+  if (!row) throw new ServiceHttpError(`工单不存在：${input.ticketId}`, 404);
+  const from = row.status as TicketStatus;
+  assertTransition(from, "assigned");
+  const dept = input.dept ?? DEPT_ROUTE[String(row.kind)] ?? DEPT_ROUTE.other!;
+  const upd = await client.query(
+    `UPDATE c_tickets SET status='assigned', dept=$3, assignee=$4, updated_at=now()
+     WHERE workspace_id=$1 AND id=$2 RETURNING *`,
+    [input.workspaceId, input.ticketId, dept, input.assignee ?? null],
+  );
+  await client.query(
+    `INSERT INTO c_ticket_events (workspace_id, ticket_id, action, actor_type, actor_id, detail)
+     VALUES ($1,$2,'assign','system','service-desk',$3)`,
+    [input.workspaceId, input.ticketId, JSON.stringify({ dept, assignee: input.assignee ?? null })],
+  );
+  return ticketOf(upd.rows[0] as Record<string, unknown>);
 }
 
 async function transition(input: {
@@ -109,6 +177,14 @@ async function transition(input: {
 }): Promise<Ticket> {
   await ensureServiceSchema();
   return serviceTx(input.workspaceId, async (client) => {
+    const cur = await client.query(
+      `SELECT status FROM c_tickets WHERE workspace_id=$1 AND id=$2 FOR UPDATE`,
+      [input.workspaceId, input.ticketId],
+    );
+    const from = (cur.rows[0] as { status?: string } | undefined)?.status as TicketStatus | undefined;
+    if (!from) throw new ServiceHttpError(`工单不存在：${input.ticketId}`, 404);
+    // H1/H3 状态机：目标态变更必须先过迁移合法性（非法跃迁 409）
+    if (input.setStatus && input.setStatus !== from) assertTransition(from, input.setStatus);
     const r = await client.query(
       `UPDATE c_tickets SET
          status   = COALESCE($3, status),
@@ -124,7 +200,7 @@ async function transition(input: {
        input.mergePayload ? JSON.stringify(input.mergePayload) : null],
     );
     const row = r.rows[0] as Record<string, unknown> | undefined;
-    if (!row) throw new Error(`工单不存在：${input.ticketId}`);
+    if (!row) throw new ServiceHttpError(`工单不存在：${input.ticketId}`, 404);
     await client.query(
       `INSERT INTO c_ticket_events (workspace_id, ticket_id, action, actor_type, actor_id, detail)
        VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -137,21 +213,15 @@ async function transition(input: {
 export async function assignTicket(input: {
   workspaceId: string; ticketId: string; dept?: string; assignee?: string;
 }): Promise<Ticket> {
-  const cur = await getTicket(input.workspaceId, input.ticketId);
-  if (!cur) throw new Error(`工单不存在：${input.ticketId}`);
-  const dept = input.dept ?? DEPT_ROUTE[cur.kind] ?? DEPT_ROUTE.other!;
-  return transition({
-    ...input, action: "assign", actorType: "system", actorId: "service-desk",
-    setStatus: "assigned", setDept: dept, setAssignee: input.assignee ?? null,
-    detail: { dept, assignee: input.assignee ?? null },
-  });
+  await ensureServiceSchema();
+  return serviceTx(input.workspaceId, async (client) => assignTicketOn(client, input));
 }
 
 export async function advanceTicket(input: {
   workspaceId: string; ticketId: string; action: string;
   actorType: string; actorId: string; detail?: Record<string, unknown>;
 }): Promise<Ticket> {
-  // B 端推进：start → processing；其余 action 原样留痕不变更状态
+  // B 端推进：start → processing（assigned→processing 状态机断言）；其余 action 原样留痕不变更状态
   return transition({ ...input, setStatus: input.action === "start" ? "processing" : undefined });
 }
 
@@ -165,42 +235,38 @@ export async function completeTicket(input: {
   });
 }
 
-/** 满意度评价（C 端本人工单；评分落 payload.rating + 'rate' 事件留痕） */
+/** 满意度评价（L9：仅 status=done 可评且只可评一次，重复评 409；评分落 payload.rating + 'rate' 事件） */
 export async function rateTicket(input: {
   workspaceId: string; ticketId: string; cUserId: string; score: number; comment?: string;
 }): Promise<Ticket> {
   await ensureServiceSchema();
   return serviceTx(input.workspaceId, async (client) => {
+    const cur = await client.query(
+      `SELECT status, payload->'rating' AS rating FROM c_tickets
+       WHERE workspace_id=$1 AND id=$2 AND c_user_id=$3 FOR UPDATE`,
+      [input.workspaceId, input.ticketId, input.cUserId],
+    );
+    const row = cur.rows[0] as { status?: string; rating?: unknown } | undefined;
+    if (!row) throw new ServiceHttpError(`工单不存在或不属于当前用户：${input.ticketId}`, 404);
+    if (row.status !== "done") throw new ServiceHttpError("仅已完成的工单可评价", 409);
+    if (row.rating) throw new ServiceHttpError("该工单已评价过，不可重复评价", 409);
     const r = await client.query(
       `UPDATE c_tickets SET payload = payload || $3::jsonb, updated_at=now()
-       WHERE workspace_id=$1 AND id=$2 AND c_user_id=$4 RETURNING *`,
-      [input.workspaceId, input.ticketId, JSON.stringify({ rating: { score: input.score, comment: input.comment ?? null } }), input.cUserId],
+       WHERE workspace_id=$1 AND id=$2 RETURNING *`,
+      [input.workspaceId, input.ticketId, JSON.stringify({ rating: { score: input.score, comment: input.comment ?? null } })],
     );
-    const row = r.rows[0] as Record<string, unknown> | undefined;
-    if (!row) throw new Error(`工单不存在或不属于当前用户：${input.ticketId}`);
     await client.query(
       `INSERT INTO c_ticket_events (workspace_id, ticket_id, action, actor_type, actor_id, detail)
        VALUES ($1,$2,'rate','c_user',$3,$4)`,
       [input.workspaceId, input.ticketId, input.cUserId, JSON.stringify({ score: input.score, comment: input.comment ?? null })],
     );
-    return ticketOf(row);
+    return ticketOf(r.rows[0] as Record<string, unknown>);
   });
 }
 
 export async function getTicket(workspaceId: string, ticketId: string): Promise<Ticket | null> {
   await ensureServiceSchema();
   const rows = await svcQuery(workspaceId, `SELECT * FROM c_tickets WHERE workspace_id=$1 AND id=$2`, [workspaceId, ticketId]);
-  return rows[0] ? ticketOf(rows[0]) : null;
-}
-
-/** 按幂等键查已有工单（网关幂等重放短路用：命中则不再派单/推送/留痕） */
-export async function findTicketByIdem(workspaceId: string, idempotencyKey: string): Promise<Ticket | null> {
-  await ensureServiceSchema();
-  const rows = await svcQuery(
-    workspaceId,
-    `SELECT * FROM c_tickets WHERE workspace_id=$1 AND idempotency_key=$2`,
-    [workspaceId, idempotencyKey],
-  );
   return rows[0] ? ticketOf(rows[0]) : null;
 }
 

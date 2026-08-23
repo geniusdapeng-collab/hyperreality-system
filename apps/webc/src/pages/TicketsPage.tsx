@@ -49,7 +49,7 @@ export default function TicketsPage({ refreshKey }: { refreshKey: number }) {
           >
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-ink3">{KIND_LABEL[t.kind] ?? t.kind}</span>
-              <StatusChip status={t.status} />
+              <StatusChip status={t.statusText ?? t.status} />
             </div>
             <p className="mt-1.5 text-[13.5px] font-medium text-ink">{t.title}</p>
             <div className="mt-2 flex items-center justify-between text-[10px] text-ink3">
@@ -105,7 +105,7 @@ function TicketDetail({ id, demo, onBack }: { id: string; demo: boolean; onBack:
     setRated(true);
   };
 
-  const done = ticket?.status === "已完成";
+  const done = (ticket?.statusText ?? ticket?.status) === "已完成" || ticket?.status === "done";
 
   return (
     <div className="flex h-full flex-col">
@@ -121,7 +121,7 @@ function TicketDetail({ id, demo, onBack }: { id: string; demo: boolean; onBack:
         <div className="rounded-2xl border border-line bg-card p-4">
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-ink3">{ticket ? KIND_LABEL[ticket.kind] : "…"}</span>
-            {ticket && <StatusChip status={ticket.status} />}
+            {ticket && <StatusChip status={ticket.statusText ?? ticket.status} />}
           </div>
           <p className="mt-1.5 text-[15px] font-semibold text-ink">{ticket?.title ?? "加载中…"}</p>
           <p className="mt-1.5 font-mono text-[11px] text-ink3">{id}</p>

@@ -1,11 +1,15 @@
 /**
  * service · 对话（接口对齐 packages/base/service-dialog 签名；表结构为底座迁移版）
- * 意图流水线（确定性规则优先，LLM 经 model-router 注入仅用于措辞生成，缺 key 全链路兜底 mock:true）：
- *   complaint（投诉）→ biz_query（订单/会员/房价/工单进度）→ kb_qa（KB 命中 / 诚实拒答）
- *   → service_request（报修服务类，产 ticketDraft）→ chat（兜底）
- * 命中 KB 必带 citations（文档/小节/原文），无据不答（诚实拒答，置信度低）。
- * 全量消息落 c_messages（stats.overview 聚合数据源；该表无 mock 列，mock 仅在响应标注）。
+ * 意图流水线（M8：与 packages/base/service-dialog/intents.ts 同一张规则表 ruleBasedIntent）：
+ *   complaint（投诉）> biz_query（订单/会员/房价/工单进度）> service_request（报修服务类，产 ticketDraft）
+ *   > kb_qa（KB 检索三档分流）> chat（规则未命中兜底）
+ *   疑问句（几点/时间/吗/呢/怎么/如何）优先 kb_qa 不建单；「修/修一下/坏了」直连 service_request。
+ * 置信度三档（H5：检索 score 归一化 0..1，复用 base scoreChunkFallback）：
+ *   ≥0.72 直接作答（带引用）；0.45–0.72 作答但附「可能不完全准确」提示；<0.45 诚实拒答 + ticketDraft。
+ * 命中 KB 必带 citations，无据不答（诚实拒答）。
+ * 全量消息落 c_messages（stats.overview 聚合数据源；mock 仅在响应标注）。
  */
+import { ruleBasedIntent } from "@workloom/base/service-dialog";
 import { ensureServiceSchema } from "./store.js";
 import { searchKB, type KbHit } from "./kb.js";
 import { llmCall } from "./llm.js";
@@ -33,23 +37,52 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${seq.toString(36).padStart(3, "0")}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const RE = {
-  complaint: /投诉|差评|不满意|举报/,
-  order: /订单|预订|订房记录|入住记录/,
-  member: /会员|积分|等级|权益/,
-  catalog: /房价|房型|多少钱一晚|价格表/,
-  ticketStatus: /工单.*(进度|状态|怎么样)|进度.*工单/,
-  service: /报修|维修|坏了|故障|打扫|加(一?条)?(毛巾|被子|枕头)|送(水|餐|东西)|开发票|发票/,
-};
+/* ================= 意图（M8：复用 base 同一张规则表） ================= */
 
-function classify(text: string): { intent: Intent; tool?: BizToolName } {
-  if (RE.complaint.test(text)) return { intent: "complaint" };
-  if (RE.order.test(text)) return { intent: "biz_query", tool: "query_order" };
-  if (RE.member.test(text)) return { intent: "biz_query", tool: "query_member" };
-  if (RE.catalog.test(text)) return { intent: "biz_query", tool: "query_catalog" };
-  if (RE.ticketStatus.test(text)) return { intent: "biz_query", tool: "query_ticket" };
-  return { intent: "kb_qa" }; // 默认先查知识库（命中与否分流 service_request / chat）
+/** 工单进度查询（server 侧特有 biz_query 子类，先于规则表判定） */
+const RE_TICKET_STATUS = /工单.*(进度|状态|怎么样)|进度.*工单/;
+const RE_ORDER = /订单|预订|订房|入住记录|房费|账单/;
+const RE_MEMBER = /会员|积分|等级|权益|余额/;
+const RE_CATALOG = /房价|房型|多少钱|价格/;
+
+export function classify(text: string): { intent: Intent; tool?: BizToolName } {
+  if (RE_TICKET_STATUS.test(text)) return { intent: "biz_query", tool: "query_ticket" };
+  const ruled = ruleBasedIntent(text);
+  if (ruled === "complaint") return { intent: "complaint" };
+  if (ruled === "service_request") return { intent: "service_request" };
+  if (ruled === "biz_query") {
+    if (RE_MEMBER.test(text)) return { intent: "biz_query", tool: "query_member" };
+    if (RE_CATALOG.test(text)) return { intent: "biz_query", tool: "query_catalog" };
+    return { intent: "biz_query", tool: "query_order" };
+  }
+  if (ruled === "kb_qa") return { intent: "kb_qa" };
+  return { intent: "kb_qa" }; // 规则未命中：默认先查知识库（低置信走诚实拒答三档）
 }
+
+/** service_request 文本 → 工单类型（修/坏类 → repair；送/拿/打扫类 → delivery；其余 other） */
+export function ticketKindOf(text: string): "repair" | "delivery" | "other" {
+  if (/维修|修|坏|故障|漏水|不制冷|不制热|空调|热水|马桶/.test(text)) return "repair";
+  if (/送|拿|打扫|换床单|加一|多要|再来/.test(text)) return "delivery";
+  return "other";
+}
+
+/* ================= 置信度三档（H5） ================= */
+
+export type ConfidenceTier = "high" | "medium" | "low";
+export const CONFIDENCE_HIGH = 0.72;
+export const CONFIDENCE_MEDIUM = 0.45;
+
+/** score 归一化（0..1）后分档：≥0.72 高 / 0.45–0.72 中 / <0.45 低 */
+export function tierOfScore(score: number | undefined): ConfidenceTier {
+  if (score === undefined) return "low";
+  const s = Math.max(0, Math.min(1, score));
+  if (s >= CONFIDENCE_HIGH) return "high";
+  if (s >= CONFIDENCE_MEDIUM) return "medium";
+  return "low";
+}
+
+export const MEDIUM_HINT = "以上回答可能不完全准确，仅供参考；如需确认可联系前台。";
+export const LOW_REFUSAL = "抱歉，这个问题我暂时无法准确回答，不敢随意编造。已为您准备好工单草稿，确认后转人工跟进；您也可以换个说法再问我。";
 
 async function ensureConversation(input: {
   workspaceId: string; cUserId: string; channel: Channel; conversationId?: string;
@@ -123,41 +156,72 @@ export async function handleMessage(input: {
       citations: [],
       ticketDraft: { kind: "complaint", title: input.text.slice(0, 40), payload: { text: input.text } },
     };
+  } else if (cls.intent === "service_request") {
+    const kind = ticketKindOf(input.text);
+    result = {
+      intent: "service_request",
+      answer: "好的，我可以为您生成服务工单，相关部门会尽快处理。请确认是否提交？",
+      confidence: 0.85,
+      citations: [],
+      ticketDraft: { kind, title: input.text.slice(0, 40), payload: { text: input.text } },
+    };
   } else {
-    // kb_qa 优先：命中 → 有据回答；未命中再看是否服务请求，否则闲聊/诚实拒答
+    // kb_qa：检索三档分流（H5）——score 已归一化 0..1
     const hits = await searchKB({ workspaceId: input.workspaceId, query: input.text, limit: 5 });
-    if (hits.length > 0) {
-      const top = hits[0]!;
-      let answer = `${top.heading ? `【${top.heading}】` : ""}${top.content.replace(/^#\s.*$/m, "").trim().slice(0, 300)}`;
+    const top = hits[0];
+    const tier = tierOfScore(top?.score);
+    if (tier === "low") {
+      // 诚实拒答 + 工单草稿（不编造；L1 低置信留痕）
+      result = {
+        intent: "kb_qa",
+        answer: LOW_REFUSAL,
+        confidence: top?.score ?? 0,
+        citations: [],
+        ticketDraft: {
+          kind: "other",
+          title: `知识库未覆盖咨询：${input.text.slice(0, 30)}`,
+          payload: { text: input.text, intent: "kb_qa", topScore: top?.score ?? null },
+        },
+      };
+    } else if (top) {
+      // top-2 合并：次命中与首命中共享非弱词 token 且自身 ≥0.45 时并入（跨块事实，如「早餐多少钱」）
+      const WEAK = new Set(["时间", "免费", "收费", "可以", "服务", "房间", "酒店", "半天", "一份", "一瓶", "东西", "地方", "怎么", "如何", "一下", "价格", "多少钱", "客房", "住客", "客人", "前台"]);
+      const norm = (t: string) => t.toLowerCase().replace(/(?<=[a-z0-9])-(?=[a-z0-9])/g, "");
+      const topHay = norm(`${top.heading}\n${top.content}`);
+      const topTokens = new Set(topHay.match(/[a-z0-9]+|[\u4e00-\u9fff]{2}/g) ?? []);
+      const topDistinctive = new Set([...topTokens].filter((t) => !WEAK.has(t)));
+      const second = hits[1];
+      const mergeSecond = second && second.score >= CONFIDENCE_MEDIUM && (() => {
+        const sHay = norm(`${second.heading}\n${second.content}`);
+        const sTokens = (sHay.match(/[a-z0-9]+|[\u4e00-\u9fff]{2}/g) ?? []).filter((t) => !WEAK.has(t));
+        return sTokens.some((t) => topDistinctive.has(t));
+      })();
+      const blocks = [top, ...(mergeSecond ? [second] : [])];
+      let answer = blocks
+        .map((h) => `${h.heading ? `【${h.heading}】` : ""}${h.content.replace(/^#\s.*$/m, "").trim().slice(0, 300)}`)
+        .join("\n");
       if (llm) {
         try {
           answer = await llm(
-            `你是酒店前台客服。仅依据以下资料回答客人问题，不要编造资料之外的信息，回答控制在 80 字内。\n客人：${input.text}\n资料：${top.content.slice(0, 800)}`,
+            `你是酒店前台客服。仅依据以下资料回答客人问题，不要编造资料之外的信息，回答控制在 80 字内。\n客人：${input.text}\n资料：${blocks.map((h) => h.content.slice(0, 400)).join("\n---\n")}`,
           );
-        } catch { /* 生成失败 → 用确定性拼装答案 */ }
+        } catch (err) {
+          console.warn("[service-c] kb_qa 组答 LLM 失败，使用确定性拼装答案：", err instanceof Error ? err.message : err);
+        }
       }
-      result = { intent: "kb_qa", answer, confidence: Math.min(0.95, 0.6 + top.score * 0.05), citations: citationsOf(hits) };
-    } else if (RE.service.test(input.text)) {
-      result = {
-        intent: "service_request",
-        answer: "好的，我可以为您生成服务工单，客房部会尽快处理。请确认是否提交？",
-        confidence: 0.85,
-        citations: [],
-        ticketDraft: { kind: "service_request", title: input.text.slice(0, 40), payload: { text: input.text } },
-      };
-    } else if (llm) {
-      try {
-        const answer = await llm(`你是酒店前台客服，客人说：「${input.text}」。知识库没有相关资料，请礼貌说明无法确认并引导其描述具体需求，60 字内。`);
-        result = { intent: "chat", answer, confidence: 0.4, citations: [] };
-      } catch {
-        result = { intent: "chat", answer: "抱歉，这个问题我暂时无法确认。您可以换个说法，或告诉我具体需求（如报修、查订单），我来为您处理。", confidence: 0.2, citations: [] };
-      }
+      if (tier === "medium") answer = `${answer}\n${MEDIUM_HINT}`;
+      result = { intent: "kb_qa", answer, confidence: Math.max(0, Math.min(1, top.score)), citations: citationsOf(hits) };
     } else {
       result = {
-        intent: "chat",
-        answer: "抱歉，知识库中暂时没有相关资料，我不敢随意作答。您可以换个说法，或告诉我具体需求（如报修、查订单、投诉），我来为您处理。",
-        confidence: 0.2,
+        intent: "kb_qa",
+        answer: LOW_REFUSAL,
+        confidence: 0,
         citations: [],
+        ticketDraft: {
+          kind: "other",
+          title: `知识库未覆盖咨询：${input.text.slice(0, 30)}`,
+          payload: { text: input.text, intent: "kb_qa", topScore: null },
+        },
       };
     }
   }

@@ -102,6 +102,14 @@ export async function upsertDocument(
   );
   const version = (ver.rows[0]?.v ?? 0) + 1;
 
+  // H8 版本链纪律：新版本落库前，同 (collection_id,title) 旧 active 版同事务置 disabled
+  // （任一时刻同标题至多一个 active 版本；pending_review 历史版不动，留审批台处理）
+  await db.query(
+    `UPDATE kb_documents SET status='disabled'
+     WHERE workspace_id=$1 AND collection_id=$2 AND title=$3 AND status='active'`,
+    [input.workspaceId, input.collectionId, input.title],
+  );
+
   const id = newId("KBD");
   const doc = await db.query<KbDocument>(
     `INSERT INTO kb_documents

@@ -94,6 +94,17 @@ function wireTicketDb(db: FakeDb, now: () => Date): FakeDb {
       .filter((r) => r["workspace_id"] === p[0] && r["ticket_id"] === p[1])
       .sort((a, b) => Number(a["id"]) - Number(b["id"])),
   }));
+  // M5：同工单同日同 from→to 的 sla_escalated 查重
+  db.on(/^SELECT 1 FROM c_ticket_events/, (p, d) => {
+    const dayStart = new Date(now()); dayStart.setHours(0, 0, 0, 0);
+    return {
+      rows: d.table("c_ticket_events").filter((r) =>
+        r["workspace_id"] === p[0] && r["ticket_id"] === p[1] && r["action"] === "sla_escalated" &&
+        String(r["created_at"]) >= dayStart.toISOString() &&
+        (r["detail"] as Record<string, unknown>)?.["from"] === p[2] &&
+        (r["detail"] as Record<string, unknown>)?.["to"] === p[3]).slice(0, 1),
+    };
+  });
   db.on(/^SELECT \* FROM c_tickets WHERE workspace_id=\$1 AND status IN \('created','assigned','processing'\)/, (p, d) => ({
     rows: d.table("c_tickets").filter((r) =>
       r["workspace_id"] === p[0] &&
@@ -249,5 +260,25 @@ describe("slaScan 超时升级", () => {
     // done 单不再被扫描
     const final = db.table("c_tickets").find((r) => r["id"] === ticket.id) as unknown as Ticket;
     expect(final.priority).toBe("urgent");
+  });
+
+  it("M5 幂等：同工单同日同 from→to 升级不重复插事件（重复扫描安全）", async () => {
+    let current = new Date("2026-08-23T10:00:00+08:00");
+    const now = () => current;
+    const { db, events, emit } = setup(now);
+    const { ticket } = await createTicket(db, CTX,
+      { kind: "delivery", title: "送水", idempotencyKey: "k-sla-m5", slaHours: 1 } as never, ACTOR, emit);
+    current = new Date("2026-08-23T11:01:00+08:00");
+    // 升到 urgent 后，urgent 仍超时：首次告警落事件，再次扫描同日同 from→to 被去重
+    await slaScan(db, CTX, emit, current); // normal→high
+    await slaScan(db, CTX, emit, current); // high→urgent
+    const first = await slaScan(db, CTX, emit, current); // urgent 告警（落事件）
+    expect(first.stillOverdue).toEqual([ticket.id]);
+    const again = await slaScan(db, CTX, emit, current); // 同日重复扫描 → 去重跳过
+    expect(again.stillOverdue).toEqual([]);
+    expect(again.escalated).toEqual([]);
+    const timeline = await ticketTimeline(db, CTX.workspaceId, ticket.id);
+    expect(timeline.filter((e) => e.action === "sla_escalated").length).toBe(3);
+    expect(events.filter((e) => e.action === "service.ticket.sla_escalated").length).toBe(3);
   });
 });

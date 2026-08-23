@@ -93,6 +93,22 @@ describe("routeIntent 规则先行 + LLM 兜底", () => {
     const noLlm = await routeIntent("今天天气不错");
     expect(noLlm).toMatchObject({ intent: "chat", source: "fallback", degraded: true });
   });
+
+  it("M8 典型句：complaint>biz_query>service_request>kb_qa；疑问句优先 kb_qa；报修词直连建单", async () => {
+    const cases: Array<[string, string]> = [
+      ["我要投诉隔壁太吵", "complaint"],           // 投诉最高优先
+      ["查一下我的订单", "biz_query"],              // 业务查询先于服务请求
+      ["我的会员积分还有多少", "biz_query"],        // 会员/积分 → 业务查询
+      ["送站巴士几点发车", "kb_qa"],               // 含服务词「送」但疑问句 → kb_qa 不建单
+      ["早餐几点开始？收费吗", "kb_qa"],           // 疑问句（几点/吗）→ kb_qa
+      ["Wi-Fi 密码是多少呢", "kb_qa"],             // 疑问词「呢」→ kb_qa
+      ["空调坏了，帮我修一下", "service_request"],  // 坏了/修一下 直连建单（不被疑问拦截）
+      ["帮我送两瓶水", "service_request"],          // 指令型服务词 → 建单
+    ];
+    for (const [text, intent] of cases) {
+      expect((await routeIntent(text)).intent, `「${text}」应为 ${intent}`).toBe(intent);
+    }
+  });
 });
 
 /* ================= 置信度三档 ================= */
@@ -199,7 +215,7 @@ describe("chat 兜底与会话", () => {
   it("复用已存在的 conversationId；不存在的会话拒绝", async () => {
     const { deps, db } = makeDeps();
     const r1 = await handleMessage(deps, { ...INPUT, text: "你好呀" });
-    const r2 = await handleMessage(deps, { ...INPUT, text: "还在吗", conversationId: r1.conversationId });
+    const r2 = await handleMessage(deps, { ...INPUT, text: "接着聊", conversationId: r1.conversationId });
     expect(r2.conversationId).toBe(r1.conversationId);
     expect(db.table("c_conversations").length).toBe(1);
     expect(db.table("c_messages").length).toBe(4);

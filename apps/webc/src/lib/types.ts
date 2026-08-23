@@ -21,7 +21,10 @@ export interface Ticket {
   id: string;
   kind: "delivery" | "repair" | "complaint" | "other";
   title: string;
+  /** 英文机读态（created/assigned/processing/done/closed） */
   status: string;
+  /** 中文展示态（已受理/处理中/已完成/已关闭）——网关契约字段，UI 一律用它渲染 */
+  statusText?: string;
   createdAt?: string;
   slaDueAt?: string;
 }
@@ -33,7 +36,9 @@ export interface ChatResponse {
   confidence: number;
   citations: Citation[];
   cards?: BusinessCard[];
-  ticket?: { id: string; kind: string; title: string; status: string };
+  ticket?: { id: string; kind: string; title: string; status: string; statusText?: string };
+  /** 低置信诚实拒答/待确认建单草稿（确认后提交） */
+  ticketDraft?: { kind: string; title: string; payload: Record<string, unknown> } | null;
   latencyMs: number;
   mock?: boolean;
 }
@@ -63,6 +68,7 @@ export interface TimelineItem {
 }
 
 export interface NotificationItem {
+  id?: string;
   kind: string;
   payload: Record<string, unknown>;
   createdAt: string;

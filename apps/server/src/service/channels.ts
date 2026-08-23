@@ -34,8 +34,22 @@ export interface CTokenPayload {
 
 const DEV_C_SECRET = "workloom-c-dev-secret-change-me";
 
+let secretWarned = false;
+
+/** C 端 JWT 密钥：生产缺失即抛错（S3）；<32 字符启动告警一次 */
 export function cSecret(): string {
-  return process.env.SERVICE_C_SECRET ?? DEV_C_SECRET;
+  const s = process.env.SERVICE_C_SECRET;
+  if (!s) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("生产环境必须配置 SERVICE_C_SECRET（拒绝使用开发占位密钥）");
+    }
+    return DEV_C_SECRET;
+  }
+  if (s.length < 32 && !secretWarned) {
+    secretWarned = true;
+    console.warn("[service-c] SERVICE_C_SECRET 长度不足 32 字符，请更换为高强度随机密钥");
+  }
+  return s;
 }
 
 function key(secret: string): Uint8Array {
@@ -131,7 +145,7 @@ export async function pushMessage(input: {
 
 export async function listNotifications(input: {
   workspaceId: string; cUserId: string; limit?: number;
-}): Promise<Array<{ id: string; kind: string; payload: Record<string, unknown>; createdAt: string }>> {
+}): Promise<Array<{ id: string; kind: string; payload: Record<string, unknown>; createdAt: string; read: boolean }>> {
   await ensureServiceSchema();
   const rows = await svcQuery<{ id: number; kind: string; payload: Record<string, unknown>; created_at: string }>(
     input.workspaceId,
@@ -139,7 +153,37 @@ export async function listNotifications(input: {
      WHERE workspace_id=$1 AND c_user_id=$2 ORDER BY id DESC LIMIT $3`,
     [input.workspaceId, input.cUserId, input.limit ?? 50],
   );
-  return rows.map((x) => ({ id: String(x.id), kind: x.kind, payload: x.payload, createdAt: new Date(x.created_at).toISOString() }));
+  // read 占位（H6 契约：底座表暂无已读列，C 端一律 false 未读样式）
+  return rows.map((x) => ({ id: String(x.id), kind: x.kind, payload: x.payload, createdAt: new Date(x.created_at).toISOString(), read: false }));
+}
+
+/**
+ * 渠道 code → openid 交换 seam（S2：wechat-mini / alipay 服务端换登）
+ * 凭据经 env 配置（SERVICE_C_WECHAT_APPID/SECRET、SERVICE_C_ALIPAY_APPID/KEY）；
+ * 未配置 → {ok:false, reason}，网关返回 503「渠道未配置」（明确报错，不回退 openid 直登）。
+ */
+export async function exchangeCodeForOpenid(
+  channel: Channel,
+  code: string,
+): Promise<{ ok: true; openid: string } | { ok: false; reason: string }> {
+  if (channel === "wechat-mini") {
+    const appid = process.env.SERVICE_C_WECHAT_APPID;
+    const secret = process.env.SERVICE_C_WECHAT_SECRET;
+    if (!appid || !secret) return { ok: false, reason: "缺少 SERVICE_C_WECHAT_APPID/SECRET" };
+    const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const data = (await res.json()) as { openid?: string; errcode?: number; errmsg?: string };
+    if (!data.openid) return { ok: false, reason: `微信换登失败：${data.errmsg ?? `errcode=${data.errcode}`}` };
+    return { ok: true, openid: data.openid };
+  }
+  if (channel === "alipay") {
+    const appid = process.env.SERVICE_C_ALIPAY_APPID;
+    const key = process.env.SERVICE_C_ALIPAY_KEY;
+    if (!appid || !key) return { ok: false, reason: "缺少 SERVICE_C_ALIPAY_APPID/KEY" };
+    // 支付宝 oauth token 交换需服务端签名 SDK，演示环境未接入：明确报渠道未配置
+    return { ok: false, reason: "alipay 换登链路待接入（签名 SDK 未装配）" };
+  }
+  return { ok: false, reason: `channel ${channel} 不支持 code 交换` };
 }
 
 /** 身份验证占位（演示：6 位数字码即通过；只落 phone_hash 不落明文，L6.2 同纪律） */

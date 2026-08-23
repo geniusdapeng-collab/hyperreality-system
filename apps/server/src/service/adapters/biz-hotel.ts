@@ -1,8 +1,9 @@
 /**
  * service · 业务查询适配器（酒店示例，packages 无关的服务端侧实现）
  * 契约：query_order / query_member / query_catalog / query_ticket 四个工具的统一适配口；
- * 本实现读本库 demo_orders / demo_members 演示数据（c_users.member_id 已绑定则按会员过滤，
- * 未绑定回退全量演示集并标注 demo:true）。真实部署实现同一 BizAdapter 接口换挂业务库即可。
+ * 本实现读本库 demo_orders / demo_members 演示数据（c_users.member_id 已绑定则按会员过滤）。
+ * S4 PII 纪律：memberId 为空时 queryOrders/queryMember 一律返回空集 + bindRequired:true +
+ * 绑定引导文案，禁止回退全量演示集（他人 PII 不得回灌给未绑定访客）；demo 标注保留。
  * 全部读写经 svcQuery（RLS 事务上下文）。
  */
 import { ensureServiceSchema } from "../store.js";
@@ -23,22 +24,26 @@ function dateStr(v: unknown): string {
 }
 
 export interface BizAdapter {
-  queryOrder(ctx: BizCtx): Promise<{ orders: DemoOrder[]; demo: boolean }>;
-  queryMember(ctx: BizCtx): Promise<{ member: DemoMember | null; demo: boolean }>;
+  queryOrder(ctx: BizCtx): Promise<{ orders: DemoOrder[]; demo: boolean; bindRequired?: boolean; hint?: string }>;
+  queryMember(ctx: BizCtx): Promise<{ member: DemoMember | null; demo: boolean; bindRequired?: boolean; hint?: string }>;
   queryCatalog(ctx: BizCtx): Promise<{ items: Array<{ sku: string; name: string; priceYuan: number }>; demo: boolean }>;
   queryTicket(ctx: BizCtx, params: { ticketId?: string }): Promise<{ ticket: Record<string, unknown> | null; demo: boolean }>;
 }
 
+/** S4 未绑定统一应答：空集 + bindRequired:true + 绑定引导文案（不回退全量演示集） */
+const BIND_HINT = "您还未绑定会员身份，完成手机号验证绑定后即可查询本人订单与会员信息。";
+
 export const hotelBizAdapter: BizAdapter = {
   async queryOrder(ctx) {
     await ensureServiceSchema();
-    // 已绑定会员 → 查本人订单；未绑定 → 全量演示集（demo:true，界面须透传提示）
-    const scoped = !!ctx.memberId;
+    if (!ctx.memberId) {
+      return { orders: [], demo: true, bindRequired: true, hint: BIND_HINT };
+    }
     const rows = await svcQuery(
       ctx.workspaceId,
       `SELECT order_id, room_type, check_in, check_out, amount_fen, status FROM demo_orders
-       WHERE workspace_id=$1 ${scoped ? "AND member_id=$2" : ""} ORDER BY check_in DESC LIMIT 10`,
-      scoped ? [ctx.workspaceId, ctx.memberId!] : [ctx.workspaceId],
+       WHERE workspace_id=$1 AND member_id=$2 ORDER BY check_in DESC LIMIT 10`,
+      [ctx.workspaceId, ctx.memberId],
     );
     return {
       orders: rows.map((x) => ({
@@ -52,22 +57,13 @@ export const hotelBizAdapter: BizAdapter = {
 
   async queryMember(ctx) {
     await ensureServiceSchema();
-    if (ctx.memberId) {
-      const rows = await svcQuery(
-        ctx.workspaceId,
-        `SELECT member_id, name, tier, points FROM demo_members WHERE workspace_id=$1 AND member_id=$2`,
-        [ctx.workspaceId, ctx.memberId],
-      );
-      if (rows[0]) {
-        const x = rows[0];
-        return { member: { memberId: String(x.member_id), name: String(x.name), tier: String(x.tier), points: Number(x.points) }, demo: true };
-      }
+    if (!ctx.memberId) {
+      return { member: null, demo: true, bindRequired: true, hint: BIND_HINT };
     }
-    // 未绑定 → 演示会员卡（demo:true）
     const rows = await svcQuery(
       ctx.workspaceId,
-      `SELECT member_id, name, tier, points FROM demo_members WHERE workspace_id=$1 ORDER BY member_id LIMIT 1`,
-      [ctx.workspaceId],
+      `SELECT member_id, name, tier, points FROM demo_members WHERE workspace_id=$1 AND member_id=$2`,
+      [ctx.workspaceId, ctx.memberId],
     );
     const x = rows[0];
     return {

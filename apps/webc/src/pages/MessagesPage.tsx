@@ -31,7 +31,7 @@ export default function MessagesPage() {
           const p = n.payload as { title?: string; detail?: string; ticketId?: string };
           return (
             <ServiceNoticeCard
-              key={i}
+              key={n.id ?? i}
               kind={n.kind}
               title={p.title ?? "服务通知"}
               detail={p.detail ?? (p.ticketId ? `工单号 ${p.ticketId}` : undefined)}

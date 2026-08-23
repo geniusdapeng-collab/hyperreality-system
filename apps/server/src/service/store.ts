@@ -2,7 +2,7 @@
  * service · 存储引导（AI 服务前台）
  * 表结构由 packages/db 迁移（并行底座代理）落地：c_users/c_conversations/c_messages/
  * c_notifications/c_tickets/c_ticket_events/kb_collections/kb_documents/kb_chunks/
- * kb_site_sources/demo_orders/demo_members，全部带 RLS（app.workspace_id GUC）。
+ * kb_sources/demo_orders/demo_members，全部带 RLS（app.workspace_id GUC）。
  * 本模块职责：
  *  - 种子演示数据（幂等：目标表为空才注入；KB 住客须知缺切块则补建）
  *  - Markdown 切块 + 检索索引重建（kb_chunks）
@@ -12,9 +12,15 @@ import { getOwnerPool } from "@workloom/db";
 
 let bootstrapped: Promise<void> | null = null;
 
-/** 幂等引导（每进程一次） */
+/** 幂等引导（每进程一次；失败置空允许下次调用重试，不永久卡死） */
 export function ensureServiceSchema(): Promise<void> {
-  if (!bootstrapped) bootstrapped = bootstrap();
+  if (!bootstrapped) {
+    bootstrapped = bootstrap().catch((err) => {
+      console.warn("[service-c] ensureServiceSchema 引导失败（允许重试）：", err instanceof Error ? err.message : err);
+      bootstrapped = null;
+      throw err;
+    });
+  }
   return bootstrapped;
 }
 

@@ -89,6 +89,25 @@ export function MemberCard({ member }: { member: MemberInfo }) {
   );
 }
 
+/** 目录业务卡（房型价格等 catalog 列表） */
+export function CatalogCard({ items }: { items: Array<{ sku?: string; name: string; priceYuan?: number }> }) {
+  return (
+    <div className="mt-2 overflow-hidden rounded-xl border border-gline bg-card">
+      <div className="bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold">房型与价格</div>
+      <div className="divide-y divide-line/60 px-3">
+        {items.map((it, i) => (
+          <div key={it.sku ?? i} className="flex items-center justify-between py-2 text-[12px]">
+            <span className="text-ink">{it.name}</span>
+            {typeof it.priceYuan === "number" && (
+              <span className="font-orb text-[13px] text-gold">¥{it.priceYuan}/晚</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** 低置信度转人工工单卡 */
 export function TicketNoticeCard({ title }: { title: string }) {
   return (

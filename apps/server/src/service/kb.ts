@@ -1,12 +1,17 @@
 /**
  * service · 知识库（接口对齐 packages/base/service-kb 签名；表结构为底座迁移版）
  *  - 切块：Markdown 二级标题分段（store.splitChunks → kb_chunks.chunk_index）
- *  - 检索：确定性关键词打分（标题权重 ×3；CJK 二字切词），仅命中 status='active' 文档
+ *  - 检索（H4）：SQL 侧候选召回（content/heading ILIKE ANY 关键词数组，LIMIT 100），
+ *    JS 侧用与 base 一致的 2-gram 切词（tokenizeQuery）+ scoreChunkFallback 确定性精排，
+ *    score 归一化 0..1，仅命中 status='active' 文档
  *  - 状态枚举（底座 CHECK）：active | pending_review | disabled；来源：manual | upload | official_site
- *  - 站点源：fetch 抓取 → 去标签纯文本 →（可选）LLM 结构化为 FAQ；无 LLM 降级直存（degraded:true）
+ *  - 站点源：统一使用 0010 已有的 kb_sources（幽灵表 kb_site_sources 已废弃，S1）；
+ *    fetch 走 base 共用 SSRF 守卫（协议白名单 + 内网拒绝 + 2MB 上限，H7）；
+ *    抓取 → 去标签纯文本 →（可选）LLM 结构化为 FAQ；无 LLM 降级直存（degraded:true）
  * 全部读写经 svcQuery/serviceTx（RLS 事务上下文）。
  */
 import { createHash } from "node:crypto";
+import { guardedFetchText, scoreChunkFallback, tokenizeQuery } from "@workloom/base/service-kb";
 import { ensureServiceSchema, indexChunks } from "./store.js";
 import { serviceTx, svcQuery } from "./events.js";
 import type { LlmCall } from "./llm.js";
@@ -59,6 +64,15 @@ export async function upsertDocument(input: {
   await ensureServiceSchema();
   const hash = createHash("sha256").update(input.contentMd).digest("hex");
   return serviceTx(input.workspaceId, async (client) => {
+    // 同内容指纹幂等（H8：UNIQUE(workspace_id,hash)）：已存在则直接复用，不建版不重切
+    const sameHash = await client.query(
+      `SELECT id, version FROM kb_documents WHERE workspace_id=$1 AND hash=$2 LIMIT 1`,
+      [input.workspaceId, hash],
+    );
+    if (sameHash.rows[0]) {
+      const d = sameHash.rows[0] as { id: string; version: number };
+      return { documentId: String(d.id), version: Number(d.version), chunks: 0 };
+    }
     const exist = await client.query(
       `SELECT id, version FROM kb_documents
        WHERE workspace_id=$1 AND (title=$2 OR ($3::text IS NOT NULL AND source_url=$3)) LIMIT 1`,
@@ -77,11 +91,23 @@ export async function upsertDocument(input: {
     } else {
       documentId = newId("kbd");
       version = 1;
-      await client.query(
+      const ins = await client.query(
         `INSERT INTO kb_documents (id, workspace_id, collection_id, title, source_kind, source_url, content_md, hash, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_review')`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_review')
+         ON CONFLICT (workspace_id, hash) DO NOTHING
+         RETURNING id`,
         [documentId, input.workspaceId, input.collectionId, input.title, input.sourceKind, input.sourceUrl ?? null, input.contentMd, hash],
       );
+      if (!ins.rows[0]) {
+        // 同 hash 已存在（并发/异名同文）：复用原文档，不重切版（H8 幂等）
+        const dup = await client.query(
+          `SELECT id, version FROM kb_documents WHERE workspace_id=$1 AND hash=$2 LIMIT 1`,
+          [input.workspaceId, hash],
+        );
+        const d = dup.rows[0] as { id: string; version: number } | undefined;
+        if (!d) throw new Error("kb_documents hash 冲突但回查为空（数据异常）");
+        return { documentId: String(d.id), version: Number(d.version), chunks: 0 };
+      }
     }
     const chunks = await indexChunks(
       client as unknown as { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
@@ -110,14 +136,16 @@ export async function setDocumentStatus(input: { workspaceId: string; documentId
   );
 }
 
+/** 注册官网抓取源（统一走 0010 的 kb_sources；UNIQUE(workspace_id,url) 幂等） */
 export async function registerSiteSource(input: { workspaceId: string; url: string }): Promise<{ sourceId: string }> {
   await ensureServiceSchema();
-  await svcQuery(
+  const rows = await svcQuery(
     input.workspaceId,
-    `INSERT INTO kb_site_sources (id, workspace_id, url) VALUES ($1,$2,$3) ON CONFLICT (workspace_id, url) DO NOTHING RETURNING id`,
+    `INSERT INTO kb_sources (id, workspace_id, url) VALUES ($1,$2,$3)
+     ON CONFLICT (workspace_id, url) DO UPDATE SET status='active'
+     RETURNING id`,
     [newId("kbs"), input.workspaceId, input.url],
   );
-  const rows = await svcQuery(input.workspaceId, `SELECT id FROM kb_site_sources WHERE workspace_id=$1 AND url=$2`, [input.workspaceId, input.url]);
   return { sourceId: String(rows[0]!.id) };
 }
 
@@ -134,10 +162,9 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+/** 页面抓取（H7：base 共用 SSRF 守卫——协议白名单 + 内网拒绝 + 2MB 读取上限） */
 async function fetchPage(url: string): Promise<string> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`抓取失败：HTTP ${res.status}`);
-  return htmlToText(await res.text());
+  return htmlToText(await guardedFetchText(url));
 }
 
 async function defaultCollection(workspaceId: string): Promise<string> {
@@ -147,14 +174,27 @@ async function defaultCollection(workspaceId: string): Promise<string> {
   return c.id;
 }
 
+interface KbSourceRow extends Record<string, unknown> {
+  id: string; url: string; fingerprint: string | null;
+}
+
+async function loadSource(workspaceId: string, sourceId: string): Promise<KbSourceRow> {
+  const src = await svcQuery<KbSourceRow>(
+    workspaceId,
+    `SELECT id, url, fingerprint FROM kb_sources WHERE workspace_id=$1 AND id=$2`,
+    [workspaceId, sourceId],
+  );
+  const source = src[0];
+  if (!source) throw new Error(`站点源不存在：${sourceId}`);
+  return source;
+}
+
 /** 抓取并结构化：LLM 在场 → 提炼 FAQ；否则降级直存原文（degraded:true）。文档进 pending_review 待审批生效。 */
 export async function crawlAndStructure(input: {
   workspaceId: string; sourceId: string; llm?: LlmCall;
 }): Promise<{ documentId: string; entryCount: number; degraded?: boolean }> {
   await ensureServiceSchema();
-  const src = await svcQuery(input.workspaceId, `SELECT * FROM kb_site_sources WHERE workspace_id=$1 AND id=$2`, [input.workspaceId, input.sourceId]);
-  const source = src[0];
-  if (!source) throw new Error(`站点源不存在：${input.sourceId}`);
+  const source = await loadSource(input.workspaceId, input.sourceId);
   const url = String(source.url);
   const text = await fetchPage(url);
   const hash = createHash("sha256").update(text).digest("hex");
@@ -166,7 +206,8 @@ export async function crawlAndStructure(input: {
       md = await input.llm(
         `把以下网页内容结构化为住客服务 FAQ（Markdown，二级标题为问题，正文为答案，不要编造原文没有的信息）：\n\n${text.slice(0, 6000)}`,
       );
-    } catch {
+    } catch (err) {
+      console.warn("[service-c] KB 抓取 LLM 结构化失败，降级直存原文：", err instanceof Error ? err.message : err);
       md = `# ${url}\n\n${text.slice(0, 8000)}`;
       degraded = true;
     }
@@ -184,21 +225,26 @@ export async function crawlAndStructure(input: {
   });
   await svcQuery(
     input.workspaceId,
-    `UPDATE kb_site_sources SET document_id=$3, last_hash=$4 WHERE workspace_id=$1 AND id=$2 RETURNING id`,
-    [input.workspaceId, input.sourceId, up.documentId, hash],
+    `UPDATE kb_sources SET fingerprint=$3, last_crawled_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING id`,
+    [input.workspaceId, input.sourceId, hash],
   );
   return { documentId: up.documentId, entryCount: up.chunks, degraded };
 }
 
-/** 定时复扫：内容哈希变化 → 生成新版本文档（pending_review），返回 changed/newDocumentId */
+/** 定时复扫：内容指纹变化 → 生成新版本文档（pending_review），返回 changed/newDocumentId */
 export async function diffScan(input: { workspaceId: string; sourceId: string }): Promise<{ changed: boolean; newDocumentId?: string }> {
   await ensureServiceSchema();
-  const src = await svcQuery(input.workspaceId, `SELECT * FROM kb_site_sources WHERE workspace_id=$1 AND id=$2`, [input.workspaceId, input.sourceId]);
-  const source = src[0];
-  if (!source) throw new Error(`站点源不存在：${input.sourceId}`);
+  const source = await loadSource(input.workspaceId, input.sourceId);
   const text = await fetchPage(String(source.url));
   const hash = createHash("sha256").update(text).digest("hex");
-  if (hash === (source.last_hash as string | null)) return { changed: false };
+  if (hash === source.fingerprint) {
+    await svcQuery(
+      input.workspaceId,
+      `UPDATE kb_sources SET last_crawled_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING id`,
+      [input.workspaceId, input.sourceId],
+    );
+    return { changed: false };
+  }
   const up = await upsertDocument({
     workspaceId: input.workspaceId,
     collectionId: await defaultCollection(input.workspaceId),
@@ -209,50 +255,34 @@ export async function diffScan(input: { workspaceId: string; sourceId: string })
   });
   await svcQuery(
     input.workspaceId,
-    `UPDATE kb_site_sources SET document_id=$3, last_hash=$4 WHERE workspace_id=$1 AND id=$2 RETURNING id`,
-    [input.workspaceId, input.sourceId, up.documentId, hash],
+    `UPDATE kb_sources SET fingerprint=$3, last_crawled_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING id`,
+    [input.workspaceId, input.sourceId, hash],
   );
   return { changed: true, newDocumentId: up.documentId };
 }
 
-/** 查询切词：英文数字按词，CJK 连续段切二字元（演示级确定性检索） */
-function termsOf(query: string): string[] {
-  const terms = new Set<string>();
-  for (const m of query.toLowerCase().matchAll(/[a-z0-9]+/g)) terms.add(m[0]);
-  for (const m of query.matchAll(/[一-鿿]+/g)) {
-    const s = m[0];
-    if (s.length <= 2) terms.add(s);
-    for (let i = 0; i < s.length - 1; i++) terms.add(s.slice(i, i + 2));
-  }
-  return [...terms].filter((t) => t.length > 0);
-}
-
-function scoreOf(terms: string[], heading: string, content: string): number {
-  let score = 0;
-  const h = heading.toLowerCase();
-  const c = content.toLowerCase();
-  for (const t of terms) {
-    if (h.includes(t)) score += 3;
-    if (c.includes(t)) score += 1;
-  }
-  return score;
-}
-
+/**
+ * 检索（H4 修复全表扫描）：SQL 侧候选召回（content/heading ILIKE ANY 关键词数组，LIMIT 100），
+ * JS 侧与 base 一致的 2-gram 切词（tokenizeQuery）+ scoreChunkFallback 精排（score 归一化 0..1）。
+ */
 export async function searchKB(input: { workspaceId: string; query: string; limit?: number }): Promise<KbHit[]> {
   await ensureServiceSchema();
-  const terms = termsOf(input.query);
+  const terms = tokenizeQuery(input.query);
   if (terms.length === 0) return [];
+  const patterns = terms.map((t) => `%${t}%`);
   const rows = await svcQuery<{ document_id: string; heading: string; content: string; title: string }>(
     input.workspaceId,
     `SELECT ch.document_id, ch.heading, ch.content, d.title
      FROM kb_chunks ch JOIN kb_documents d ON d.id = ch.document_id AND d.workspace_id = ch.workspace_id
-     WHERE ch.workspace_id=$1 AND d.status='active'`,
-    [input.workspaceId],
+     WHERE ch.workspace_id=$1 AND d.status='active'
+       AND (replace(lower(ch.content), '-', '') ILIKE ANY($2::text[]) OR replace(lower(ch.heading), '-', '') ILIKE ANY($2::text[]))
+     LIMIT 100`,
+    [input.workspaceId, patterns],
   );
   return rows
     .map((x) => ({
       content: x.content, heading: x.heading, documentTitle: x.title, documentId: x.document_id,
-      score: scoreOf(terms, x.heading, x.content),
+      score: scoreChunkFallback(input.query, { heading: x.heading, content: x.content }),
     }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)

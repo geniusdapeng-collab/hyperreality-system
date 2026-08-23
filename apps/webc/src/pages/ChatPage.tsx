@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ensureSession } from "../lib/api";
 import { demoChatAnswer } from "../lib/demo";
 import type { BusinessCard, Citation, MemberInfo, Order } from "../lib/types";
-import { CitationCard, MemberCard, OrderCard, TicketNoticeCard } from "../components/cards";
+import { CitationCard, CatalogCard, MemberCard, OrderCard, TicketNoticeCard } from "../components/cards";
 import { DemoBadge } from "../components/common";
 
 interface Msg {
@@ -87,7 +87,11 @@ export default function ChatPage({
         citations: res.citations,
         cards: res.cards,
         lowConfidence: res.confidence < 0.5 || Boolean(res.ticket),
-        ticketTitle: res.ticket ? `工单 ${res.ticket.id}「${res.ticket.title}」已受理` : undefined,
+        ticketTitle: res.ticket
+          ? `工单 ${res.ticket.id}「${res.ticket.title}」已受理`
+          : res.ticketDraft
+            ? `已为您准备工单草稿：${res.ticketDraft.title}（可在下方「转工单」提交）`
+            : undefined,
         demo: Boolean(res.mock),
       });
     } catch {
@@ -196,9 +200,14 @@ export default function ChatPage({
                 {done &&
                   m.cards?.map((c, i) =>
                     c.kind === "order" ? (
-                      <OrderCard key={i} order={c.data as unknown as Order} />
+                      <OrderCard key={`o-${i}`} order={c.data as unknown as Order} />
                     ) : c.kind === "member" ? (
-                      <MemberCard key={i} member={c.data as unknown as MemberInfo} />
+                      <MemberCard key={`m-${i}`} member={c.data as unknown as MemberInfo} />
+                    ) : c.kind === "catalog" ? (
+                      <CatalogCard
+                        key={`c-${i}`}
+                        items={((c.data as { items?: Array<{ sku?: string; name: string; priceYuan?: number }> }).items) ?? []}
+                      />
                     ) : null,
                   )}
                 {done && m.ticketTitle && <TicketNoticeCard title={m.ticketTitle} />}

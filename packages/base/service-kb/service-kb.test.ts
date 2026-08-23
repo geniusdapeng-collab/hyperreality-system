@@ -61,6 +61,13 @@ function wireKbDb(db: FakeDb): FakeDb {
     }
     return { rows };
   });
+  // H8：新版本落库前同 (collection_id,title) 旧 active 版置 disabled
+  db.on(/^UPDATE kb_documents SET status='disabled'/, (p, d) => {
+    const hit = d.table("kb_documents").filter((r) =>
+      r["workspace_id"] === p[0] && r["collection_id"] === p[1] && r["title"] === p[2] && r["status"] === "active");
+    for (const row of hit) row["status"] = "disabled";
+    return { rows: hit };
+  });
   db.on(/^UPDATE kb_documents SET status=\$3/, (p, d) => {
     const row = d.table("kb_documents").find((r) => r["id"] === p[0] && r["workspace_id"] === p[1]);
     if (!row) return { rows: [] };
@@ -163,6 +170,11 @@ describe("upsertDocument 版本链 + hash 幂等", () => {
     const v2 = await upsertDocument(db, { ...base, contentMd: "## 退房\n\n14:00 退房（新政策）。" });
     expect(v2.document.version).toBe(2);
     expect(v2.firstVersion).toBe(false);
+
+    // H8：旧版同标题 active → disabled（版本链唯一 active）
+    const v1Row = db.table("kb_documents").find((r) => r["id"] === v1.document.id)!;
+    expect(v1Row["status"]).toBe("disabled");
+    expect(v2.document.status).toBe("active");
 
     // 同内容再 upsert → 幂等
     const dup = await upsertDocument(db, { ...base, contentMd: "## 退房\n\n14:00 退房（新政策）。" });

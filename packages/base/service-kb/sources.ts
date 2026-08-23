@@ -8,6 +8,7 @@
  */
 import { newId } from "@workloom/shared";
 import { hashContent } from "./chunk.js";
+import { guardedFetchText } from "./fetch-guard.js";
 import { upsertDocument, type KbDocument, type Queryable } from "./kb.js";
 
 export interface KbSource {
@@ -28,11 +29,8 @@ export interface StructuringLlm {
   extractKnowledge(pageText: string, url: string): Promise<Array<{ title: string; content: string }>>;
 }
 
-const defaultFetcher: Fetcher = async (url) => {
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`抓取失败：HTTP ${res.status}（${url}）`);
-  return res.text();
-};
+/** 默认抓取器：SSRF 守卫（协议白名单 + 内网拒绝 + 2MB 读取上限，H7） */
+const defaultFetcher: Fetcher = async (url) => guardedFetchText(url);
 
 /** HTML → 可读文本（去 script/style/标签/实体，纯函数） */
 export function htmlToText(html: string): string {

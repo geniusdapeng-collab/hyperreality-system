@@ -320,8 +320,18 @@ export async function slaScan(
   const result: SlaScanResult = { escalated: [], stillOverdue: [] };
   for (const row of r.rows as Ticket[]) {
     const from = row.priority; // 先快照（UPDATE 后再读可能被同一对象引用污染）
-    const to = PRIORITY_ESCALATION[from];
-    if (to) {
+    const to = PRIORITY_ESCALATION[from] ?? from;
+    // M5 幂等：同工单同日同 action（同 from→to 升级）不重复插事件——重复扫描/多实例并发安全
+    const dup = await db.query(
+      `SELECT 1 FROM c_ticket_events
+       WHERE workspace_id=$1 AND ticket_id=$2 AND action='sla_escalated'
+         AND created_at >= date_trunc('day', now())
+         AND detail->>'from'=$3 AND detail->>'to'=$4
+       LIMIT 1`,
+      [ctx.workspaceId, row.id, from, to],
+    );
+    if (dup.rows[0]) continue;
+    if (to !== from) {
       const upd = await db.query<Ticket & Record<string, unknown>>(
         `UPDATE c_tickets SET priority=$3, updated_at=now() WHERE id=$1 AND workspace_id=$2 RETURNING *`,
         [row.id, ctx.workspaceId, to],

@@ -59,9 +59,9 @@ export async function ensureSession(): Promise<{ token: string; user: SessionUse
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function rawRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
+  return fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -69,6 +69,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
+}
+
+/** L7：401 → 清本地 token → ensureSession 重建会话 → 原样重试一次（再失败才抛错降级） */
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res = await rawRequest(path, init);
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    const s = await ensureSession();
+    if (s) res = await rawRequest(path, init);
+  }
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return (await res.json()) as T;
 }
