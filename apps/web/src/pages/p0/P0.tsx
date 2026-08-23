@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { SimBanner } from "../../components/SimBanner";
+import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
 
 /* ================= 类型 ================= */
 interface Satellite { id: string; presetKey: string; name: string; grade: string }
@@ -18,6 +19,7 @@ interface Theater {
   latestBriefing: { text: string; at: string } | null;
   satellites: Satellite[];
   ticker: TickerItem[];
+  floor?: FloorPayload | null;
 }
 interface ChairmanItem {
   approval_id: string; event_id: string;
@@ -166,6 +168,11 @@ export default function P0() {
   const [busy, setBusy] = useState(false);
   const [ceremony, setCeremony] = useState(0); // 0=未演 1-4=开门礼阶段 5=完成
   const [msg, setMsg] = useState("");
+  // D25 视图：floor=数字职场（默认） / stage=剧场舞台（D23）
+  const [view, setView] = useState<"floor" | "stage">(() =>
+    (typeof localStorage !== "undefined" && localStorage.getItem("theater-view") === "stage") ? "stage" : "floor");
+  const [askPick, setAskPick] = useState<FloorAgent | null>(null); // 职场请示卡弹层
+  const switchView = (v: "floor" | "stage") => { setView(v); localStorage.setItem("theater-view", v); };
 
   const load = async () => {
     await ensureDemoLogin();
@@ -231,6 +238,7 @@ export default function P0() {
   const decide = async (approvalId: string, gesture: "approve" | "reject") => {
     await trpc.approvals.decide.mutate({ approvalId, gesture });
     setMsg(`已${gesture === "approve" ? "批准" : "驳回"}，全链留痕`);
+    setAskPick(null);
     setTimeout(() => setMsg(""), 3000);
     await load();
   };
@@ -246,6 +254,11 @@ export default function P0() {
         <span className="text-xs text-ink3">经营剧场 · {data?.ceoName ?? "公司CEO"}</span>
         <span className="flex-1" />
         {msg && <span className="text-xs text-go">{msg}</span>}
+        {/* D25 视图切换：职场=等距办公区 / 舞台=全息卫星群 */}
+        <div className="flex overflow-hidden rounded border border-line text-[11px]">
+          <button onClick={() => switchView("floor")} className={`px-2 py-0.5 ${view === "floor" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>职场</button>
+          <button onClick={() => switchView("stage")} className={`px-2 py-0.5 ${view === "stage" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>舞台</button>
+        </div>
         <span className={`rounded border px-2 py-0.5 text-[11px] ${tone === "amber" ? "border-amber-400/60 text-amber-300" : tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
           {data?.mode === "trial" ? "试用期" : data?.mode === "active" ? "正式受托" : data?.mode === "disabled" ? "未授权" : data?.mode ?? "…"}
         </span>
@@ -258,10 +271,30 @@ export default function P0() {
 
       {/* 舞台 */}
       <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4">
-        <div className={`relative transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-90 opacity-0" : "opacity-100"}`}>
-          <Hologram tone={tone} active={!showCeremony || ceremony >= 3} />
-          {data && <Satellites agents={data.satellites} onPick={setPick} />}
-        </div>
+        {view === "floor" && data?.floor ? (
+          <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-95 opacity-0" : "opacity-100"}`}>
+            <div className="mb-1 flex items-center gap-2 px-1 text-[11px] text-ink3">
+              <span className="text-holo">{data.floor.scene.name}</span>
+              <span>·</span><span>{data.floor.agents.filter((a) => a.state === "working").length} 工作中</span>
+              <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-300" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
+              <span>·</span><span>{data.floor.agents.filter((a) => a.state === "idle").length} 待命</span>
+              <span className="flex-1" />
+              <span>点员工看绩效 · 点举手者原地裁决</span>
+            </div>
+            <FloorView
+              floor={data.floor}
+              ceoName={data.ceoName}
+              onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
+              onPickApproval={(a) => setAskPick(a)}
+              onDecide={(id, g) => void decide(id, g)}
+            />
+          </div>
+        ) : (
+          <div className={`relative transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-90 opacity-0" : "opacity-100"}`}>
+            <Hologram tone={tone} active={!showCeremony || ceremony >= 3} />
+            {data && <Satellites agents={data.satellites} onPick={setPick} />}
+          </div>
+        )}
 
         {/* 语音气泡 + 聊天 */}
         <div className="mt-2 w-full max-w-2xl space-y-2">
@@ -336,6 +369,23 @@ export default function P0() {
             <div className="mt-2 text-xs">绩效态：<b className={pick.grade === "表扬" ? "text-go" : pick.grade === "辅导" ? "text-warn" : "text-ink2"}>{pick.grade}</b></div>
             <a href="/p8" className="mt-3 block rounded border border-line px-3 py-1.5 text-center text-xs text-holo no-underline hover:border-gline">去名册看全部（工作台 P8）</a>
             <button onClick={() => setPick(null)} className="mt-2 w-full rounded border border-line py-1.5 text-xs text-ink3">关闭</button>
+          </div>
+        </div>
+      )}
+
+      {/* 职场请示卡弹层（举手员工 → 原地三手势） */}
+      {askPick && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50" onClick={() => setAskPick(null)}>
+          <div className="w-80 rounded-xl border border-amber-400/50 bg-card p-4 shadow-[0_0_50px_rgba(255,190,106,.15)]" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 text-[11px] tracking-[.2em] text-amber-300">请您决策 · {askPick.pendingTier === "l4_chairman" ? "董事长级" : askPick.pendingTier === "l3_fleet" ? "集团CEO级" : "公司CEO级"}</div>
+            <div className="text-sm font-bold text-ink">{askPick.name}</div>
+            <div className="mt-1 text-xs text-ink2">{askPick.statusLine}</div>
+            <div className="mt-1 font-mono text-[10px] text-ink3">{askPick.approvalId}</div>
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => void decide(askPick.approvalId!, "approve")} className="flex-1 rounded border border-go/50 px-3 py-1.5 text-xs text-go">✓ 批准</button>
+              <button onClick={() => void decide(askPick.approvalId!, "reject")} className="flex-1 rounded border border-warn/50 px-3 py-1.5 text-xs text-warn">✕ 驳回</button>
+            </div>
+            <button onClick={() => setAskPick(null)} className="mt-2 w-full rounded border border-line py-1.5 text-xs text-ink3">稍后</button>
           </div>
         </div>
       )}

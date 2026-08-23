@@ -2908,6 +2908,116 @@ h2("onboarding 经营主体写入 + 启用真实模式（横幅熄灭）→ 复�
   });
 }
 
+/* ================= V 域 · 数字职场 floor（D25） ================= */
+{
+  const VC = C("V");
+  const { defaultOfficeScene, deriveFloor, resolveFloorScene, registerFloorSceneProvider } = await import("@workloom/base/captain");
+  const scene = defaultOfficeScene();
+  // 专属探针员工（隔离其他用例对 pricing-agent 的近窗事件污染；用例内幂等就位——注册期不执行）
+  const PROBE = `floor-probe-${SFX}`;
+  const ensureProbe = () => qApp(
+    `INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status)
+     VALUES ($1,$2,$3,'探针员工','v1','specialist',false,'[]','[]','ready') ON CONFLICT (id) DO NOTHING`,
+    [`agt-${PROBE}`, scope.workspaceId, PROBE],
+  );
+  const probeEvent = async (action: string) => (await gatewayAppend(gw, { ...scope, actor: { id: PROBE, type: "agent" }, sessionId: `suite-v-${SFX}` }, {
+    who: { type: "agent", id: PROBE, version: "v1" },
+    context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+    object: { type: "suite", id: `v-${SFX}` },
+    decision: { action, params: {}, after: {}, basis: ["V 域探针"] },
+    rule_impact: [],
+  })).eventId;
+  const probeState = async () => (await deriveFloor(app, scope, scene)).find((x) => x.presetKey === PROBE);
+
+  VC("场景包：无行业/未知行业 → 通用办公室兜底（工位≥8 · 指挥台/休息角/入口齐备）", async () => {
+    const s1 = await resolveFloorScene(null);
+    eq(s1.id, "office-generic", "null 行业兜底");
+    assert(s1.stations.length >= 8, "工位 ≥8");
+    assert(s1.ceoDesk && s1.lounge && s1.entrance, "三锚点齐备");
+    const s2 = await resolveFloorScene("nonexistent-industry");
+    eq(s2.id, "office-generic", "未知行业兜底");
+  });
+
+  VC("场景包：行业注册优先（registerFloorSceneProvider 挂钩）", async () => {
+    registerFloorSceneProvider((ind) => ind === "test-ind" ? { ...defaultOfficeScene(), id: "test-scene", name: "测试场景" } : undefined);
+    const s = await resolveFloorScene("test-ind");
+    eq(s.id, "test-scene", "注册场景命中");
+    registerFloorSceneProvider(() => undefined); // 复位
+    const s2 = await resolveFloorScene("test-ind");
+    eq(s2.id, "office-generic", "复位后兜底");
+  });
+
+  VC("floor 派生：running 线程 → working（携线程卡）", async () => {
+    await ensureProbe();
+    const tid = `T-floor-${SFX}`;
+    await qApp(`INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id) VALUES ($1,$2,$3,'floor 工作态','quest','running','MEM-001',$4)`, [tid, scope.tenantId, scope.workspaceId, `agt-${PROBE}`]);
+    try {
+      const me = (await probeState())!;
+      eq(me.state, "working", "running→working");
+      eq(me.currentThread?.id, tid, "线程卡携 id");
+    } finally {
+      await qApp(`UPDATE threads SET status='completed' WHERE id=$1`, [tid]);
+    }
+  });
+
+  VC("floor 派生：pending 请示 → asking（携 approvalId + tier；优先级高于 working）", async () => {
+    await ensureProbe();
+    const tid = `T-floor2-${SFX}`;
+    await qApp(`INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id) VALUES ($1,$2,$3,'floor 优先级','quest','running','MEM-001',$4)`, [tid, scope.tenantId, scope.workspaceId, `agt-${PROBE}`]);
+    const eventId = await probeEvent("suite.v_reviewable");
+    const approvalId = `apr-v-${SFX}`;
+    await qApp(
+      `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+       VALUES ($1,$2,$3,$4,'inapp','pending','{}','l4_chairman')`,
+      [approvalId, scope.tenantId, scope.workspaceId, eventId],
+    );
+    try {
+      const me = (await probeState())!;
+      eq(me.state, "asking", "请示优先于工作");
+      eq(me.approvalId, approvalId, "携审批单号（原地三手势）");
+      eq(me.pendingTier, "l4_chairman", "携层级");
+    } finally {
+      await qApp(`UPDATE approvals SET status='approved' WHERE approval_id=$1`, [approvalId]);
+      await qApp(`UPDATE threads SET status='completed' WHERE id=$1`, [tid]);
+    }
+  });
+
+  VC("floor 派生：近窗完成事件 → celebrating（先于 blocked 用例执行，窗口互斥）", async () => {
+    await ensureProbe();
+    await probeEvent("task.complete");
+    const me = (await probeState())!;
+    eq(me.state, "celebrating", "完成→celebrating");
+  });
+
+  VC("floor 派生：近窗熔断事件 → blocked（优先级高于 celebrating）", async () => {
+    await ensureProbe();
+    await probeEvent("pricing.adjust.blocked");
+    const me = (await probeState())!;
+    eq(me.state, "blocked", "熔断→blocked 压过庆祝");
+  });
+
+  VC("floor 派生：disabled → 工位清空", async () => {
+    const rid = `agt-floor-dis-${SFX}`;
+    await qApp(`INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status) VALUES ($1,$2,'floor-disabled','已离任员工','v1','specialist',false,'[]','[]','disabled')`, [rid, scope.workspaceId]);
+    try {
+      const dis = (await deriveFloor(app, scope, scene)).find((x) => x.id === rid)!;
+      eq(dis.state, "disabled", "disabled 态");
+      eq(dis.stationId, null, "工位清空");
+    } finally {
+      await qApp(`DELETE FROM agents WHERE id=$1`, [rid]);
+    }
+  });
+
+  VC("floor 派生：全部员工 stationId 落在场景工位表内（映射不越界）", async () => {
+    const agents = await deriveFloor(app, scope, scene);
+    const ids = new Set(scene.stations.map((s) => s.id));
+    for (const a of agents) {
+      if (a.stationId) assert(ids.has(a.stationId), `${a.name} 工位 ${a.stationId} 在场景内`);
+    }
+    await qApp(`DELETE FROM agents WHERE id=$1`, [`agt-${PROBE}`]); // 收尾清理探针
+  });
+}
+
 /* ================= 主流程 ================= */
 
 const svcPassed = await runCases(cases, "服务层用例");

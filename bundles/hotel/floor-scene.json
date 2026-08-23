@@ -1,0 +1,27 @@
+{
+  "id": "hotel-lobby",
+  "name": "云栖酒店 · 前厅",
+  "theme": { "floorA": "#3a3026", "floorB": "#241d16", "wall": "#5a4a36", "accent": "#ffd98a", "night": false },
+  "grid": { "w": 8, "h": 8 },
+  "stations": [
+    { "id": "st-1", "x": 3.6, "y": 2.2, "kind": "counter" },
+    { "id": "st-2", "x": 4.8, "y": 2.6, "kind": "counter" },
+    { "id": "st-3", "x": 1.6, "y": 2.6, "kind": "desk" },
+    { "id": "st-4", "x": 6.2, "y": 2.0, "kind": "desk" },
+    { "id": "st-5", "x": 2.2, "y": 4.6, "kind": "desk" },
+    { "id": "st-6", "x": 5.4, "y": 4.4, "kind": "monitor" },
+    { "id": "st-7", "x": 6.4, "y": 5.4, "kind": "bench" },
+    { "id": "st-8", "x": 3.4, "y": 5.6, "kind": "desk" }
+  ],
+  "props": [
+    { "kind": "board", "x": 0.8, "y": 1.0, "label": "房态看板" },
+    { "kind": "luggage", "x": 7.0, "y": 1.2, "label": "行李车" },
+    { "kind": "plant", "x": 0.8, "y": 6.8 },
+    { "kind": "plant", "x": 7.2, "y": 6.6 },
+    { "kind": "sofa", "x": 1.5, "y": 6.2, "label": "大堂吧" },
+    { "kind": "coffee", "x": 2.5, "y": 6.6 }
+  ],
+  "ceoDesk": { "x": 4.2, "y": 0.6 },
+  "lounge": { "x": 1.7, "y": 6.3 },
+  "entrance": { "x": 7.4, "y": 7.2 }
+}
