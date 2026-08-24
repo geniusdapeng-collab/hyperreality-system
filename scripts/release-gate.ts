@@ -81,23 +81,26 @@ await check("G-00", "服务健康前置", async () => {
 const tokens: Record<string, string> = {};
 // 工作区自动探测（跨产品复用口径：hyperreality 无 ws-geo，WorkLoom GEO 有；存在才校验）
 const WS_CANDIDATES = [
-  { key: "video", slug: "video-studio", member: "MEM-V01", name: "AI 视频经营（ws-video）", wsId: "ws-video" },
-  { key: "geo", slug: "geo-growth", member: "MEM-G01", name: "社媒×GEO 双域（ws-geo）", wsId: "ws-geo" },
+  { key: "video", slug: "video-studio", member: "MEM-V01", name: "AI 视频经营（ws-video）", wsId: "ws-video", preset: "director" },
+  { key: "geo", slug: "geo-growth", member: "MEM-G01", name: "社媒×GEO 双域（ws-geo）", wsId: "ws-geo", preset: "director" },
+  { key: "hotel", slug: "yunqi-hotel", member: "MEM-001", name: "云栖酒店（ws-yunqi）", wsId: "ws-yunqi", preset: "pricing-agent" },
 ];
 const WS_LIST: typeof WS_CANDIDATES = [];
 {
-  const app = new pg.Client({ connectionString: APP_URL });
-  await app.connect();
-  try {
-    await app.query("SELECT set_config('app.tenant_id','tenant-demo',false)");
-    const r = await app.query(`SELECT slug FROM workspaces WHERE slug = ANY($1::text[])`, [WS_CANDIDATES.map((w) => w.slug)]);
-    const have = new Set(r.rows.map((x) => x.slug));
-    for (const w of WS_CANDIDATES) if (have.has(w.slug)) WS_LIST.push(w);
-    console.log(`工作区探测：${WS_LIST.map((w) => w.wsId).join(" / ") || "（无演示工作区）"}
-`);
-  } finally {
-    await app.end();
+  // RLS 收紧口径（0013⑧：workspaces 仅按 app.workspace_id 直查，不开租户口径）——逐候选设上下文探测，新旧策略均兼容
+  for (const w of WS_CANDIDATES) {
+    const app = new pg.Client({ connectionString: APP_URL });
+    await app.connect();
+    try {
+      await app.query("SELECT set_config('app.workspace_id',$1,false)", [w.wsId]);
+      const r = await app.query(`SELECT slug FROM workspaces WHERE id=$1`, [w.wsId]);
+      if (r.rows[0]?.slug === w.slug) WS_LIST.push(w);
+    } catch { /* 该区不存在或不可见，跳过 */ } finally {
+      await app.end();
+    }
   }
+  console.log(`工作区探测：${WS_LIST.map((w) => w.wsId).join(" / ") || "（无演示工作区）"}
+`);
 }
 if (WS_LIST.length === 0) {
   results.push({ id: "G-01", name: "工作区探测", ok: false, detail: "无任何演示工作区（请先播种 db:seed*）", ms: 0 });
@@ -116,12 +119,14 @@ const ASK_ALL: Array<{ ws: string; q: string }> = [
   { ws: "video", q: "最近哪类选题完播率最高？" },
   { ws: "geo", q: "我们本周在 AI 搜索里的能见度如何？" },
   { ws: "geo", q: "竞品在品类词上的表现比我们好吗？" },
+  { ws: "hotel", q: "这周入住率怎么样？" },
+  { ws: "hotel", q: "现在差评主要集中在哪些方面？" },
 ];
 const ASK_SCENARIOS = ASK_ALL.filter((sc) => WS_LIST.some((w) => w.key === sc.ws));
 for (const [i, sc] of ASK_SCENARIOS.entries()) {
   await check(`A-0${i + 1}`, `ASK · ${sc.q.slice(0, 18)}…`, async () => {
     const r = await call<{ kind: string; mode?: string; answer?: string; via?: string }>(
-      "threads.dispatch", tokens[sc.ws]!, { title: sc.q, presetKey: "director" }, 30000,
+      "threads.dispatch", tokens[sc.ws]!, { title: sc.q, presetKey: WS_LIST.find((w) => w.key === sc.ws)!.preset }, 30000,
     );
     assert(r.kind === "routed", `未路由（kind=${r.kind}）`);
     assert(r.mode === "ask", `意图误判为 ${r.mode}`);
@@ -134,7 +139,7 @@ for (const [i, sc] of ASK_SCENARIOS.entries()) {
 await check("Q-01", "QUEST · 一句话目标自动拆解多步骤", async () => {
   const r = await call<{ kind: string; mode?: string; threadId?: string; status?: string; stepsTotal?: number; stepsDone?: number }>(
     "threads.dispatch", tokens[WS_LIST[0]!.key]!,
-    { title: "给 RK-1500W 新品出 3 条小红书测评片，本周五前要", presetKey: "director", runImmediately: true },
+    { title: WS_LIST[0]!.key === "hotel" ? "把大床房周末房价上调 5%，并回复最新那条差评" : "给 RK-1500W 新品出 3 条小红书测评片，本周五前要", presetKey: WS_LIST[0]!.preset ?? "director", runImmediately: true },
     60000,
   );
   assert(r.kind === "routed" && r.mode === "quest", `未按 quest 路由（${r.kind}/${r.mode}）`);
@@ -221,9 +226,10 @@ await check("T-03", "编排 · 事件哈希链完整（验链脚本）", async (
   const out = execSync("pnpm db:verify-chain", {
     cwd: new URL("..", import.meta.url).pathname, stdio: "pipe", env: { ...process.env },
   }).toString();
-  assert(out.includes("逐条重算全部一致"), "验链失败");
+  // 验链口径兼容：旧版「逐条重算全部一致」/ 新版六项检查「全库验证通过」（D31 远端硬化版）
+  assert(/逐条重算全部一致|全库验证通过/.test(out), "验链失败");
   const m = out.match(/(\d+) 条事件/);
-  return `全库 ${m?.[1] ?? "?"} 条事件逐条重算一致`;
+  return `全库 ${m?.[1] ?? "?"} 条事件验链一致`;
 });
 
 /* ================= 裁决 ================= */
