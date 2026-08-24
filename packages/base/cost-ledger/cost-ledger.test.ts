@@ -33,11 +33,16 @@ class MockDb {
       const e = this.events.find((x) => x.event_id === params[1]);
       return { rows: e ? [{ seq: String(e.seq), hash: e.hash }] : [], rowCount: e ? 1 : 0 };
     }
-    if (/FROM biz_events WHERE tenant_id = \$1 ORDER BY seq DESC/.test(s)) {
+    if (/FROM biz_events WHERE tenant_id = \$1( AND workspace_id = \$\d+)? ORDER BY seq DESC/.test(s)) {
       const tail = this.events[this.events.length - 1];
       return { rows: tail ? [{ seq: String(tail.seq), hash: tail.hash }] : [], rowCount: tail ? 1 : 0 };
     }
-    if (s.includes("append_event_insert")) {
+        // P0-3 契约：event_id 由全局序列分配——mock nextval 返回递增计数
+    if (/nextval\('biz_events_eid_seq'\)/.test(s)) {
+      this._eidSeq = (this._eidSeq ?? 9100) + 1;
+      return { rows: [{ v: String(this._eidSeq) }], rowCount: 1 };
+    }
+if (s.includes("append_event_insert")) {
       const seq = ++this.seq;
       this.events.push({ seq, event_id: params[0], hash: params[6], payload: JSON.parse(params[4]) });
       return { rows: [{ seq: String(seq), inserted: true }], rowCount: 1 };
