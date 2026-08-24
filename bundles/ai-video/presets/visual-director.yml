@@ -7,7 +7,7 @@ description: 镜头视觉设计。逐镜视觉语言：构图/运镜/景别/光�
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G6]       # 提示词审核
 skills: []
 tools:
   - { name: visual.design, access: write, desc: 设计镜头视觉语言 }

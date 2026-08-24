@@ -69,6 +69,11 @@ class MockDb {
       return { rows: [{ c: String(c) }], rowCount: 1 };
     }
 
+    // ---- 事件号源函数（D29：appendEventInTx 号尾查询，SECURITY DEFINER 全租户口径） ----
+    if (/biz_events_max_event_no/.test(s)) {
+      return { rows: [{ n: "9900" }], rowCount: 1 };
+    }
+
     throw new Error(`mock 未覆盖 SQL: ${s}`);
   }
 }

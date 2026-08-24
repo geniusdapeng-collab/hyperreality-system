@@ -184,6 +184,14 @@ async function computeAssemblyScoped(
   );
   const isActive = ws.rows[0]?.industry === slug;
 
+  // Bundle 自家工作区（D28：探针/围栏注册表须在 Bundle 属地查验——同租户 RLS 放行 workspaces，
+  // 非激活 Bundle 在他域视角不应恒红；无属地（未播种）则回退当前工作区，探针如实报缺）
+  const home = await client.query<{ id: string }>(
+    `SELECT id FROM workspaces WHERE tenant_id=$1 AND industry=$2 ORDER BY created_at NULLS LAST, id LIMIT 1`,
+    [scope.tenantId, slug],
+  );
+  const homeWsId = home.rows[0]?.id ?? scope.workspaceId;
+
   /* ---------- 槽① 档案 Schema + 校验① 档案 forbidden ---------- */
   const archiveSchema = readJson<{
     properties?: Record<string, unknown>; required?: string[];
@@ -214,9 +222,10 @@ async function computeAssemblyScoped(
 
   /* ---------- 槽② 枚举 + 校验② 枚举冲突检测 ---------- */
   const objectsJson = readJson<{ objects?: Array<{ type: string; label: string }> }>(join(dir, "schemas/objects.json"));
-  const stagesJson = readJson<{ stages?: Array<{ id: string; label: string }> }>(join(dir, "schemas/stages.json"));
+  const stagesJson = readJson<{ stages?: Array<{ id: string; label: string }>; account_stages?: Array<{ id: string; label: string }> }>(join(dir, "schemas/stages.json"));
   const objTypes = (objectsJson?.objects ?? []).map((o) => o.type);
-  const stageIds = (stagesJson?.stages ?? []).map((s) => s.id);
+  // 工作区 stage 属账号生命周期口径（D27 修复：account_stages 与内容 stages 并集均为合法枚举）
+  const stageIds = [...(stagesJson?.stages ?? []), ...(stagesJson?.account_stages ?? [])].map((s) => s.id);
   const dupObj = objTypes.filter((t, i) => objTypes.indexOf(t) !== i);
   const dupStage = stageIds.filter((t, i) => stageIds.indexOf(t) !== i);
   const stageConflict = isActive && ws.rows[0]?.stage && !stageIds.includes(ws.rows[0].stage)
@@ -245,14 +254,15 @@ async function computeAssemblyScoped(
     .map((f) => YAML.parse(readFileSync(join(presetsDir, f), "utf-8")) as PresetYml)
     .filter((p) => p?.preset_key);
   const toolNames = [...new Set(presets.flatMap((p) => (p.tools ?? []).map((t) => t.name)))];
+  await client.query("SELECT set_config('app.workspace_id', $1, true)", [homeWsId]);
   const agentRows = presets.length > 0
     ? (await client.query<{
         id: string; preset_key: string; name: string; version: string;
         status: string; readonly: boolean; fence_bindings: string[];
       }>(
-        `SELECT id, preset_key, name, version, status, readonly, fence_bindings
-         FROM agents WHERE workspace_id=$1 AND preset_key = ANY($2::text[]) ORDER BY preset_key`,
-        [scope.workspaceId, presets.map((p) => p.preset_key!)],
+        `SELECT a.id, a.preset_key, a.name, a.version, a.status, a.readonly, a.fence_bindings
+         FROM agents a WHERE a.workspace_id = $1 AND a.preset_key = ANY($2::text[]) ORDER BY a.preset_key`,
+        [homeWsId, presets.map((p) => p.preset_key!)],
       )).rows
     : [];
   const probeFails: string[] = [];
@@ -285,7 +295,7 @@ async function computeAssemblyScoped(
     ? (await client.query<{ rule_id: string }>(
         `SELECT DISTINCT rule_id FROM fence_rules
          WHERE status='active' AND (workspace_id='*' OR workspace_id=$1)`,
-        [scope.workspaceId],
+        [homeWsId],
       )).rows.map((r) => r.rule_id)
     : [];
   const activeRules = new Set(fenceRuleRows);
@@ -317,6 +327,8 @@ async function computeAssemblyScoped(
           detail: fenceFails.join("；"), fix: "在 preset 中补齐围栏声明（F2.10）" }
       : { key: "fences", label: "围栏绑定完整", ok: true, slot: "fences",
           detail: `基线 ${baselineCount} 条 🔒 单调守卫 · ${agentsOut.filter((a) => !a.readonly).length} 员绑定全合法` };
+
+  await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
 
   /* ---------- 槽⑥ 工作台 UI + 校验⑤ UI 用例同步 ---------- */
   const uiCases = readJson<UiCasesJson>(join(dir, "ui/cases.json"));

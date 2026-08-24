@@ -7,7 +7,7 @@ description: 场景卡设计。情绪弧线/光档/调色/屏幕方向，为逐�
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G6]       # 提示词审核
 skills: []
 tools:
   - { name: scene.design, access: write, desc: 设计场景卡 }

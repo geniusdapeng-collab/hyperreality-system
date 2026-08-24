@@ -180,12 +180,11 @@ export async function dispatchFromAnomaly(
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+    // 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS，跨工作区不撞号）
     const max = await client.query<{ n: number }>(
-      `SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 100) AS n
-       FROM threads WHERE workspace_id=$1 AND id ~ '^T-\\d+$'`,
-      [scope.workspaceId],
+      `SELECT public.threads_max_t_no() AS n`,
     );
-    threadId = makeReadableId("T", (max.rows[0]?.n ?? 100) + 1);
+    threadId = makeReadableId("T", Number(max.rows[0]?.n ?? 100) + 1);
     await client.query(
       `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id)
        VALUES ($1,$2,$3,$4,'quest','queued',$5,$6)`,

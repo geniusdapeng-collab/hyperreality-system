@@ -7,7 +7,7 @@ description: 定时采集账号/视频数据、阈值告警、早八点战报（
 readonly: false
 night_shift: true             # 夜班巡检员工
 high_risk: false
-fence_bindings: []
+fence_bindings: [G13]       # 分账差异告警
 skills: []
 tools:
   - { name: metrics.collect, access: read,  desc: 定时采集账号/视频指标 }

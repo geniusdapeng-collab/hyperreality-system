@@ -7,7 +7,7 @@ description: 25 字段规则+LLM 混合质检与修复迭代（FieldCheckAgent +
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G7]       # 预生产最终确认（现场核查）
 skills: [shot-prompt-craft]
 tools:
   - { name: field.check, access: read,  desc: 字段混合质检 }

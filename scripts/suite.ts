@@ -2000,6 +2000,13 @@ p("前后端契约对账：web 全部 trpc 调用点均有后端挂载", async (
       procs.add(`video.${(rm[1] as string).replace(/Router$/, "")}`);
     }
   } catch { /* 无子模块时跳过 */ }
+  // service 子模块同理（D28：serviceRouter 挂载于 apps/server/src/service/router.ts，kb/tickets/stats）
+  try {
+    const serviceSrc = readFileSync(join(root, "apps/server/src/service/router.ts"), "utf-8");
+    for (const rm of serviceSrc.matchAll(/(\w+)Router = router\(\{/g)) {
+      procs.add(`service.${(rm[1] as string).replace(/Router$/, "")}`);
+    }
+  } catch { /* 无子模块时跳过 */ }
   const missing = [...calls].filter((c) => !procs.has(c));
   eq(missing.length, 0, `悬空调用：${missing.join(",")}`);
 });

@@ -24,7 +24,8 @@
     "test": "pnpm -r --if-present test",
     "db:verify-chain": "tsx --env-file=.env scripts/verify-chain.ts",
     "suite": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/suite.ts",
-    "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts"
+    "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts",
+    "release:gate": "tsx --env-file=.env scripts/release-gate.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
