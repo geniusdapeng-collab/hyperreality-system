@@ -6,6 +6,7 @@
  *  - G10 评论分流门 → 评论区运营（comment-operator）
  * 命中不了门时按动作前缀兜底；再兜底=事件发起方 who.id 原样展示
  */
+import { actionText } from "../../lib/display";
 
 export interface GateAgent {
   gate: string;
