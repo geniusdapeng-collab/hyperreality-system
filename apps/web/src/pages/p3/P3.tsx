@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { shortId } from "../../lib/display";
 import {
   BannerAlert,
   EmergencyBrake,
@@ -163,8 +164,8 @@ export default function P3() {
               {expired.map((a) => (
                 <div key={a.approval_id} className="rounded-2xl border border-dashed border-warn/50 bg-warn/4 p-3.5">
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-body font-bold text-warn">◆ 已超时（expired 虚框）</span>
-                    <span className="font-mono text-micro text-ink3">{a.approval_id}</span>
+                    <span className="text-body font-bold text-warn">◆ 已超时（虚框标记）</span>
+                    <span className="font-mono text-micro text-ink3">{shortId(a.approval_id)}</span>
                   </div>
                   <div className="text-caption text-ink2">{a.snapshot.summary ?? a.snapshot.title ?? "待审项超 24h 未处理（F5.7）"}</div>
                   <div className="mt-1 text-micro text-ink3">高危项不存在超时自动放行（L5.4）· 请尽快决断</div>
@@ -176,7 +177,7 @@ export default function P3() {
                 <div key={a.approval_id} className="rounded-2xl border border-warn/40 bg-card p-3.5">
                   <div className="mb-1.5 flex items-center justify-between">
                     <span className="text-body font-bold text-warn">◆ 待决断</span>
-                    <span className="font-mono text-micro text-ink3">{a.approval_id}</span>
+                    <span className="font-mono text-micro text-ink3">{shortId(a.approval_id)}</span>
                   </div>
                   {(a.snapshot.summary ?? a.snapshot.title) && (
                     <div className="mb-1 text-body font-bold text-ink">{a.snapshot.summary ?? a.snapshot.title}</div>

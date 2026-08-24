@@ -12,6 +12,7 @@ import { EmergencyBrake, NightStatusPill } from "../components/hud";
 import { LiveTicker } from "../components/hud/LiveTicker";
 import { StarRing } from "../components/star-ring/StarRing";
 import { SimBanner } from "../components/SimBanner";
+import { COMMON_STATUS_TEXT, dictText } from "../lib/display";
 import { PlanSwitcher } from "./PlanSwitcher";
 
 /** 星野背景（氛围层；永不遮挡信息、不影响 G10 首屏口径——§7 动效纪律） */
@@ -138,7 +139,7 @@ export function Bridge({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[11px] text-ink3">{t.id}</span>
-                    <span className={`text-[11px] ${t.cls}`}>{t.status}</span>
+                    <span className={`text-[11px] ${t.cls}`}>{dictText(COMMON_STATUS_TEXT, t.status)}</span>
                   </div>
                   <div className="mt-1 text-body text-ink2">{t.title}</div>
                 </div>

@@ -28,6 +28,7 @@ import {
   type NightPillState,
 } from "../../components/hud";
 import { HostAgent } from "../../components/hud/HostAgent";
+import { THREAD_MODE_TEXT, dictText } from "../../lib/display";
 
 /* ---------- 类型（与 server router 对齐） ---------- */
 interface ThreadRow {
@@ -366,7 +367,7 @@ export default function P1() {
               <AgentActionMessage
                 sender={threads[0].agent_id ?? "值班 Agent"}
                 version=""
-                action={threads[0].mode}
+                action={dictText(THREAD_MODE_TEXT, threads[0].mode)}
                 eventId={threads[0].id}
                 receipt={threads[0].status === "completed" ? "synced" : threads[0].status === "failed" ? "failed" : "unverified"}
               >

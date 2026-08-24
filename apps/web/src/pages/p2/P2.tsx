@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { COMMON_STATUS_TEXT, THREAD_MODE_TEXT, actionText, dictText, shortId } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import {
   AgentActionMessage,
@@ -191,7 +192,7 @@ export default function P2() {
             <div className="mb-1.5 text-caption font-bold text-holo">进度（≤5s 轮询 F3.4）</div>
             <XpBar done={thread.progress_done} total={thread.progress_total} />
             <div className="mt-1.5 text-micro text-ink3">
-              {offline ? "连接中断 · 重连中（保留最后已知进度）" : `状态 ${thread.status} · 预计剩余 —`}
+              {offline ? "连接中断 · 重连中（保留最后已知进度）" : `状态 ${dictText(COMMON_STATUS_TEXT, thread.status)} · 预计剩余 —`}
             </div>
           </div>
           <div className="rounded-lg border border-line bg-card p-3">
@@ -204,9 +205,9 @@ export default function P2() {
           <div className="rounded-lg border border-line bg-card p-3">
             <div className="mb-1.5 text-caption font-bold text-holo">围栏判定（rule_impact 渲染）</div>
             <div className="flex gap-2.5 font-mono text-caption">
-              <span className="text-go">pass {meter.pass}</span>
-              <span className="text-warn">review {meter.review}</span>
-              <span className="text-alert">block {meter.blocked}</span>
+              <span className="text-go">放行 {meter.pass}</span>
+              <span className="text-warn">复核 {meter.review}</span>
+              <span className="text-alert">阻断 {meter.blocked}</span>
             </div>
           </div>
           <div className="rounded-lg border border-line bg-card p-3">
@@ -230,7 +231,7 @@ export default function P2() {
           {thread && (
             <>
               <span className="rounded border border-gold/60 bg-gold/10 px-1.5 py-0.5 text-micro font-black text-gold">
-                {thread.mode === "quest" ? "主线 QUEST" : thread.mode}
+                {dictText(THREAD_MODE_TEXT, thread.mode)}
               </span>
               <span className="font-mono text-micro text-ink3">{thread.id}</span>
               <span className="text-body text-ink2">{thread.title}</span>
@@ -279,7 +280,7 @@ export default function P2() {
             <EmptyState icon="🌌" title="还没有会话内容" hint="@ 一位 Agent 或说出第一句话（F3.1）" />
           ) : (
             <>
-              <SystemDivider time={new Date(thread.created_at).toTimeString().slice(0, 5)} summary={`线程 ${thread.id} 建立（thread.dispatch 已落库）`} />
+              <SystemDivider time={new Date(thread.created_at).toTimeString().slice(0, 5)} summary={`线程 ${thread.id} 建立（派遣事件已落库）`} />
               {events.map((ev) => {
                 if (ev.who.type === "human") {
                   // 人类消息文案化（§9.1 副官语气；动作码不直接上屏）
@@ -288,13 +289,13 @@ export default function P2() {
                     ? (after?.title ?? thread.title)
                     : ev.decision.action === "approval.gesture"
                       ? `舰长决断：${after?.gesture ?? "已处理"}`
-                      : ev.decision.action;
+                      : actionText(ev.decision.action);
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{text}</HumanBubble>;
                 }
                 if (ev.links && ev.links.length > 0 && ev.who.type === "agent" && ev.decision.action.includes("subcall")) {
                   return (
                     <SubCallMessage key={ev.event_id} target={ev.object.id ?? ev.object.type} version={ev.who.version ?? ""} receipt={receiptOf(ev)}>
-                      {ev.decision.action}
+                      {actionText(ev.decision.action)}
                     </SubCallMessage>
                   );
                 }
@@ -320,7 +321,7 @@ export default function P2() {
                     key={ev.event_id}
                     sender={ev.who.id}
                     version={ev.who.version ?? ""}
-                    action={ev.decision.action}
+                    action={actionText(ev.decision.action)}
                     eventId={ev.event_id}
                     receipt={receiptOf(ev)}
                     rules={(ev.rule_impact ?? []).map((r) => `${r.rule_id} ${r.version}`)}
@@ -340,7 +341,7 @@ export default function P2() {
                     <span className={`text-h2 font-bold ${a.status === "pending" ? "text-warn" : "text-ink2"}`}>
                       ◆ 舰长决断 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
                     </span>
-                    <span className="font-mono text-micro text-ink3">{a.approval_id}</span>
+                    <span className="font-mono text-micro text-ink3">{shortId(a.approval_id)}</span>
                     {a.snapshot.rule_version && <span className="font-mono text-micro text-holo">命中 {a.snapshot.rule_version}</span>}
                   </div>
                   {(a.snapshot.before !== undefined || a.snapshot.after !== undefined) && (
@@ -367,7 +368,7 @@ export default function P2() {
                     {events.map((ev) => (
                       <div key={ev.event_id} className="flex items-center gap-2 font-mono text-micro text-ink3">
                         <span className="text-holo">#{ev.event_id}</span>
-                        <span>{ev.who.id} · {ev.decision.action}</span>
+                        <span>{ev.who.id} · {actionText(ev.decision.action)}</span>
                         <span className={receiptOf(ev) === "synced" ? "text-go" : receiptOf(ev) === "failed" ? "text-alert" : "text-warn"}>
                           {receiptOf(ev) === "synced" ? "✓" : receiptOf(ev) === "failed" ? "✗" : "⚠"}
                         </span>

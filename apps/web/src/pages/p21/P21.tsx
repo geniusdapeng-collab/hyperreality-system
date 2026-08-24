@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { actionText, shortId } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 
 const StatusPill = ({ tone, children }: { tone: "ok" | "warn" | "info"; children: React.ReactNode }) => (
@@ -63,6 +64,10 @@ const MODE_LABEL: Record<CeoMode, string> = {
 const MODE_TONE: Record<CeoMode, "ok" | "warn" | "info"> = {
   disabled: "info", shadow: "info", trial: "warn", suspended: "warn", active: "ok",
 };
+const BEATS: Array<[string, string]> = [
+  ["daily", "晨报"], ["queue", "L2 裁决"], ["deviation", "偏差扫描"], ["breaker", "熔断巡检"],
+  ["outcome", "命中率回测"], ["hr", "绩效评议"], ["board", "董事会包"], ["orgscan", "扩编扫描"], ["weekly", "周经营会"],
+];
 
 export default function P21() {
   const [state, setState] = useState<StateResp | null>(null);
@@ -89,7 +94,7 @@ export default function P21() {
   const beat = async (b: string) => {
     setMsg("节拍执行中…");
     const r = await trpc.captain.runBeat.mutate({ beat: b as "daily" }) as Record<string, unknown>;
-    setMsg(`节拍 ${b} 完成：${JSON.stringify(r).slice(0, 120)}`);
+    setMsg(`节拍「${BEATS.find(([k]) => k === b)?.[1] ?? b}」完成：${JSON.stringify(r).slice(0, 120)}`);
     await load();
   };
   const transit = async (kind: string) => {
@@ -104,7 +109,7 @@ export default function P21() {
 
   const decide = async (approvalId: string, gesture: "approve" | "reject") => {
     await trpc.approvals.decide.mutate({ approvalId, gesture });
-    setMsg(`请示 ${approvalId} 已${gesture === "approve" ? "批准" : "驳回"}（三手势写回，全链留痕）`);
+    setMsg(`请示 ${shortId(approvalId)} 已${gesture === "approve" ? "批准" : "驳回"}（三手势写回，全链留痕）`);
     await load();
   };
 
@@ -166,8 +171,7 @@ export default function P21() {
         <div className="space-y-2">
           <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">节拍控制台</div>
           <div className="rounded-lg border border-line bg-card p-3 text-xs">
-            {["daily|晨报", "queue|L2 裁决", "deviation|偏差扫描", "breaker|熔断巡检", "outcome|命中率回测", "hr|绩效评议", "board|董事会包", "orgscan|扩编扫描", "weekly|周经营会"].map((x) => {
-              const [k, label] = x.split("|") as [string, string];
+            {BEATS.map(([k, label]) => {
               return (
                 <button key={k} onClick={() => void beat(k)}
                   className="mb-1.5 block w-full rounded border border-line bg-panel px-3 py-2 text-left text-ink2 hover:border-gline">
@@ -243,8 +247,8 @@ export default function P21() {
               return (
                 <div key={q.approval_id} className="rounded-lg border border-gline bg-card p-3">
                   <div className="mb-1 flex items-center gap-2 text-[11px] text-ink3">
-                    <span className="font-mono">{q.approval_id}</span>
-                    <span>{snap.action ?? q.payload.decision.action}</span>
+                    <span className="font-mono">{shortId(q.approval_id)}</span>
+                    <span>{actionText(snap.action ?? q.payload.decision.action)}</span>
                     {snap.ceo_escalated && <span className="rounded border border-holo/40 px-1 text-holo">公司CEO 谨慎上浮</span>}
                   </div>
                   <div className="text-xs text-ink2">
@@ -281,8 +285,8 @@ export default function P21() {
             return (
               <div key={b.event_id} className="rounded-lg border border-line bg-card p-3">
                 <div className="mb-1 flex items-center gap-2 text-[11px] text-ink3">
-                  <span className="font-mono">{b.event_id}</span>
-                  <span>{action}</span>
+                  <span className="font-mono">{shortId(b.event_id)}</span>
+                  <span>{actionText(action)}</span>
                   {dry && <StatusPill tone="info">影子·未执行</StatusPill>}
                   <span className="flex-1" />
                   <span>{new Date(b.created_at).toLocaleString()}</span>

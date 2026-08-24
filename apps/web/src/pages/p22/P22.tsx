@@ -13,6 +13,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import {
+  DOC_STATUS_TEXT,
+  SOURCE_KIND_TEXT,
+  TICKET_ACTOR_TEXT,
+  TICKET_KIND_TEXT,
+  TICKET_PRIORITY_TEXT,
+  TICKET_STATUS_TEXT,
+  actionText,
+  confidenceText,
+  dictText,
+  latencyText,
+  shortId,
+} from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import { BannerAlert, EmptyState, SkeletonBlock } from "../../components/hud";
 
@@ -41,21 +54,14 @@ type Tab = "kb" | "tickets" | "stats";
 const DEPTS = ["客服部", "工程部", "客房部", "前厅部"];
 const TICKET_STATUS: Array<{ key: string; label: string }> = [
   { key: "", label: "全部" },
-  { key: "created", label: "新建" },
-  { key: "assigned", label: "已分派" },
-  { key: "processing", label: "处理中" },
-  { key: "done", label: "已办结" },
-  { key: "closed", label: "已关闭" },
+  ...["created", "assigned", "processing", "done", "closed"].map((key) => ({ key, label: TICKET_STATUS_TEXT[key] ?? key })),
 ];
-const KIND_LABEL: Record<string, string> = {
-  complaint: "投诉", repair: "报修", delivery: "送物", service_request: "服务请求", consult: "咨询", other: "其他",
-};
-const SOURCE_LABEL: Record<string, string> = { manual: "手工录入", site: "官网抓取", crawl: "官网抓取" };
 
 function docStatusChip(s: string) {
-  if (s === "active") return <span className="rounded border border-go/40 px-1.5 py-0.5 text-micro text-go">active</span>;
-  if (s === "pending_review") return <span className="rounded border border-warn/40 px-1.5 py-0.5 text-micro text-warn">待审</span>;
-  return <span className="rounded border border-line px-1.5 py-0.5 text-micro text-ink3">disabled</span>;
+  const label = dictText(DOC_STATUS_TEXT, s);
+  if (s === "active") return <span className="rounded border border-go/40 px-1.5 py-0.5 text-micro text-go">{label}</span>;
+  if (s === "pending_review") return <span className="rounded border border-warn/40 px-1.5 py-0.5 text-micro text-warn">{label}</span>;
+  return <span className="rounded border border-line px-1.5 py-0.5 text-micro text-ink3">{label}</span>;
 }
 function ticketStatusChip(s: string) {
   const cls =
@@ -63,8 +69,7 @@ function ticketStatusChip(s: string) {
     s === "processing" ? "border-holo/40 text-holo" :
     s === "assigned" ? "border-gline text-goldhi" :
     "border-line text-ink3";
-  const label = TICKET_STATUS.find((x) => x.key === s)?.label ?? s;
-  return <span className={`rounded border px-1.5 py-0.5 text-micro ${cls}`}>{label}</span>;
+  return <span className={`rounded border px-1.5 py-0.5 text-micro ${cls}`}>{dictText(TICKET_STATUS_TEXT, s)}</span>;
 }
 function pct(x: number | null): string { return x === null ? "—" : `${Math.round(x * 100)}%`; }
 
@@ -227,7 +232,7 @@ export default function P22() {
     setBusy("col");
     try {
       await trpc.service.kb.createCollection.mutate({ name: newColName.trim(), description: newColDesc.trim() || undefined });
-      setBanner({ level: "info", text: `已新建集合「${newColName.trim()}」（kb.collection.create 已留痕）` });
+      setBanner({ level: "info", text: `已新建集合「${newColName.trim()}」（事件已留痕）` });
       setNewColName(""); setNewColDesc("");
       await load(true);
     } catch (e) { fail(e); } finally { setBusy(null); }
@@ -237,7 +242,7 @@ export default function P22() {
     setBusy(`doc-${d.id}`);
     try {
       await trpc.service.kb.setStatus.mutate({ documentId: d.id, status });
-      setBanner({ level: status === "active" ? "info" : "warn", text: `「${d.title}」已置为 ${status}${status === "disabled" ? "（即时退出检索索引）" : "（重新进入检索索引）"}` });
+      setBanner({ level: status === "active" ? "info" : "warn", text: `「${d.title}」已置为${dictText(DOC_STATUS_TEXT, status)}${status === "disabled" ? "（即时退出检索索引）" : "（重新进入检索索引）"}` });
       setDocDrawer(null);
       await loadDocs(activeCol);
       await load(true);
@@ -250,7 +255,7 @@ export default function P22() {
       const r = await trpc.service.kb.approveDocument.mutate({ documentId: d.id }) as { ok: boolean; eventId: string };
       setBanner({
         level: "info",
-        text: `「${d.title}」v${d.version} 已批准生效——文档状态/五元事件/approvals 审批行 三写同一 COMMIT（事件 ${r.eventId}，围栏动作 kb.publish，审批台可见 D16）`,
+        text: `「${d.title}」v${d.version} 已批准生效——文档状态/五元事件/approvals 审批行 三写同一 COMMIT（事件 ${shortId(r.eventId)}，围栏动作「${actionText("kb.publish")}」，审批台可见 D16）`,
       });
       await load(true);
       await loadDocs(activeCol);
@@ -263,7 +268,7 @@ export default function P22() {
     try {
       const r = await trpc.service.kb.registerSite.mutate({ url: siteUrl.trim() }) as { sourceId: string };
       setSiteId(r.sourceId);
-      setSiteResult(`已登记抓取源 ${r.sourceId}——可「立即抓取」入库`);
+      setSiteResult(`已登记抓取源 ${shortId(r.sourceId)}——可「立即抓取」入库`);
     } catch (e) { fail(e); } finally { setBusy(null); }
   }, [siteUrl, fail]);
 
@@ -272,7 +277,7 @@ export default function P22() {
     setBusy("crawl");
     try {
       const r = await trpc.service.kb.crawlNow.mutate({ sourceId: siteId }) as { documentId: string; entryCount: number; degraded?: boolean };
-      setSiteResult(`抓取完成：结构化 ${r.entryCount} 条入知识库（文档 ${r.documentId}${r.degraded ? "；LLM 缺 key 已降级直存 degraded:true" : "；LLM 结构化正常"}）`);
+      setSiteResult(`抓取完成：结构化 ${r.entryCount} 条入知识库（文档 ${shortId(r.documentId)}${r.degraded ? "；LLM 缺 key 已降级直存" : "；LLM 结构化正常"}）`);
       await load(true);
       await loadDocs(activeCol);
     } catch (e) { fail(e); } finally { setBusy(null); }
@@ -283,7 +288,7 @@ export default function P22() {
     setBusy("diff");
     try {
       const r = await trpc.service.kb.diffScan.mutate({ sourceId: siteId }) as { changed: boolean; newDocumentId?: string };
-      setSiteResult(r.changed ? `检测到官网更新——已生成新版本文档 ${r.newDocumentId}` : "指纹比对：官网暂无更新");
+      setSiteResult(r.changed ? `检测到官网更新——已生成新版本文档 ${shortId(r.newDocumentId)}` : "指纹比对：官网暂无更新");
       await loadDocs(activeCol);
     } catch (e) { fail(e); } finally { setBusy(null); }
   }, [siteId, activeCol, loadDocs, fail]);
@@ -303,7 +308,7 @@ export default function P22() {
     setBusy(`tk-${assignFor}`);
     try {
       await trpc.service.tickets.assign.mutate({ ticketId: assignFor, dept: assignDept, assignee: assignee.trim() || undefined });
-      setBanner({ level: "info", text: `工单 ${assignFor} 已分派 ${assignDept}${assignee.trim() ? ` / ${assignee.trim()}` : ""}` });
+      setBanner({ level: "info", text: `工单 ${shortId(assignFor)} 已分派 ${assignDept}${assignee.trim() ? ` / ${assignee.trim()}` : ""}` });
       setAssignFor(null); setAssignee("");
       await loadTickets(fStatus, fDept);
     } catch (e) { fail(e); } finally { setBusy(null); }
@@ -313,7 +318,7 @@ export default function P22() {
     setBusy(`tk-${t.id}`);
     try {
       await trpc.service.tickets.advance.mutate({ ticketId: t.id, action: "start" });
-      setBanner({ level: "info", text: `工单 ${t.id} 开始处理（assigned → processing 状态机断言）` });
+      setBanner({ level: "info", text: `工单 ${shortId(t.id)} 开始处理（已分派 → 处理中 状态机断言）` });
       await loadTickets(fStatus, fDept);
     } catch (e) { fail(e); } finally { setBusy(null); }
   }, [fStatus, fDept, loadTickets, fail]);
@@ -323,7 +328,7 @@ export default function P22() {
     setBusy(`tk-${completeFor}`);
     try {
       await trpc.service.tickets.complete.mutate({ ticketId: completeFor, result: completeResult.trim() });
-      setBanner({ level: "info", text: `工单 ${completeFor} 已办结——结果已 pushMessage 通知 C 端（无真实通道 mock:true）` });
+      setBanner({ level: "info", text: `工单 ${shortId(completeFor)} 已办结——结果已推送通知 C 端（无真实通道，模拟发送）` });
       setCompleteFor(null); setCompleteResult("");
       await loadTickets(fStatus, fDept);
       await load(true);
@@ -351,7 +356,7 @@ export default function P22() {
       xs.push({ level: "info", text: `今日工单 ${overview.ticketsToday} 单，完结率 ${pct(overview.completionRate)}${overview.avgRating !== null ? `，满意度均分 ${overview.avgRating}` : "（尚无满意度评价）"}。` });
     }
     if (overview.avgLatencyMs !== null) {
-      xs.push({ level: "info", text: `平均首答延迟 ${overview.avgLatencyMs}ms（c_messages 投影）。` });
+      xs.push({ level: "info", text: `平均首答延迟 ${latencyText(overview.avgLatencyMs)}（会话消息投影）。` });
     }
     return xs;
   }, [overview]);
@@ -399,7 +404,7 @@ export default function P22() {
       </div>
       <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-caption text-ink3">
         <div className="mb-1 text-micro font-bold text-ink2">待审知识</div>
-        <b className="font-orb text-[16px] text-warn">{pending.length}</b> 篇（pending_review）
+        <b className="font-orb text-[16px] text-warn">{pending.length}</b> 篇（{DOC_STATUS_TEXT.pending_review}）
       </div>
       <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-caption text-ink3">
         <div className="mb-1 text-micro font-bold text-ink2">SLA 超时</div>
@@ -484,7 +489,7 @@ export default function P22() {
                 <tr key={d.id} className="border-b border-line/60 last:border-0 hover:bg-bg800/40">
                   <td className="px-3 py-2 text-ink2">{d.title}</td>
                   <td className="px-3 py-2 text-ink3">
-                    {SOURCE_LABEL[d.sourceKind] ?? d.sourceKind}
+                    {dictText(SOURCE_KIND_TEXT, d.sourceKind)}
                     {d.sourceUrl && <span className="ml-1 font-mono text-micro text-holo" title={d.sourceUrl}>↗</span>}
                   </td>
                   <td className="px-3 py-2 font-mono text-ink3">v{d.version}</td>
@@ -507,10 +512,10 @@ export default function P22() {
       )}
 
       {/* 待审区 */}
-      <div className="mb-2 text-caption font-bold tracking-wider text-ink2">待审区（pending_review · {pending.length}）</div>
+      <div className="mb-2 text-caption font-bold tracking-wider text-ink2">待审区（{DOC_STATUS_TEXT.pending_review} · {pending.length}）</div>
       {pending.length === 0 ? (
         <div className="mb-5 rounded-lg border border-dashed border-line p-4 text-center text-caption text-ink3">
-          暂无待审文档——抓取/录入的文档经批准生效后才进入检索索引（kb.publish）
+          暂无待审文档——抓取/录入的文档经批准生效后才进入检索索引
         </div>
       ) : (
         <div className="mb-5 space-y-2">
@@ -520,7 +525,7 @@ export default function P22() {
               <div className="flex-1">
                 <div className="text-body text-ink">{d.title} <span className="font-mono text-micro text-ink3">v{d.version}</span></div>
                 <div className="text-micro text-ink3">
-                  {SOURCE_LABEL[d.source_kind] ?? d.source_kind}{d.source_url ? ` · ${d.source_url}` : ""} · 提交于 {new Date(d.created_at).toLocaleString("zh-CN", { hour12: false })}
+                  {dictText(SOURCE_KIND_TEXT, d.source_kind)}{d.source_url ? ` · ${d.source_url}` : ""} · 提交于 {new Date(d.created_at).toLocaleString("zh-CN", { hour12: false })}
                 </div>
               </div>
               <button
@@ -534,7 +539,7 @@ export default function P22() {
               </button>
             </div>
           ))}
-          <div className="text-micro text-ink3">批准即发布：联动 approvals 审批台（围栏动作 kb.publish，事件留痕 D16）。</div>
+          <div className="text-micro text-ink3">批准即发布：联动 approvals 审批台（围栏动作「{actionText("kb.publish")}」，事件留痕 D16）。</div>
         </div>
       )}
 
@@ -578,7 +583,7 @@ export default function P22() {
               🔍 检查更新（diffScan）
             </button>
           </div>
-          {siteId && <div className="mt-1.5 font-mono text-micro text-ink3">sourceId: {siteId}</div>}
+          {siteId && <div className="mt-1.5 font-mono text-micro text-ink3">抓取源编号 {shortId(siteId)}</div>}
           {siteResult && <div className="mt-1.5 rounded border border-line bg-bg800/60 px-2 py-1 text-micro leading-relaxed text-ink2">{siteResult}</div>}
         </div>
 
@@ -603,7 +608,7 @@ export default function P22() {
           </div>
           <div className="mt-2 space-y-1.5">
             {hits === null ? (
-              <div className="text-micro text-ink3">输入问题试检——命中块带 score（0..1 归一化）</div>
+              <div className="text-micro text-ink3">输入问题试检——命中块带相关度评分（0..1 归一化）</div>
             ) : hits.length === 0 ? (
               <div className="text-micro text-warn">无命中——可考虑补充知识文档</div>
             ) : hits.map((h, i) => (
@@ -657,10 +662,10 @@ export default function P22() {
           {tickets.map((t) => (
             <div key={t.id} className={`rounded-lg border bg-card p-3 ${overdue(t) ? "border-alert/50" : "border-line"}`}>
               <div className="flex items-center gap-2.5">
-                <span className="font-mono text-micro text-ink3">{t.id}</span>
+                <span className="font-mono text-micro text-ink3">{shortId(t.id)}</span>
                 {ticketStatusChip(t.status)}
-                <span className="rounded border border-line px-1.5 py-0.5 text-micro text-ink3">{KIND_LABEL[t.kind] ?? t.kind}</span>
-                {t.priority !== "normal" && <span className="rounded border border-alert/40 px-1.5 py-0.5 text-micro text-alert">{t.priority}</span>}
+                <span className="rounded border border-line px-1.5 py-0.5 text-micro text-ink3">{dictText(TICKET_KIND_TEXT, t.kind)}</span>
+                {t.priority !== "normal" && <span className="rounded border border-alert/40 px-1.5 py-0.5 text-micro text-alert">{dictText(TICKET_PRIORITY_TEXT, t.priority)}</span>}
                 {overdue(t) && <span className="rounded border border-alert/50 bg-alert/8 px-1.5 py-0.5 text-micro text-alert">SLA 超时</span>}
                 <span className="flex-1" />
                 <button
@@ -784,9 +789,9 @@ export default function P22() {
       <div className="mb-4 grid grid-cols-3 gap-3">
         {metric("今日会话", String(overview.sessions), { tone: "holo" })}
         {metric("问答量", String(overview.qaCount), { tone: "holo" })}
-        {metric("平均置信度", overview.avgConfidence === null ? "—" : `${Math.round(overview.avgConfidence * 100)}%`, { tone: overview.avgConfidence !== null && overview.avgConfidence < 0.6 ? "warn" : undefined })}
+        {metric("平均置信度", overview.avgConfidence === null ? "—" : `${Math.round(overview.avgConfidence * 100)}%`, { tone: overview.avgConfidence !== null && overview.avgConfidence < 0.6 ? "warn" : undefined, hint: confidenceText(overview.avgConfidence) })}
         {metric("有据率（带引用回答）", pct(overview.groundedRate), { tone: overview.groundedRate !== null && overview.groundedRate >= 0.8 ? "go" : "warn" })}
-        {metric("平均首答延迟", overview.avgLatencyMs === null ? "—" : `${overview.avgLatencyMs}ms`)}
+        {metric("平均首答延迟", latencyText(overview.avgLatencyMs))}
         {metric("今日工单", String(overview.ticketsToday))}
         {metric("工单完结率", pct(overview.completionRate), { tone: "go" })}
         {metric("SLA 超时", String(overview.slaBreached), { tone: overview.slaBreached > 0 ? "alert" : "go", hint: overview.slaBreached > 0 ? "需立即介入" : "在时限内" })}
@@ -882,8 +887,8 @@ export default function P22() {
             <div className="mt-1.5 flex items-center gap-2 text-micro text-ink3">
               {docStatusChip(docDrawer.status)}
               <span className="font-mono">v{docDrawer.version}</span>
-              <span>{SOURCE_LABEL[docDrawer.sourceKind] ?? docDrawer.sourceKind}</span>
-              <span className="font-mono">{docDrawer.id}</span>
+              <span>{dictText(SOURCE_KIND_TEXT, docDrawer.sourceKind)}</span>
+              <span className="font-mono">{shortId(docDrawer.id)}</span>
             </div>
             {docDrawer.sourceUrl && (
               <div className="mt-1 break-all font-mono text-micro text-holo">{docDrawer.sourceUrl}</div>
@@ -918,7 +923,7 @@ export default function P22() {
                   title={docDrawer.status === "pending_review" ? "待审文档建议走待审区批准（联动审批台）" : ""}
                   className="cursor-pointer rounded-md border border-go/50 px-3 py-1.5 text-caption font-bold text-go hover:bg-go/10 disabled:opacity-40"
                 >
-                  ▶ 置为 active
+                  ▶ 置为{DOC_STATUS_TEXT.active}
                 </button>
               )}
               {docDrawer.status !== "disabled" && (
@@ -928,7 +933,7 @@ export default function P22() {
                   onClick={() => void doSetDocStatus(docDrawer, "disabled")}
                   className="cursor-pointer rounded-md border border-line px-3 py-1.5 text-caption text-ink3 hover:border-alert/40 hover:text-alert disabled:opacity-40"
                 >
-                  ■ 停用（disabled）
+                  ■ 停用
                 </button>
               )}
             </div>
@@ -951,8 +956,8 @@ export default function P22() {
             <h3 className="text-body font-bold text-ink">{timelineFor.title}</h3>
             <div className="mt-1.5 flex items-center gap-2 text-micro text-ink3">
               {ticketStatusChip(timelineFor.status)}
-              <span className="font-mono">{timelineFor.id}</span>
-              <span>{KIND_LABEL[timelineFor.kind] ?? timelineFor.kind}</span>
+              <span className="font-mono">{shortId(timelineFor.id)}</span>
+              <span>{dictText(TICKET_KIND_TEXT, timelineFor.kind)}</span>
             </div>
             <div className="mt-3">
               {timeline === null ? (
@@ -965,8 +970,8 @@ export default function P22() {
                     <div key={ev.id} className="relative border-l border-line pb-3 pl-3.5">
                       <span className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${i === timeline.length - 1 ? "bg-holo animate-pulse-hud" : "bg-ink3"}`} />
                       <div className="text-caption text-ink2">
-                        <b className="font-mono text-micro text-holo">{ev.action}</b>
-                        <span className="ml-1.5 text-micro text-ink3">{ev.actorType} · {ev.actorId}</span>
+                        <b className="text-caption text-holo">{actionText(ev.action)}</b>
+                        <span className="ml-1.5 text-micro text-ink3">{dictText(TICKET_ACTOR_TEXT, ev.actorType)} · {ev.actorId}</span>
                       </div>
                       {Object.keys(ev.detail).length > 0 && (
                         <div className="mt-0.5 break-all font-mono text-micro leading-relaxed text-ink3">{JSON.stringify(ev.detail)}</div>

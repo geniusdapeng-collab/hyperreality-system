@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { actionText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
 
@@ -27,15 +28,10 @@ interface ChairmanItem {
   payload: { decision: { action: string } };
 }
 
-const ACTION_CN: Array<[RegExp, string]> = [
-  [/^price\.adjust/, "调价"], [/^pms\.price\.read/, "读房价"], [/^competitor\.fetch/, "竞对采集"],
-  [/^review\.reply/, "回评价"], [/^order\.confirm/, "新订单"], [/^order\.refund/, "退款"],
-  [/^pms\.checkin/, "办理入住"], [/^pms\.checkout/, "办理退房"], [/^task\.complete/, "工单完成"],
-  [/^call\.summary/, "电话摘要"], [/^content\.publish/, "内容发布"], [/^night\./, "夜班作业"],
-  [/^ceo\.briefing/, "CEO 简报"], [/^ceo\.decision/, "CEO 裁决"], [/^inventory\./, "库存动作"],
-  [/^goal\.tracking/, "目标追踪"], [/^store\.daily/, "经营快照"], [/^faq\./, "FAQ 萃取"],
-];
-const cn = (a: string) => ACTION_CN.find(([re]) => re.test(a))?.[1] ?? a;
+/** 数字CEO 模式 → 中文（剧场顶栏 chip；与 P21 MODE_LABEL 同口径） */
+const MODE_TEXT: Record<string, string> = {
+  disabled: "未授权", shadow: "影子模式", trial: "试用期", suspended: "仅汇报", active: "正式受托",
+};
 
 /* ================= 星野画布 ================= */
 function Starfield({ density = 110 }: { density?: number }) {
@@ -260,7 +256,7 @@ export default function P0() {
           <button onClick={() => switchView("stage")} className={`px-2 py-0.5 ${view === "stage" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>舞台</button>
         </div>
         <span className={`rounded border px-2 py-0.5 text-[11px] ${tone === "amber" ? "border-amber-400/60 text-amber-300" : tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
-          {data?.mode === "trial" ? "试用期" : data?.mode === "active" ? "正式受托" : data?.mode === "disabled" ? "未授权" : data?.mode ?? "…"}
+          {MODE_TEXT[data?.mode ?? ""] ?? "…"}
         </span>
         <a href="/p1" className="rounded border border-line px-2 py-0.5 text-[11px] text-ink2 no-underline hover:border-gline">工作台</a>
         <a href="/p21" className="rounded border border-gline px-2 py-0.5 text-[11px] text-gold no-underline">董事长视图</a>
@@ -314,7 +310,7 @@ export default function P0() {
               {queue.slice(0, 2).map((q) => (
                 <div key={q.approval_id} className="rounded-lg border border-amber-300/30 bg-card p-3">
                   <div className="text-xs text-ink2">
-                    <b>{q.snapshot.title ?? q.snapshot.action ?? q.payload.decision.action}</b>
+                    <b>{q.snapshot.title ?? actionText(q.snapshot.action ?? q.payload.decision.action)}</b>
                     <span className="ml-2 text-ink3">{JSON.stringify(q.snapshot.params ?? {}).slice(0, 60)}</span>
                   </div>
                   {q.snapshot.ceo_rationale && <div className="mt-1 text-[11px] text-holo">CEO 意见：{q.snapshot.ceo_rationale}</div>}
@@ -334,7 +330,7 @@ export default function P0() {
       <div className="relative z-10 overflow-hidden border-t border-line/60 bg-panel/60 py-1.5 backdrop-blur">
         <div className="flex animate-[ticker_36s_linear_infinite] gap-8 whitespace-nowrap text-[11px] text-ink3">
           {(data?.ticker ?? []).concat(data?.ticker ?? []).map((e, i) => (
-            <span key={i}><b className="text-ink2">{cn(e.action)}</b> · {e.who}</span>
+            <span key={i}><b className="text-ink2">{actionText(e.action)}</b> · {e.who}</span>
           ))}
           {!data?.ticker.length && <span>实况待命中……</span>}
         </div>

@@ -62,5 +62,6 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 export function actionLabel(action: string): string {
-  return ACTION_LABEL[action] ?? action;
+  // 已收编到展示字典层（lib/display）：先查本地表，再查字典，兜底人性化，不裸奔原始码
+  return ACTION_LABEL[action] ?? actionText(action);
 }

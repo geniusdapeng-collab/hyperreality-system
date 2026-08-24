@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { actionText } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import {
   AgentActionMessage,
@@ -164,7 +165,7 @@ export default function P9() {
         <div className="mb-1.5 text-caption font-bold text-holo">峰谷计量（NightMeter）</div>
         <div className="font-orb text-h2 font-bold text-ink">{run?.stats?.credits_used ?? meter.credits} <span className="text-caption text-ink3">积分</span></div>
         <div className="mt-0.5 font-mono text-micro text-ink3">
-          {meter.offPeak ? "窗口 off-peak（谷时费率 F6.3/G9）" : "窗口 peak"} · 需介入 {run?.stats?.need_human ?? meter.needHuman} 项
+          {meter.offPeak ? "谷时窗口（峰谷费率 F6.3/G9）" : "峰时窗口"} · 需介入 {run?.stats?.need_human ?? meter.needHuman} 项
         </div>
       </div>
       <div className="mb-3 rounded-lg border border-line bg-card p-3">
@@ -230,7 +231,7 @@ export default function P9() {
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{String((ev.decision.after as { text?: string })?.text ?? "")}</HumanBubble>;
                 }
                 if (ev.who.type === "system") {
-                  return <SystemDivider key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)} summary={`${ev.who.id} · ${ev.decision.action}（已落库）`} />;
+                  return <SystemDivider key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)} summary={`${ev.who.id} · ${actionText(ev.decision.action)}（已落库）`} />;
                 }
                 // 需介入卡（红框，L4.2 夜间不确定不执行）+ 一键派单（P9E3）
                 const blocked = ev.rule_impact?.some((r) => r.result === "blocked");
@@ -240,7 +241,7 @@ export default function P9() {
                       key={ev.event_id}
                       severity="p0"
                       eventId={ev.event_id}
-                      title={`需介入：${ev.who.id} · ${ev.decision.action}${ev.object.id ? `（${ev.object.id}）` : ""}`}
+                      title={`需介入：${ev.who.id} · ${actionText(ev.decision.action)}${ev.object.id ? `（${ev.object.id}）` : ""}`}
                       source={ev.object.type}
                       onDispatch={() => {
                         void trpc.inspection.dispatch.mutate({ anomalyEventId: ev.event_id, presetKey: "comment-operator" })
@@ -255,7 +256,7 @@ export default function P9() {
                     key={ev.event_id}
                     sender={ev.who.id}
                     version={ev.who.version ?? ""}
-                    action={ev.decision.action}
+                    action={actionText(ev.decision.action)}
                     eventId={ev.event_id}
                     receipt={receiptOf(ev)}
                     rules={(ev.rule_impact ?? []).map((r) => `${r.rule_id} ${r.version}${r.result === "review" ? " · 未生效待审批" : ""}`)}
