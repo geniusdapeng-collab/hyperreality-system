@@ -195,23 +195,30 @@ ${item.action} ${JSON.stringify(item.params)}
       verdict = decideForCaptain(charter, item);
     }
     await inTx(app, scope, async (c) => {
+      // P0-4 裁决守卫：UPDATE 必须命中仍 pending 的行（并发下他处已裁决/上浮则 rowCount=0），
+      // 未命中即跳过事件写入——杜绝「状态未变但 ceo.decision 留痕已落」的双写失真
+      let applied = true;
       if (verdict.kind === "escalate") {
-        await c.query(
-          `UPDATE approvals SET tier='l4_chairman', snapshot = snapshot || $3::jsonb WHERE approval_id=$1 AND workspace_id=$2`,
+        const u = await c.query(
+          `UPDATE approvals SET tier='l4_chairman', snapshot = snapshot || $3::jsonb
+           WHERE approval_id=$1 AND workspace_id=$2 AND status='pending'`,
           [row.approval_id, scope.workspaceId, JSON.stringify({ ceo_escalated: true, ceo_rationale: verdict.rationale })],
         );
-        escalated++;
+        applied = (u.rowCount ?? 0) > 0;
+        if (applied) escalated++;
       } else if (!dryRun) {
-        await c.query(
+        const u = await c.query(
           `UPDATE approvals SET status=$3, gesture=$4::jsonb, decided_by=$5, decided_at=now()
-           WHERE approval_id=$1 AND workspace_id=$2`,
+           WHERE approval_id=$1 AND workspace_id=$2 AND status='pending'`,
           [row.approval_id, scope.workspaceId, verdict.kind === "approve" ? "approved" : "rejected",
            JSON.stringify({ type: verdict.kind, weight: 1, reason_text: verdict.rationale }), CEO_ACTOR.id],
         );
-        decided++;
+        applied = (u.rowCount ?? 0) > 0;
+        if (applied) decided++;
       } else {
         decided++; // shadow：完整推理但不落审批状态
       }
+      if (!applied) return; // 他处已裁决：本拍不再写 ceo.decision 事件（P0-4）
       const expected: ExpectedOutcome = {
         metric: "occ_hold",
         target: 0.7, // 基线：决策后 OCC 不低于宪章下限（行业事实面注册后可细化）
@@ -326,9 +333,18 @@ export async function runOutcomeReviewBeat(
   if (!canExecute(charter.mode) && !isShadow(charter.mode)) {
     return { reviewed: 0, hits: 0, skipped: `${charter.mode}：回测不执行` };
   }
-  // 到期未回测的决策日记
-  const due = await inTx(app, scope, async (c) => {
-    const r = await c.query<{ event_id: string; payload: Record<string, unknown> }>(
+  const dryRun = isShadow(charter.mode);
+  // M1 防双写：整拍单事务 + 工作区级 advisory 占位锁（pg_try_advisory_xact_lock）——
+  // 并发/重入的第二拍拿不到锁直接跳过；到期选取与 outcome 事件写入同一 COMMIT，
+  // 不再存在「两拍各选同一批到期日记、decision.outcome 双写」的窗口
+  return inTx(app, scope, async (c) => {
+    const lock = await c.query<{ ok: boolean }>(
+      `SELECT pg_try_advisory_xact_lock(hashtext($1)) AS ok`,
+      [`ceo-outcome-review:${scope.workspaceId}`],
+    );
+    if (!lock.rows[0]?.ok) return { reviewed: 0, hits: 0, skipped: "回测节拍已在进行中（advisory 锁未获得，M1 防双写）" };
+    // 到期未回测的决策日记
+    const due = (await c.query<{ event_id: string; payload: Record<string, unknown> }>(
       `SELECT event_id, payload FROM biz_events
        WHERE workspace_id=$1 AND payload->'decision'->>'action'='ceo.decision'
          AND (payload->'decision'->'params'->'expected'->>'review_at')::timestamptz < now()
@@ -338,36 +354,30 @@ export async function runOutcomeReviewBeat(
          )
        ORDER BY seq LIMIT 10`,
       [scope.workspaceId],
-    );
-    return r.rows;
-  });
-  if (due.length === 0) return { reviewed: 0, hits: 0 };
-  // 最新 KPI
-  const latest = await inTx(app, scope, async (c) => {
-    const r = await c.query<{ payload: Record<string, unknown> }>(
+    )).rows;
+    if (due.length === 0) return { reviewed: 0, hits: 0 };
+    // 最新 KPI
+    const kpi = await c.query<{ payload: Record<string, unknown> }>(
       `SELECT payload FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='store.daily.summary'
        ORDER BY seq DESC LIMIT 1`,
       [scope.workspaceId],
     );
-    const after = ((r.rows[0]?.payload?.decision as Record<string, unknown> | undefined)?.after ?? {}) as Record<string, unknown>;
-    return { occ: Number(after.occ ?? 0) };
-  });
-  let hits = 0;
-  const dryRun = isShadow(charter.mode);
-  for (const row of due) {
-    const params = ((row.payload.decision as Record<string, unknown>)?.params ?? {}) as Record<string, unknown>;
-    const expected = (params.expected ?? {}) as ExpectedOutcome;
-    const verdict = judgeOutcome(expected.target ?? 0.7, latest.occ);
-    if (verdict === "命中") hits++;
-    await inTx(app, scope, async (c) => {
+    const after = ((kpi.rows[0]?.payload?.decision as Record<string, unknown> | undefined)?.after ?? {}) as Record<string, unknown>;
+    const latest = { occ: Number(after.occ ?? 0) };
+    let hits = 0;
+    for (const row of due) {
+      const params = ((row.payload.decision as Record<string, unknown>)?.params ?? {}) as Record<string, unknown>;
+      const expected = (params.expected ?? {}) as ExpectedOutcome;
+      const verdict = judgeOutcome(expected.target ?? 0.7, latest.occ);
+      if (verdict === "命中") hits++;
       await emitCeoEvent(c, scope, "decision.outcome", {
         params: { ref_decision: row.event_id, verdict, expected_target: expected.target, actual: latest.occ, dry_run: dryRun },
         after: { verdict, comment: `预期 ${expected.target} / 实际 ${latest.occ}（${verdict}）` },
         basis: [`决策日记回测：${row.event_id} 到期对账（命中≥95% / 偏离≥80% / 打脸<80%）`],
       });
-    });
-  }
-  return { reviewed: due.length, hits };
+    }
+    return { reviewed: due.length, hits };
+  });
 }
 
 /* ================= 节拍⑥：周度员工绩效评议（表扬/关注/辅导 → 汰换重生提案） ================= */
@@ -416,16 +426,16 @@ export async function runHrReviewBeat(
       });
       // 连续两周期辅导 → 汰换重生提案（L4 董事长批）
       if (replacement && !dryRun) {
-        const aprId = `apr-hr-${card.agentId}-${Date.now().toString(36)}`;
         const evId = await emitCeoEvent(c, scope, "hr.replacement_proposal", {
           params: { agent_id: card.agentId },
           after: { design: replacement },
           basis: [replacement.diagnosis, "汰换不是删除，是基因重组：旧员工留痕作为新员工训练案例库"],
         });
+        // M7：审批单 ID 由事件 ID 派生（apr-<eventId 小写>），不再用时间戳主键（可回溯、无碰撞）
         await c.query(
           `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
            VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l4_chairman') ON CONFLICT (event_id, channel) DO NOTHING`,
-          [aprId, scope.tenantId, scope.workspaceId, evId,
+          [`apr-${evId.toLowerCase()}`, scope.tenantId, scope.workspaceId, evId,
            JSON.stringify({ kind: "hr.replacement", agent_id: card.agentId, design: replacement, title: `汰换 ${card.agentId} → ${replacement.newPreset.name}` })],
         );
       }
@@ -441,17 +451,19 @@ export async function applyReplacement(
 ): Promise<{ disabledAgent: string; newAgentId: string }> {
   return inTx(app, scope, async (c) => {
     await c.query(`UPDATE agents SET status='disabled' WHERE id=$1 AND workspace_id=$2`, [oldAgentId, scope.workspaceId]);
-    const newId = `agt-${design.newPreset.preset_key}-${Date.now().toString(36)}`;
+    // M7：新员工 ID 由事件 ID 派生（agt-<eventId 小写>）——先落事件取号再建档，
+    // 不再用时间戳主键；事件与建档同一事务，编号可互查
+    const evId = await emitCeoEvent(c, scope, "hr.replacement_applied", {
+      params: { old_agent: oldAgentId },
+      after: { design },
+      basis: ["董事长批准汰换重生；新员工进入试用观察期（下周评议跟踪）", "旧员工留痕已转为训练案例库"],
+    });
+    const newId = `agt-${evId.toLowerCase()}`;
     await c.query(
       `INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status)
        VALUES ($1,$2,$3,$4,'v2.0','specialist',false,$5,'[]','ready')`,
       [newId, scope.workspaceId, design.newPreset.preset_key, design.newPreset.name, JSON.stringify(design.newPreset.fence_bindings)],
     );
-    await emitCeoEvent(c, scope, "hr.replacement_applied", {
-      params: { old_agent: oldAgentId, new_agent: newId },
-      after: { design },
-      basis: ["董事长批准汰换重生；新员工进入试用观察期（下周评议跟踪）", "旧员工留痕已转为训练案例库"],
-    });
     return { disabledAgent: oldAgentId, newAgentId: newId };
   });
 }
@@ -519,10 +531,11 @@ export async function runOrgScanBeat(
       basis: [proposal.reason, "扩编不设上限，每单必批；新员工上岗走影子+试用（机制与舰长治理同构）"],
     }, { dryRun });
     if (!dryRun) {
+      // M7：审批单 ID 由事件 ID 派生（apr-<eventId 小写>），不再用时间戳主键
       await c.query(
         `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
          VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l4_chairman') ON CONFLICT (event_id, channel) DO NOTHING`,
-        [`apr-org-${Date.now().toString(36)}`, scope.tenantId, scope.workspaceId, evId,
+        [`apr-${evId.toLowerCase()}`, scope.tenantId, scope.workspaceId, evId,
          JSON.stringify({ kind: "org.hiring", role: proposal.role, jd: proposal.jd, title: `招聘提案：${proposal.role}` })],
       );
     }

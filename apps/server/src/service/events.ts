@@ -21,7 +21,8 @@ export async function serviceTx<T>(
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [workspaceId]);
     const ws = await client.query<{ tenant_id: string }>(`SELECT tenant_id FROM workspaces WHERE id=$1`, [workspaceId]);
-    const tenantId = ws.rows[0]?.tenant_id ?? "";
+    if (!ws.rows[0]?.tenant_id) throw new Error(`serviceTx: 工作区不存在 ${workspaceId}`); // M5 fail-closed：不写 tenant_id='' 孤儿事件
+    const tenantId = ws.rows[0].tenant_id as string;
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const result = await fn(client, { tenantId, workspaceId });
     await client.query("COMMIT");

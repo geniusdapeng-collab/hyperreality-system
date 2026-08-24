@@ -32,8 +32,8 @@ import { appendEventOn, serviceTx } from "./events.js";
 
 export const serviceGateway = new Hono();
 
-/** S2：h5/openid 演示直登开关（默认开发态 true；生产置 false 并配置渠道凭据） */
-export const DEMO_AUTH = (process.env.SERVICE_C_DEMO_AUTH ?? "true") === "true";
+/** S2：h5/openid 演示直登开关（开发缺省 true；P1-11：生产环境缺省 false，必须显式配置渠道凭据或显式开启） */
+export const DEMO_AUTH = (process.env.SERVICE_C_DEMO_AUTH ?? (process.env.NODE_ENV === "production" ? "false" : "true")) === "true";
 if (DEMO_AUTH) {
   console.warn("[service-c] SERVICE_C_DEMO_AUTH 已开启：h5/openid 演示直登可用（生产环境必须置 false 并配置渠道 code 交换凭据）");
 }

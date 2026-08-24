@@ -219,14 +219,16 @@ d("PG 集成 Quest 循环（种子库）", async () => {
     // 从「未安装」态开始（重跑安全）
     await uninstallSkill(app, gw, scope, { skillId: revenue.id, by: "MEM-001" }).catch(() => undefined);
     const before = await assemblePreset(app, scope, { workspaceId: scope.workspaceId, presetKey: "content-agent", goal: "装配并集探针" });
-    expect(before.fenceBindings).toEqual(["R3"]); // preset 自身声明（content-agent 仅 R3）
+    // 0013 契约：seed 安装行落真实快照——review-crisis(R6)、channel-reconciler(R4/R5) 在装，
+    // 并集 = content-agent 自身声明 R3 ∪ 全部在装技能快照
+    expect(before.fenceBindings).toEqual(["R3", "R4", "R5", "R6"]);
     // 安装即绑定：装配声明并入技能 fence_bindings 快照
     await installSkill(app, gw, scope, { skillId: revenue.id, by: "MEM-001" });
     const after = await assemblePreset(app, scope, { workspaceId: scope.workspaceId, presetKey: "content-agent", goal: "装配并集探针" });
-    expect(after.fenceBindings).toEqual(["R1", "R2", "R3"]); // preset 声明 ∪ 技能快照
+    expect(after.fenceBindings).toEqual(["R1", "R2", "R3", "R4", "R5", "R6"]); // preset 声明 ∪ 技能快照
     // 卸载即撤销：并集收缩
     await uninstallSkill(app, gw, scope, { skillId: revenue.id, by: "MEM-001" });
     const revoked = await assemblePreset(app, scope, { workspaceId: scope.workspaceId, presetKey: "content-agent", goal: "装配并集探针" });
-    expect(revoked.fenceBindings).toEqual(["R3"]);
+    expect(revoked.fenceBindings).toEqual(["R3", "R4", "R5", "R6"]);
   });
 });

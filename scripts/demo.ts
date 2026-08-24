@@ -293,7 +293,9 @@ async function main(): Promise<void> {
         { token },
       );
       if (err instanceof TrpcError && /非法迁移/.test(err.message)) {
-        if (curNow.configured && curNow.run?.id === `nr-${runDate}` && curNow.run.status === "running") {
+        // 班次 id 兼容新旧格式：旧 nr-<runDate> / 新 nr-<workspaceId>-<runDate>（0013 复合主键口径）
+        const curRunId = curNow.run?.id;
+        if (curNow.configured && curRunId && (curRunId === `nr-${runDate}` || curRunId.endsWith(`-${runDate}`)) && curNow.run?.status === "running") {
           nightRunId = curNow.run.id;
           nightStartedAt = curNow.run.startedAt;
           ok("复跑降级：该日夜班已在运行，沿用现有班次", nightRunId);

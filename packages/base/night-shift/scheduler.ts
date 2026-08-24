@@ -77,6 +77,11 @@ async function emit(
   return r.eventId;
 }
 
+/** 班次 id（0013 口径）：nr-<workspaceId>-<runDate>；PK 已改 (workspace_id, run_date)，id 保留唯一约束兼容旧查询 */
+export function nightRunId(workspaceId: string, runDate: string): string {
+  return `nr-${workspaceId}-${runDate}`;
+}
+
 /** 创建/就绪夜班（unconfigured → ready；配置变更留痕 F4.8） */
 export async function ensureReady(
   app: pg.Pool,
@@ -84,25 +89,31 @@ export async function ensureReady(
   scope: Scope,
   runDate: string,
 ): Promise<string> {
-  const id = `nr-${runDate}`;
+  const id = nightRunId(scope.workspaceId, runDate);
   const client = await app.connect();
   try {
     // 事务级 RLS 上下文必须在显式事务内设置：autocommit 下 set_config(...,true) 语句结束即失效
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+    // 同工作区同日期唯一一班（复合 PK 幂等）；旧格式 id 存量行命中 PK 冲突即跳过
     await client.query(
       `INSERT INTO night_runs (id, workspace_id, run_date, status) VALUES ($1,$2,$3,'ready')
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (workspace_id, run_date) DO NOTHING`,
       [id, scope.workspaceId, runDate],
     );
+    // 回读真实 id：兼容旧格式 id（nr-<runDate>）存量行，调用方一律按返回 id 操作
+    const row = await client.query<{ id: string }>(
+      `SELECT id FROM night_runs WHERE workspace_id=$1 AND run_date=$2`,
+      [scope.workspaceId, runDate],
+    );
+    await client.query("COMMIT");
+    return row.rows[0]?.id ?? id;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
   } finally {
-    await client.query("COMMIT").catch(() => undefined);
     client.release();
   }
-  return id;
 }
 
 /** 开启夜班（人类命令，不经模型轮次 F4.1）：ready → running + 围栏快照（F2.6） */
@@ -148,10 +159,10 @@ export async function confirmNight(
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
-    client.release();
     throw err;
+  } finally {
+    client.release();
   }
-  client.release();
 }
 
 /* ---------- 一键暂停（F4.3/G5/E4.1） ---------- */
@@ -170,20 +181,20 @@ export async function pauseAll(
   runId: string,
   by: { memberNo: string; channel: string },
 ): Promise<PauseResult> {
-  const t0 = Date.now();
   const client = await app.connect();
+  // G5 SLA 计时从拿到连接后开始（排队等连接不计入端到端暂停耗时）
+  const t0 = Date.now();
   let pausedThreads = 0;
-  let result!: PauseResult;
   try {
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]); // D16：append_event_insert 双 GUC 校验要求
-    await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
     const cur = await client.query<{ status: NightStatus }>(
       `SELECT status FROM night_runs WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, [runId, scope.workspaceId],
     );
     const from = cur.rows[0]?.status;
-    if (from) assertTransition(from, "paused");
+    if (!from) throw new Error(`夜班班次 ${runId} 不存在（pauseAll 拒绝对空班次操作）`);
+    assertTransition(from, "paused");
     // 挂起工作区全部 running 线程（断点挂起，恢复续跑 E4.2/E3.3）
     // #13 修复：标记 paused_by='night-shift'，resumeNight 只恢复该标记的线程，不覆盖手动暂停
     const th = await client.query(
@@ -192,9 +203,7 @@ export async function pauseAll(
       [scope.workspaceId],
     );
     pausedThreads = th.rowCount ?? 0;
-    if (from) {
-      await client.query(`UPDATE night_runs SET status='paused' WHERE id=$1 AND workspace_id=$2`, [runId, scope.workspaceId]);
-    }
+    await client.query(`UPDATE night_runs SET status='paused' WHERE id=$1 AND workspace_id=$2`, [runId, scope.workspaceId]);
     const elapsedMs = Date.now() - t0;
     const withinSla = elapsedMs <= PAUSE_ALL_SLA_SECONDS * 1000;
     // D16（#1/A）：暂停状态、线程挂起、事件留痕同一事务同一 COMMIT
@@ -211,14 +220,13 @@ export async function pauseAll(
       }, [eventId]);
     }
     await client.query("COMMIT");
-    result = { runId, elapsedMs, withinSla, pausedThreads };
+    return { runId, elapsedMs, withinSla, pausedThreads };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
-    client.release();
     throw err;
+  } finally {
+    client.release();
   }
-  client.release();
-  return result;
 }
 
 /** 恢复（paused → running；断点续跑由 runtime runQuest 重入保证） */

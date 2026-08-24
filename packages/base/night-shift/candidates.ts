@@ -67,12 +67,13 @@ export async function buildCandidateList(
       });
     }
     // 谷时价折算（F4.6：预估积分按峰谷价展示）
-    return items.map((i) => ({ ...i, estCredits: Math.max(1, Math.round(i.estCredits * OFF_PEAK_RATE_RATIO)) }));
+    const out = items.map((i) => ({ ...i, estCredits: Math.max(1, Math.round(i.estCredits * OFF_PEAK_RATE_RATIO)) }));
+    await client.query("COMMIT");
+    return out;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
   } finally {
-    await client.query("COMMIT").catch(() => undefined);
     client.release();
   }
 }

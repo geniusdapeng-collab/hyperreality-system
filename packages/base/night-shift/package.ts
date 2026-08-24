@@ -9,7 +9,7 @@
  */
 import type pg from "pg";
 import { APPROVAL_LIMITS, type BusinessEvent } from "@workloom/shared";
-import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
+import { gatewayAppendOnClient } from "../workdata/gateway.js";
 
 /* ---------- 三段投影（纯函数，H-7 走查核心） ---------- */
 
@@ -107,11 +107,11 @@ export async function deliverPackage(
       [scope.tenantId, scope.workspaceId, window.from, window.to],
     );
     events = r.rows.map((x) => x.payload);
+    await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
   } finally {
-    await client.query("COMMIT").catch(() => undefined);
     client.release();
   }
 
@@ -123,10 +123,15 @@ export async function deliverPackage(
     await c2.query("BEGIN");
     await c2.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
     await c2.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-    await c2.query(
+    const upd = await c2.query(
       `UPDATE night_runs SET status='package_generated', stats=$3 WHERE id=$1 AND workspace_id=$2 AND status IN ('running','paused','ready')`,
       [runId, scope.workspaceId, JSON.stringify(pkg.stats)],
     );
+    // 幂等：已 package_generated（或班次不存在）→ rowCount=0，直接返回不重写投递事件（G8 留痕唯一）
+    if (upd.rowCount === 0) {
+      await c2.query("COMMIT");
+      return pkg;
+    }
     // D16（#1/A）：状态回写与投递事件同一事务同一 COMMIT（G8）
     await gatewayAppendOnClient(c2, {
       tenantId: scope.tenantId, workspaceId: scope.workspaceId,
@@ -141,11 +146,11 @@ export async function deliverPackage(
       },
       rule_impact: [],
     } as never);
+    await c2.query("COMMIT");
   } catch (err) {
     await c2.query("ROLLBACK").catch(() => undefined);
     throw err;
   } finally {
-    await c2.query("COMMIT").catch(() => undefined);
     c2.release();
   }
 

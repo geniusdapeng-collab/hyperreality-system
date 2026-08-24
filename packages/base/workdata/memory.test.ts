@@ -54,7 +54,7 @@ d("PG 集成记忆（种子库）", async () => {
       scope: "workspace",
       kind: "pattern",
       content: memContent,
-      sourceEvents: ["E-8801", "E-8802"],
+      sourceEvents: ["E-SEED-8801", "E-SEED-8802"],
       confidence: 0.6,
     }, embedder);
     const byKind = await searchMemories(pool, scope, { kind: "pattern" });
@@ -66,13 +66,50 @@ d("PG 集成记忆（种子库）", async () => {
   });
 
   it("归因闭环：任一记忆可反查来源事件（验收断言）", async () => {
-    await recordMemoryUsage(pool, scope, memId, "E-8803");
+    await recordMemoryUsage(pool, scope, memId, "E-SEED-8803");
     const r = await getMemorySources(pool, scope, memId);
     expect(r.memory?.memory_id).toBe(memId);
-    expect(r.sourceEvents.map((e) => e.event_id)).toEqual(["E-8801", "E-8802"]);
-    expect(r.usedBy).toContain("E-8803");
+    expect(r.sourceEvents.map((e) => e.event_id)).toEqual(["E-SEED-8801", "E-SEED-8802"]);
+    expect(r.usedBy).toContain("E-SEED-8803");
     // 来源事件确为种子库真实事件（五元完整）
     expect(r.sourceEvents[0]!.who.type).toBe("agent");
+  });
+
+  it("M3/M4：subject_id 落库 + subjectId 过滤检索 + getMemorySources 同步", async () => {
+    const agentMem = `mem-b3-agent-${RUN}`;
+    await upsertMemory(pool, scope, {
+      memoryId: agentMem,
+      scope: "agent",
+      kind: "preference",
+      content: `agent 主体记忆 ${RUN}`,
+      sourceEvents: [],
+      subjectId: "pricing-agent",
+    }, embedder);
+    // subjectId 过滤命中本主体，过滤他主体不命中
+    const bySubject = await searchMemories(pool, scope, { subjectId: "pricing-agent", limit: 50 });
+    expect(bySubject.some((m) => m.memory_id === agentMem)).toBe(true);
+    const other = await searchMemories(pool, scope, { subjectId: `other-${RUN}`, limit: 50 });
+    expect(other.some((m) => m.memory_id === agentMem)).toBe(false);
+    // getMemorySources 同步返回 subject_id
+    const r = await getMemorySources(pool, scope, agentMem);
+    expect(r.memory?.subject_id).toBe("pricing-agent");
+  });
+
+  it("M3/M4：recordMemoryUsage 校验记忆归属本工作区（跨区/不存在必拒），usage 带 workspace_id", async () => {
+    const owned = `mem-b3-owned-${RUN}`;
+    await upsertMemory(pool, scope, {
+      memoryId: owned, scope: "workspace", kind: "sop", content: `归属校验 ${RUN}`, sourceEvents: [],
+    }, embedder);
+    // 本工作区正常记录
+    await recordMemoryUsage(pool, scope, owned, "E-SEED-8804");
+    const r = await getMemorySources(pool, scope, owned);
+    expect(r.usedBy).toContain("E-SEED-8804");
+    // 不存在的记忆 → 拒
+    await expect(recordMemoryUsage(pool, scope, `mem-nonexist-${RUN}`, "E-SEED-8801")).rejects.toThrow(/归属/);
+    // 跨工作区引用他区记忆 → 拒（防归属伪造）
+    await expect(
+      recordMemoryUsage(pool, { tenantId: scope.tenantId, workspaceId: "ws-other" }, owned, "E-SEED-8801"),
+    ).rejects.toThrow(/归属/);
   });
 
   it("生命周期：active→superseded 幂等约束，重复迁移报错", async () => {
@@ -82,9 +119,9 @@ d("PG 集成记忆（种子库）", async () => {
     expect(after.some((m) => m.memory_id === memId)).toBe(false);
   });
 
-  it("种子记忆可归因（E-8801/E-8802 反查）", async () => {
+  it("种子记忆可归因（E-SEED-8801/E-SEED-8802 反查）", async () => {
     const r = await getMemorySources(pool, scope, "mem-review-sop");
     expect(r.sourceEvents.length).toBe(1);
-    expect(r.sourceEvents[0]!.event_id).toBe("E-8802");
+    expect(r.sourceEvents[0]!.event_id).toBe("E-SEED-8802");
   });
 });

@@ -159,6 +159,39 @@ describe.runIf(RUN_DB)("技能/意识 PG 集成（M8 铁律）", async () => {
     expect(bindingsAfter.length).toBeLessThanOrEqual(bindings.length);
   });
 
+  it("seed 与运行时双路径安装快照同构：快照=实时绑定、版本对齐、并集一致（#17 口径回归）", async () => {
+    // seed 直写路径（scripts/seed.ts）与运行时 installSkill 路径都必须落
+    // fence_bindings_snapshot=安装时刻 skills.fence_bindings、installed_version=skills.version——
+    // 任一路径漏写都会让运行时并集（resolveAgentFenceBindings）与卸载撤销清单（#40）口径分裂
+    const rows = await qApp<{
+      skill_id: string; snap: string[]; ver: string; live: string[]; live_ver: string;
+    }>(
+      `SELECT i.skill_id, i.fence_bindings_snapshot AS snap, i.installed_version AS ver,
+              s.fence_bindings AS live, s.version AS live_ver
+       FROM skill_installs i JOIN skills s ON s.id = i.skill_id
+       WHERE i.workspace_id=$1
+         AND NOT EXISTS (SELECT 1 FROM skill_revocations r WHERE r.skill_id = i.skill_id)`,
+      [scope.workspaceId],
+    );
+    expect(rows.rows.length).toBeGreaterThan(0); // seed 已预装官方套件
+    for (const r of rows.rows) {
+      expect(r.snap, `${r.skill_id} 快照须等于 skills.fence_bindings（双路径同构）`).toEqual(r.live);
+      expect(r.ver, `${r.skill_id} installed_version 须对齐 skills.version`).toBe(r.live_ver);
+    }
+
+    // 围栏并集：运行时消费点（resolveAgentFenceBindings）= preset 声明 ∪ 全部在装技能快照
+    const agent = await qApp<{ id: string; fence_bindings: string[] }>(
+      `SELECT id, fence_bindings FROM agents WHERE workspace_id=$1 AND preset_key='pricing-agent'`,
+      [scope.workspaceId],
+    );
+    const union = await resolveAgentFenceBindings(app, scope, agent.rows[0]!.id);
+    const expected = new Set<string>([
+      ...(agent.rows[0]!.fence_bindings ?? []),
+      ...rows.rows.flatMap((r) => r.snap ?? []),
+    ]);
+    expect(new Set(union)).toEqual(expected);
+  });
+
   it("L8.1 未脱敏 industry 技能拦截；E8.1 绑定冲突进审批不静默放行", async () => {
     await qApp(
       `INSERT INTO skills (id, level, name, version, description, fence_bindings, body, desensitized)

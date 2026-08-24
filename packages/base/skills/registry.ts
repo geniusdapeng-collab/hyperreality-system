@@ -324,7 +324,11 @@ export async function uninstallSkill(
   const client = await app.connect();
   let removed = 0;
   // #40 修复：撤销清单读安装时快照（与 #17 口径一致）——此前读 skills.fence_bindings
-  // 实时值，若技能作者安装后改过绑定，卸载留痕的撤销清单与实际安装清单不符
+  // 实时值，若技能作者安装后改过绑定，卸载留痕的撤销清单与实际安装清单不符。
+  // 快照一致性（双路径同构）：seed 直写与运行时 installSkill 两条安装路径都落
+  // fence_bindings_snapshot=安装时刻 skills.fence_bindings、installed_version=skills.version，
+  // 因此此处 snapshot 必有值；`?? skill.fence_bindings` 仅为历史行（快照列上线前安装）兜底，
+  // 兜底值与 seed 快照同源（同读 skills 表），口径不分裂。
   let revokedBindings: string[] = [];
   try {
     // 事务级 RLS 上下文必须在显式事务内设置：autocommit 下 set_config(...,true) 语句结束即失效

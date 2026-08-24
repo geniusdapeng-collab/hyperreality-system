@@ -5,7 +5,7 @@
  *  - 触发即写 trigger.fired 事件 + 返回派遣模板（由 runtime 装配执行）
  */
 import type pg from "pg";
-import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
+import { gatewayAppendOnClient } from "../workdata/gateway.js";
 
 /* ---------- 最小 cron 求值（确定性；完整 cron 库进停车场） ---------- */
 
@@ -74,11 +74,11 @@ export async function upsertTrigger(
       decision: { action: "trigger.upsert", after: { id: input.id, kind: input.kind, schedule: input.schedule } },
       rule_impact: [],
     } as never);
+    await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
   } finally {
-    await client.query("COMMIT").catch(() => undefined);
     client.release();
   }
 }
@@ -113,11 +113,11 @@ export async function setTriggerEnabled(
       decision: { action: enabled ? "trigger.enable" : "trigger.disable", after: { id, enabled } },
       rule_impact: [],
     } as never);
+    await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
   } finally {
-    await client.query("COMMIT").catch(() => undefined);
     client.release();
   }
 }
@@ -131,44 +131,68 @@ export interface FiredTrigger {
   firedEventId: string;
 }
 
+/**
+ * cron tick（幂等 + 多副本安全）：
+ *  - pg_try_advisory_xact_lock 抢本工作区 tick 权：多副本并发只有一个真正评估，其余空转返回 []
+ *  - 每个命中的触发器先落 trigger_fires 账本（ON CONFLICT DO NOTHING 占位）：
+ *    同 trigger 同分钟已触发过 → 跳过（重复触发/重试/多副本均不产生第二个 trigger.fired 事件）
+ *  - 账本占位与 trigger.fired 事件同一事务同一 COMMIT（D16）
+ */
 export async function tickTriggers(
   app: pg.Pool,
   gateway: pg.Pool,
   scope: Scope,
   at: Date = new Date(),
 ): Promise<FiredTrigger[]> {
+  const fired: FiredTrigger[] = [];
   const client = await app.connect();
-  let rows: Array<{ id: string; name: string; schedule: string; action: Record<string, unknown> }>;
   try {
     // 事务级 RLS 上下文必须在显式事务内设置：autocommit 下 set_config(...,true) 语句结束即失效
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-    const r = await client.query<typeof rows[number]>(
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]); // D16：append_event_insert 双 GUC 校验要求
+    // 多副本抢 tick 权（xact 锁：COMMIT/ROLLBACK 自动释放）；抢不到 = 别的副本在跑，本轮空转
+    const lock = await client.query<{ ok: boolean }>(
+      `SELECT pg_try_advisory_xact_lock(hashtext($1)) AS ok`,
+      [`trigger-tick:${scope.workspaceId}`],
+    );
+    if (!lock.rows[0]?.ok) {
+      await client.query("ROLLBACK");
+      return [];
+    }
+    const r = await client.query<{ id: string; name: string; schedule: string; action: Record<string, unknown> }>(
       `SELECT id, name, schedule, action FROM triggers WHERE workspace_id=$1 AND enabled=true AND kind='cron'`,
       [scope.workspaceId],
     );
-    rows = r.rows;
+    for (const t of r.rows) {
+      if (!cronMatches(t.schedule, at)) continue;
+      // 幂等占位：同 trigger 同 fire_minute 已落账 → 跳过（不重复触发、不重写事件）
+      const claim = await client.query(
+        `INSERT INTO trigger_fires (trigger_id, fire_minute, workspace_id)
+         VALUES ($1, date_trunc('minute', $2::timestamptz), $3)
+         ON CONFLICT (trigger_id, fire_minute) DO NOTHING`,
+        [t.id, at.toISOString(), scope.workspaceId],
+      );
+      if (claim.rowCount === 0) continue;
+      // 账本占位与 trigger.fired 事件同一 COMMIT（D16）
+      const ev = await gatewayAppendOnClient(client, {
+        tenantId: scope.tenantId, workspaceId: scope.workspaceId,
+        actor: { id: "trigger-engine", type: "system" },
+      }, {
+        who: { type: "system", id: "trigger-engine" },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: at.toISOString(), channel: "inapp" },
+        object: { type: "staff", id: t.id },
+        decision: { action: "trigger.fired", after: { id: t.id, schedule: t.schedule, dispatch: t.action } },
+        rule_impact: [],
+      } as never);
+      fired.push({ id: t.id, name: t.name, action: t.action, firedEventId: ev.eventId });
+    }
+    await client.query("COMMIT");
+    return fired;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
   } finally {
-    await client.query("COMMIT").catch(() => undefined);
     client.release();
   }
-  const fired: FiredTrigger[] = [];
-  for (const t of rows) {
-    if (!cronMatches(t.schedule, at)) continue;
-    const ev = await gatewayAppend(gateway, {
-      tenantId: scope.tenantId, workspaceId: scope.workspaceId,
-      actor: { id: "trigger-engine", type: "system" },
-    }, {
-      who: { type: "system", id: "trigger-engine" },
-      context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: at.toISOString(), channel: "inapp" },
-      object: { type: "staff", id: t.id },
-      decision: { action: "trigger.fired", after: { id: t.id, schedule: t.schedule, dispatch: t.action } },
-      rule_impact: [],
-    } as never);
-    fired.push({ id: t.id, name: t.name, action: t.action, firedEventId: ev.eventId });
-  }
-  return fired;
 }

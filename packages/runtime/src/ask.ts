@@ -103,7 +103,10 @@ export const defaultAskFactProvider: AskFactProvider = async (app, scope, questi
     sources.push("approvals");
   }
 
-  const active = await queryCount(app, scope, `SELECT count(*)::text AS n FROM threads WHERE workspace_id=$1 AND status IN ('active','pending_review')`);
+  // L3 修复：threads.status 枚举以 0001 CHECK 约束为准
+  // （queued/running/pending_review/completed/failed/paused）——不存在 'active'；
+  // 「进行中」= 全部非终态（queued/running/pending_review/paused）
+  const active = await queryCount(app, scope, `SELECT count(*)::text AS n FROM threads WHERE workspace_id=$1 AND status IN ('queued','running','pending_review','paused')`);
   facts.push({ label: "进行中线程", value: `${active} 条` });
   sources.push("threads");
 

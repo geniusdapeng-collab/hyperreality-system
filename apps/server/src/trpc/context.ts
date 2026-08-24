@@ -15,13 +15,15 @@ import {
 
 export interface TrpcContext {
   identity: Identity | null;
+  /** 原始请求头（P0-1 通道验签 x-channel-* / 服务间密钥 x-workloom-key 读取面） */
+  headers: Headers;
 }
 
 export async function createContext(req: Request): Promise<TrpcContext> {
   const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return { identity: null };
+  if (!auth?.startsWith("Bearer ")) return { identity: null, headers: req.headers };
   const identity = await verifyToken(auth.slice(7));
-  return { identity };
+  return { identity, headers: req.headers };
 }
 
 const t = initTRPC.context<TrpcContext>().create();

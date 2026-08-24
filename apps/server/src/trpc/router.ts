@@ -19,7 +19,7 @@ import {
   signDemoToken,
   type Identity,
 } from "@workloom/base/tenancy";
-import { gatewayAppend, gatewayAppendOnClient } from "@workloom/base/workdata";
+import { gatewayAppend, gatewayAppendOnClient, MockEmbedder, upsertMemoryInTx } from "@workloom/base/workdata";
 import { makeReadableId } from "@workloom/shared";
 import { capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, writeProcedure } from "./context.js";
 import {
@@ -76,6 +76,7 @@ import {
   uninstallSkill,
 } from "@workloom/base/skills";
 import {
+  boundOpenidOfMember,
   ChannelError,
   composeApprovalCard,
   handleGestureCallback,
@@ -83,6 +84,8 @@ import {
   listChannels,
   MockChannelDriver,
   sendApprovalCard,
+  stableStringify,
+  verifyChannelSignature,
   type ChannelDriver,
   type ApprovalChannel,
 } from "@workloom/base/im-channels";
@@ -256,24 +259,37 @@ const onboardingRouter = router({
         }
       }
       persistLlmEnv(input);
-      await gatewayAppend(getGatewayPool(), {
-        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
-      }, {
-        who: { type: "human", id: ctx.identity.memberNo },
-        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
-        object: { type: "workspace", id: scope.workspaceId },
-        decision: {
-          action: "onboarding.llm_configured",
-          params: {
-            provider: input.provider, base_url: input.baseUrl, model: input.model,
-            key_mask: input.apiKey ? `***${input.apiKey.slice(-4)}` : "(免 key 网关)",
+      // D16（#1/A）：事件写入并入显式事务（.env 落盘不可回滚，故事件写在其成功后同一 COMMIT 提交）
+      const llmClient = await getAppPool().connect();
+      try {
+        await llmClient.query("BEGIN");
+        await llmClient.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        await llmClient.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        await gatewayAppendOnClient(llmClient, {
+          ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
+        }, {
+          who: { type: "human", id: ctx.identity.memberNo },
+          context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+          object: { type: "workspace", id: scope.workspaceId },
+          decision: {
+            action: "onboarding.llm_configured",
+            params: {
+              provider: input.provider, base_url: input.baseUrl, model: input.model,
+              key_mask: input.apiKey ? `***${input.apiKey.slice(-4)}` : "(免 key 网关)",
+            },
+            after: { real: input.provider !== "mock" },
+            basis: ["落地向导：真实大模型装配（实测通过后写回 .env 四变量，全链即时生效）"],
           },
-          after: { real: input.provider !== "mock" },
-          basis: ["落地向导：真实大模型装配（实测通过后写回 .env 四变量，全链即时生效）"],
-        },
-        rule_impact: [],
-        model_trace: { model_id: "human-operator", tier: "standard" },
-      });
+          rule_impact: [],
+          model_trace: { model_id: "human-operator", tier: "standard" },
+        });
+        await llmClient.query("COMMIT");
+      } catch (err) {
+        await llmClient.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        llmClient.release();
+      }
       return { ok: true, real: input.provider !== "mock" };
     }),
 
@@ -297,6 +313,22 @@ const onboardingRouter = router({
           `UPDATE profiles SET archive = jsonb_set(archive, '{business}', $2::jsonb), industry=$3, updated_at=now() WHERE workspace_id=$1`,
           [scope.workspaceId, JSON.stringify({ name: input.displayName, note: input.note, onboarded_at: new Date().toISOString() }), input.industry],
         );
+        // D16（#1/A）：档案写与事件留痕同一事务同一 COMMIT
+        await gatewayAppendOnClient(client, {
+          ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
+        }, {
+          who: { type: "human", id: ctx.identity.memberNo },
+          context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+          object: { type: "workspace", id: scope.workspaceId },
+          decision: {
+            action: "onboarding.workspace_profile",
+            params: { name: input.displayName, industry: input.industry, note: input.note },
+            after: {},
+            basis: ["落地向导：经营主体信息写入一店一档（archive.business）"],
+          },
+          rule_impact: [],
+          model_trace: { model_id: "human-operator", tier: "standard" },
+        });
         await client.query("COMMIT");
       } catch (err) {
         await client.query("ROLLBACK").catch(() => undefined);
@@ -304,21 +336,6 @@ const onboardingRouter = router({
       } finally {
         client.release();
       }
-      await gatewayAppend(getGatewayPool(), {
-        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
-      }, {
-        who: { type: "human", id: ctx.identity.memberNo },
-        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
-        object: { type: "workspace", id: scope.workspaceId },
-        decision: {
-          action: "onboarding.workspace_profile",
-          params: { name: input.displayName, industry: input.industry, note: input.note },
-          after: {},
-          basis: ["落地向导：经营主体信息写入一店一档（archive.business）"],
-        },
-        rule_impact: [],
-        model_trace: { model_id: "human-operator", tier: "standard" },
-      });
       return { ok: true };
     }),
 
@@ -335,6 +352,22 @@ const onboardingRouter = router({
         `UPDATE profiles SET archive = jsonb_set(archive, '{dataMode}', '"real"'::jsonb), updated_at=now() WHERE workspace_id=$1`,
         [scope.workspaceId],
       );
+      // D16（#1/A）：dataMode 翻转与事件留痕同一事务同一 COMMIT
+      await gatewayAppendOnClient(client, {
+        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
+      }, {
+        who: { type: "human", id: ctx.identity.memberNo },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "workspace", id: scope.workspaceId },
+        decision: {
+          action: "onboarding.real_mode_activated",
+          params: { from: "simulated", to: "real" },
+          after: { dataMode: "real" },
+          basis: ["落地向导收官：切换真实经营模式，模拟数据横幅熄灭；此后经营动作即真实数据"],
+        },
+        rule_impact: [],
+        model_trace: { model_id: "human-operator", tier: "standard" },
+      });
       await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -342,21 +375,6 @@ const onboardingRouter = router({
     } finally {
       client.release();
     }
-    await gatewayAppend(getGatewayPool(), {
-      ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
-    }, {
-      who: { type: "human", id: ctx.identity.memberNo },
-      context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
-      object: { type: "workspace", id: scope.workspaceId },
-      decision: {
-        action: "onboarding.real_mode_activated",
-        params: { from: "simulated", to: "real" },
-        after: { dataMode: "real" },
-        basis: ["落地向导收官：切换真实经营模式，模拟数据横幅熄灭；此后经营动作即真实数据"],
-      },
-      rule_impact: [],
-      model_trace: { model_id: "human-operator", tier: "standard" },
-    });
     return { ok: true, dataMode: "real" as const };
   }),
 });
@@ -1654,6 +1672,19 @@ function imRethrow(err: unknown): never {
   }
   throw err;
 }
+/** P0-1：im.inbound 服务间密钥校验（dsh-im → server 内网调用面）
+ *  env IM_BRIDGE_KEY 已配置：x-workloom-key 头必须匹配，否则 401；
+ *  缺省（开发）：占位放行并 console.warn（生产必须配置，与 SERVICE_C_DEMO_AUTH 同纪律）。 */
+function assertBridgeKey(headers: Headers): void {
+  const key = process.env.IM_BRIDGE_KEY;
+  if (!key) {
+    console.warn("[im] IM_BRIDGE_KEY 未配置：im.inbound 服务间密钥校验占位放行（开发态；生产必须配置）");
+    return;
+  }
+  if (headers.get("x-workloom-key") !== key) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "服务间密钥校验失败（x-workloom-key 与 IM_BRIDGE_KEY 不匹配）" });
+  }
+}
 const imRouter = router({
   /** 通道注册表 + 驱动状态（P 设置页/联调用） */
   channels: protectedProcedure.query(() => ({
@@ -1674,6 +1705,7 @@ const imRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      assertBridgeKey(ctx.headers); // P0-1：服务间密钥（缺省 dev 占位 warn）
       try {
         return await ingestInbound(getAppPool(), getGatewayPool(), scopeOf(ctx.identity), input);
       } catch (err) {
@@ -1730,8 +1762,10 @@ const imRouter = router({
         client.release();
       }
     }),
-  /** 手势回调（F5.4 手势回写多通道；decide 内聚 L5.1/L5.2/L5.3/E5.3 全纪律） */
-  callback: protectedProcedure
+  /** 手势回调（F5.4 手势回写多通道；decide 内聚 L5.1/L5.2/L5.3/E5.3 全纪律）
+   *  P0-1 通道验签：secret 已配置 → x-channel-signature 必须通过；开发缺省 secret 降级为
+   *  「仅允许会话成员本人操作」（operatorOpenId 必须等于当前会话成员在该通道绑定的 openid），响应标注 unsigned:true */
+  callback: writeProcedure
     .input(
       z.object({
         channel: z.enum(["dingtalk", "wecom", "feishu"]),
@@ -1745,14 +1779,32 @@ const imRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      // P0-1 验签 seam：body = 回调 payload 稳定 JSON（与 dsh-im 桥约定口径）
+      const sig = verifyChannelSignature(input.channel, ctx.headers, stableStringify(input));
+      if (!sig.verified) {
+        if (!sig.unsigned) {
+          // secret 已配置但验签失败（缺头/超时/比对不一致）→ 一律拒绝，不落本人降级
+          throw new TRPCError({ code: "FORBIDDEN", message: `通道签名验证失败：${sig.reason}` });
+        }
+        // 开发降级（缺省 secret）：仅允许会话成员本人操作——冒名他人 openid 在此被拒
+        const bound = await boundOpenidOfMember(getAppPool(), scope, input.channel, ctx.identity.memberNo);
+        if (!bound || bound !== input.operatorOpenId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `未验签通道回调仅允许本人操作：operatorOpenId 须为当前会话成员 ${ctx.identity.memberNo} 在 ${input.channel} 绑定的 openid（P0-1 开发降级）`,
+          });
+        }
+      }
       try {
-        return await handleGestureCallback(
+        const r = await handleGestureCallback(
           getAppPool(),
           getGatewayPool(),
-          scopeOf(ctx.identity),
+          scope,
           input,
           mockDriverFor(input.channel),
         );
+        return { ...r, unsigned: sig.unsigned };
       } catch (err) {
         imRethrow(err);
       }
@@ -1915,24 +1967,6 @@ function withCharterLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function saveCharter(app: ReturnType<typeof getAppPool>, scope: { tenantId: string; workspaceId: string }, charter: unknown): Promise<void> {
-  const client = await app.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-    await client.query(
-      `UPDATE profiles SET archive = jsonb_set(archive, '{charter}', $2::jsonb), updated_at=now() WHERE workspace_id=$1`,
-      [scope.workspaceId, JSON.stringify(charter)],
-    );
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
 const captainRouter = router({
   /** 治理状态：宪章 + 模式 + 授权信息 + 待审分层 */
   state: protectedProcedure.query(async ({ ctx }) => {
@@ -1979,33 +2013,56 @@ const captainRouter = router({
       if (!input.identityConfirmed) throw new TRPCError({ code: "BAD_REQUEST", message: "未完成身份核验（§12.2 第⑤步）" });
       const app = getAppPool();
       return withCharterLock(async () => {
-      const charter = await loadCharter(app, scope);
-      const grantEventId = `E-GRANT-${Date.now().toString(36).toUpperCase()}`;
-      const next = transition({ ...charter, autonomy: input.autonomy }, {
-        kind: "grant",
-        grant: {
-          event_id: grantEventId, granted_by: ctx.identity.memberNo, granted_at: new Date().toISOString(),
-          disclosure_version: RISK_DISCLOSURE_VERSION, clauses: input.clauses,
-          shadow_days: input.shadowDays, trial_days: input.trialDays, trial_ends_at: null, retain_until: null,
-        },
-      });
-      await saveCharter(app, scope, next);
-      await gatewayAppend(getGatewayPool(), {
-        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `ceo-grant-${scope.workspaceId}`,
-      }, {
-        who: { type: "human", id: ctx.identity.memberNo },
-        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
-        object: { type: "company_ceo", id: scope.workspaceId },
-        decision: {
-          action: "captain.grant",
-          params: { disclosure_version: RISK_DISCLOSURE_VERSION, clauses: input.clauses, autonomy: input.autonomy, shadow_days: input.shadowDays, trial_days: input.trialDays },
-          after: { mode: next.mode },
-          basis: ["深度授权六步完成：风险揭示/逐项确认/边界设定/试用计划/身份核验/签署", "此记录不可篡改不可删除（§12.2 第⑥步）"],
-        },
-        rule_impact: [],
-        model_trace: { model_id: "human-chairman", tier: "standard" },
-      });
-      return { mode: next.mode, grantEventId };
+      // D16（#1/A）：宪章读改写 + 授权事件同一事务同一 COMMIT；
+      // 事件先落库取真实 eventId 回填 charter.grant.event_id（替换 E-GRANT-${Date.now()} 假 id）
+      const client = await app.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        const row = await client.query<{ archive: Record<string, unknown> }>(
+          `SELECT archive FROM profiles WHERE workspace_id=$1 FOR UPDATE`,
+          [scope.workspaceId],
+        );
+        const charter = parseCharter(row.rows[0]?.archive?.charter);
+        const grantedAt = new Date().toISOString();
+        const next = transition({ ...charter, autonomy: input.autonomy }, {
+          kind: "grant",
+          grant: {
+            event_id: "", granted_by: ctx.identity.memberNo, granted_at: grantedAt,
+            disclosure_version: RISK_DISCLOSURE_VERSION, clauses: input.clauses,
+            shadow_days: input.shadowDays, trial_days: input.trialDays, trial_ends_at: null, retain_until: null,
+          },
+        });
+        const ev = await gatewayAppendOnClient(client, {
+          ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `ceo-grant-${scope.workspaceId}`,
+        }, {
+          who: { type: "human", id: ctx.identity.memberNo },
+          context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: grantedAt },
+          object: { type: "company_ceo", id: scope.workspaceId },
+          decision: {
+            action: "captain.grant",
+            params: { disclosure_version: RISK_DISCLOSURE_VERSION, clauses: input.clauses, autonomy: input.autonomy, shadow_days: input.shadowDays, trial_days: input.trialDays },
+            after: { mode: next.mode },
+            basis: ["深度授权六步完成：风险揭示/逐项确认/边界设定/试用计划/身份核验/签署", "此记录不可篡改不可删除（§12.2 第⑥步）"],
+          },
+          rule_impact: [],
+          model_trace: { model_id: "human-chairman", tier: "standard" },
+        });
+        // 真实 eventId 回填宪章（法律留痕锚点：宪章 ↔ 授权事件可互查）
+        if (next.grant) next.grant.event_id = ev.eventId;
+        await client.query(
+          `UPDATE profiles SET archive = jsonb_set(archive, '{charter}', $2::jsonb), updated_at=now() WHERE workspace_id=$1`,
+          [scope.workspaceId, JSON.stringify(next)],
+        );
+        await client.query("COMMIT");
+        return { mode: next.mode, grantEventId: ev.eventId };
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        client.release();
+      }
       });
     }),
 
@@ -2016,33 +2073,53 @@ const captainRouter = router({
       const scope = scopeOf(ctx.identity);
       const app = getAppPool();
       return withCharterLock(async () => {
-      const charter = await loadCharter(app, scope);
-      const t: CeoTransition = input.kind === "keep_until"
-        ? { kind: "keep_until", until: input.until ?? new Date(Date.now() + 30 * 86400e3).toISOString() }
-        : { kind: input.kind };
-      let next;
+      // D16（#1/A）：宪章读改写 + 迁移事件同一事务同一 COMMIT
+      const client = await app.connect();
       try {
-        next = transition(charter, t);
-      } catch (e) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message });
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        const row = await client.query<{ archive: Record<string, unknown> }>(
+          `SELECT archive FROM profiles WHERE workspace_id=$1 FOR UPDATE`,
+          [scope.workspaceId],
+        );
+        const charter = parseCharter(row.rows[0]?.archive?.charter);
+        const t: CeoTransition = input.kind === "keep_until"
+          ? { kind: "keep_until", until: input.until ?? new Date(Date.now() + 30 * 86400e3).toISOString() }
+          : { kind: input.kind };
+        let next;
+        try {
+          next = transition(charter, t);
+        } catch (e) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message });
+        }
+        await client.query(
+          `UPDATE profiles SET archive = jsonb_set(archive, '{charter}', $2::jsonb), updated_at=now() WHERE workspace_id=$1`,
+          [scope.workspaceId, JSON.stringify(next)],
+        );
+        await gatewayAppendOnClient(client, {
+          ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `ceo-grant-${scope.workspaceId}`,
+        }, {
+          who: { type: "human", id: ctx.identity.memberNo },
+          context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+          object: { type: "company_ceo", id: scope.workspaceId },
+          decision: {
+            action: "captain.mode_change",
+            params: { from: charter.mode, to: next.mode, by: ctx.identity.memberNo, kind: input.kind },
+            after: { mode: next.mode },
+            basis: [`董事长手动迁移：${charter.mode} → ${next.mode}`],
+          },
+          rule_impact: [],
+          model_trace: { model_id: "human-chairman", tier: "standard" },
+        });
+        await client.query("COMMIT");
+        return { mode: next.mode };
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        client.release();
       }
-      await saveCharter(app, scope, next);
-      await gatewayAppend(getGatewayPool(), {
-        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `ceo-grant-${scope.workspaceId}`,
-      }, {
-        who: { type: "human", id: ctx.identity.memberNo },
-        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
-        object: { type: "company_ceo", id: scope.workspaceId },
-        decision: {
-          action: "captain.mode_change",
-          params: { from: charter.mode, to: next.mode, by: ctx.identity.memberNo, kind: input.kind },
-          after: { mode: next.mode },
-          basis: [`董事长手动迁移：${charter.mode} → ${next.mode}`],
-        },
-        rule_impact: [],
-        model_trace: { model_id: "human-chairman", tier: "standard" },
-      });
-      return { mode: next.mode };
       });
     }),
 
@@ -2083,21 +2160,37 @@ const captainRouter = router({
             if (text) {
               const driver = new MockChannelDriver("wecom");
               const sent = await driver.sendText({ conversationId: `chairman-${scope.workspaceId}` }, text);
-              await gatewayAppend(getGatewayPool(), {
-                ...scope, actor: { id: "im-channels", type: "system" }, sessionId: `ceo-im-${scope.workspaceId}`,
-              }, {
-                who: { type: "system", id: "im-channels" },
+              // 外发口径（D16 例外，先发后写，同 sendApprovalCard）：外发不可撤回，先发送后写事件；
+              // 事件写失败补写补偿事件（im.outbound.unrecorded，best-effort 一次），再失败抛错人工对账
+              const outboundActor = { id: "im-channels", type: "system" as const };
+              const outboundBase = {
+                who: { type: "system" as const, id: "im-channels" },
                 context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "wecom" },
                 object: { type: "conversation", id: `chairman-${scope.workspaceId}` },
-                decision: {
-                  action: "im.outbound",
-                  params: { channel_msg_id: sent.channelMsgId, ref_event: r.eventId, kind },
-                  after: { text: text.slice(0, 500) },
-                  basis: [`简报双通道推送（charter.briefing.channel=${charter.briefing.channel}）`],
-                },
-                rule_impact: [],
-                model_trace: { model_id: "im-channels", tier: "standard" },
-              });
+                rule_impact: [] as never[],
+              };
+              try {
+                await gatewayAppend(getGatewayPool(), { ...scope, actor: outboundActor }, {
+                  ...outboundBase,
+                  decision: {
+                    action: "im.outbound",
+                    params: { channel_msg_id: sent.channelMsgId, ref_event: r.eventId, kind },
+                    after: { text: text.slice(0, 500) },
+                    basis: [`简报双通道推送（charter.briefing.channel=${charter.briefing.channel}）`],
+                  },
+                });
+              } catch (outErr) {
+                console.warn(`[captain] im.outbound 留痕写失败（简报 ${r.eventId} 已外发 ${sent.channelMsgId}），补写补偿事件：`, outErr instanceof Error ? outErr.message : outErr);
+                await gatewayAppend(getGatewayPool(), { ...scope, actor: outboundActor }, {
+                  ...outboundBase,
+                  decision: {
+                    action: "im.outbound.unrecorded",
+                    params: { channel_msg_id: sent.channelMsgId, ref_event: r.eventId, kind },
+                    after: { original_action: "im.outbound", send_error: outErr instanceof Error ? outErr.message : String(outErr) },
+                    basis: ["补偿事件：简报已外发但 im.outbound 留痕写失败（外发不可撤回，先发后写口径）"],
+                  },
+                });
+              }
               imPushed = true;
             }
           }
@@ -2159,43 +2252,46 @@ const captainRouter = router({
     }
   }),
 
-  /** 董事长反馈（赞/踩 → ceo.feedback 事件 + 组织记忆奖励信号） */
+  /** 董事长反馈（赞/踩 → ceo.feedback 事件 + 组织记忆奖励信号）
+   *  D16（#1/A）：事件与 org_memory 写入同一事务同一 COMMIT；
+   *  记忆写入走 workdata upsertMemoryInTx（内含 maskText 脱敏——修复 note 明文直插的 PII 漏脱敏） */
   feedback: writeProcedure
     .input(z.object({ eventId: z.string(), signal: z.enum(["up", "down"]), note: z.string().max(200).optional() }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
-      await gatewayAppend(getGatewayPool(), {
-        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `ceo-feedback-${scope.workspaceId}`,
-      }, {
-        who: { type: "human", id: ctx.identity.memberNo },
-        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
-        object: { type: "task", id: input.eventId },
-        decision: {
-          action: "ceo.feedback",
-          params: { ref_event: input.eventId, signal: input.signal, note: input.note ?? "" },
-          after: {},
-          basis: [`董事长对决策 ${input.eventId} 的${input.signal === "up" ? "点赞" : "点踩"}（入组织记忆，成为后续决策奖励信号）`],
-        },
-        rule_impact: [],
-        model_trace: { model_id: "human-chairman", tier: "standard" },
-      });
-      // 组织记忆写入（pattern 类：奖励/纠正信号）
       const app = getAppPool();
       const client = await app.connect();
       try {
         await client.query("BEGIN");
         await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-        await client.query(
-          `INSERT INTO org_memory (memory_id, tenant_id, workspace_id, scope, kind, content, source_events, status)
-           VALUES ($1,$2,$3,'workspace','pattern',$4,$5,'active') ON CONFLICT (memory_id) DO NOTHING`,
-          [`mem-fb-${Date.now().toString(36)}`, scope.tenantId, scope.workspaceId,
-           `【${ctx.identity.memberNo}】董事长${input.signal === "up" ? "认可" : "否定"}决策 ${input.eventId}${input.note ? `：${input.note}` : ""}`,
-           [input.eventId]],
-        );
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        const ev = await gatewayAppendOnClient(client, {
+          ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `ceo-feedback-${scope.workspaceId}`,
+        }, {
+          who: { type: "human", id: ctx.identity.memberNo },
+          context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+          object: { type: "task", id: input.eventId },
+          decision: {
+            action: "ceo.feedback",
+            params: { ref_event: input.eventId, signal: input.signal, note: input.note ?? "" },
+            after: {},
+            basis: [`董事长对决策 ${input.eventId} 的${input.signal === "up" ? "点赞" : "点踩"}（入组织记忆，成为后续决策奖励信号）`],
+          },
+          rule_impact: [],
+          model_trace: { model_id: "human-chairman", tier: "standard" },
+        });
+        // 组织记忆写入（pattern 类：奖励/纠正信号；memoryId 由反馈事件派生可互查；内容经 maskText 脱敏）
+        await upsertMemoryInTx(client, scope, {
+          memoryId: `mem-fb-${ev.eventId.toLowerCase()}`,
+          scope: "workspace",
+          kind: "pattern",
+          content: `【${ctx.identity.memberNo}】董事长${input.signal === "up" ? "认可" : "否定"}决策 ${input.eventId}${input.note ? `：${input.note}` : ""}`,
+          sourceEvents: [ev.eventId, input.eventId],
+        }, new MockEmbedder());
         await client.query("COMMIT");
-      } catch (e) {
+      } catch (err) {
         await client.query("ROLLBACK").catch(() => undefined);
-        throw e;
+        throw err;
       } finally {
         client.release();
       }

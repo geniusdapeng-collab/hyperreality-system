@@ -3,10 +3,18 @@
  * 集成用例仅在 RUN_DB_TESTS=1 且 DATABASE_GATEWAY_URL 可达时运行（CI/沙箱实测口径），
  * 否则自动跳过——单元用例永远全量跑。
  */
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { maskDeep, maskText } from "./pii.js";
-import { checkHighRiskAuthorization, checkPermission, GatewayReject, isWriteAction } from "./gateway.js";
-import { canonicalJson, eventHash, GENESIS_HASH } from "./events.js";
+import {
+  checkHighRiskAuthorization,
+  checkPermission,
+  GatewayReject,
+  isWriteAction,
+  SYSTEM_ACTOR_WHITELIST,
+  type GatewayQueryable,
+} from "./gateway.js";
+import { canonicalJson, eventHash, GENESIS_HASH, isReplayEventId } from "./events.js";
 
 const draft = (action: string, whoId = "pricing-agent") => ({
   who: { type: "agent" as const, id: whoId, version: "v2.3" },
@@ -21,10 +29,28 @@ describe("PII 脱敏（瀑布段②）", () => {
     const a = maskText("客人电话 13812345678，邮箱 a.b@c.com");
     expect(a.hits).toBe(2);
     expect(a.text).not.toContain("13812345678");
-    expect(a.text).toMatch(/\[PII:PHONE:[0-9a-f]{8}\]/);
+    expect(a.text).toMatch(/\[PII:PHONE:[0-9a-f]{12}\]/);
     const b = maskText("回访 13812345678");
     // 同值同占位（可关联、无明文）
-    expect(b.text).toContain(a.text.match(/\[PII:PHONE:[0-9a-f]{8}\]/)![0]);
+    expect(b.text).toContain(a.text.match(/\[PII:PHONE:[0-9a-f]{12}\]/)![0]);
+  });
+
+  it("M2-PII：占位符为 HMAC-SHA256（≥12 hex，带盐不可彩虹表反推）", () => {
+    const r = maskText("电话 13812345678");
+    const m = r.text.match(/\[PII:PHONE:([0-9a-f]+)\]/)!;
+    expect(m[1]!.length).toBeGreaterThanOrEqual(12);
+    // 无盐 sha256 前缀不得命中（旧协议 8 位 hex 直散列已被 HMAC 取代）
+    expect(m[1]).not.toBe(createHash("sha256").update("13812345678", "utf-8").digest("hex").slice(0, 12));
+  });
+
+  it("M2-PII：分段手机号（138 0000 0000）与分隔符证件号命中", () => {
+    const p = maskText("客人留电 138 0000 0000 请回拨");
+    expect(p.hits).toBe(1);
+    expect(p.text).not.toContain("0000 0000");
+    expect(p.text).toMatch(/\[PII:PHONE:[0-9a-f]{12}\]/);
+    const d = maskText("证件 110101 19900307 7758 登记");
+    expect(d.text).toMatch(/\[PII:IDCARD:[0-9a-f]{12}\]/);
+    expect(d.text).not.toContain("19900307");
   });
 
   it("身份证号优先于银行卡，不误伤价格数字", () => {
@@ -59,13 +85,82 @@ describe("权限段①（F2.10/L9.1 复查位）", () => {
     ).not.toThrow();
     expect(() => checkPermission({ id: "inspection-agent", type: "agent", readonly: true }, draft("inspection.scan", "inspection-agent"))).not.toThrow();
   });
+
+  it("M5：白名单系统组件豁免段①；未知 system 身份按普通身份走全检查", () => {
+    const sysDraft = (whoId: string) => ({
+      ...draft("price.adjust", whoId),
+      who: { type: "system" as const, id: whoId },
+    });
+    // 白名单内已知系统组件（night-shift/captain/service-c 等）走系统通道
+    expect(SYSTEM_ACTOR_WHITELIST).toEqual(
+      expect.arrayContaining(["system", "model-router", "im-channels", "review-console", "night-shift", "captain", "service-c"]),
+    );
+    expect(() => checkPermission({ id: "night-shift", type: "system" }, sysDraft("night-shift"))).not.toThrow();
+    // 伪造 system 身份（不在白名单）写动作：按普通身份全检查——无 fence_bindings 必拒
+    expect(() => checkPermission({ id: "evil-system", type: "system" }, sysDraft("evil-system"))).toThrow(/fence_bindings/);
+    // 只读动作仍放行（全检查中的只读豁免）
+    const roDraft = { ...draft("inspection.scan", "evil-system"), who: { type: "system" as const, id: "evil-system" } };
+    expect(() => checkPermission({ id: "evil-system", type: "system" }, roDraft)).not.toThrow();
+  });
 });
 
-describe("高风险授权段③（L3.5）", () => {
-  it("高危 Agent 写动作缺授权引用被拒，带引用放行", () => {
-    const desktop = { id: "desktop-agent", type: "agent" as const, highRisk: true, fenceBindings: ["R2"] };
-    expect(() => checkHighRiskAuthorization(desktop, draft("desktop.gui", "desktop-agent"))).toThrow(/L3\.5/);
-    expect(() => checkHighRiskAuthorization(desktop, draft("desktop.gui", "desktop-agent"), "apr-e-8888")).not.toThrow();
+describe("高风险授权段③（L3.5 + P1-8 验真）", () => {
+  const desktop = { id: "desktop-agent", type: "agent" as const, highRisk: true, fenceBindings: ["R2"] };
+  const scope = { tenantId: "tenant-demo", workspaceId: "ws-yunqi" };
+  /** 审批表桩：模拟 approvals 查询结果（P1-8 段③已改为查表验真） */
+  const stubDb = (rows: Array<{ status: string; snapshot: unknown }>) =>
+    ({ query: async () => ({ rows }) }) as unknown as GatewayQueryable;
+  const d = () => draft("desktop.gui", "desktop-agent");
+
+  it("缺授权引用被拒（L3.5）", async () => {
+    await expect(checkHighRiskAuthorization(stubDb([]), scope, desktop, d())).rejects.toThrow(/L3\.5/);
+  });
+
+  it("伪造引用查无此行被拒（P1-8）", async () => {
+    await expect(checkHighRiskAuthorization(stubDb([]), scope, desktop, d(), "apr-forged")).rejects.toThrow(/不存在/);
+  });
+
+  it("非 approved 状态被拒（pending/rejected 均不放行）", async () => {
+    await expect(
+      checkHighRiskAuthorization(stubDb([{ status: "pending", snapshot: {} }]), scope, desktop, d(), "apr-1"),
+    ).rejects.toThrow(/非 approved/);
+  });
+
+  it("已过期审批被拒（snapshot.expires_at 已过）", async () => {
+    const snapshot = { expires_at: "2020-01-01T00:00:00.000Z" };
+    await expect(
+      checkHighRiskAuthorization(stubDb([{ status: "approved", snapshot }]), scope, desktop, d(), "apr-1"),
+    ).rejects.toThrow(/过期/);
+  });
+
+  it("绑定对象/动作不符被拒；相符或通用授权（无绑定字段）放行", async () => {
+    await expect(
+      checkHighRiskAuthorization(stubDb([{ status: "approved", snapshot: { object_type: "order" } }]), scope, desktop, d(), "apr-1"),
+    ).rejects.toThrow(/不符/);
+    await expect(
+      checkHighRiskAuthorization(
+        stubDb([{ status: "approved", snapshot: { object_type: "room_price", action: "desktop.gui" } }]),
+        scope, desktop, d(), "apr-1",
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      checkHighRiskAuthorization(stubDb([{ status: "approved", snapshot: {} }]), scope, desktop, d(), "apr-1"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("非高危身份不查库直接放行", async () => {
+    const human = { id: "MEM-001", type: "human" as const };
+    const hDraft = { ...draft("price.adjust", "MEM-001"), who: { type: "human" as const, id: "MEM-001" } };
+    await expect(checkHighRiskAuthorization(stubDb([]), scope, human, hDraft)).resolves.toBeUndefined();
+  });
+});
+
+describe("回放通道命名空间（P0-3）", () => {
+  it("E-SEED-/E-RPL- 前缀识别；普通 E-<digits> 与非 E 前缀一律不算回放 ID", () => {
+    expect(isReplayEventId("E-RPL-abc")).toBe(true);
+    expect(isReplayEventId("E-SEED-8801")).toBe(true);
+    expect(isReplayEventId("E-8801")).toBe(false);
+    expect(isReplayEventId("CUSTOM-1")).toBe(false);
   });
 });
 
@@ -140,48 +235,136 @@ d("PG 集成（H-2/L1.4：幂等丢弃、哈希链序）", async () => {
     }
   });
 
-  it("重复 event_id 写入幂等丢弃不报错（L1.4）", async () => {
-    const ev = { ...draft("price.adjust"), event_id: "E-8801" } as const;
-    // E-8801 为种子事件，重复写入必须 deduped=true 且不抛错
-    const r = await gatewayAppendIdempotent(pool, ctx, ev as never);
-    expect(r.deduped).toBe(true);
-    expect(r.eventId).toBe("E-8801");
+  it("重复 event_id 写入幂等丢弃不报错（L1.4；P0-3 回放前缀空间）", async () => {
+    // P0-3：回放通道自选 ID 必须 E-RPL-/E-SEED- 前缀；同 payload 重复写入 deduped=true 不抛错
+    const ev = { ...draft("price.adjust"), event_id: `E-RPL-${Date.now().toString(36)}` } as const;
+    const r1 = await gatewayAppendIdempotent(pool, ctx, ev as never);
+    expect(r1.deduped).toBe(false);
+    const r2 = await gatewayAppendIdempotent(pool, ctx, ev as never);
+    expect(r2.deduped).toBe(true);
+    expect(r2.eventId).toBe(ev.event_id);
+    // #4/M2：deduped 返回 DB 中已存在事件的真实 seq/hash（事务内回查）
+    expect(r2.seq).toBe(r1.seq);
+    expect(r2.hash).toBe(r1.hash);
   });
 
-  it("#26 appendEvent 幂等丢弃返回 DB 真实 hash/seq（不返回新算值）", async () => {
-    // 独立租户隔离构造（不碰种子事件库——append-only 不可清理）：
-    // 占位行用 CTE 取 nextval 同时决定 seq 与 event_id=E-(seq+1)——appendEvent 读链尾后
-    // 分配的 event_id 恰为 E-(seq+1)，与占位行撞上 ON CONFLICT → deduped 分支；hash 用哨兵值
+  it("P0-3：回放通道 event_id 无前缀（E-8801 等序列空间）一律拒绝", async () => {
+    const ev = { ...draft("price.adjust"), event_id: "E-8801" } as const;
+    await expect(gatewayAppendIdempotent(pool, ctx, ev as never)).rejects.toThrow(/前缀空间/);
+  });
+
+  it("P0-3：同 event_id 不同 payload 抢占攻击被拒（append_event_insert 比对 payload hash）", async () => {
+    // 确定性构造：经回放通道（E-RPL- 前缀）以同一 event_id 写两次，第二次换 payload ——
+    // DB 函数比对 payload hash 不一致 → 抢占攻击拒绝。
+    // 此前用「抢注下一个全局序列号」构造：全量并行跑批时其他测试文件并发消耗
+    // biz_events_eid_seq，哨兵占位号与实际分配号错位，用例随机失败；
+    // 回放通道与序列分配走同一个 append_event_insert 比对逻辑，路径等价且无竞态。
     const iso = { tenantId: `tenant-t26-${Date.now().toString(36)}`, workspaceId: "ws-t26" };
     const isoCtx = { ...iso, actor: ctx.actor };
-    await gatewayAppend(pool, isoCtx, draft("price.adjust")); // iso 租户首条（起链）
-    const sentinelHash = "sentinel-hash-26";
-    const c = await pool.connect();
-    let occupiedId = "";
+    const attackId = `E-RPL-p03-${Date.now().toString(36)}`;
+    const first = { ...draft("price.adjust"), event_id: attackId } as const;
+    const r1 = await gatewayAppendIdempotent(pool, isoCtx, first as never);
+    expect(r1.deduped).toBe(false);
+    // 同 id 不同 payload → 抢占攻击拒绝（不再静默 deduped）
+    const hijack = { ...draft("order.refund"), event_id: attackId } as const;
+    await expect(gatewayAppendIdempotent(pool, isoCtx, hijack as never)).rejects.toThrow(/抢占攻击/);
+    // 对照：同 id 同 payload 仍是幂等丢弃——拒绝的是 payload 不一致，而非重复本身（L1.4）
+    const r2 = await gatewayAppendIdempotent(pool, isoCtx, first as never);
+    expect(r2.deduped).toBe(true);
+  });
+
+  it("L6：gatewayAppendIdempotent 段序统一先 zod 后权限（坏 payload 先报附录 E）", async () => {
+    // actor/who 不一致（权限必拒）+ payload 残缺（zod 必拒）→ 必须先抛 zod 校验错误
+    const bad = { event_id: "E-RPL-l6", who: { type: "agent", id: "someone-else" } } as never;
+    await expect(gatewayAppendIdempotent(pool, ctx, bad)).rejects.toThrow(/附录 E/);
+  });
+
+  it("P1-8：伪造/状态不符/对象不符的 approvalRef 全拒；真实 approved 审批放行", async () => {
+    const desktopCtx = {
+      ...scope,
+      actor: { id: "desktop-agent", type: "agent" as const, highRisk: true, fenceBindings: ["R2"] },
+    };
+    const ddraft = (objId: string) => ({
+      who: { type: "agent" as const, id: "desktop-agent" },
+      context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "inapp" },
+      object: { type: "room_price", id: objId },
+      decision: { action: "desktop.gui" },
+      rule_impact: [],
+    });
+    const tag = Date.now().toString(36);
+    const insApr = async (id: string, status: string, snapshot: unknown) => {
+      const c = await pool.connect();
+      try {
+        await c.query("BEGIN");
+        await c.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        await c.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        await c.query(
+          `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot)
+           VALUES ($1,$2,$3,$4,'inapp',$5,$6)`,
+          // approvals 有 UNIQUE(event_id, channel)：每行用独立 event_id 避免互撞
+          [id, scope.tenantId, scope.workspaceId, `E-RPL-${id}`, status, JSON.stringify(snapshot)],
+        );
+        await c.query("COMMIT");
+      } catch (err) {
+        await c.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        c.release();
+      }
+    };
     try {
-      await c.query("BEGIN");
-      await c.query("SELECT set_config('app.workspace_id', $1, true)", [iso.workspaceId]);
-      await c.query("SELECT set_config('app.tenant_id', $1, true)", [iso.tenantId]);
-      const ins = await c.query<{ event_id: string }>(
-        `WITH s AS (SELECT nextval('biz_events_seq_seq') AS v)
-         INSERT INTO biz_events (seq, event_id, tenant_id, workspace_id, payload, prev_hash, hash)
-         SELECT s.v, 'E-' || (s.v + 1), $1, $2, $3, $4, $5 FROM s
-         RETURNING event_id`,
-        [iso.tenantId, iso.workspaceId, JSON.stringify({ marker: "occupy-26" }), "occupy-prev", sentinelHash],
-      );
-      occupiedId = ins.rows[0]!.event_id;
-      await c.query("COMMIT");
-    } catch (err) {
-      await c.query("ROLLBACK").catch(() => undefined);
-      throw err;
+      // 伪造引用（查无此行）→ 拒
+      await expect(
+        gatewayAppend(pool, { ...desktopCtx, approvalRef: `apr-p18-forged-${tag}` }, ddraft("RT-P18")),
+      ).rejects.toThrow(/不存在/);
+      // 真实 pending → 拒
+      await insApr(`apr-p18-pending-${tag}`, "pending", {});
+      await expect(
+        gatewayAppend(pool, { ...desktopCtx, approvalRef: `apr-p18-pending-${tag}` }, ddraft("RT-P18")),
+      ).rejects.toThrow(/非 approved/);
+      // approved 但已过期 → 拒
+      await insApr(`apr-p18-exp-${tag}`, "approved", { expires_at: "2020-01-01T00:00:00.000Z" });
+      await expect(
+        gatewayAppend(pool, { ...desktopCtx, approvalRef: `apr-p18-exp-${tag}` }, ddraft("RT-P18")),
+      ).rejects.toThrow(/过期/);
+      // approved 但绑定对象类型不符 → 拒
+      await insApr(`apr-p18-mis-${tag}`, "approved", { object_type: "order" });
+      await expect(
+        gatewayAppend(pool, { ...desktopCtx, approvalRef: `apr-p18-mis-${tag}` }, ddraft("RT-P18")),
+      ).rejects.toThrow(/不符/);
+      // 真实 approved 且绑定相符、未过期 → 放行
+      await insApr(`apr-p18-ok-${tag}`, "approved", {
+        object_type: "room_price",
+        action: "desktop.gui",
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      });
+      const ok = await gatewayAppend(pool, { ...desktopCtx, approvalRef: `apr-p18-ok-${tag}` }, ddraft("RT-P18"));
+      expect(ok.deduped).toBe(false);
+      expect(ok.eventId).toMatch(/^E-\d+$/);
     } finally {
-      c.release();
+      const c = await pool.connect();
+      try {
+        await c.query("BEGIN");
+        await c.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        await c.query(`DELETE FROM approvals WHERE approval_id LIKE 'apr-p18-%'`);
+        await c.query("COMMIT");
+      } finally {
+        c.release();
+      }
     }
-    // appendEvent 分配同一 event_id → ON CONFLICT 丢弃 → 必须返回 DB 中真实 hash/seq
-    const r = await gatewayAppend(pool, isoCtx, draft("price.adjust"));
-    expect(r.eventId).toBe(occupiedId);
-    expect(r.deduped).toBe(true);
-    expect(r.hash).toBe(sentinelHash); // #26：此前会返回按本 payload 新算的 hash（断链风险）
+  });
+
+  it("M5：白名单系统组件写动作放行（系统通道豁免段①）", async () => {
+    const sysCtx = { ...scope, actor: { id: "night-shift", type: "system" as const } };
+    const sysDraft = {
+      who: { type: "system" as const, id: "night-shift" },
+      context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "inapp" },
+      object: { type: "suite", id: `m5-${Date.now().toString(36)}` },
+      decision: { action: "price.adjust" },
+      rule_impact: [],
+    };
+    const r = await gatewayAppend(pool, sysCtx, sysDraft);
+    expect(r.deduped).toBe(false);
   });
 
   it("#35 actor 与 who 身份分叉被拒（防伪造留痕），且不落库", async () => {

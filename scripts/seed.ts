@@ -1,6 +1,5 @@
 /**
  * A5 · 演示种子数据（PRD V2.5 P 章示例场景：云栖酒店）
- * ⚠️ 底座回归专用·酒店演示集，客户演示请用 seed-video.ts / demo-video.ts
  * 用法：pnpm db:seed（读取 .env；幂等，可重复执行）
  *
  * 内容：demo 租户 / 云栖酒店工作区 / 3 人类成员 / 7 Agent preset 实例 /
@@ -9,8 +8,13 @@
  *
  * 纪律：
  *  - 事件只经 workloom_gateway 角色写入（F1.2），其余表走 owner 种子连接（D10）；
- *  - 每条事件写入前过 safeParseBusinessEvent（附录 E 校验）；
- *  - 幂等：组织模型 ON CONFLICT DO NOTHING；事件 UNIQUE(tenant_id,event_id) 冲突丢弃（L1.4）；
+ *  - 事件一律走 append_event_insert 特权函数（P0-3：不再裸 INSERT biz_events）；
+ *    种子 event_id 用 E-SEED- 前缀（回放/种子独立命名空间，与序列分配的 E-<digits> 硬隔离）；
+ *  - 每条事件写入前过 zod（safeParseReplayAwareEvent：E-SEED- 前缀经占位缝过同一附录 E schema）；
+ *  - 幂等：组织模型 ON CONFLICT DO NOTHING；事件先查存在再写（L1.4 确定性幂等——
+ *    演示时间轴含实时时钟，重跑 payload 必然不同，直撞 append_event_insert 会按
+ *    P0-3 抢占攻击拒写，故存在即跳过、不触发 md5 冲突比对）；
+ *  - GUC 一律 set_config(..., is_local=true) 且包在显式事务内（L2：不留会话级残留）；
  *  - 验收：写入后回读 100 条事件逐条过 zod，五元字段完整率必须 100%（附录 H-1）。
  */
 import { readFileSync, readdirSync } from "node:fs";
@@ -18,11 +22,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import YAML from "yaml";
-import { safeParseBusinessEvent } from "@workloom/shared";
 // #32 修复：哈希链统一生产口径（events.ts 的 canonicalJson/eventHash）——
 // 此前种子用 JSON.stringify 键序算哈希，与生产 canonicalJson 口径不一致，
 // 种子 100 条事件用生产验证器重算全部不符（链上两种算法混杂）
-import { eventHash } from "@workloom/base/workdata";
+// P0-3 续：种子 ID 走 E-SEED- 前缀，zod 经 safeParseReplayAwareEvent 占位缝校验
+import { eventHash, safeParseReplayAwareEvent } from "@workloom/base/workdata";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -49,7 +53,7 @@ const MEMBERS = [
   { id: "MEM-003", name: "李前台", role: "readonly" },
 ] as const;
 
-const EVENT_BASE = 8800; // 事件编号 E-8801 起（PRD 展示口径）
+const EVENT_BASE = 8800; // 事件编号 E-SEED-8801 起（PRD 展示口径 + P0-3 种子前缀空间）
 const EVENT_COUNT = 100;
 const GENESIS_HASH = "GENESIS";
 
@@ -272,7 +276,7 @@ const CHANNELS = ["美团", "携程", "飞猪"] as const;
 
 /** 生成一条剧本事件（按序号轮转场景，保证 R1–R6 均有命中样本） */
 function makeEvent(i: number, time: Date, presets: Preset[]): SeedEvent {
-  const id = `E-${EVENT_BASE + i}`;
+  const id = `E-SEED-${EVENT_BASE + i}`;
   const scene = i % 10;
   const baseCtx = {
     tenant_id: TENANT_ID,
@@ -585,19 +589,26 @@ async function main(): Promise<void> {
   // 官方技能 + 安装绑定（F8.1/F8.2）
   for (const s of skillsDocs) {
     const skillId = `skill-${s.name}`;
+    // 技能装载幂等升级：ON CONFLICT 版本比对——版本变化才升级 body/fence_bindings，
+    // 同版本重跑不覆盖（避免无谓行 churn；#17 纪律下运行时读安装快照，此更新不影响已装并集）
     await q(
       `INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized)
        VALUES ($1,'official','hotel',$2,'1.0.0',$3,$4,$5,false)
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body, version = EXCLUDED.version,
+                                      fence_bindings = EXCLUDED.fence_bindings
+       WHERE skills.version IS DISTINCT FROM EXCLUDED.version`,
       [skillId, s.name, s.description, JSON.stringify(s.fenceBindings), s.body],
     );
+    // 安装行与运行时 installSkill 同口径（#17 安装时快照 + D15-⑤ installed_version）：
+    // 快照/版本从 skills 表取，保证 seed 与运行时两条路径的围栏并集计算一致
     await q(
-      `INSERT INTO skill_installs (skill_id, workspace_id, installed_by)
-       VALUES ($1,$2,'MEM-001') ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
+      `INSERT INTO skill_installs (skill_id, workspace_id, installed_by, fence_bindings_snapshot, installed_version)
+       SELECT s.id, $2, 'MEM-001', s.fence_bindings, s.version FROM skills s WHERE s.id = $1
+       ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
       [skillId, WS_ID],
     );
   }
-  console.log(`✓ 官方技能 ×${skillsDocs.length} 已安装（围栏绑定随安装生效）`);
+  console.log(`✓ 官方技能 ×${skillsDocs.length} 已安装（围栏绑定随安装生效，安装快照已落）`);
 
   // 团队技能 + 行业共享技能（P6 装备库三区演示数据；F8.1 三级体系；幂等 ON CONFLICT）
   await q(
@@ -609,9 +620,12 @@ async function main(): Promise<void> {
              false)
      ON CONFLICT (id) DO NOTHING`,
   );
+  // 团队技能安装行同样补快照/版本（与运行时 installSkill 同口径）
   await q(
-    `INSERT INTO skill_installs (skill_id, workspace_id, installed_by)
-     VALUES ('skill-t-ws-yunqi-weekly-ops-review',$1,'MEM-002') ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
+    `INSERT INTO skill_installs (skill_id, workspace_id, installed_by, fence_bindings_snapshot, installed_version)
+     SELECT s.id, $1, 'MEM-002', s.fence_bindings, s.version FROM skills s
+     WHERE s.id = 'skill-t-ws-yunqi-weekly-ops-review'
+     ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
     [WS_ID],
   );
   await q(
@@ -673,16 +687,20 @@ async function main(): Promise<void> {
   console.log("✓ 凭据引用 ×2（占位密文，事件只记引用 ID）");
 
   // —— 事件写入：切 gateway 角色（F1.2 唯一可 INSERT biz_events）
+  // L2：GUC 一律 is_local=true 且包在显式事务内（事务提交即失效，不留会话级残留）；
+  // 后续 approvals/night_runs/org_memory/C 端运行态等 gateway 段写入同在此事务内。
   await owner.end();
   const gw = new pg.Client({ connectionString: GATEWAY_URL });
   await gw.connect();
-  await gw.query("SELECT set_config('app.workspace_id', $1, false)", [WS_ID]);
-  await gw.query("SELECT set_config('app.tenant_id', $1, false)", [TENANT_ID]);
+  await gw.query("BEGIN");
+  await gw.query("SELECT set_config('app.workspace_id', $1, true)", [WS_ID]);
+  await gw.query("SELECT set_config('app.tenant_id', $1, true)", [TENANT_ID]);
 
-  // 哈希链续接（幂等重跑时接在已有链尾之后；链内已存在的事件靠 UNIQUE 丢弃）
+  // 哈希链续接（幂等重跑时接在已有链尾之后；链内已存在的事件按存在预检跳过）
+  // 链粒度 = tenant+workspace（P1-5 与 append_event_insert 同口径）
   const last = await gw.query(
-    `SELECT hash FROM biz_events WHERE tenant_id=$1 ORDER BY seq DESC LIMIT 1`,
-    [TENANT_ID],
+    `SELECT hash FROM biz_events WHERE tenant_id=$1 AND workspace_id=$2 ORDER BY seq DESC LIMIT 1`,
+    [TENANT_ID, WS_ID],
   );
   let prevHash = (last.rows[0]?.hash as string) ?? GENESIS_HASH;
 
@@ -691,32 +709,80 @@ async function main(): Promise<void> {
   const sessionOf = (scene: number): string | null =>
     scene === 0 || scene === 7 ? "T-101" : scene === 1 || scene === 4 ? "T-102" : scene === 8 ? "T-103" : null;
 
+  /** 幂等存在预检（L1.4 确定性口径）：同 (tenant_id,event_id) 已存在即跳过——
+   *  演示时间轴含实时时钟，重跑同 ID 事件 payload 必然不同，直撞 append_event_insert
+   *  会触发 P0-3 md5 冲突比对按抢占攻击拒写；种子语义是「已种即跳过」，故先查后写。 */
+  const eventExists = async (eventId: string): Promise<boolean> => {
+    const r = await gw.query(
+      `SELECT 1 FROM biz_events WHERE tenant_id=$1 AND event_id=$2`,
+      [TENANT_ID, eventId],
+    );
+    return (r.rowCount ?? 0) > 0;
+  };
+
   let inserted = 0;
   let dupSkipped = 0;
   for (let i = 1; i <= EVENT_COUNT; i++) {
     const ev = makeEvent(i, times[i - 1] as Date, presets);
-    const checked = safeParseBusinessEvent(ev);
+    // E-SEED- 前缀经回放占位缝过附录 E 校验（结构强度与 safeParseBusinessEvent 一致）
+    const checked = safeParseReplayAwareEvent(ev as never);
     if (!checked.success) {
       throw new Error(`种子事件 ${ev.event_id} 未过附录 E 校验：${checked.error.message}`);
+    }
+    if (await eventExists(ev.event_id)) {
+      dupSkipped += 1;
+      continue;
     }
     // #32：哈希输入与存库 payload 均为 zod parse 后的 checked.data（与 appendEvent 逐字节一致）
     const payload = JSON.stringify(checked.data);
     const hash = eventHash(prevHash, checked.data);
-    const res = await gw.query(
-      `INSERT INTO biz_events (event_id, tenant_id, workspace_id, session_id, payload, prev_hash, hash, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT (tenant_id, event_id) DO NOTHING
-       RETURNING seq`,
+    // P0-3：走 append_event_insert 特权函数（不再裸 INSERT）——DB 层自校验
+    // GUC 上下文一致性与链式接龙（断链拒写），冲突按 md5 比对（此处有存在预检兜底不会触达）
+    const res = await gw.query<{ seq: string | null; inserted: boolean }>(
+      `SELECT * FROM append_event_insert($1,$2,$3,$4,$5,$6,$7,$8)`,
       [ev.event_id, TENANT_ID, WS_ID, sessionOf(i % 10), payload, prevHash, hash, ev.context.time],
     );
-    if (res.rowCount && res.rowCount > 0) {
+    if (res.rows[0]?.inserted) {
       prevHash = hash; // 只有真实落库的事件才进链
       inserted += 1;
     } else {
-      dupSkipped += 1;
+      dupSkipped += 1; // 并发下被同 payload 抢先落库（理论路径，按幂等丢弃计）
     }
   }
+
   console.log(`✓ 五元事件：新写入 ${inserted} 条，幂等丢弃 ${dupSkipped} 条（L1.4）`);
+
+  // CEO 晨报事件（剧场汇报气泡/董事长视图简报流的数据源；幂等键 E-SEED-8999）
+  {
+    const ev = {
+      event_id: "E-SEED-8999",
+      who: { type: "agent", id: "captain", version: "v1.0" },
+      context: { tenant_id: TENANT_ID, workspace_id: WS_ID, time: new Date().toISOString(), stage: "stable", store: WS_NAME },
+      object: { type: "workspace", id: WS_ID, label: WS_NAME },
+      decision: {
+        action: "ceo.briefing",
+        after: { text: "董事长，早报已备：昨夜班组完成 14 项作业（评论/巡检/对账各线正常），1 件差评处置请您拍板；本周 OCC 与 RevPAR 趋势见节拍控制台。试用期边界降一档执行中。" },
+        basis: ["CEO Loop 日频晨报 08:30"],
+      },
+      rule_impact: [],
+      receipt: { synced: true, snapshot_uri: "data/snapshots/e-seed-8999.png", verified_at: new Date().toISOString() },
+      model_trace: { model_id: "mock-hotel-001", tier: "standard", window: "peak", credits: 1 },
+    };
+    const checked = safeParseReplayAwareEvent(ev as never);
+    if (!checked.success) throw new Error(`晨报事件未过校验：${checked.error.message}`);
+    if (await eventExists(ev.event_id)) {
+      console.log("✓ CEO 晨报事件（已存在，幂等跳过）");
+    } else {
+      const payload = JSON.stringify(checked.data);
+      const hash = eventHash(prevHash, checked.data);
+      const res = await gw.query<{ seq: string | null; inserted: boolean }>(
+        `SELECT * FROM append_event_insert($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [ev.event_id, TENANT_ID, WS_ID, null, payload, prevHash, hash, ev.context.time],
+      );
+      if (res.rows[0]?.inserted) prevHash = hash;
+      console.log("✓ CEO 晨报事件（剧场汇报气泡数据源）");
+    }
+  }
 
   // 审批样例：取最近两条 review 结果事件挂审批（一 pending 一 approved）
   const reviewEvents = await gw.query(
@@ -762,27 +828,29 @@ async function main(): Promise<void> {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const runDate = yesterday.toISOString().slice(0, 10);
+  // 0013 口径：班次 id = nr-<workspaceId>-<runDate>（PK 已改 (workspace_id, run_date)，
+  // id 保留唯一约束，ON CONFLICT (id) 幂等不变）
   await gw.query(
     `INSERT INTO night_runs (id, workspace_id, run_date, status, fence_snapshot_version, candidate_count, stats, started_at, package_event_id)
      VALUES ($1,$2,$3,'package_generated',$4,$5,$6,$7,$8)
      ON CONFLICT (id) DO NOTHING`,
     [
-      `nr-${runDate}`,
+      `nr-${WS_ID}-${runDate}`,
       WS_ID,
       runDate,
       FENCE_VERSION,
       14,
       JSON.stringify({ done: 9, pending: 3, need_human: 2, credits_used: 96, credits_est: 118 }),
       new Date(yesterday.setHours(22, 0, 0, 0)).toISOString(),
-      `E-${EVENT_BASE + EVENT_COUNT}`,
+      `E-SEED-${EVENT_BASE + EVENT_COUNT}`,
     ],
   );
-  console.log(`✓ 夜班班次 nr-${runDate}（package_generated，围栏快照 ${FENCE_VERSION}）`);
+  console.log(`✓ 夜班班次 nr-${WS_ID}-${runDate}（package_generated，围栏快照 ${FENCE_VERSION}）`);
 
-  // 组织记忆 + 归因（F1.4）
+  // 组织记忆 + 归因（F1.4；来源事件为种子段 E-SEED- 前缀 ID）
   const memories = [
-    { id: "mem-occ-friday", kind: "pattern", content: "周五晚大床房需求弹性高，18:00 前提价转化损失最小", source: ["E-8801"] },
-    { id: "mem-review-sop", kind: "sop", content: "差评回复结构：致歉→核实→已采取措施→改进承诺，不承诺档案外补偿", source: ["E-8802"] },
+    { id: "mem-occ-friday", kind: "pattern", content: "周五晚大床房需求弹性高，18:00 前提价转化损失最小", source: ["E-SEED-8801"] },
+    { id: "mem-review-sop", kind: "sop", content: "差评回复结构：致歉→核实→已采取措施→改进承诺，不承诺档案外补偿", source: ["E-SEED-8802"] },
   ];
   for (const m of memories) {
     await gw.query(
@@ -792,9 +860,9 @@ async function main(): Promise<void> {
       [m.id, TENANT_ID, WS_ID, m.kind, m.content, m.source],
     );
     await gw.query(
-      `INSERT INTO memory_usage (memory_id, event_id) VALUES ($1,$2)
+      `INSERT INTO memory_usage (memory_id, event_id, workspace_id) VALUES ($1,$2,$3)
        ON CONFLICT (memory_id, event_id) DO NOTHING`,
-      [m.id, m.source[0]],
+      [m.id, m.source[0], WS_ID],
     );
   }
   console.log(`✓ 组织记忆 ×${memories.length}（含来源事件归因）`);
@@ -804,11 +872,12 @@ async function main(): Promise<void> {
     `SELECT payload FROM biz_events
      WHERE tenant_id=$1 AND workspace_id=$2 AND event_id >= $3 AND event_id <= $4
      ORDER BY seq`,
-    [TENANT_ID, WS_ID, `E-${EVENT_BASE + 1}`, `E-${EVENT_BASE + EVENT_COUNT}`],
+    [TENANT_ID, WS_ID, `E-SEED-${EVENT_BASE + 1}`, `E-SEED-${EVENT_BASE + EVENT_COUNT}`],
   );
   let valid = 0;
   for (const row of check.rows) {
-    if (safeParseBusinessEvent(row.payload).success) valid += 1;
+    // E-SEED- 前缀经回放占位缝过同一附录 E schema
+    if (safeParseReplayAwareEvent(row.payload as never).success) valid += 1;
   }
   const rate = check.rowCount ? valid / check.rowCount : 0;
   console.log(`✓ 验收（H-1）：回读 ${check.rowCount} 条，五元字段完整 ${valid} 条，完整率 ${(rate * 100).toFixed(1)}%`);
@@ -962,6 +1031,9 @@ async function main(): Promise<void> {
   }
   console.log("✓ AI 服务前台运行态：C 端用户×2 / 知识库集合×2+官网源 / 会话×2 / 工单×3（全状态+时间线）/ 通知×3");
 
+  // L2 收口：显式 COMMIT——本事务内全部 gateway 段写入（事件/审批/夜班/记忆/C 端运行态）
+  // 同一提交；若中途抛错，main 捕获退出时连接关闭，PG 自动 ROLLBACK 不留半提交态
+  await gw.query("COMMIT");
   await gw.end();
   console.log("种子数据完成 ✅（云栖酒店演示数据集就绪）");
 }

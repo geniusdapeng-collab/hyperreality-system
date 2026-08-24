@@ -76,6 +76,23 @@ export async function resolveMemberByOpenid(
   });
 }
 
+/** 反向查询：会话成员在该通道绑定的 openid（P0-1 未验签降级用：仅允许本人操作） */
+export async function boundOpenidOfMember(
+  app: pg.Pool,
+  scope: { tenantId: string; workspaceId: string },
+  channel: ApprovalChannel,
+  memberNo: string,
+): Promise<string | null> {
+  return scoped(app, scope, async (c) => {
+    const r = await c.query<{ openid: string | null }>(
+      `SELECT im_openids->>$2 AS openid FROM members
+       WHERE workspace_id=$1 AND member_no=$3`,
+      [scope.workspaceId, channel, memberNo],
+    );
+    return r.rows[0]?.openid ?? null;
+  });
+}
+
 /** 入站归一化校验（纯函数，可单测；坏消息直接拒，不落库） */
 export function validateInbound(msg: InboundMessage): void {
   getChannel(msg.channel); // 未启用/未知通道在此抛 ChannelError

@@ -151,6 +151,8 @@ export const memoryUsage = pgTable(
     memoryId: text("memory_id").notNull().references(() => orgMemory.memoryId),
     eventId: text("event_id").notNull(),
     usedAt: timestamp("used_at", { withTimezone: true }).notNull().defaultNow(),
+    /** M3/M4：RLS 入列（见 0013 迁移；历史行可为 NULL，新写入必带） */
+    workspaceId: text("workspace_id"),
   },
   (t) => [primaryKey({ columns: [t.memoryId, t.eventId] })],
 );

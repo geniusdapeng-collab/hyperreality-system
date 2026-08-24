@@ -11,10 +11,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router, scopeOf, writeProcedure } from "../trpc/context.js";
 import {
-  createCollection, listCollections, listDocuments, setDocumentStatus, upsertDocument,
-  registerSiteSource, crawlAndStructure, diffScan, searchKB,
+  createCollectionOn, listCollections, listDocuments, setDocumentStatusOn, upsertDocumentOn,
+  registerSiteSourceOn, crawlAndStructure, diffScan, searchKB,
 } from "./kb.js";
-import { assignTicket, advanceTicket, completeTicket, listTickets, slaScan, ticketTimeline } from "./ticket.js";
+import { assignTicketOn, advanceTicketOn, completeTicketOn, listTickets, slaScanOn, ticketTimeline } from "./ticket.js";
 import { pushMessage } from "./channels.js";
 import { appendEventOn, serviceTx, svcQuery } from "./events.js";
 import { llmCall } from "./llm.js";
@@ -30,7 +30,8 @@ const kbRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       return serviceTx(scope.workspaceId, async (client, sc) => {
-        const col = await createCollection({ workspaceId: scope.workspaceId, name: input.name, description: input.description });
+        // D16：建集与事件同一 client 同一 COMMIT（createCollectionOn 事务内变体，不再嵌套另开连接）
+        const col = await createCollectionOn(client, { workspaceId: scope.workspaceId, name: input.name, description: input.description });
         await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
           objectType: "kb_collection", objectId: col.id, action: "kb.collection.create",
           after: { name: input.name, description: input.description ?? null },
@@ -56,7 +57,7 @@ const kbRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       return serviceTx(scope.workspaceId, async (client, sc) => {
-        const r = await upsertDocument({ workspaceId: scope.workspaceId, ...input });
+        const r = await upsertDocumentOn(client, { workspaceId: scope.workspaceId, ...input });
         await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
           objectType: "kb_document", objectId: r.documentId, action: "kb.document.upsert",
           after: { title: input.title, version: r.version, chunks: r.chunks, sourceKind: input.sourceKind },
@@ -70,7 +71,7 @@ const kbRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       return serviceTx(scope.workspaceId, async (client, sc) => {
-        await setDocumentStatus({ workspaceId: scope.workspaceId, documentId: input.documentId, status: input.status });
+        await setDocumentStatusOn(client, { workspaceId: scope.workspaceId, documentId: input.documentId, status: input.status });
         await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
           objectType: "kb_document", objectId: input.documentId, action: "kb.document.status",
           after: { status: input.status },
@@ -84,7 +85,7 @@ const kbRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       return serviceTx(scope.workspaceId, async (client, sc) => {
-        const r = await registerSiteSource({ workspaceId: scope.workspaceId, url: input.url });
+        const r = await registerSiteSourceOn(client, { workspaceId: scope.workspaceId, url: input.url });
         await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
           objectType: "kb_site", objectId: r.sourceId, action: "kb.site.register", after: { url: input.url },
         });
@@ -186,12 +187,13 @@ const ticketsRouter = router({
     .input(z.object({ ticketId: z.string(), dept: z.string().optional(), assignee: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
-      const t = await assignTicket({ workspaceId: scope.workspaceId, ...input });
-      await serviceTx(scope.workspaceId, async (client, sc) => {
+      const t = await serviceTx(scope.workspaceId, async (client, sc) => {
+        const t2 = await assignTicketOn(client, { workspaceId: scope.workspaceId, ...input });
         await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
-          objectType: "ticket", objectId: t.id, action: "service.ticket.assign",
-          after: { dept: t.dept, assignee: t.assignee },
+          objectType: "ticket", objectId: t2.id, action: "service.ticket.assign",
+          after: { dept: t2.dept, assignee: t2.assignee },
         });
+        return t2;
       });
       return { ticket: t };
     }),
@@ -203,15 +205,16 @@ const ticketsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
-      const t = await advanceTicket({
-        workspaceId: scope.workspaceId, ticketId: input.ticketId, action: input.action,
-        actorType: "staff", actorId: ctx.identity.memberNo, detail: input.detail,
-      });
-      await serviceTx(scope.workspaceId, async (client, sc) => {
-        await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
-          objectType: "ticket", objectId: t.id, action: "service.ticket.advance",
-          after: { step: input.action, status: t.status, detail: input.detail ?? null },
+      const t = await serviceTx(scope.workspaceId, async (client, sc) => {
+        const t2 = await advanceTicketOn(client, {
+          workspaceId: scope.workspaceId, ticketId: input.ticketId, action: input.action,
+          actorType: "staff", actorId: ctx.identity.memberNo, detail: input.detail,
         });
+        await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
+          objectType: "ticket", objectId: t2.id, action: "service.ticket.advance",
+          after: { step: input.action, status: t2.status, detail: input.detail ?? null },
+        });
+        return t2;
       });
       return { ticket: t };
     }),
@@ -221,15 +224,16 @@ const ticketsRouter = router({
     .input(z.object({ ticketId: z.string(), result: z.string().min(1).max(1000) }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
-      const t = await completeTicket({
-        workspaceId: scope.workspaceId, ticketId: input.ticketId,
-        result: input.result, actorId: ctx.identity.memberNo,
-      });
-      await serviceTx(scope.workspaceId, async (client, sc) => {
+      const t = await serviceTx(scope.workspaceId, async (client, sc) => {
+        const t2 = await completeTicketOn(client, {
+          workspaceId: scope.workspaceId, ticketId: input.ticketId,
+          result: input.result, actorId: ctx.identity.memberNo,
+        });
         await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
-          objectType: "ticket", objectId: t.id, action: "service.ticket.complete",
+          objectType: "ticket", objectId: t2.id, action: "service.ticket.complete",
           after: { result: input.result },
         });
+        return t2;
       });
       if (t.cUserId) {
         await pushMessage({
@@ -243,15 +247,16 @@ const ticketsRouter = router({
   /** SLA 扫描（超时升级；演示手动触发，生产挂定时器） */
   slaScan: writeProcedure.mutation(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
-    const r = await slaScan({ workspaceId: scope.workspaceId });
-    if (r.escalated > 0) {
-      await serviceTx(scope.workspaceId, async (client, sc) => {
+    const r = await serviceTx(scope.workspaceId, async (client, sc) => {
+      const r2 = await slaScanOn(client, { workspaceId: scope.workspaceId });
+      if (r2.escalated > 0) {
         await appendEventOn(client, sc, { id: "sla-scan", type: "system" }, {
           objectType: "ticket", objectId: "batch", action: "service.ticket.escalate",
-          after: { escalated: r.escalated },
+          after: { escalated: r2.escalated },
         });
-      });
-    }
+      }
+      return r2;
+    });
     return r;
   }),
 });

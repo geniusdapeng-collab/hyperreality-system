@@ -18,6 +18,16 @@ export interface Identity {
 
 const DEV_SECRET = "hyperreality-dev-secret-change-me";
 
+// 生产启动强校验（模块加载即生效）：缺 JWT_SECRET 直接抛错拒启，不回落开发占位密钥
+if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
+  throw new Error("生产环境（NODE_ENV=production）必须配置 JWT_SECRET（见 .env.example），拒绝回落开发占位密钥");
+}
+// 弱密钥告警（一次性）：<32 字符熵不足，暴力可枚举
+const _secret = process.env.JWT_SECRET ?? DEV_SECRET;
+if (_secret.length < 32) {
+  console.warn("[auth] JWT_SECRET 长度 <32 字符，熵不足——生产环境请配置 ≥32 字符随机密钥");
+}
+
 function key(): Uint8Array {
   return new TextEncoder().encode(process.env.JWT_SECRET ?? DEV_SECRET);
 }

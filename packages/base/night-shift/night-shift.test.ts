@@ -3,7 +3,7 @@
  * PG 集成：候选清单 / 开启夜班（围栏快照）/ 一键暂停（G5 计时+留痕）/ 决策包投递 / 触发器事件化
  */
 import { describe, expect, it } from "vitest";
-import { assertTransition, NightTransitionError } from "./scheduler.js";
+import { assertTransition, NightTransitionError, nightRunId } from "./scheduler.js";
 import { cronMatches } from "./triggers.js";
 import { projectNightPackage } from "./package.js";
 import type { BusinessEvent } from "@workloom/shared";
@@ -83,7 +83,9 @@ d("PG 集成夜班闭环（种子库）", async () => {
   const gw = new pg.Pool({ connectionString: process.env.DATABASE_GATEWAY_URL });
   const scope = { tenantId: "tenant-demo", workspaceId: "ws-yunqi" };
   const runDate = `test-${Date.now().toString(36)}`;
-  const runId = `nr-${runDate}`;
+  // 0013 口径：nr-<workspaceId>-<runDate>（PK 已改 (workspace_id, run_date)，id 保留唯一约束兼容旧查询）
+  const runId = nightRunId(scope.workspaceId, runDate);
+  expect(runId).toBe(`nr-ws-yunqi-${runDate}`);
 
   it("18:00 候选清单：夜班 preset 覆盖 3 项 + 谷时价 + 围栏摘要", async () => {
     const list = await buildCandidateList(app, scope);
@@ -129,6 +131,12 @@ d("PG 集成夜班闭环（种子库）", async () => {
     } finally { c.release(); }
   });
 
+  it("pauseAll 对不存在班次抛错（拒绝空班次操作）", async () => {
+    await expect(
+      pauseAll(app, gw, scope, `nr-ws-yunqi-missing-${Date.now().toString(36)}`, { memberNo: "MEM-001", channel: "mobile" }),
+    ).rejects.toThrow(/不存在/);
+  });
+
   it("08:30 决策包：夜间窗口事件三段投影 + 状态 package_generated + 投递留痕", async () => {
     const now = new Date();
     const from = new Date(now); from.setDate(from.getDate() - 2);
@@ -144,19 +152,47 @@ d("PG 集成夜班闭环（种子库）", async () => {
       const r = await c.query(`SELECT status, stats FROM night_runs WHERE id=$1`, [runId]);
       expect(r.rows[0].status).toBe("package_generated");
       expect(r.rows[0].stats.done).toBe(pkg.stats.done);
+      // 重复投递幂等：UPDATE rowCount=0 → 不重写 night.package.deliver 事件
+      const before = await c.query<{ c: string }>(
+        `SELECT count(*) AS c FROM biz_events
+         WHERE workspace_id=$1 AND payload->'decision'->>'action'='night.package.deliver'
+           AND payload->'decision'->'after'->>'runId'=$2`,
+        [scope.workspaceId, runId],
+      );
+      const again = await deliverPackage(app, gw, scope, runId, { from: from.toISOString(), to: now.toISOString() });
+      expect(again.stats).toEqual(pkg.stats);
+      const after = await c.query<{ c: string }>(
+        `SELECT count(*) AS c FROM biz_events
+         WHERE workspace_id=$1 AND payload->'decision'->>'action'='night.package.deliver'
+           AND payload->'decision'->'after'->>'runId'=$2`,
+        [scope.workspaceId, runId],
+      );
+      expect(after.rows[0]!.c).toBe(before.rows[0]!.c);
+      expect(Number(before.rows[0]!.c)).toBe(1);
     } finally { c.release(); }
   });
 
-  it("触发器：CRUD/启停事件化（L4.4）+ cron tick 命中触发", async () => {
+  it("触发器：CRUD/启停事件化（L4.4）+ cron tick 命中触发 + 同分钟幂等", async () => {
     const id = `tg-test-${Date.now().toString(36)}`;
+    const at = new Date("2026-08-17T07:00:00+08:00");
     await upsertTrigger(app, gw, scope, { id, name: "测试触发器", kind: "cron", schedule: "0 7 * * *", action: { dispatch: "inspection-agent" }, createdBy: "MEM-001" });
     await setTriggerEnabled(app, gw, scope, id, false, "MEM-001");
     // 停用时 tick 不触发
-    let fired = await tickTriggers(app, gw, scope, new Date("2026-08-17T07:00:00+08:00"));
+    let fired = await tickTriggers(app, gw, scope, at);
     expect(fired.some((f) => f.id === id)).toBe(false);
     await setTriggerEnabled(app, gw, scope, id, true, "MEM-001");
-    fired = await tickTriggers(app, gw, scope, new Date("2026-08-17T07:00:00+08:00"));
+    fired = await tickTriggers(app, gw, scope, at);
     expect(fired.some((f) => f.id === id)).toBe(true);
+    // 幂等：同 trigger 同分钟重复 tick → trigger_fires 占位冲突 → 跳过不重触发（多副本/重试安全）
+    const dup = await tickTriggers(app, gw, scope, at);
+    expect(dup.some((f) => f.id === id)).toBe(false);
+    // 账本落库可查
+    const c = await app.connect();
+    try {
+      await c.query("SELECT set_config('app.workspace_id', $1, false)", [scope.workspaceId]);
+      const ledger = await c.query(`SELECT fire_minute FROM trigger_fires WHERE trigger_id=$1`, [id]);
+      expect(ledger.rows.length).toBe(1);
+    } finally { c.release(); }
     // 事件化留痕可查
     const q = await import("../workdata/recall.js");
     for (const action of ["trigger.upsert", "trigger.disable", "trigger.enable", "trigger.fired"]) {

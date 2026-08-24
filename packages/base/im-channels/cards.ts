@@ -100,7 +100,13 @@ export class MockChannelDriver implements ChannelDriver {
 
 /**
  * 审批卡片出站（校验通道 → 驱动发送 → 留痕事件）
- * @returns 通道消息 ID + 留痕事件 ID
+ *
+ * 外发口径（D16 例外，先发后写）：通道外发不可撤回，必须先发送成功再写留痕事件——
+ * 若反过来「先写事件后发送」，发送失败会留下「未发却已留痕」的失真。
+ * 代价是「已发未留痕」窗口：事件写失败时补写补偿事件（im.outbound.unrecorded，best-effort 一次），
+ * 补偿也失败则抛错——调用方据此知晓外发已发生但留痕缺失，需人工介入对账。
+ *
+ * @returns 通道消息 ID + 留痕事件 ID（补偿路径 compensated=true）
  */
 export async function sendApprovalCard(
   gateway: pg.Pool,
@@ -109,7 +115,7 @@ export async function sendApprovalCard(
   target: { conversationId: string },
   card: ApprovalCard,
   by: string,
-): Promise<{ channelMsgId: string; eventId: string }> {
+): Promise<{ channelMsgId: string; eventId: string; compensated?: boolean }> {
   getChannel(driver.channel); // 未启用通道在此拒绝（D14）
   let sent: { channelMsgId: string };
   try {
@@ -117,28 +123,49 @@ export async function sendApprovalCard(
   } catch (err) {
     throw new ChannelDriverError(driver.channel, err);
   }
-  const ev = await gatewayAppend(gateway, {
-    ...scope,
-    actor: { id: "im-channels", type: "system" },
-  }, {
-    who: { type: "system", id: "im-channels" },
+  const actor = { id: "im-channels", type: "system" as const };
+  const base = {
+    who: { type: "system" as const, id: "im-channels" },
     context: {
       tenant_id: scope.tenantId,
       workspace_id: scope.workspaceId,
       time: new Date().toISOString(),
       channel: driver.channel,
     },
-    object: { type: "approval", id: card.approvalId },
-    decision: {
-      action: "approval.card.sent",
-      after: {
-        approval_id: card.approvalId, event_id: card.eventId,
-        conversation_id: target.conversationId, channel_msg_id: sent.channelMsgId,
-        title: card.title, rule_hits: card.ruleHits,
+    rule_impact: [] as never[],
+  };
+  try {
+    const ev = await gatewayAppend(gateway, { ...scope, actor }, {
+      ...base,
+      object: { type: "approval", id: card.approvalId },
+      decision: {
+        action: "approval.card.sent",
+        after: {
+          approval_id: card.approvalId, event_id: card.eventId,
+          conversation_id: target.conversationId, channel_msg_id: sent.channelMsgId,
+          title: card.title, rule_hits: card.ruleHits,
+        },
+        basis: [`由 ${by} 触发推送`],
       },
-      basis: [`由 ${by} 触发推送`],
-    },
-    rule_impact: [],
-  });
-  return { channelMsgId: sent.channelMsgId, eventId: ev.eventId };
+    });
+    return { channelMsgId: sent.channelMsgId, eventId: ev.eventId };
+  } catch (err) {
+    // 已发未留痕：补写补偿事件（best-effort 一次；失败则抛错交人工对账）
+    console.warn(`[im-channels] approval.card.sent 留痕写失败（审批 ${card.approvalId} 已外发 ${sent.channelMsgId}），补写补偿事件：`, err instanceof Error ? err.message : err);
+    const comp = await gatewayAppend(gateway, { ...scope, actor }, {
+      ...base,
+      object: { type: "approval", id: card.approvalId },
+      decision: {
+        action: "im.outbound.unrecorded",
+        after: {
+          original_action: "approval.card.sent",
+          approval_id: card.approvalId, event_id: card.eventId,
+          conversation_id: target.conversationId, channel_msg_id: sent.channelMsgId,
+          send_error: err instanceof Error ? err.message : String(err),
+        },
+        basis: ["补偿事件：卡片已外发但 approval.card.sent 留痕写失败（外发不可撤回，先发后写口径）"],
+      },
+    });
+    return { channelMsgId: sent.channelMsgId, eventId: comp.eventId, compensated: true };
+  }
 }

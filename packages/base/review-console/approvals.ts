@@ -248,9 +248,11 @@ export async function decide(
         sourceEvents: [gres.eventId],
         confidence: 0.6,
       }, embedder);
+      // M3/M4：memory_usage 已入 RLS（workspace_id 列），必须带本工作区键落库——
+      // 缺列时 workspace_id 为 NULL，WITH CHECK 不通过（RLS 42501）
       await c.query(
-        `INSERT INTO memory_usage (memory_id, event_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
-        [`mem-reject-${gesture.reasonEnum}`, gres.eventId],
+        `INSERT INTO memory_usage (memory_id, event_id, workspace_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+        [`mem-reject-${gesture.reasonEnum}`, gres.eventId, scope.workspaceId],
       );
     }
     return { kind: "decided" as const, row, status, gestureEventId: gres.eventId };

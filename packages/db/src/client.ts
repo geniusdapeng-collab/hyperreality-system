@@ -22,22 +22,38 @@ let ownerPool: Pool | null = null;
  */
 export function getOwnerPool(url = process.env.DATABASE_URL): Pool {
   if (!url) throw new Error("缺少 DATABASE_URL（见 .env.example）");
-  if (!ownerPool) ownerPool = new Pool({ connectionString: url, max: 5 });
+  if (!ownerPool) ownerPool = makePool(url, 5, 30_000);
   return ownerPool;
 }
 
 export function getAppPool(url = process.env.DATABASE_APP_URL): Pool {
   if (!url) throw new Error("缺少 DATABASE_APP_URL（见 .env.example）");
   // 架构 L 修复：扩容 app 池（10→30），避免并发请求耗尽连接
-  if (!appPool) appPool = new Pool({ connectionString: url, max: 30 });
+  if (!appPool) appPool = makePool(url, 30, 15_000);
   return appPool;
 }
 
 export function getGatewayPool(url = process.env.DATABASE_GATEWAY_URL): Pool {
   if (!url) throw new Error("缺少 DATABASE_GATEWAY_URL（见 .env.example）");
   // 架构 L 修复：扩容 gateway 池（4→20），避免 withObjectLock 并发耗尽池阻塞所有事件写入
-  if (!gatewayPool) gatewayPool = new Pool({ connectionString: url, max: 20 });
+  if (!gatewayPool) gatewayPool = makePool(url, 20, 15_000);
   return gatewayPool;
+}
+
+/**
+ * 三池统一加固（审计）：connectionTimeoutMillis 5s 快速失败；
+ * statement_timeout 兜底慢查询（owner 池宽松到 30s：迁移/运维语句）；
+ * pool.on('error') 只记日志不 crash（空闲连接异常不应打挂进程）。
+ */
+function makePool(connectionString: string, max: number, statementTimeoutMs: number): Pool {
+  const pool = new Pool({
+    connectionString,
+    max,
+    connectionTimeoutMillis: 5_000,
+    statement_timeout: statementTimeoutMs,
+  });
+  pool.on("error", (err) => console.error("[db] 连接池空闲连接异常：", err.message));
+  return pool;
 }
 
 export interface TenantScope {

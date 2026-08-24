@@ -11,6 +11,7 @@
  * 全部读写经 svcQuery/serviceTx（RLS 事务上下文）。
  */
 import { createHash } from "node:crypto";
+import type pg from "pg";
 import { guardedFetchText, scoreChunkFallback, tokenizeQuery } from "@workloom/base/service-kb";
 import { ensureServiceSchema, indexChunks } from "./store.js";
 import { serviceTx, svcQuery } from "./events.js";
@@ -40,14 +41,22 @@ function documentOf(x: Record<string, unknown>): KbDocument {
   };
 }
 
-export async function createCollection(input: { workspaceId: string; name: string; description?: string }): Promise<KbCollection> {
+/** 事务内建集（D16：供 router serviceTx 回调复用同一 client，不再嵌套另开连接） */
+export async function createCollectionOn(
+  client: pg.PoolClient,
+  input: { workspaceId: string; name: string; description?: string },
+): Promise<KbCollection> {
   await ensureServiceSchema();
-  const rows = await svcQuery(
-    input.workspaceId,
+  const r = await client.query(
     `INSERT INTO kb_collections (id, workspace_id, name, description) VALUES ($1,$2,$3,$4) RETURNING *`,
     [newId("kbc"), input.workspaceId, input.name, input.description ?? ""],
   );
-  return collectionOf(rows[0]!);
+  return collectionOf(r.rows[0] as Record<string, unknown>);
+}
+
+export async function createCollection(input: { workspaceId: string; name: string; description?: string }): Promise<KbCollection> {
+  await ensureServiceSchema();
+  return serviceTx(input.workspaceId, (client) => createCollectionOn(client, input));
 }
 
 export async function listCollections(input: { workspaceId: string }): Promise<KbCollection[]> {
@@ -57,64 +66,73 @@ export async function listCollections(input: { workspaceId: string }): Promise<K
 }
 
 /** upsert：同工作区同标题（或同 sourceUrl）→ 版本 +1 重建切块；否则新建（pending_review 待审批生效） */
+export async function upsertDocumentOn(
+  client: pg.PoolClient,
+  input: {
+    workspaceId: string; collectionId: string; title: string;
+    sourceKind: string; sourceUrl?: string; contentMd: string;
+  },
+): Promise<{ documentId: string; version: number; chunks: number }> {
+  await ensureServiceSchema();
+  const hash = createHash("sha256").update(input.contentMd).digest("hex");
+  // 同内容指纹幂等（H8：UNIQUE(workspace_id,hash)）：已存在则直接复用，不建版不重切
+  const sameHash = await client.query(
+    `SELECT id, version FROM kb_documents WHERE workspace_id=$1 AND hash=$2 LIMIT 1`,
+    [input.workspaceId, hash],
+  );
+  if (sameHash.rows[0]) {
+    const d = sameHash.rows[0] as { id: string; version: number };
+    return { documentId: String(d.id), version: Number(d.version), chunks: 0 };
+  }
+  const exist = await client.query(
+    `SELECT id, version FROM kb_documents
+     WHERE workspace_id=$1 AND (title=$2 OR ($3::text IS NOT NULL AND source_url=$3)) LIMIT 1`,
+    [input.workspaceId, input.title, input.sourceUrl ?? null],
+  );
+  let documentId: string;
+  let version: number;
+  if (exist.rows[0]) {
+    documentId = String(exist.rows[0].id);
+    version = Number(exist.rows[0].version) + 1;
+    await client.query(
+      `UPDATE kb_documents SET collection_id=$3, source_kind=$4, source_url=$5, content_md=$6, version=$7, hash=$8
+       WHERE workspace_id=$1 AND id=$2`,
+      [input.workspaceId, documentId, input.collectionId, input.sourceKind, input.sourceUrl ?? null, input.contentMd, version, hash],
+    );
+  } else {
+    documentId = newId("kbd");
+    version = 1;
+    const ins = await client.query(
+      `INSERT INTO kb_documents (id, workspace_id, collection_id, title, source_kind, source_url, content_md, hash, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_review')
+       ON CONFLICT (workspace_id, hash) DO NOTHING
+       RETURNING id`,
+      [documentId, input.workspaceId, input.collectionId, input.title, input.sourceKind, input.sourceUrl ?? null, input.contentMd, hash],
+    );
+    if (!ins.rows[0]) {
+      // 同 hash 已存在（并发/异名同文）：复用原文档，不重切版（H8 幂等）
+      const dup = await client.query(
+        `SELECT id, version FROM kb_documents WHERE workspace_id=$1 AND hash=$2 LIMIT 1`,
+        [input.workspaceId, hash],
+      );
+      const d = dup.rows[0] as { id: string; version: number } | undefined;
+      if (!d) throw new Error("kb_documents hash 冲突但回查为空（数据异常）");
+      return { documentId: String(d.id), version: Number(d.version), chunks: 0 };
+    }
+  }
+  const chunks = await indexChunks(
+    client as unknown as { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
+    input.workspaceId, documentId, input.contentMd,
+  );
+  return { documentId, version, chunks };
+}
+
 export async function upsertDocument(input: {
   workspaceId: string; collectionId: string; title: string;
   sourceKind: string; sourceUrl?: string; contentMd: string;
 }): Promise<{ documentId: string; version: number; chunks: number }> {
   await ensureServiceSchema();
-  const hash = createHash("sha256").update(input.contentMd).digest("hex");
-  return serviceTx(input.workspaceId, async (client) => {
-    // 同内容指纹幂等（H8：UNIQUE(workspace_id,hash)）：已存在则直接复用，不建版不重切
-    const sameHash = await client.query(
-      `SELECT id, version FROM kb_documents WHERE workspace_id=$1 AND hash=$2 LIMIT 1`,
-      [input.workspaceId, hash],
-    );
-    if (sameHash.rows[0]) {
-      const d = sameHash.rows[0] as { id: string; version: number };
-      return { documentId: String(d.id), version: Number(d.version), chunks: 0 };
-    }
-    const exist = await client.query(
-      `SELECT id, version FROM kb_documents
-       WHERE workspace_id=$1 AND (title=$2 OR ($3::text IS NOT NULL AND source_url=$3)) LIMIT 1`,
-      [input.workspaceId, input.title, input.sourceUrl ?? null],
-    );
-    let documentId: string;
-    let version: number;
-    if (exist.rows[0]) {
-      documentId = String(exist.rows[0].id);
-      version = Number(exist.rows[0].version) + 1;
-      await client.query(
-        `UPDATE kb_documents SET collection_id=$3, source_kind=$4, source_url=$5, content_md=$6, version=$7, hash=$8
-         WHERE workspace_id=$1 AND id=$2`,
-        [input.workspaceId, documentId, input.collectionId, input.sourceKind, input.sourceUrl ?? null, input.contentMd, version, hash],
-      );
-    } else {
-      documentId = newId("kbd");
-      version = 1;
-      const ins = await client.query(
-        `INSERT INTO kb_documents (id, workspace_id, collection_id, title, source_kind, source_url, content_md, hash, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_review')
-         ON CONFLICT (workspace_id, hash) DO NOTHING
-         RETURNING id`,
-        [documentId, input.workspaceId, input.collectionId, input.title, input.sourceKind, input.sourceUrl ?? null, input.contentMd, hash],
-      );
-      if (!ins.rows[0]) {
-        // 同 hash 已存在（并发/异名同文）：复用原文档，不重切版（H8 幂等）
-        const dup = await client.query(
-          `SELECT id, version FROM kb_documents WHERE workspace_id=$1 AND hash=$2 LIMIT 1`,
-          [input.workspaceId, hash],
-        );
-        const d = dup.rows[0] as { id: string; version: number } | undefined;
-        if (!d) throw new Error("kb_documents hash 冲突但回查为空（数据异常）");
-        return { documentId: String(d.id), version: Number(d.version), chunks: 0 };
-      }
-    }
-    const chunks = await indexChunks(
-      client as unknown as { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
-      input.workspaceId, documentId, input.contentMd,
-    );
-    return { documentId, version, chunks };
-  });
+  return serviceTx(input.workspaceId, (client) => upsertDocumentOn(client, input));
 }
 
 export async function listDocuments(input: { workspaceId: string; collectionId?: string }): Promise<KbDocument[]> {
@@ -127,6 +145,18 @@ export async function listDocuments(input: { workspaceId: string; collectionId?:
   return rows.map(documentOf);
 }
 
+/** 事务内文档状态变更（D16：供 router serviceTx 回调复用同一 client） */
+export async function setDocumentStatusOn(
+  client: pg.PoolClient,
+  input: { workspaceId: string; documentId: string; status: string },
+): Promise<void> {
+  await ensureServiceSchema();
+  await client.query(
+    `UPDATE kb_documents SET status=$3 WHERE workspace_id=$1 AND id=$2`,
+    [input.workspaceId, input.documentId, input.status],
+  );
+}
+
 export async function setDocumentStatus(input: { workspaceId: string; documentId: string; status: string }): Promise<void> {
   await ensureServiceSchema();
   await svcQuery(
@@ -136,17 +166,25 @@ export async function setDocumentStatus(input: { workspaceId: string; documentId
   );
 }
 
-/** 注册官网抓取源（统一走 0010 的 kb_sources；UNIQUE(workspace_id,url) 幂等） */
-export async function registerSiteSource(input: { workspaceId: string; url: string }): Promise<{ sourceId: string }> {
+/** 事务内注册官网抓取源（D16：供 router serviceTx 回调复用同一 client） */
+export async function registerSiteSourceOn(
+  client: pg.PoolClient,
+  input: { workspaceId: string; url: string },
+): Promise<{ sourceId: string }> {
   await ensureServiceSchema();
-  const rows = await svcQuery(
-    input.workspaceId,
+  const r = await client.query(
     `INSERT INTO kb_sources (id, workspace_id, url) VALUES ($1,$2,$3)
      ON CONFLICT (workspace_id, url) DO UPDATE SET status='active'
      RETURNING id`,
     [newId("kbs"), input.workspaceId, input.url],
   );
-  return { sourceId: String(rows[0]!.id) };
+  return { sourceId: String((r.rows[0] as { id: string }).id) };
+}
+
+/** 注册官网抓取源（统一走 0010 的 kb_sources；UNIQUE(workspace_id,url) 幂等） */
+export async function registerSiteSource(input: { workspaceId: string; url: string }): Promise<{ sourceId: string }> {
+  await ensureServiceSchema();
+  return serviceTx(input.workspaceId, (client) => registerSiteSourceOn(client, input));
 }
 
 /** HTML → 纯文本（演示级去标签） */

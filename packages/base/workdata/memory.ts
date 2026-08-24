@@ -111,11 +111,12 @@ export async function upsertMemoryInTx(
   const embedding = await embedder.embed(masked.text);
   const vecLiteral = `[${embedding.map((x) => x.toFixed(8)).join(",")}]`;
   await client.query(
-    `INSERT INTO org_memory (memory_id, tenant_id, workspace_id, scope, kind, content, embedding, source_events, confidence)
-     VALUES ($1,$2,$3,$4,$5,$6,$7::vector,$8,$9)
+    `INSERT INTO org_memory (memory_id, tenant_id, workspace_id, scope, kind, content, embedding, source_events, confidence, subject_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::vector,$8,$9,$10)
      ON CONFLICT (memory_id) DO UPDATE
        SET content = EXCLUDED.content, embedding = EXCLUDED.embedding,
-           source_events = EXCLUDED.source_events, status = 'active'`,
+           source_events = EXCLUDED.source_events, status = 'active',
+           subject_id = EXCLUDED.subject_id`,
     [
       input.memoryId,
       scope.tenantId,
@@ -126,6 +127,7 @@ export async function upsertMemoryInTx(
       vecLiteral,
       input.sourceEvents,
       input.confidence ?? MEMORY_DEFAULT_CONFIDENCE,
+      input.subjectId ?? null,
     ],
   );
   return { memoryId: input.memoryId, piiHits: masked.hits };
@@ -143,11 +145,12 @@ export async function upsertMemory(
   const vecLiteral = `[${embedding.map((x) => x.toFixed(8)).join(",")}]`;
   await withScope(app, scope, (c) =>
     c.query(
-      `INSERT INTO org_memory (memory_id, tenant_id, workspace_id, scope, kind, content, embedding, source_events, confidence)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::vector,$8,$9)
+      `INSERT INTO org_memory (memory_id, tenant_id, workspace_id, scope, kind, content, embedding, source_events, confidence, subject_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::vector,$8,$9,$10)
        ON CONFLICT (memory_id) DO UPDATE
          SET content = EXCLUDED.content, embedding = EXCLUDED.embedding,
-             source_events = EXCLUDED.source_events, status = 'active'`,
+             source_events = EXCLUDED.source_events, status = 'active',
+             subject_id = EXCLUDED.subject_id`,
       [
         input.memoryId,
         scope.tenantId,
@@ -158,6 +161,7 @@ export async function upsertMemory(
         vecLiteral,
         input.sourceEvents,
         input.confidence ?? MEMORY_DEFAULT_CONFIDENCE,
+        input.subjectId ?? null,
       ],
     ),
   );
@@ -171,15 +175,17 @@ export interface MemoryHit {
   content: string;
   confidence: number;
   source_events: string[];
+  /** 作用域归属 id（agent/run 作用域的主体；workspace 作用域为 null，M3/M4） */
+  subject_id: string | null;
   /** cosine 距离（结构化过滤检索时为 null） */
   distance: number | null;
 }
 
-/** 记忆检索：结构化（作用域/种类）+ 可选语义相似（传 query 时按 cosine 升序） */
+/** 记忆检索：结构化（作用域/种类/主体）+ 可选语义相似（传 query 时按 cosine 升序） */
 export async function searchMemories(
   app: pg.Pool,
   scope: { tenantId: string; workspaceId: string },
-  q: { scope?: MemoryScope; kind?: MemoryKind; status?: MemoryStatus; query?: string; limit?: number },
+  q: { scope?: MemoryScope; kind?: MemoryKind; status?: MemoryStatus; subjectId?: string; query?: string; limit?: number },
   embedder?: Embedder,
 ): Promise<MemoryHit[]> {
   const limit = Math.min(q.limit ?? 10, 50);
@@ -187,6 +193,7 @@ export async function searchMemories(
   const params: unknown[] = [scope.tenantId, scope.workspaceId];
   if (q.scope) { params.push(q.scope); clauses.push(`scope = $${params.length}`); }
   if (q.kind) { params.push(q.kind); clauses.push(`kind = $${params.length}`); }
+  if (q.subjectId) { params.push(q.subjectId); clauses.push(`subject_id = $${params.length}`); }
   params.push(q.status ?? "active");
   clauses.push(`status = $${params.length}`);
 
@@ -198,7 +205,7 @@ export async function searchMemories(
   }
   return withScope(app, scope, async (c) => {
     const r = await c.query<MemoryHit & { dist: number | null }>(
-      `SELECT memory_id, scope, kind, content, confidence, source_events,
+      `SELECT memory_id, scope, kind, content, confidence, source_events, subject_id,
               ${q.query && embedder ? `embedding <=> $${params.length}::vector` : "NULL"} AS dist
        FROM org_memory WHERE ${clauses.join(" AND ")}
        ORDER BY ${order} LIMIT ${limit}`,
@@ -208,20 +215,31 @@ export async function searchMemories(
   });
 }
 
-/** 使用记录（F1.4：引用必写；复合主键幂等） */
+/**
+ * 使用记录（F1.4：引用必写；复合主键幂等）
+ * M3/M4：带 workspace_id 落库（RLS 入列）；先校验记忆归属本工作区——
+ * 跨工作区记忆不得被本区事件引用（归属伪造拒绝）。
+ */
 export async function recordMemoryUsage(
   app: pg.Pool,
   scope: { tenantId: string; workspaceId: string },
   memoryId: string,
   eventId: string,
 ): Promise<void> {
-  await withScope(app, scope, (c) =>
-    c.query(
-      `INSERT INTO memory_usage (memory_id, event_id) VALUES ($1,$2)
+  await withScope(app, scope, async (c) => {
+    const owned = await c.query(
+      `SELECT 1 FROM org_memory WHERE memory_id = $1 AND tenant_id = $2 AND workspace_id = $3`,
+      [memoryId, scope.tenantId, scope.workspaceId],
+    );
+    if (owned.rows.length === 0) {
+      throw new Error(`记忆 ${memoryId} 不存在或不归属工作区 ${scope.workspaceId}（M3/M4 归属校验拒绝）`);
+    }
+    await c.query(
+      `INSERT INTO memory_usage (memory_id, event_id, workspace_id) VALUES ($1,$2,$3)
        ON CONFLICT (memory_id, event_id) DO NOTHING`,
-      [memoryId, eventId],
-    ),
-  );
+      [memoryId, eventId, scope.workspaceId],
+    );
+  });
 }
 
 /** 归因反查（验收断言：任一记忆可反查来源事件） */
@@ -232,7 +250,7 @@ export async function getMemorySources(
 ): Promise<{ memory: MemoryHit | null; sourceEvents: BusinessEvent[]; usedBy: string[] }> {
   return withScope(app, scope, async (c) => {
     const m = await c.query<MemoryHit>(
-      `SELECT memory_id, scope, kind, content, confidence, source_events
+      `SELECT memory_id, scope, kind, content, confidence, source_events, subject_id
        FROM org_memory WHERE memory_id = $1 AND tenant_id = $2 AND workspace_id = $3`,
       [memoryId, scope.tenantId, scope.workspaceId],
     );
@@ -242,9 +260,10 @@ export async function getMemorySources(
       `SELECT payload FROM biz_events WHERE tenant_id=$1 AND event_id = ANY($2) ORDER BY seq`,
       [scope.tenantId, mem.source_events],
     );
+    // M3/M4：memory_usage 已入 RLS（workspace_id 列），显式按本工作区过滤
     const usage = await c.query<{ event_id: string }>(
-      `SELECT event_id FROM memory_usage WHERE memory_id = $1 ORDER BY used_at`,
-      [memoryId],
+      `SELECT event_id FROM memory_usage WHERE memory_id = $1 AND workspace_id = $2 ORDER BY used_at`,
+      [memoryId, scope.workspaceId],
     );
     return {
       memory: { ...mem, distance: null },
