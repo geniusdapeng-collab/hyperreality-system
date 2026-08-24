@@ -61,6 +61,7 @@ interface Issue {
 }
 interface WsReport {
   workspace_id: string;
+  tenant_id: string;
   events: number;
   chain_ok: boolean;
   /** ON CONFLICT 消耗的 nextval 小空洞（容忍，仅计数） */
@@ -84,8 +85,10 @@ async function main(): Promise<void> {
   await client.connect();
   const report: WsReport[] = [];
   try {
-    const ws = await client.query<{ workspace_id: string }>(
-      `SELECT DISTINCT workspace_id FROM biz_events ORDER BY 1`,
+    // 分段粒度 (tenant_id, workspace_id)：与 append_event_insert 的链校验粒度一致
+    // （同一 workspace 下不同 tenant 各成其链——如测试用随机 tenant 共享 ws-t26）
+    const ws = await client.query<{ tenant_id: string; workspace_id: string }>(
+      `SELECT DISTINCT tenant_id, workspace_id FROM biz_events ORDER BY 1, 2`,
     );
     // ③ 的判定基准：全局事件号序列的已分配区间（P0-3）
     const seqStartRow = await client.query<{ start_value: string }>(
@@ -99,13 +102,13 @@ async function main(): Promise<void> {
     const eidLast = seqCurRow.rows[0]
       ? BigInt(seqCurRow.rows[0].last_value) - (seqCurRow.rows[0].is_called ? 0n : 1n)
       : 0n;
-    for (const { workspace_id } of ws.rows) {
+    for (const { tenant_id, workspace_id } of ws.rows) {
       const r = await client.query<EventRow>(
         // 注意：不得写 seq::text——输出列名仍为 seq 时 ORDER BY seq 会按文本序排（1,10,100,11…）。
         // node-pg 的 int8 默认即以字符串返回，直接选原列即可保数值序
         `SELECT event_id, seq, payload, prev_hash, hash, created_at
-         FROM biz_events WHERE workspace_id=$1 ORDER BY seq`,
-        [workspace_id],
+         FROM biz_events WHERE tenant_id=$1 AND workspace_id=$2 ORDER BY seq`,
+        [tenant_id, workspace_id],
       );
       const issues: Issue[] = [];
       let prevHash = "GENESIS";
@@ -202,6 +205,7 @@ async function main(): Promise<void> {
 
       report.push({
         workspace_id,
+        tenant_id,
         events: r.rows.length,
         chain_ok: issues.length === 0,
         tolerated_seq_gaps: toleratedGaps,
@@ -211,7 +215,7 @@ async function main(): Promise<void> {
       });
       const mark = issues.length === 0 ? "✓" : "✗";
       const gapNote = toleratedGaps > 0 ? ` · 容忍 seq 小空洞 ${toleratedGaps}（ON CONFLICT 消耗）` : "";
-      console.log(`${mark} [${workspace_id}] ${r.rows.length} 条${issues.length === 0 ? "，六项检查全过" : `（${issues.length} 处异常）`}${gapNote}`);
+      console.log(`${mark} [${tenant_id}/${workspace_id}] ${r.rows.length} 条${issues.length === 0 ? "，六项检查全过" : `（${issues.length} 处异常）`}${gapNote}`);
       for (const iss of issues) {
         console.error(`  ✗ ${iss.kind}${iss.event_id ? ` ${iss.event_id}` : ""}: ${iss.detail}`);
       }
