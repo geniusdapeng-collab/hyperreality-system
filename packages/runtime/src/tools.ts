@@ -50,6 +50,12 @@ export const DEMO_TOOLS: Record<string, ToolFn> = {
   "refund.apply": async (p) => maybeUnverified({ order_id: p.order_id, amount: p.amount, refunded: true }),
   "content.draft": async (p) => maybeUnverified({ title: p.title ?? "秋日云栖套餐", draft_id: `CT-${Date.now().toString(36)}` }),
   "content.publish": async (p) => maybeUnverified({ title: p.title, published: true }),
+  // 内容域（ai-video / geo-growth 双域经营演示口径；与种子剧本一致）
+  "intel.collect": async () => maybeUnverified({ topics: [{ q: "激光切割机怎么选", heat: 1842, confidence: "confirmed", suggest: "双用" }, { q: "CE certified laser cutter China", heat: 967, confidence: "reported", suggest: "GEO 图文" }] }),
+  "script.draft": async (p) => maybeUnverified({ script_id: `SC-${Date.now().toString(36)}`, shots: 3, has_ai_answer_variant: true, char_check: { withinSpec: true } }),
+  "content.submit": async (p) => maybeUnverified({ submitted: true, fact_check: "passed", entity_anchors: "12/12 一致" }),
+  "publish.execute": async (p) => maybeUnverified({ platform: p.platform ?? "tiktok", url: "https://example.invalid/published/001", published: true }),
+  "metrics.collect": async () => maybeUnverified({ plays_24h: 21437, inquiries: 4, visibility: { mention_rate: 0.11, first_rate: 0.02 } }),
 };
 
 export async function executeTool(name: string, params: Record<string, unknown>): Promise<ToolResult> {

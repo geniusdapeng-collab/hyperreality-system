@@ -24,7 +24,7 @@ interface NightRun {
 }
 interface ApprovalRow {
   approval_id: string; event_id: string; status: string;
-  snapshot: { summary?: string; before?: unknown; after?: unknown; rule_version?: string; high_risk?: boolean; gesture?: string };
+  snapshot: { summary?: string; title?: string; gate?: string; ceo_rationale?: string; params?: Record<string, unknown>; before?: unknown; after?: unknown; rule_version?: string; high_risk?: boolean; gesture?: string };
 }
 
 type Filter = "all" | "done" | "pending" | "needHuman";
@@ -166,7 +166,7 @@ export default function P3() {
                     <span className="text-body font-bold text-warn">◆ 已超时（expired 虚框）</span>
                     <span className="font-mono text-micro text-ink3">{a.approval_id}</span>
                   </div>
-                  <div className="text-caption text-ink2">{a.snapshot.summary ?? "待审项超 24h 未处理（F5.7）"}</div>
+                  <div className="text-caption text-ink2">{a.snapshot.summary ?? a.snapshot.title ?? "待审项超 24h 未处理（F5.7）"}</div>
                   <div className="mt-1 text-micro text-ink3">高危项不存在超时自动放行（L5.4）· 请尽快决断</div>
                 </div>
               ))}
@@ -178,8 +178,14 @@ export default function P3() {
                     <span className="text-body font-bold text-warn">◆ 待决断</span>
                     <span className="font-mono text-micro text-ink3">{a.approval_id}</span>
                   </div>
-                  {a.snapshot.rule_version && (
-                    <div className="mb-1 font-mono text-micro text-holo">命中 {a.snapshot.rule_version}</div>
+                  {(a.snapshot.summary ?? a.snapshot.title) && (
+                    <div className="mb-1 text-body font-bold text-ink">{a.snapshot.summary ?? a.snapshot.title}</div>
+                  )}
+                  {a.snapshot.ceo_rationale && (
+                    <div className="mb-1.5 text-caption text-ink2">CEO 意见：{a.snapshot.ceo_rationale}</div>
+                  )}
+                  {(a.snapshot.rule_version ?? a.snapshot.gate) && (
+                    <div className="mb-1 font-mono text-micro text-holo">命中 {a.snapshot.rule_version ?? a.snapshot.gate}</div>
                   )}
                   {(a.snapshot.before !== undefined || a.snapshot.after !== undefined) && (
                     <div className="mb-2.5 rounded-lg border border-line bg-bg800/60 p-2.5 font-mono text-caption">

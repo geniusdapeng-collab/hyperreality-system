@@ -7,7 +7,7 @@ description: 跨平台统一复盘：口径对齐→归因分析→可执行结�
 readonly: true                # 只读分析，不外发不处置
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G13]       # 复盘归因告警口径
 skills: [cross-platform-review]
 tools:
   - { name: review.metrics.join, access: read, desc: 跨平台指标拉通（口径对齐） }

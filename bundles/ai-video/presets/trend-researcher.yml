@@ -7,7 +7,7 @@ description: 趋势/竞品账号/爆款拆解/评论语义挖掘（珍妮纺织�
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G1]       # 情报档案确认（无源不入库）
 skills: [jenny-loom-research]
 tools:
   - { name: research.search, access: read,  desc: 检索趋势与竞品账号 }

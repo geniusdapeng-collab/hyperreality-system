@@ -132,12 +132,11 @@ const studioRouter = router({
         if (input.projectId) {
           projectId = input.projectId;
         } else {
+          // 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS，跨工作区不撞号）
           const max = await client.query<{ n: number }>(
-            `SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) AS n
-             FROM video_projects WHERE workspace_id=$1 AND id ~ '^VID-\\d+$'`,
-            [scope.workspaceId],
+            `SELECT public.video_projects_max_vid_no() AS n`,
           );
-          projectId = makeReadableId("VID", (max.rows[0]?.n ?? 0) + 1);
+          projectId = makeReadableId("VID", Number(max.rows[0]?.n ?? 0) + 1);
         }
         const kind = input.isMarketing ? "marketing" : "narrative";
         await client.query(

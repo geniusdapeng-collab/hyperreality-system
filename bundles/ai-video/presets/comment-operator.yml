@@ -7,7 +7,7 @@ description: 评论采集→意图分类→候选回复；三级分流：夸赞 
 readonly: false
 night_shift: false
 high_risk: true               # 公网外发
-fence_bindings: [G10]         # 评论回复三级分流
+fence_bindings: [G10a, G10b, G10c, G10d]  # 评论回复四档分流
 skills: [comment-ops]
 tools:
   - { name: comment.collect, access: read,  desc: 定时采集评论 }

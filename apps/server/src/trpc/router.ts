@@ -527,12 +527,12 @@ const threadsRouter = router({
             message: `并发上限 ${MAX_CONCURRENT_THREADS}/工作区（L3.1/G11），已超出请稍后或排队`,
           });
         }
+        // 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS——主键全库唯一，按本区分配必撞他区；
+        // 历史教训：第二次派遣即 duplicate key，ASK/QUEST 主链路故障）
         const max = await client.query<{ n: number }>(
-          `SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 100) AS n
-           FROM threads WHERE workspace_id=$1 AND id ~ '^T-\\d+$'`,
-          [scope.workspaceId],
+          `SELECT public.threads_max_t_no() AS n`,
         );
-        threadId = makeReadableId("T", (max.rows[0]?.n ?? 100) + 1);
+        threadId = makeReadableId("T", Number(max.rows[0]?.n ?? 100) + 1); // bigint 驱动返回 string，必须 Number() 防拼接（D29 教训）
         await client.query(
           `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
            VALUES ($1,$2,$3,$4,$5,'queued',$6)`,
@@ -568,7 +568,7 @@ const threadsRouter = router({
       }
       if (input.runImmediately && intent.mode === "quest") {
         const r = await runQuest(app, getGatewayPool(), scope, {
-          threadId, goal: input.title, presetKey: input.presetKey,
+          threadId, goal: input.title, presetKey: input.presetKey, llmCall: llmCall(),
         });
         return { kind: "routed" as const, mode: intent.mode, via: intent.via, threadId, status: r.status, stepsDone: r.stepsDone, stepsTotal: r.stepsTotal };
       }

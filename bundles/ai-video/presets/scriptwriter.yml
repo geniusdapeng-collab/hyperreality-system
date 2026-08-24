@@ -7,7 +7,7 @@ description: 剧本蓝图。意图→剧本蓝图（IC-2 单一事实源），�
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G2, G6]   # 主题确认+提示词审核
 skills: []
 tools:
   - { name: script.generate, access: write,  desc: 生成剧本蓝图 }

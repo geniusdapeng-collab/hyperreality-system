@@ -34,6 +34,6 @@ export const trpc = createTRPCClient<AppRouter>({
 /** 演示身份自动登录（种子成员；演示工作区 video-studio） */
 export async function ensureDemoLogin(memberNo = "MEM-V01"): Promise<void> {
   if (getToken()) return;
-  const r = await trpc.auth.loginAs.mutate({ workspaceSlug: "video-studio", memberNo });
+  const r = await trpc.auth.loginAs.mutate({ workspaceSlug: (import.meta.env.VITE_WS_SLUG ?? "video-studio"), memberNo: (import.meta.env.VITE_MEMBER_NO ?? memberNo) });
   setToken(r.token);
 }

@@ -469,7 +469,7 @@ async function main() {
      VALUES ($1,$2,$3,'package_generated',$4,14,$5,$6,NULL)
      ON CONFLICT (id) DO NOTHING`,
     [
-      `nr-${runDate}`, WS_ID, runDate, FENCE_VERSION,
+      `nr-video-${runDate}`, WS_ID, runDate, FENCE_VERSION,
       JSON.stringify({ done: 14, pending: 2, alerts: 1, note: "评论分流 47 条 / 数据采集 12 轮 / 谷时渲染 S00 完成 / 早八点战报已生成" }),
       new Date(yesterday.setHours(22, 0, 0, 0)).toISOString(),
     ],

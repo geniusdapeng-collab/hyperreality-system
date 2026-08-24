@@ -7,7 +7,7 @@ description: IP 资产台账：音乐/字体/素材/肖像授权登记与到期�
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G14]       # 送审预检（授权凭证前置）
 skills: []
 tools:
   - { name: ip.asset.register, access: write, desc: IP 资产登记（授权范围/期限/来源凭证） }

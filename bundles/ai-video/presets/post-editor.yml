@@ -7,7 +7,7 @@ description: 后期合成。字幕/音乐/弹幕/多版本 + ffmpeg 链，平台
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G8]       # 渲染提交（合成烧额度）
 skills: []
 tools:
   - { name: post.compose, access: write, desc: 后期合成编排 }
