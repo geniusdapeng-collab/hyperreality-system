@@ -66,6 +66,7 @@ interface WsReport {
   /** ON CONFLICT 消耗的 nextval 小空洞（容忍，仅计数） */
   tolerated_seq_gaps: number;
   legacy_event_ids: number;
+  tolerated_backfills: number;
   issues: Issue[];
 }
 
@@ -111,6 +112,7 @@ async function main(): Promise<void> {
       let prevSeq: bigint | null = null;
       let prevEidN: bigint | null = null;
         let legacyCount = 0;
+        let toleratedBackfills = 0;
       let prevCreatedAt: Date | null = null;
       let toleratedGaps = 0;
 
@@ -180,11 +182,20 @@ async function main(): Promise<void> {
             detail: `附录 E 校验失败：${checked.error.issues[0]?.message ?? "unknown"}` });
         }
 
-        // ⑤ created_at 单调性（同 workspace 分段内按 seq 非递减）
+        // ⑤ created_at 单调性（同 workspace 分段内按 seq 非递减）：
+        // 种子/回放通道是有意的历史补录（payload.context.time 与 created_at 一致）——
+        // 回退行若属「诚实补录」则仅计数，created_at 与 context.time 不符的乱序才报异常
         const createdAt = new Date(row.created_at);
         if (prevCreatedAt !== null && createdAt.getTime() < prevCreatedAt.getTime()) {
-          issues.push({ kind: "CREATED_AT_REGRESSION", event_id: row.event_id,
-            detail: `created_at 回退：${prevCreatedAt.toISOString()} → ${createdAt.toISOString()}` });
+          const ctxTime = (row.payload as { context?: { time?: string } } | null)?.context?.time;
+          const honestBackfill = isReplayEventId(row.event_id)
+            || (ctxTime != null && Math.abs(new Date(ctxTime).getTime() - createdAt.getTime()) < 5 * 60_000);
+          if (honestBackfill) {
+            toleratedBackfills += 1;
+          } else {
+            issues.push({ kind: "CREATED_AT_REGRESSION", event_id: row.event_id,
+              detail: `created_at 回退且非诚实补录：${prevCreatedAt.toISOString()} → ${createdAt.toISOString()}` });
+          }
         }
         prevCreatedAt = createdAt;
       }
@@ -195,6 +206,7 @@ async function main(): Promise<void> {
         chain_ok: issues.length === 0,
         tolerated_seq_gaps: toleratedGaps,
         legacy_event_ids: legacyCount, // 全局序列上线前的旧分配方案存量（赦免，仅计数）
+        tolerated_backfills: toleratedBackfills, // 种子/回放诚实历史补录（仅计数）
         issues,
       });
       const mark = issues.length === 0 ? "✓" : "✗";
