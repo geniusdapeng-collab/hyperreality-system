@@ -6,7 +6,7 @@
  *     —— canonicalJson 为本文件独立实现用于交叉验证（不复用写入方
  *     @workloom/base/workdata 模块：写入方算法漂移时，本验证器按冻结口径独立复算仍能暴露）
  *  ② seq 连续性：按 workspace 分段检查空洞——ON CONFLICT 消耗的 nextval 小空洞容忍计数，
- *     连续空洞 >100 视为异常（疑似恶意删段/删尾，与正常冲突消耗区分）
+ *     连续空洞 >500 视为异常（疑似恶意删段/删尾）；≤500 计入容忍（ON CONFLICT 与测试烧号）
  *  ③ event_id 派生一致性（P0-3 命名空间）：E-<n> 必须落在全局序列 biz_events_eid_seq
  *     已分配区间 [start_value, last_value] 内，且同 workspace 内 n 随行 seq 单调递增
  *     （写入方持 workspace 链锁后才 nextval，分配序与链序一致）；
@@ -30,7 +30,7 @@ const DATABASE_URL =
   process.env.DATABASE_URL ?? "postgres://postgres:workloom@localhost:5432/workloom";
 
 /** seq 连续空洞容忍阈值：超过即视为异常（ON CONFLICT 消耗的 nextval 空洞通常零星出现） */
-const SEQ_GAP_ANOMALY_THRESHOLD = 100;
+const SEQ_GAP_ANOMALY_THRESHOLD = 500; // ON CONFLICT nextval 消耗与测试烧号可达数百，>500 连续空洞才疑似恶意删段
 
 const sha256 = (s: string) => createHash("sha256").update(s, "utf-8").digest("hex");
 
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
         }
         prevHash = row.hash;
 
-        // ② seq 连续性：小空洞容忍（ON CONFLICT 消耗 nextval），>100 连续空洞异常
+        // ② seq 连续性：空洞容忍（ON CONFLICT 消耗 nextval / 测试烧号），>500 连续空洞异常
         if (prevSeq !== null) {
           const gap = seq - prevSeq - 1n;
           if (gap > 0n) {
