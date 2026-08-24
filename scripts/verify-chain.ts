@@ -65,6 +65,7 @@ interface WsReport {
   chain_ok: boolean;
   /** ON CONFLICT 消耗的 nextval 小空洞（容忍，仅计数） */
   tolerated_seq_gaps: number;
+  legacy_event_ids: number;
   issues: Issue[];
 }
 
@@ -109,6 +110,7 @@ async function main(): Promise<void> {
       let prevHash = "GENESIS";
       let prevSeq: bigint | null = null;
       let prevEidN: bigint | null = null;
+        let legacyCount = 0;
       let prevCreatedAt: Date | null = null;
       let toleratedGaps = 0;
 
@@ -148,13 +150,20 @@ async function main(): Promise<void> {
         const m = /^E-(\d+)$/.exec(row.event_id);
         if (m) {
           const n = BigInt(m[1]!);
-          if (n < eidStart || n > eidLast) {
-            issues.push({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
-              detail: `event_id 数字段 ${n} 不在全局序列已分配区间 [${eidStart}, ${eidLast}]（P0-3：疑似绕过序列分配）` });
-          }
-          if (prevEidN !== null && n <= prevEidN) {
-            issues.push({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
-              detail: `event_id 数字段 ${n} 未随 seq 单调递增（前序 ${prevEidN}，分配序与链序不一致）` });
+          // 存量赦免（append-only 历史不可改写）：n < eidStart 的是全局序列上线前的
+          // 旧分配方案（MAX(seq)+1 派生），仅计数为 legacy 不报异常；
+          // n >= eidStart 的必须落在已分配区间且单调递增（新方案严格口径）
+          if (n < eidStart) {
+            legacyCount += 1;
+          } else {
+            if (n > eidLast) {
+              issues.push({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
+                detail: `event_id 数字段 ${n} 超出全局序列已分配上界 ${eidLast}（P0-3：疑似绕过序列分配）` });
+            }
+            if (prevEidN !== null && prevEidN >= eidStart && n <= prevEidN) {
+              issues.push({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
+                detail: `event_id 数字段 ${n} 未随 seq 单调递增（前序 ${prevEidN}，分配序与链序不一致）` });
+            }
           }
           prevEidN = n;
         } else if (!isReplayEventId(row.event_id)) {
@@ -185,6 +194,7 @@ async function main(): Promise<void> {
         events: r.rows.length,
         chain_ok: issues.length === 0,
         tolerated_seq_gaps: toleratedGaps,
+        legacy_event_ids: legacyCount, // 全局序列上线前的旧分配方案存量（赦免，仅计数）
         issues,
       });
       const mark = issues.length === 0 ? "✓" : "✗";
