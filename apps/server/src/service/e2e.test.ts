@@ -693,14 +693,14 @@ describe("F C 端旅程 · 场景分支", () => {
     const { token } = await cSession(`${RUN}-fw`, "h5", "203.0.113.118");
     const r = await chat(token, "wifi 密码是什么", {}, "203.0.113.118");
     expect((r.citations as unknown[]).length).toBeGreaterThan(0);
-    expect(String(r.answer)).toContain("房间号后四位");
+    expect(String(r.answer)).toMatch(/房间号的后四位|房间号后四位/); // FAQ 预置库与基线文档措辞兼容
   });
 
   it("连字符原样问句「Wi-Fi 密码」可命中（对照组）", async () => {
     const { token } = await cSession(`${RUN}-fw2`, "h5", "203.0.113.120");
     const r = await chat(token, "Wi-Fi 密码是多少", {}, "203.0.113.120");
     expect((r.citations as unknown[]).length).toBeGreaterThan(0);
-    expect(String(r.answer)).toContain("房间号后四位");
+    expect(String(r.answer)).toMatch(/房间号的后四位|房间号后四位/); // FAQ 预置库与基线文档措辞兼容
   });
 
   it("未 confirmTicket 时 ticket 为 null（草稿不落库）", async () => {
