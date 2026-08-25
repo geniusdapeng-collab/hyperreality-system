@@ -5,7 +5,7 @@
  *  - P7E2 Agent 班组卡：preset 清单与围栏绑定校验状态；未声明 fence_bindings 即系统级禁写（F2.10）；点击 →P8
  *  - P7E3 起飞前检查单：档案 forbidden/枚举冲突/工具探针/围栏绑定完整/UI 用例同步；
  *    bundle 变更自动运行（活算），任一失败拒绝激活（F2.10）；校验留痕 bundle.check_run；修复后重跑
- *  - P7E4 围栏包卡 → P5 规则中心（基线单调守卫 L2.1）
+ *  - P7E4 围栏包卡 → P5 规则与权限（基线单调守卫 L2.1）
  *  - P7E5 新建行业 Bundle 五要素向导（§2.3：草稿态不进入分发）
  * 状态变体：p7 默认 / p7_fail 校验失败（红条+失败槽位标红+修复清单）；加载骨架 G10；
  *   空态=新行业草稿槽位待填充计数（§2.3）；权限态=readonly 无「新建/激活」入口（E2.6 隐藏非置灰，服务端 403）；
@@ -309,7 +309,7 @@ export default function P7() {
                   <div className="mb-1.5 text-[22px]">{SLOT_ICON[s.id] ?? "🧩"}</div>
                   <h4 className="text-body font-bold text-ink2">{s.label}</h4>
                   <p className={`mt-1 text-micro leading-relaxed ${s.failed ? "text-alert" : "text-ink3"}`}>{s.summary}</p>
-                  {s.go && <p className="mt-1 text-micro text-holo">{s.go === "p5" ? "→ P5 规则中心" : "→ P8 团队成员"}</p>}
+                  {s.go && <p className="mt-1 text-micro text-holo">{s.go === "p5" ? "→ P5 规则与权限" : "→ P8 员工名册"}</p>}
                 </button>
               ))}
             </div>

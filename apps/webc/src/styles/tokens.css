@@ -6,31 +6,37 @@
 @import "tailwindcss";
 
 @theme {
-  /* 深空底（移动端页面 → 卡片 → 浮层） */
-  --color-bg950: #04060f;
-  --color-bg900: #050a1a;
-  --color-bg800: #0a1230;
-  --color-bg700: #121e45;
-  /* 酒店金（行动/奖励/会员）+ 金高光 + 金底文字 */
-  --color-gold: #e9b558;
-  --color-gold2: #d69a3a;
-  --color-goldhi: #ffe0a3;
-  --color-ongold: #2a1500;
-  /* 全息青（信息/引用证据） */
-  --color-holo: #45e0ff;
-  --color-holo2: #2fa8ff;
-  /* 语义色 */
-  --color-go: #3dffb2;
-  --color-warn: #ffc24d;
-  --color-alert: #ff5470;
-  /* 文字三级 */
-  --color-ink: #eaf1ff;
-  --color-ink2: #9db2dc;
-  --color-ink3: #5e7099;
+  /* ===== §2.1 色板 · 糖果色系（小红书式年轻时尚） ===== */
+  /* 糖果四阶（背景三分层：页面奶莓 → 卡片云白 → 浮层蜜桃雾 → 悬停樱花粉） */
+  --color-bg950: #fff5f7;
+  --color-bg900: #ffffff;
+  --color-bg800: #fff0f4;
+  --color-bg700: #ffe4ec;
+  /* 糖果晕染对（背景晕染与空态插画，不做功能色） */
+  --color-nebula: #ffe0ec;
+  --color-nebula2: #e8e0ff;
+  /* 珊瑚主色（行动/奖励专属）+ 深珊瑚强调 + 主色上文字（§2.2 对比度） */
+  --color-gold: #ff2442;
+  --color-gold2: #ff7a9e;
+  --color-goldhi: #d4002a;
+  --color-ongold: #ffffff;
+  /* 蓝莓信息色（信息/证据专属）+ 天空蓝（链接/次级信息） */
+  --color-holo: #4d96ff;
+  --color-holo2: #6ec6ff;
+  /* 语义四色（全局唯一）：薄荷绿=auto/已完成 蜜桃橙=review/待审 草莓红=block/需介入/失败 葡萄紫=需介入 */
+  --color-go: #22c88a;
+  --color-warn: #ffaa33;
+  --color-alert: #ff4d6d;
+  --color-need: #b678ff;
+  /* 可可文字三级（§2.1/§3） */
+  --color-ink: #33262b;
+  --color-ink2: #8a757d;
+  --color-ink3: #b9a9b0;
   /* 卡片与描线 */
-  --color-card: rgb(13 22 52 / 0.72);
-  --color-line: rgb(96 140 255 / 0.22);
-  --color-gline: rgb(233 181 88 / 0.45);
+  --color-card: rgb(255 255 255 / 0.88);
+  --color-line: rgb(255 36 66 / 0.14);
+  --color-gline: rgb(255 36 66 / 0.32);
+
 
   --font-sans: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;

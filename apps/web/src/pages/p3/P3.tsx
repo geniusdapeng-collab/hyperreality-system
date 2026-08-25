@@ -127,7 +127,7 @@ export default function P3() {
             <><SkeletonBlock lines={2} h={56} /><SkeletonBlock lines={4} /></>
           ) : !nightConfigured ? (
             /* p3_empty：夜班未启用（F4.8） */
-            <EmptyState icon="🌙" title="夜班中心尚未开启" hint="去规则中心（P5）配置夜班，明早 08:30 日报送达" actionLabel="去配置 →" />
+            <EmptyState icon="🌙" title="夜班中心尚未出征" hint="去规则与权限（P5）配置夜班，明早 08:30 日报送达" actionLabel="去配置 →" />
           ) : (
             <>
               {/* P3E1 三栏计数头（与 P1 交接班卡强一致 F4.4；点击筛选） */}
@@ -156,7 +156,7 @@ export default function P3() {
                   ))}
                 </div>
                 <div className="mt-2 text-center font-mono text-micro text-ink3">
-                  积分 {stats.credits_used} · 峰谷费率（F4.6/G9） · 计数与 P1 强一致（F4.4）
+                  能量 {stats.credits_used} · 峰谷费率（F4.6/G9） · 计数与 P1 强一致（F4.4）
                 </div>
               </div>
 

@@ -14,7 +14,7 @@ import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { BannerAlert, EventIdChip } from "../hud";
 import { scorecardOf } from "./employeeScorecard";
 
-/** 团队成员行投影（与 server roster.list 的 agents 行结构对齐，结构性传入） */
+/** 名册行投影（与 server roster.list 的 agents 行结构对齐，结构性传入） */
 export interface EmployeeRow {
   id: string; presetKey: string; name: string; version: string; kind: string;
   readonly: boolean; status: string; invalidReason: string | null;
@@ -360,7 +360,7 @@ export function EmployeeCardDrawer({
                 onClick={() => void dispatch()}
                 className="mt-2 cursor-pointer rounded-lg gold-grad px-4 py-1.5 text-caption font-black text-ongold disabled:opacity-40"
               >
-                建线程并跳 P2 任务中心 →
+                建线程并跳 P2 任务页 →
               </button>
             </div>
           )}

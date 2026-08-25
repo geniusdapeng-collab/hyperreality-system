@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>云栖酒店 · AI 服务前台 C 端演示（镜像 apps/webc）</title>
 <style>
-/* ===== 设计令牌：逐值镜像 apps/webc/src/styles/tokens.css（深空底 #0a1230 + 暗金 #e9b558） ===== */
+/* ===== 设计令牌：逐值镜像 apps/webc/src/styles/tokens.css（深空底 #fff0f4 + 暗金 #ff2442） ===== */
 :root{
-  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
-  --gold:#e9b558; --gold2:#d69a3a; --goldhi:#ffe0a3; --ongold:#2a1500;
-  --holo:#45e0ff; --holo2:#2fa8ff;
-  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470;
-  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
-  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(233,181,88,.45);
+  --bg950:#fff5f7; --bg900:#ffffff; --bg800:#fff0f4; --bg700:#ffe4ec;
+  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#ffc2d4; --ongold:#ffffff;
+  --holo:#4d96ff; --holo2:#6ec6ff;
+  --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d;
+  --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
+  --card:rgba(255,255,255,.88); --line:rgba(255,36,66,.14); --gline:rgba(255,36,66,.32);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh}
@@ -218,7 +218,7 @@ input,textarea,select{font-family:inherit}
     <div class="scroll" id="svcDone" style="display:none">
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 32px;text-align:center">
         <div class="pop" style="width:64px;height:64px;border-radius:99px;border:1px solid rgba(61,255,178,.5);background:rgba(61,255,178,.1);display:flex;align-items:center;justify-content:center">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3dffb2" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22c88a" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
         </div>
         <h2 style="margin-top:16px;font-size:17px;font-weight:600">工单已提交</h2>
         <p class="mono" style="margin-top:8px;font-size:13px;color:var(--gold)" id="svcDoneId">tck-seed-004</p>

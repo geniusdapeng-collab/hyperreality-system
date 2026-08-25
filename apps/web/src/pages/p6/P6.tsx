@@ -338,7 +338,7 @@ export default function P6() {
                 <div className="flex items-center gap-3">
                   <span className="text-[18px]">🤖</span>
                   <div className="flex-1">
-                    <b className="text-body text-ink">工作台副官建议</b>
+                    <b className="text-body text-ink">AI 副官建议</b>
                     {suggestions.length > 1 && (
                       <span className="ml-2 rounded border border-holo/40 px-1.5 py-0.5 text-micro text-holo">待确认 {suggestions.length} 条</span>
                     )}

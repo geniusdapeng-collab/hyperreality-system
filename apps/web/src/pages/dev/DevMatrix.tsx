@@ -98,7 +98,7 @@ export default function DevMatrix() {
         </Cell>
       </Section>
 
-      <Section name="FenceLight 航道状态灯" spec="§5.5 · auto/review/block/need + 基线金锁">
+      <Section name="FenceLight 围栏状态灯" spec="§5.5 · auto/review/block/need + 基线金锁">
         <Cell label="auto 绿（常亮）/ review 琥珀（2s 呼吸）">
           <div className="space-y-2">
             <FenceLight level="auto" name="G9 发布必审" baseline />
@@ -168,7 +168,7 @@ export default function DevMatrix() {
       <Section name="空态 / 骨架屏 / 告警条" spec="§5.10">
         <Cell label="EmptyState（星云晕染+副官语气）+ SkeletonBlock（流光 1.4s）">
           <div className="space-y-2">
-            <EmptyState icon="🌌" title="舷窗外一片平静" hint="派遣第一条主线任务，舰队即刻启航" actionLabel="设定航线 ▶" />
+            <EmptyState icon="🌌" title="一切平静" hint="派遣第一条主线任务，团队即刻开工" actionLabel="开始第一个任务 ▶" />
             <SkeletonBlock lines={3} />
           </div>
         </Cell>

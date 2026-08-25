@@ -1,5 +1,5 @@
 /**
- * P2 任务中心·主线执行（F4：Quest 会话页；PRD P2-①②③ 逐条对账）
+ * P2 任务页·主线执行（F4：Quest 会话页；PRD P2-①②③ 逐条对账）
  *  - 行动消息流（P2E2）= 该线程事件流子序列投影（P2-⑤：ts 升序；回执三态/命中规则/计量逐事件渲染）
  *  - 失败步红框 + 转人工/降级重试/回滚三入口（E3.1）；无回执标「未核实」不宣称完成（L3.6/E3.7）
  *  - ThreadInspector 右栏：进度 x/y · 参与成员 · 计量（档/窗口/积分/降级链）· 围栏判定，≤5s 轮询（F3.4）；
@@ -226,8 +226,8 @@ export default function P2() {
       <div className="flex min-h-full flex-col">
         {/* ThreadHeader（P2-④：mode/路由置信度可见） */}
         <div className="mb-3 flex items-center gap-2.5">
-          <h2 className="text-h1 font-black tracking-wider">任务中心 · 主线执行</h2>
-          <span className="text-[11px] tracking-[.2em] text-ink3">P2 · QUEST CABIN</span>
+          <h2 className="text-h1 font-black tracking-wider">任务执行</h2>
+          <span className="text-[11px] tracking-[.2em] text-ink3">P2 · QUEST</span>
           {thread && (
             <>
               <span className="rounded border border-gold/60 bg-gold/10 px-1.5 py-0.5 text-micro font-black text-gold">

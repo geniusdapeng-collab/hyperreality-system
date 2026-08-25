@@ -64,7 +64,7 @@ function ClapperIcon() {
 export function StarRing() {
   const nav = useNavigate();
   const { pathname } = useLocation();
-  // 0=收起 1=输入条 2=半屏对话面板（L3=双击跳经营主页，非稳态）
+  // 0=收起 1=输入条 2=半屏对话面板（L3=双击跳剧场，非稳态）
   const [level, setLevel] = useState<0 | 1 | 2>(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [input, setInput] = useState("");
@@ -116,7 +116,7 @@ export function StarRing() {
     setMsgs((cur) => [...cur, { ...m, id: msgSeq.current }]);
   }, []);
 
-  /* ---------- 单击（L1 开关）与双击（L3 跳经营主页）消歧 ---------- */
+  /* ---------- 单击（L1 开关）与双击（L3 跳剧场）消歧 ---------- */
   const onBallClick = useCallback(() => {
     if (clickTimer.current) clearTimeout(clickTimer.current);
     clickTimer.current = setTimeout(() => {
@@ -141,7 +141,7 @@ export function StarRing() {
       const r = (await trpc.threads.dispatch.mutate({ title: text, presetKey: "director" })) as DispatchResult;
       if (r.kind === "clarify") {
         pushMsg({
-          role: "agent", action: "航线待确认", receipt: "unverified", refId: r.threadId,
+          role: "agent", action: "任务待确认", receipt: "unverified", refId: r.threadId,
           text: r.question ?? "请补充目标与时间（含糊指令不建任务 F3.2）",
         });
       } else if (isQuestion(text)) {
@@ -151,7 +151,7 @@ export function StarRing() {
         } else {
           pushMsg({
             role: "agent", action: "已转立项处理", receipt: "unverified", refId: r.threadId,
-            text: `该问句被路由为任务（${r.mode ?? "quest"}），线程 ${r.threadId ?? "—"} 已建立，可到 P2 任务中心跟进。`,
+            text: `该问句被路由为任务（${r.mode ?? "quest"}），线程 ${r.threadId ?? "—"} 已建立，可到 P2 任务页跟进。`,
             linkTo: r.threadId ? `/p2/${encodeURIComponent(r.threadId)}` : undefined,
           });
         }
@@ -159,7 +159,7 @@ export function StarRing() {
         // quest 立项：不离开当前页，给 P2 下钻口
         pushMsg({
           role: "agent", action: "总导演已接单", receipt: "unverified", refId: r.threadId,
-          text: `已立项 ${r.threadId ?? "—"}（状态 ${r.status ?? "queued"}）：「${text}」。点击跳任务中心跟进执行。`,
+          text: `已立项 ${r.threadId ?? "—"}（状态 ${r.status ?? "queued"}）：「${text}」。点击跳任务页跟进执行。`,
           linkTo: r.threadId ? `/p2/${encodeURIComponent(r.threadId)}` : undefined,
         });
       }
@@ -236,7 +236,7 @@ export function StarRing() {
       {level === 2 && (
         <div className="fixed inset-y-0 right-0 z-40 flex w-[min(560px,94vw)] flex-col border-l border-line bg-bg900/95 shadow-[-20px_0_60px_rgba(0,0,0,.5)] backdrop-blur-md">
           <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-            <span className="text-h2 font-black tracking-wider text-gold">Ask · AI 助手</span>
+            <span className="text-h2 font-black tracking-wider text-gold">AI 助手 · 对话</span>
             <span className="font-mono text-micro text-ink3">{pathname}</span>
             <span className="flex-1" />
             <button type="button" onClick={() => nav("/p0")}
@@ -267,7 +267,7 @@ export function StarRing() {
                 >
                   {m.text}
                   {m.linkTo && (
-                    <a href={m.linkTo} className="ml-1 text-holo underline">→ 任务中心跟进</a>
+                    <a href={m.linkTo} className="ml-1 text-holo underline">→ 任务页跟进</a>
                   )}
                 </AgentActionMessage>
               ))

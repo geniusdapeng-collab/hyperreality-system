@@ -7,12 +7,12 @@
 <style>
 /* ===== 设计令牌：逐值镜像 apps/web/src/styles/tokens.css（与 PC demo 同源） ===== */
 :root{
-  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
-  --gold:#ffb545; --gold2:#ff8a3d; --goldhi:#ffe0a3; --ongold:#2a1500;
-  --holo:#45e0ff; --holo2:#2fa8ff;
-  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470; --need:#b45cff;
-  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
-  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(255,181,69,.45);
+  --bg950:#fff5f7; --bg900:#ffffff; --bg800:#fff0f4; --bg700:#ffe4ec;
+  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#ffc2d4; --ongold:#ffffff;
+  --holo:#4d96ff; --holo2:#6ec6ff;
+  --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d; --need:#b678ff;
+  --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
+  --card:rgba(255,255,255,.88); --line:rgba(255,36,66,.14); --gline:rgba(255,36,66,.32);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg950);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;gap:44px;flex-wrap:wrap;
@@ -38,7 +38,7 @@ body{background:var(--bg950);min-height:100vh;display:flex;align-items:flex-star
 .guide .src b{color:var(--holo);font-weight:600}
 /* ---- 手机壳（P3 真机框镜像：375px · 圆角 44px） ---- */
 .phone{width:375px;height:790px;background:var(--bg900);border-radius:44px;border:1px solid var(--line);
-  box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 8px #10152a;overflow:hidden;display:flex;flex-direction:column;position:relative;flex-shrink:0}
+  box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 8px #ffffff;overflow:hidden;display:flex;flex-direction:column;position:relative;flex-shrink:0}
 .notch{height:34px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line);background:rgba(4,6,15,.85);flex-shrink:0;position:relative}
 .notch i{width:64px;height:6px;border-radius:999px;background:var(--bg700)}
 .statusbar{position:absolute;top:0;left:22px;right:22px;height:34px;display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--ink3)}
@@ -174,8 +174,8 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
 @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @keyframes core-breathe{0%,100%{opacity:.65;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
 @keyframes mhspin{to{transform:rotate(360deg)}}
-.mstage{position:relative;border:1px solid var(--line);border-radius:18px;background:#07070d;overflow:hidden;padding:14px 12px 12px;text-align:center;
-  background-image:radial-gradient(60% 45% at 18% 8%,rgba(36,27,77,.5),transparent 70%),radial-gradient(1px 1px at 22% 30%,rgba(234,241,255,.7) 50%,transparent 51%),radial-gradient(1px 1px at 70% 18%,rgba(234,241,255,.5) 50%,transparent 51%),radial-gradient(1.5px 1.5px at 85% 60%,rgba(69,224,255,.5) 50%,transparent 51%),radial-gradient(1px 1px at 40% 80%,rgba(255,181,69,.45) 50%,transparent 51%)}
+.mstage{position:relative;border:1px solid var(--line);border-radius:18px;background:#fff5f7;overflow:hidden;padding:14px 12px 12px;text-align:center;
+  background-image:radial-gradient(60% 45% at 18% 8%,rgba(36,27,77,.5),transparent 70%),radial-gradient(1px 1px at 22% 30%,rgba(234,241,255,.7) 50%,transparent 51%),radial-gradient(1px 1px at 70% 18%,rgba(234,241,255,.5) 50%,transparent 51%),radial-gradient(1.5px 1.5px at 85% 60%,rgba(69,224,255,.5) 50%,transparent 51%),radial-gradient(1px 1px at 40% 80%,rgba(255,36,66,.32) 50%,transparent 51%)}
 .msats{position:relative;height:170px;margin-top:2px}
 .mholo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:110px;height:110px}
 .mholo .core{position:absolute;inset:28px;border-radius:50%;background:radial-gradient(circle at 50% 42%,rgba(255,217,138,.95),rgba(200,162,74,.35) 60%,transparent 75%);animation:core-breathe 2.4s ease-in-out infinite}
@@ -198,9 +198,9 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
   <div class="lg">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#c9922e"/>
-      <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#e9b558"/>
+      <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#ff2442"/>
       <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#7a5410" stroke-width="1.1"/>
-      <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#1b1206"/>
+      <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#ffffff"/>
     </svg>
     <div><h1>视频经理 · 移动端</h1><div class="ws">HyperReality · 视频创作工作室</div></div>
   </div>
@@ -477,10 +477,10 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
     <button class="mstar" id="mStar" title="星环 · 全局 Ask（单击快捷条 · 双击进剧场）">
       <span class="halo"></span>
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#2a1500"/>
-        <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#2a1500"/>
-        <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#ffb545" stroke-width="1.1"/>
-        <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#ffb545"/>
+        <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#ffffff"/>
+        <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#ffffff"/>
+        <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#ff2442" stroke-width="1.1"/>
+        <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#ff2442"/>
       </svg>
       <span class="rbadge">2</span>
     </button>
