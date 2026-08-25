@@ -1,11 +1,11 @@
 /**
- * P7 舰船换装坞（F11：行业装配台 · 皮肤+通讯录+群规，底座特有；PRD P7-①②③④⑤ 逐条对账）
+ * P7 装配中心（F11：行业装配台 · 皮肤+通讯录+群规，底座特有；PRD P7-①②③④⑤ 逐条对账）
  *  - P7E1 六槽位卡：档案 Schema/对象阶段/工具集/围栏包/Agent 班组/工作台 UI，逐卡显装配状态
  *    （底座代码零改动；行业 Bundle = npm 包 §2.3；围栏包→P5、班组→P8 回链）
  *  - P7E2 Agent 班组卡：preset 清单与围栏绑定校验状态；未声明 fence_bindings 即系统级禁写（F2.10）；点击 →P8
  *  - P7E3 起飞前检查单：档案 forbidden/枚举冲突/工具探针/围栏绑定完整/UI 用例同步；
  *    bundle 变更自动运行（活算），任一失败拒绝激活（F2.10）；校验留痕 bundle.check_run；修复后重跑
- *  - P7E4 围栏包卡 → P5 航道管制台（基线单调守卫 L2.1）
+ *  - P7E4 围栏包卡 → P5 规则中心（基线单调守卫 L2.1）
  *  - P7E5 新建行业 Bundle 五要素向导（§2.3：草稿态不进入分发）
  * 状态变体：p7 默认 / p7_fail 校验失败（红条+失败槽位标红+修复清单）；加载骨架 G10；
  *   空态=新行业草稿槽位待填充计数（§2.3）；权限态=readonly 无「新建/激活」入口（E2.6 隐藏非置灰，服务端 403）；
@@ -138,7 +138,7 @@ export default function P7() {
     <Bridge
       left={
         <>
-          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">换装坞 · DOCK</div>
+          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">装配中心 · DOCK</div>
           {[
             ["#sec-profiles", "🛰 Profile 切换器", `${data?.profiles.length ?? 0} 套注册`],
             ["#sec-slots", "🧩 六装配槽", selected ? `${selected.filledCount}/6 已装配` : "—"],
@@ -179,7 +179,7 @@ export default function P7() {
     >
       <div className="px-1">
         <div className="mb-4 flex items-baseline gap-3">
-          <h2 className="text-[20px] font-black text-ink">舰船换装坞</h2>
+          <h2 className="text-[20px] font-black text-ink">装配中心</h2>
           <span className="text-caption text-ink3">行业装配台 · 换行业=换成员/群规/皮肤</span>
           <span className="font-mono text-micro text-ink3">§2.2 · F2.10</span>
         </div>
@@ -309,7 +309,7 @@ export default function P7() {
                   <div className="mb-1.5 text-[22px]">{SLOT_ICON[s.id] ?? "🧩"}</div>
                   <h4 className="text-body font-bold text-ink2">{s.label}</h4>
                   <p className={`mt-1 text-micro leading-relaxed ${s.failed ? "text-alert" : "text-ink3"}`}>{s.summary}</p>
-                  {s.go && <p className="mt-1 text-micro text-holo">{s.go === "p5" ? "→ P5 航道管制台" : "→ P8 船员名册"}</p>}
+                  {s.go && <p className="mt-1 text-micro text-holo">{s.go === "p5" ? "→ P5 规则中心" : "→ P8 团队成员"}</p>}
                 </button>
               ))}
             </div>

@@ -58,7 +58,7 @@ export const EMPLOYEE_SCORECARD: Record<string, ScorecardSpec> = {
     title: "数据看板官成绩单",
     metrics: [
       { key: "alert_precision", label: "告警准确率", hint: "阈值告警经复盘确认有效占比" },
-      { key: "brief_punctuality", label: "战报准点率", hint: "早八点战报准点投递占比" },
+      { key: "brief_punctuality", label: "日报准点率", hint: "早八点日报准点投递占比" },
       { key: "anomaly_lead", label: "异常发现提前量", hint: "异常发现早于人工察觉的平均时长" },
     ],
   },

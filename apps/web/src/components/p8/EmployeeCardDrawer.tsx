@@ -14,7 +14,7 @@ import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { BannerAlert, EventIdChip } from "../hud";
 import { scorecardOf } from "./employeeScorecard";
 
-/** 名册行投影（与 server roster.list 的 agents 行结构对齐，结构性传入） */
+/** 团队成员行投影（与 server roster.list 的 agents 行结构对齐，结构性传入） */
 export interface EmployeeRow {
   id: string; presetKey: string; name: string; version: string; kind: string;
   readonly: boolean; status: string; invalidReason: string | null;
@@ -208,7 +208,7 @@ export function EmployeeCardDrawer({
             {profile === null ? (
               <div className="text-caption text-ink3">技能清单加载中…</div>
             ) : profile.skills.length === 0 ? (
-              <div className="text-caption text-ink3">暂无挂载技能（→P6 装备库安装）</div>
+              <div className="text-caption text-ink3">暂无挂载技能（→P6 技能中心安装）</div>
             ) : (
               <div className="space-y-1.5">
                 {profile.skills.map((s) => (
@@ -216,7 +216,7 @@ export function EmployeeCardDrawer({
                     key={s.id}
                     type="button"
                     onClick={() => nav("/p6")}
-                    title="技能 → P6 装备库"
+                    title="技能 → P6 技能中心"
                     className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-line bg-bg800/40 px-2.5 py-1.5 text-left text-caption hover:border-gline"
                   >
                     <span className="min-w-0 flex-1 truncate text-ink2">🎒 {s.name} <span className="font-mono text-micro text-ink3">v{s.version}</span></span>
@@ -360,7 +360,7 @@ export function EmployeeCardDrawer({
                 onClick={() => void dispatch()}
                 className="mt-2 cursor-pointer rounded-lg gold-grad px-4 py-1.5 text-caption font-black text-ongold disabled:opacity-40"
               >
-                建线程并跳 P2 任务舱 →
+                建线程并跳 P2 任务中心 →
               </button>
             </div>
           )}

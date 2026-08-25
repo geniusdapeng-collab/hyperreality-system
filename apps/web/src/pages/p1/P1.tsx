@@ -1,6 +1,6 @@
 /**
- * P1 主甲板·舰桥（F3：真实 API 接线版；PRD P1-①②③ 逐条对账）
- *  - 左栏 ConversationList：📌 置顶（守夜战队频道/昨夜战报）+ 待办（审批请求 badge）+ 任务线程（状态点实时）+ 问答
+ * P1 工作台（F3：真实 API 接线版；PRD P1-①②③ 逐条对账）
+ *  - 左栏 ConversationList：📌 置顶（夜班中心频道/昨夜日报）+ 待办（审批请求 badge）+ 任务线程（状态点实时）+ 问答
  *  - 中栏 MessageFlow：系统分隔线 → 交接班卡（P1E3，三计数与 P3 强一致 F4.4）→ KPI 投影（一企一档 history_curve 真实数据）
  *    → 巡检雷达推送（P1E4，一键派单接 inspection.dispatch；无异常显「昨夜一切正常」）
  *  - 右栏：档案 chips / 夜班班组状态卡 / 在线成员人机混编（P1E6）/ 渠道巡检状态
@@ -175,7 +175,7 @@ export default function P1() {
       {!isCommunity && nightConfigured && (
         <div className="mb-1.5 cursor-pointer rounded-lg border border-holo/35 bg-holo/5 px-3 py-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-caption text-holo">📌 守夜战队频道</span>
+            <span className="text-caption text-holo">📌 夜班中心频道</span>
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${night?.run?.status === "running" ? "bg-holo animate-pulse-hud" : "bg-ink3"}`} />
           </div>
           <div className="mt-0.5 text-body text-ink2">夜班班组群 → P9</div>
@@ -183,7 +183,7 @@ export default function P1() {
       )}
       {nightConfigured && night?.run?.stats && (
         <div className="mb-1.5 cursor-pointer rounded-lg border border-gline bg-gold/5 px-3 py-2.5">
-          <div className="text-caption text-gold">📌 昨夜战报</div>
+          <div className="text-caption text-gold">📌 昨夜日报</div>
           <div className="mt-0.5 text-body text-ink2">
             ✓{night.run.stats.done} ◆{night.run.stats.pending} ▲{night.run.stats.need_human}
           </div>
@@ -195,7 +195,7 @@ export default function P1() {
             <span className="text-caption text-warn">待办 · 审批请求</span>
             <span className="rounded-full bg-warn/15 px-1.5 font-orb text-micro font-bold text-warn">{pendingCount}</span>
           </div>
-          <div className="mt-0.5 text-body text-ink2">决断队列 → P4</div>
+          <div className="mt-0.5 text-body text-ink2">审批中心 → P4</div>
         </div>
       )}
       <div className="mt-3 mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">任务线程 · ≤10 并发（G11）</div>
@@ -242,7 +242,7 @@ export default function P1() {
       {/* 夜班班组状态卡（社区版隐藏，F7.2） */}
       {!isCommunity && (
         <div className="mb-3 rounded-lg border border-line bg-card p-3">
-          <div className="mb-1.5 text-caption font-bold text-holo">守夜战队</div>
+          <div className="mb-1.5 text-caption font-bold text-holo">夜班中心</div>
           <NightStatusPill state={pillState} window="22:00–08:00" onClick={() => { window.location.href = "/p9"; }} />
           {night?.run?.fenceSnapshot && (
             <div className="mt-1.5 font-mono text-micro text-ink3">围栏快照 {night.run.fenceSnapshot}</div>
@@ -287,12 +287,12 @@ export default function P1() {
     <Bridge left={left} right={right}>
       <div className="flex min-h-full flex-col">
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-h1 font-black tracking-wider">主甲板 · 舰桥</h2>
+          <h2 className="text-h1 font-black tracking-wider">工作台</h2>
           <span className="text-[11px] tracking-[.2em] text-ink3">
             P1 · MAIN DECK{isCommunity ? " · 社区版" : ""}{demo ? ` · demo=${demo}` : ""}
           </span>
           <span className="flex-1" />
-          {/* 本页主理员工（主甲板=总导演；点击 → P8 员工档案） */}
+          {/* 本页主理员工（工作台=总导演；点击 → P8 员工档案） */}
           <HostAgent presetKey="director" fallbackName="总导演" />
         </div>
 

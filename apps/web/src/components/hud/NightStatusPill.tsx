@@ -8,7 +8,7 @@
 export type NightPillState = "cruising" | "ready" | "paused" | "unconfigured";
 
 const STATE_META: Record<NightPillState, { text: string; dot: string; border: string; bg: string; anim: string; glow: string }> = {
-  cruising: { text: "守夜战队 · 巡航中", dot: "bg-holo", border: "border-holo/40", bg: "bg-holo/7", anim: "animate-pulse-hud", glow: "var(--color-holo)" },
+  cruising: { text: "夜班中心 · 巡航中", dot: "bg-holo", border: "border-holo/40", bg: "bg-holo/7", anim: "animate-pulse-hud", glow: "var(--color-holo)" },
   ready: { text: "夜班 · 已就绪 22:00 出征", dot: "bg-holo", border: "border-holo/40", bg: "bg-holo/7", anim: "animate-pulse-hud", glow: "var(--color-holo)" },
   paused: { text: "夜班 · 已制动", dot: "bg-warn", border: "border-warn/45", bg: "bg-warn/7", anim: "animate-pulse-warn", glow: "var(--color-warn)" },
   unconfigured: { text: "夜班 · 未配置", dot: "bg-ink3", border: "border-line", bg: "bg-bg700/50", anim: "", glow: "transparent" },
@@ -32,7 +32,7 @@ export function NightStatusPill({
     <button
       type="button"
       onClick={onClick}
-      title="进入守夜战队频道（P9）"
+      title="进入夜班中心频道（P9）"
       className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11.5px] transition-colors ${m.border} ${m.bg}`}
     >
       <span

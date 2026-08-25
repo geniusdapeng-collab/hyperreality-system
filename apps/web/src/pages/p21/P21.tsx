@@ -65,7 +65,7 @@ const MODE_TONE: Record<CeoMode, "ok" | "warn" | "info"> = {
   disabled: "info", shadow: "info", trial: "warn", suspended: "warn", active: "ok",
 };
 const BEATS: Array<[string, string]> = [
-  ["daily", "晨报"], ["queue", "L2 裁决"], ["deviation", "偏差扫描"], ["breaker", "熔断巡检"],
+  ["daily", "晨报"], ["queue", "L2 决策"], ["deviation", "偏差扫描"], ["breaker", "熔断巡检"],
   ["outcome", "命中率回测"], ["hr", "绩效评议"], ["board", "董事会包"], ["orgscan", "扩编扫描"], ["weekly", "周经营会"],
 ];
 
@@ -149,14 +149,14 @@ export default function P21() {
           </div>
           <div className="rounded-lg border border-line bg-card p-3 text-xs text-ink2">
             <div className="mb-1 text-[11px] tracking-[.2em] text-ink3">待审分层</div>
-            L2 公司CEO 裁决 {state?.pendingByTier.l2_captain ?? 0} 件<br />
+            L2 公司CEO 决策 {state?.pendingByTier.l2_captain ?? 0} 件<br />
             L3 集团CEO {state?.pendingByTier.l3_fleet ?? 0} 件<br />
             <b className="text-gold">L4 请示董事长 {state?.pendingByTier.l4_chairman ?? 0} 件</b>
           </div>
           {score && (
             <div className="rounded-lg border border-line bg-card p-3 text-xs text-ink2">
               <div className="mb-1 text-[11px] tracking-[.2em] text-ink3">成绩单（30 天）</div>
-              裁决 {score.decisions} · 简报 {score.briefings} · 立项 {score.initiatives}<br />
+              决策 {score.decisions} · 简报 {score.briefings} · 立项 {score.initiatives}<br />
               谨慎上浮 {score.escalatedToChairman} · 熔断 {score.breakerTrips} · 影子决策 {score.shadowDecisions}<br />
               <b className="text-gold">命中率 {score.hitRate === null ? "样本积累中" : `${(score.hitRate * 100).toFixed(0)}%`}</b>
               {score.outcomeCounts.hit + score.outcomeCounts.miss + score.outcomeCounts.fail > 0 && (

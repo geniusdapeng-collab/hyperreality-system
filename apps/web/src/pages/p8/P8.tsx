@@ -1,12 +1,12 @@
 /**
- * P8 船员名册（F9：通讯录 · 人机混编，Agent 是一等公民 IM.3；PRD P8-①②③④⑤ 逐条对账）
+ * P8 团队成员（F9：通讯录 · 人机混编，Agent 是一等公民 IM.3；PRD P8-①②③④⑤ 逐条对账）
  *  - 人类成员卡（P8E2：圆头像；角色与权限范围展示 经营者/只读/集团；三端权限一致 F5.6；
  *    在线状态=近 24h 事件留痕推导，不伪造 presence）
  *  - Agent 成员卡（P8E1：方头像+版本角标+LV 徽章+段位；围栏绑定 tags；技能包；
  *    30 天工时=动作数/采纳率/积分 · 峰谷占比 G9，全部事件库聚合投影 L6.3；
  *    夜班窗口 22:00–08:00 内 night_shift preset 自动上线·青脉冲（M4）；
  *    只读 preset 标绿无写工具（L9.1）；加载校验失败标红+原因（F2.10 错误态））
- *  - 加装 preset（P8E3 → P7 舰船换装坞，§2.3 行业 Bundle 分发；非管理员无入口 E2.6 隐藏非置灰）
+ *  - 加装 preset（P8E3 → P7 装配中心，§2.3 行业 Bundle 分发；非管理员无入口 E2.6 隐藏非置灰）
  *  - 员工卡（五层活档案 · 侧滑抽屉，components/p8/EmployeeCardDrawer）：
  *    ①人格层（渐变方块+工种 emoji+人设一句话）②专长层（技能清单+围栏 G 系列章）
  *    ③状态层（当前任务/今日动作数/在线·夜班中，缺则兜底「待命」）
@@ -16,7 +16,7 @@
  * 状态变体：p8 默认 / p8_agent 员工卡展开态；加载=成员卡骨架屏（G10）；空态=仅官方 preset 引导（§2.2）；
  *          权限态=非管理员隐藏「加装/派遣」入口（E2.6）；错误态=preset 校验失败卡片标红（F2.10）
  * 数据：roster.list / roster.profile + captain.theater 评议（PRD P8-⑤；本页无直接写入，派遣走 threads.dispatch）
- * 轮询口径（D6）：名册 10s；员工卡档案细节开卡时拉取
+ * 轮询口径（D6）：团队成员 10s；员工卡档案细节开卡时拉取
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
@@ -107,7 +107,7 @@ function HumanCard({ h }: { h: HumanRow }) {
       <div className="mt-2 border-t border-line/60 pt-2 text-micro leading-relaxed text-ink3">
         {ROLE_SCOPE[h.role] ?? ""}
         <div className="mt-1 flex gap-3">
-          <span>30 天决断 <b className="font-orb text-holo">{h.stats.decided30}</b></span>
+          <span>30 天审批 <b className="font-orb text-holo">{h.stats.decided30}</b></span>
           <span>派遣 <b className="font-orb text-holo">{h.stats.dispatched30}</b></span>
           <span>沉淀 <b className="font-orb text-holo">{h.stats.settled30}</b></span>
         </div>
@@ -183,7 +183,7 @@ function AgentCard({ a, onOpen }: { a: AgentRow; onOpen: (id: string) => void })
           <div className="mt-2 flex gap-3 border-t border-line/60 pt-2 text-micro text-ink3">
             <span><b className="font-orb text-holo">{a.stats.actions30}</b> 动作</span>
             <span>采纳 <b className="font-orb text-go">{pct(a.stats.adoptionRate)}</b></span>
-            <span className="ml-auto"><b className="font-orb text-gold">{a.stats.credits30.toLocaleString()}</b> 币</span>
+            <span className="ml-auto"><b className="font-orb text-gold">{a.stats.credits30.toLocaleString()}</b> 积分</span>
           </div>
         </>
       )}
@@ -234,16 +234,16 @@ function RosterHome({ expandId }: { expandId: string | null }) {
   // 深链 /p8/agent/:id：自动展开对应员工卡；读不到（不存在/未加载）则忽略
   const expanded = expandId ? (agents.find((a) => a.id === expandId) ?? null) : null;
 
-  /* 左栏：名册导航 + 在线概览 */
+  /* 左栏：团队成员导航 + 在线概览 */
   const left = (
     <>
-      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">名册 · ROSTER</div>
+      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">团队成员 · ROSTER</div>
       <div className="mb-1.5 rounded-lg border border-line bg-card px-3 py-2.5">
-        <div className="text-caption font-bold text-ink">人类船员 · {humans.length}</div>
+        <div className="text-caption font-bold text-ink">人类成员 · {humans.length}</div>
         <div className="mt-0.5 text-micro text-ink3">{humans.filter((h) => h.online).length} 人在线（近 24h 留痕）</div>
       </div>
       <div className="mb-1.5 rounded-lg border border-line bg-card px-3 py-2.5">
-        <div className="text-caption font-bold text-ink">Agent 船员 · {agents.length} preset</div>
+        <div className="text-caption font-bold text-ink">Agent 成员 · {agents.length} preset</div>
         <div className="mt-0.5 text-micro text-ink3">
           hyperreality-ai-video 装配 · {data?.nightWindow.open ? `夜班窗口内 ${onlineAgents} 名在线` : "夜班窗口外 · 待命"}
         </div>
@@ -279,14 +279,14 @@ function RosterHome({ expandId }: { expandId: string | null }) {
     <Bridge left={left} right={right}>
       <div className="flex min-h-full flex-col">
         <div className="mb-3 flex items-baseline gap-3">
-          <h2 className="text-h1 font-black tracking-wider">船员名册</h2>
+          <h2 className="text-h1 font-black tracking-wider">团队成员</h2>
           <span className="text-[11px] tracking-[.2em] text-ink3">P8 · CREW · 人机混编通讯录 IM.3</span>
         </div>
 
         {failed && (
           <div className="mb-3">
             <BannerAlert level="warn" actionLabel="重试" onAction={() => void load()}>
-              名册数据加载失败（连接中断·重连中，不伪造数据）——点击重试
+              团队成员数据加载失败（连接中断·重连中，不伪造数据）——点击重试
             </BannerAlert>
           </div>
         )}
@@ -298,19 +298,19 @@ function RosterHome({ expandId }: { expandId: string | null }) {
           <EmptyState
             icon="👥"
             title="新工作区暂无成员卡片"
-            hint="仅行业 Bundle 官方 preset 可用——从 P7 舰船换装坞装配后此处点亮"
-            actionLabel={canManage ? "＋ 加装船员 preset" : undefined}
+            hint="仅行业 Bundle 官方 preset 可用——从 P7 装配中心装配后此处点亮"
+            actionLabel={canManage ? "＋ 加装成员 preset" : undefined}
             onAction={canManage ? () => nav("/p7") : undefined}
           />
         ) : (
           <>
-            <div className="mb-2 text-[11px] tracking-[.2em] text-ink3">人类船员 · {humans.length}</div>
+            <div className="mb-2 text-[11px] tracking-[.2em] text-ink3">人类成员 · {humans.length}</div>
             <div className="mb-5 grid grid-cols-3 gap-3">
               {humans.map((h) => <HumanCard key={h.memberNo} h={h} />)}
             </div>
 
             <div className="mb-2 text-[11px] tracking-[.2em] text-ink3">
-              Agent 船员 · {agents.length} preset（hyperreality-ai-video 装配）· 夜班窗口 {data?.nightWindow.range} 自动上线
+              Agent 成员 · {agents.length} preset（hyperreality-ai-video 装配）· 夜班窗口 {data?.nightWindow.range} 自动上线
             </div>
             <div className="grid grid-cols-3 gap-3">
               {agents.map((a) => <AgentCard key={a.id} a={a} onOpen={(id) => nav(`/p8/agent/${encodeURIComponent(id)}`)} />)}
@@ -324,7 +324,7 @@ function RosterHome({ expandId }: { expandId: string | null }) {
                   onClick={() => nav("/p7")}
                   className="cursor-pointer rounded-lg gold-grad px-4 py-2 text-caption font-black text-ongold"
                 >
-                  ＋ 加装船员 preset（→P7 舰船换装坞 §2.3）
+                  ＋ 加装成员 preset（→P7 装配中心 §2.3）
                 </button>
                 <span className="text-micro text-ink3">未声明 fence_bindings 的 Agent 系统级禁写（F2.10）</span>
               </div>
@@ -346,7 +346,7 @@ function RosterHome({ expandId }: { expandId: string | null }) {
   );
 }
 
-/** P8 入口：/p8 名册；/p8/agent/:agentId 深链自动展开员工卡（读不到则忽略，留在名册） */
+/** P8 入口：/p8 团队成员；/p8/agent/:agentId 深链自动展开员工卡（读不到则忽略，留在团队成员） */
 export default function P8() {
   const { agentId } = useParams<{ agentId: string }>();
   return <RosterHome expandId={agentId ?? null} />;

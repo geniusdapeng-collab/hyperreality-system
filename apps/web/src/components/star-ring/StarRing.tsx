@@ -1,8 +1,8 @@
 /**
- * 星环 StarRing（全局 Ask 入口；AI 原生工作空间 · 交互层）
+ * AI 助手 StarRing（全局 Ask 入口；AI 原生工作空间 · 交互层）
  *  - PC 右下 56px 悬浮球：场记板 SVG 造型 + 金色呼吸光圈；待审批红点 badge（有待批时呼吸加速 0.8s）
  *  - 三级展开：L1 单击 → 底部输入条 + 情境快捷钮；L2 上滑/点扩展 → 半屏对话面板（不离开当前页，
- *    消息流复用 hud/messages 的 HumanBubble / AgentActionMessage）；L3 双击 → /p0 经营剧场
+ *    消息流复用 hud/messages 的 HumanBubble / AgentActionMessage）；L3 双击 → /p0 经营主页
  *  - ⌘K / Ctrl+K 唤起；Esc 逐层收起
  *  - 上下文感知：useLocation 读当前路由预置情境 chips（/p10 镜级问题、/p4 审批风险等）
  *  - 输入分流：问句走 ask（threads.dispatch 意图路由 → ask 即时应答，P2 同口径）；明确任务走 quest（立项 → P2）
@@ -21,7 +21,7 @@ const CONTEXT_CHIPS: Array<[prefix: string, chips: string[]]> = [
   ["/p2", ["这线程卡在哪一步", "预估剩余积分消耗"]],
   ["/p1", ["昨夜经营有什么异常", "今天优先级最高的三件事"]],
 ];
-const DEFAULT_CHIPS = ["汇报当前经营概况", "有哪些待我决断的事项"];
+const DEFAULT_CHIPS = ["汇报当前经营概况", "有哪些待我审批的事项"];
 
 interface RingMsg {
   id: number;
@@ -64,7 +64,7 @@ function ClapperIcon() {
 export function StarRing() {
   const nav = useNavigate();
   const { pathname } = useLocation();
-  // 0=收起 1=输入条 2=半屏对话面板（L3=双击跳剧场，非稳态）
+  // 0=收起 1=输入条 2=半屏对话面板（L3=双击跳经营主页，非稳态）
   const [level, setLevel] = useState<0 | 1 | 2>(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [input, setInput] = useState("");
@@ -116,7 +116,7 @@ export function StarRing() {
     setMsgs((cur) => [...cur, { ...m, id: msgSeq.current }]);
   }, []);
 
-  /* ---------- 单击（L1 开关）与双击（L3 跳剧场）消歧 ---------- */
+  /* ---------- 单击（L1 开关）与双击（L3 跳经营主页）消歧 ---------- */
   const onBallClick = useCallback(() => {
     if (clickTimer.current) clearTimeout(clickTimer.current);
     clickTimer.current = setTimeout(() => {
@@ -126,7 +126,7 @@ export function StarRing() {
   }, []);
   const onBallDoubleClick = useCallback(() => {
     if (clickTimer.current) { clearTimeout(clickTimer.current); clickTimer.current = null; }
-    nav("/p0"); // L3：经营剧场
+    nav("/p0"); // L3：经营主页
   }, [nav]);
 
   /* ---------- 发送：问句走 ask，明确任务走 quest；失败优雅降级 ---------- */
@@ -147,11 +147,11 @@ export function StarRing() {
       } else if (isQuestion(text)) {
         // ask 问询：即时应答上屏（B8；意图路由 misclassify 时按实际 mode 降级提示）
         if (r.mode === "ask" && r.answer) {
-          pushMsg({ role: "agent", action: "星环参谋 · 应答", receipt: "synced", refId: r.threadId, text: r.answer });
+          pushMsg({ role: "agent", action: "AI 助手 · 应答", receipt: "synced", refId: r.threadId, text: r.answer });
         } else {
           pushMsg({
             role: "agent", action: "已转立项处理", receipt: "unverified", refId: r.threadId,
-            text: `该问句被路由为任务（${r.mode ?? "quest"}），线程 ${r.threadId ?? "—"} 已建立，可到 P2 任务舱跟进。`,
+            text: `该问句被路由为任务（${r.mode ?? "quest"}），线程 ${r.threadId ?? "—"} 已建立，可到 P2 任务中心跟进。`,
             linkTo: r.threadId ? `/p2/${encodeURIComponent(r.threadId)}` : undefined,
           });
         }
@@ -159,7 +159,7 @@ export function StarRing() {
         // quest 立项：不离开当前页，给 P2 下钻口
         pushMsg({
           role: "agent", action: "总导演已接单", receipt: "unverified", refId: r.threadId,
-          text: `已立项 ${r.threadId ?? "—"}（状态 ${r.status ?? "queued"}）：「${text}」。点击跳任务舱跟进执行。`,
+          text: `已立项 ${r.threadId ?? "—"}（状态 ${r.status ?? "queued"}）：「${text}」。点击跳任务中心跟进执行。`,
           linkTo: r.threadId ? `/p2/${encodeURIComponent(r.threadId)}` : undefined,
         });
       }
@@ -167,7 +167,7 @@ export function StarRing() {
       setInput(text); // 输入保留可重试
       pushMsg({
         role: "agent", action: "调用失败", receipt: "failed",
-        text: `星环连接中断：${e instanceof Error ? e.message : String(e)}。输入已保留，可重试（E1.1 优雅降级）。`,
+        text: `AI 助手连接中断：${e instanceof Error ? e.message : String(e)}。输入已保留，可重试（E1.1 优雅降级）。`,
       });
     } finally {
       setSending(false);
@@ -236,12 +236,12 @@ export function StarRing() {
       {level === 2 && (
         <div className="fixed inset-y-0 right-0 z-40 flex w-[min(560px,94vw)] flex-col border-l border-line bg-bg900/95 shadow-[-20px_0_60px_rgba(0,0,0,.5)] backdrop-blur-md">
           <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-            <span className="text-h2 font-black tracking-wider text-gold">星环 · 对话</span>
+            <span className="text-h2 font-black tracking-wider text-gold">Ask · AI 助手</span>
             <span className="font-mono text-micro text-ink3">{pathname}</span>
             <span className="flex-1" />
             <button type="button" onClick={() => nav("/p0")}
               className="cursor-pointer rounded border border-gline px-2 py-0.5 text-micro text-gold hover:bg-card">
-              进剧场 →
+              进经营主页 →
             </button>
             <button type="button" onClick={() => setLevel(1)}
               className="cursor-pointer rounded border border-line px-2 py-0.5 text-micro text-ink3 hover:bg-card">
@@ -259,7 +259,7 @@ export function StarRing() {
               ) : (
                 <AgentActionMessage
                   key={m.id}
-                  sender="星环参谋"
+                  sender="AI 助手"
                   version=""
                   action={m.action ?? "应答"}
                   eventId={m.refId ?? "—"}
@@ -267,7 +267,7 @@ export function StarRing() {
                 >
                   {m.text}
                   {m.linkTo && (
-                    <a href={m.linkTo} className="ml-1 text-holo underline">→ 任务舱跟进</a>
+                    <a href={m.linkTo} className="ml-1 text-holo underline">→ 任务中心跟进</a>
                   )}
                 </AgentActionMessage>
               ))
@@ -293,7 +293,7 @@ export function StarRing() {
         type="button"
         onClick={onBallClick}
         onDoubleClick={onBallDoubleClick}
-        title="星环 · 全局 Ask（⌘K 唤起 · 双击进剧场）"
+        title="AI 助手 · 全局 Ask（⌘K 唤起 · 双击进经营主页）"
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full gold-grad shadow-[0_0_24px_rgba(255,160,60,.5)]"
       >
         <span

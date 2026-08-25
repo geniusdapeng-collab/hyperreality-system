@@ -1,5 +1,5 @@
 /**
- * P2 任务舱·主线执行（F4：Quest 会话页；PRD P2-①②③ 逐条对账）
+ * P2 任务中心·主线执行（F4：Quest 会话页；PRD P2-①②③ 逐条对账）
  *  - 行动消息流（P2E2）= 该线程事件流子序列投影（P2-⑤：ts 升序；回执三态/命中规则/计量逐事件渲染）
  *  - 失败步红框 + 转人工/降级重试/回滚三入口（E3.1）；无回执标「未核实」不宣称完成（L3.6/E3.7）
  *  - ThreadInspector 右栏：进度 x/y · 参与成员 · 计量（档/窗口/积分/降级链）· 围栏判定，≤5s 轮询（F3.4）；
@@ -136,7 +136,7 @@ export default function P2() {
     } else {
       await trpc.approvals.decide.mutate({ approvalId, gesture: g });
     }
-    setBanner({ level: "info", text: "决断已写回事件库并回流偏好记忆（F5.5/F1.7）" });
+    setBanner({ level: "info", text: "审批已写回事件库并回流偏好记忆（F5.5/F1.7）" });
     await load();
   }, [load]);
 
@@ -226,7 +226,7 @@ export default function P2() {
       <div className="flex min-h-full flex-col">
         {/* ThreadHeader（P2-④：mode/路由置信度可见） */}
         <div className="mb-3 flex items-center gap-2.5">
-          <h2 className="text-h1 font-black tracking-wider">任务舱 · 主线执行</h2>
+          <h2 className="text-h1 font-black tracking-wider">任务中心 · 主线执行</h2>
           <span className="text-[11px] tracking-[.2em] text-ink3">P2 · QUEST CABIN</span>
           {thread && (
             <>
@@ -288,7 +288,7 @@ export default function P2() {
                   const text = ev.decision.action === "thread.dispatch"
                     ? (after?.title ?? thread.title)
                     : ev.decision.action === "approval.gesture"
-                      ? `舰长决断：${after?.gesture ?? "已处理"}`
+                      ? `待我审批：${after?.gesture ?? "已处理"}`
                       : actionText(ev.decision.action);
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{text}</HumanBubble>;
                 }
@@ -339,7 +339,7 @@ export default function P2() {
                 <div key={a.approval_id} className={`rounded-msg border p-4 ${a.status === "pending" ? "border-warn/40 bg-warn/4" : "border-line bg-card"}`}>
                   <div className="mb-2 flex items-center gap-2">
                     <span className={`text-h2 font-bold ${a.status === "pending" ? "text-warn" : "text-ink2"}`}>
-                      ◆ 舰长决断 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
+                      ◆ 待我审批 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
                     </span>
                     <span className="font-mono text-micro text-ink3">{shortId(a.approval_id)}</span>
                     {a.snapshot.rule_version && <span className="font-mono text-micro text-holo">命中 {a.snapshot.rule_version}</span>}

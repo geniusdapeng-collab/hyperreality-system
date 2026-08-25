@@ -1,9 +1,9 @@
 /**
- * P0 经营剧场（默认首页）——数字CEO 与数字团队的主界面
+ * P0 经营主页（默认首页）——数字CEO 与数字团队的主界面
  *
- * 界面三要素：形象（织元体全息CEO+员工卫星群）/ 实况（语音气泡+请示卡+实况字幕）/ 聊天框。
- * 设计原则：剧场负责「感觉」，工作台（/p1…）负责「操作」；全部状态来自真实事件（captain.theater 5s 心跳）。
- * 形象纯 SVG+CSS+Canvas 零素材；仪式：每日首访开门礼（光核→光环→卫星逐亮→报到词）。
+ * 界面三要素：形象（数字CEO 全息+员工状态）/ 实况（语音气泡+请示卡+实况字幕）/ 聊天框。
+ * 设计原则：经营主页负责「感觉」，工作台（/p1…）负责「操作」；全部状态来自真实事件（captain.theater 5s 心跳）。
+ * 形象纯 SVG+CSS+Canvas 零素材；仪式：每日首访晨间播报（光核→光环→员工逐亮→报到词）。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
@@ -28,7 +28,7 @@ interface ChairmanItem {
   payload: { decision: { action: string } };
 }
 
-/** 数字CEO 模式 → 中文（剧场顶栏 chip；与 P21 MODE_LABEL 同口径） */
+/** 数字CEO 模式 → 中文（经营主页顶栏 chip；与 P21 MODE_LABEL 同口径） */
 const MODE_TEXT: Record<string, string> = {
   disabled: "未授权", shadow: "影子模式", trial: "试用期", suspended: "仅汇报", active: "正式受托",
 };
@@ -63,7 +63,7 @@ function Starfield({ density = 110 }: { density?: number }) {
   return <canvas ref={ref} className="absolute inset-0 h-full w-full" />;
 }
 
-/* ================= 织元体全息 CEO ================= */
+/* ================= 数字CEO 全息形象 ================= */
 function Hologram({ tone, active }: { tone: "gold" | "holo" | "amber" | "red" | "grey"; active: boolean }) {
   const colors = {
     gold: ["#ffd98a", "#c8a24a"], holo: ["#8ad8ff", "#3a9ec8"],
@@ -104,7 +104,7 @@ function Hologram({ tone, active }: { tone: "gold" | "holo" | "amber" | "red" | 
   );
 }
 
-/* ================= 员工卫星群 ================= */
+/* ================= 员工状态 ================= */
 function Satellites({ agents, onPick }: { agents: Satellite[]; onPick: (a: Satellite) => void }) {
   const [t, setT] = useState(0);
   useEffect(() => {
@@ -162,12 +162,12 @@ export default function P0() {
   const [input, setInput] = useState("");
   const [chat, setChat] = useState<Array<{ from: "me" | "ceo"; text: string }>>([]);
   const [busy, setBusy] = useState(false);
-  const [ceremony, setCeremony] = useState(0); // 0=未演 1-4=开门礼阶段 5=完成
+  const [ceremony, setCeremony] = useState(0); // 0=未演 1-4=晨间播报阶段 5=完成
   const [msg, setMsg] = useState("");
-  // D25 视图：floor=数字职场（默认） / stage=剧场舞台（D23）
+  // D25 视图：floor=数字办公区（默认） / stage=总览（D23）
   const [view, setView] = useState<"floor" | "stage">(() =>
     (typeof localStorage !== "undefined" && localStorage.getItem("theater-view") === "stage") ? "stage" : "floor");
-  const [askPick, setAskPick] = useState<FloorAgent | null>(null); // 职场请示卡弹层
+  const [askPick, setAskPick] = useState<FloorAgent | null>(null); // 办公区请示卡弹层
   const switchView = (v: "floor" | "stage") => { setView(v); localStorage.setItem("theater-view", v); };
 
   const load = async () => {
@@ -184,7 +184,7 @@ export default function P0() {
     return () => clearInterval(id);
   }, []);
 
-  // 开门仪式（每日首访）
+  // 晨间播报仪式（每日首访）
   useEffect(() => {
     const key = `theater-ceremony-${new Date().toDateString()}`;
     if (localStorage.getItem(key)) { setCeremony(5); return; }
@@ -247,13 +247,13 @@ export default function P0() {
       {/* 顶栏（极简） */}
       <header className="relative z-20 flex items-center gap-3 px-4 py-2.5">
         <span className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text font-bold text-transparent">视频经理</span>
-        <span className="text-xs text-ink3">经营剧场 · {data?.ceoName ?? "公司CEO"}</span>
+        <span className="text-xs text-ink3">经营主页 · {data?.ceoName ?? "公司CEO"}</span>
         <span className="flex-1" />
         {msg && <span className="text-xs text-go">{msg}</span>}
-        {/* D25 视图切换：职场=等距办公区 / 舞台=全息卫星群 */}
+        {/* D25 视图切换：办公区=等距办公区 / 总览=全息员工状态 */}
         <div className="flex overflow-hidden rounded border border-line text-[11px]">
-          <button onClick={() => switchView("floor")} className={`px-2 py-0.5 ${view === "floor" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>职场</button>
-          <button onClick={() => switchView("stage")} className={`px-2 py-0.5 ${view === "stage" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>舞台</button>
+          <button onClick={() => switchView("floor")} className={`px-2 py-0.5 ${view === "floor" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>办公区</button>
+          <button onClick={() => switchView("stage")} className={`px-2 py-0.5 ${view === "stage" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>总览</button>
         </div>
         <span className={`rounded border px-2 py-0.5 text-[11px] ${tone === "amber" ? "border-amber-400/60 text-amber-300" : tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
           {MODE_TEXT[data?.mode ?? ""] ?? "…"}
@@ -265,7 +265,7 @@ export default function P0() {
       {/* 模拟数据横幅（D24：引导落地向导接入真实数据与真实大模型） */}
       <SimBanner />
 
-      {/* 舞台 */}
+      {/* 总览 */}
       <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4">
         {view === "floor" && data?.floor ? (
           <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-95 opacity-0" : "opacity-100"}`}>
@@ -275,7 +275,7 @@ export default function P0() {
               <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-300" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
               <span>·</span><span>{data.floor.agents.filter((a) => a.state === "idle").length} 待命</span>
               <span className="flex-1" />
-              <span>点员工看绩效 · 点举手者原地裁决</span>
+              <span>点员工看绩效 · 点举手者原地审批</span>
             </div>
             <FloorView
               floor={data.floor}
@@ -326,13 +326,13 @@ export default function P0() {
         </div>
       </main>
 
-      {/* 实况字幕条 */}
+      {/* 实时动态字幕条 */}
       <div className="relative z-10 overflow-hidden border-t border-line/60 bg-panel/60 py-1.5 backdrop-blur">
         <div className="flex animate-[ticker_36s_linear_infinite] gap-8 whitespace-nowrap text-[11px] text-ink3">
           {(data?.ticker ?? []).concat(data?.ticker ?? []).map((e, i) => (
             <span key={i}><b className="text-ink2">{actionText(e.action)}</b> · {e.who}</span>
           ))}
-          {!data?.ticker.length && <span>实况待命中……</span>}
+          {!data?.ticker.length && <span>实时动态待命中……</span>}
         </div>
       </div>
 
@@ -363,13 +363,13 @@ export default function P0() {
             <div className="mb-1 text-sm font-bold text-ink">{pick.name}</div>
             <div className="text-xs text-ink3">岗位：{pick.presetKey}</div>
             <div className="mt-2 text-xs">绩效态：<b className={pick.grade === "表扬" ? "text-go" : pick.grade === "辅导" ? "text-warn" : "text-ink2"}>{pick.grade}</b></div>
-            <a href="/p8" className="mt-3 block rounded border border-line px-3 py-1.5 text-center text-xs text-holo no-underline hover:border-gline">去名册看全部（工作台 P8）</a>
+            <a href="/p8" className="mt-3 block rounded border border-line px-3 py-1.5 text-center text-xs text-holo no-underline hover:border-gline">去团队成员看全部（工作台 P8）</a>
             <button onClick={() => setPick(null)} className="mt-2 w-full rounded border border-line py-1.5 text-xs text-ink3">关闭</button>
           </div>
         </div>
       )}
 
-      {/* 职场请示卡弹层（举手员工 → 原地三手势） */}
+      {/* 办公区请示卡弹层（举手员工 → 原地三手势） */}
       {askPick && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50" onClick={() => setAskPick(null)}>
           <div className="w-80 rounded-xl border border-amber-400/50 bg-card p-4 shadow-[0_0_50px_rgba(255,190,106,.15)]" onClick={(e) => e.stopPropagation()}>
@@ -386,7 +386,7 @@ export default function P0() {
         </div>
       )}
 
-      {/* 开门仪式遮罩 */}
+      {/* 晨间播报遮罩 */}
       {showCeremony && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#07070d] transition-opacity duration-700"
           style={{ opacity: ceremony >= 4 ? 0 : 1, pointerEvents: ceremony >= 4 ? "none" : "auto" }}>

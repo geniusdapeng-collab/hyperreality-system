@@ -1,5 +1,5 @@
 /**
- * TriGestureBar 舰长决断三操纵杆（设计规范 §5.4；审批手势 F5.2）
+ * TriGestureBar 待我审批三操纵杆（设计规范 §5.4；审批手势 F5.2）
  * 结构：三杆并列 ✓推进（绿边）/ ✎校准（青边）/ ✗制动（红边）；大图标+主名+小字副标题
  *      （采纳 / 编辑后采纳 / 驳回）
  * 铁律：驳回必弹原因（枚举+≤200 字，L5.2）；无审批权角色整组隐藏（非置灰，L5.1/F5.6）；
@@ -31,7 +31,7 @@ export function TriGestureBar({
   if (expired) {
     return (
       <div className="flex items-center gap-3 rounded-lg border border-warn/40 bg-warn/5 px-4 py-2.5">
-        <span className="text-body text-warn">快照已过期，决断杆已锁定（E5.3）</span>
+        <span className="text-body text-warn">快照已过期，审批杆已锁定（E5.3）</span>
         <button
           type="button"
           onClick={onRefresh}

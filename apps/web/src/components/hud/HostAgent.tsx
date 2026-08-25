@@ -1,7 +1,7 @@
 /**
  * HostAgent 本页主理员工卡（页面右上角挂载点；供各页复用）
  *  - 按 presetKey 从 workspace.agents 投影取在册员工（姓名/版本/状态点真实数据）
- *  - 点击 → /p8/agent/:id 员工档案（P8E1）；未匹配到 → /p8 名册兜底
+ *  - 点击 → /p8/agent/:id 员工档案（P8E1）；未匹配到 → /p8 团队成员兜底
  *  - 取数失败 → 静态兜底卡（preset 显示名），不阻塞页面（E1.1 优雅降级）
  */
 import { useCallback, useEffect, useState } from "react";
@@ -19,7 +19,7 @@ interface AgentRow {
 
 export function HostAgent({
   presetKey,
-  /** 未取到名册时的兜底显示名 */
+  /** 未取到团队成员时的兜底显示名 */
   fallbackName,
   /** 副标题（缺省「本页主理员工」） */
   subtitle = "本页主理员工",

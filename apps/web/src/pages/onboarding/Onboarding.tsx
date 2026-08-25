@@ -3,7 +3,7 @@
  *
  * ① 环境自检（自动跑：DB/事件库/模型/数据模式）
  * ② 真实大模型（预设一键填 → 真实试调 → 通过才保存；保存即全链即时真实化，无需重启）
- * ③ 经营主体（名称/行业/简介 → 一店一档）
+ * ③ 经营主体（名称/行业/简介 → 门店档案）
  * ④ 启用真实模式（翻转 dataMode，横幅熄灭；模拟期数据保留为「演示期」历史）
  * ⑤ AI 服务前台（可选）：官网抓取建知识库 / 文档入库 / 试营业测试问 / 生成 C 端入口
  *
@@ -178,7 +178,7 @@ export default function Onboarding() {
       <div className="mx-auto max-w-2xl">
         {/* 头 */}
         <div className="mb-6 flex items-center gap-3">
-          <a href="/" className="rounded border border-line px-2.5 py-1 text-xs text-ink3 no-underline hover:border-gline">← 返回剧场</a>
+          <a href="/" className="rounded border border-line px-2.5 py-1 text-xs text-ink3 no-underline hover:border-gline">← 返回经营主页</a>
           <h1 className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text text-lg font-bold text-transparent">落地向导 · 接入真实数据</h1>
         </div>
 
@@ -260,7 +260,7 @@ export default function Onboarding() {
         {/* ③ 经营主体 */}
         {step === 2 && (
           <div className="space-y-4 rounded-xl border border-line bg-panel/70 p-5">
-            <div className="text-sm font-bold">经营主体 <span className="text-xs font-normal text-ink3">写入一店一档，成为数字团队的上下文</span></div>
+            <div className="text-sm font-bold">经营主体 <span className="text-xs font-normal text-ink3">写入门店档案，成为数字团队的上下文</span></div>
             <label className="block text-xs text-ink3">主体名称
               <input className={`${inputCls} mt-1`} value={bizName} onChange={(e) => setBizName(e.target.value)} placeholder="如：云栖酒店" />
             </label>
@@ -355,7 +355,7 @@ export default function Onboarding() {
 
             <div className="flex items-center justify-between pt-1">
               <button className="text-xs text-ink3 underline" onClick={() => setDone(true)}>暂不配置，稍后在知识中台配置</button>
-              <button className={btnCls} onClick={() => setDone(true)}>完成，进入经营剧场 →</button>
+              <button className={btnCls} onClick={() => setDone(true)}>完成，进入经营主页 →</button>
             </div>
           </div>
         )}
@@ -367,10 +367,10 @@ export default function Onboarding() {
             <div className="text-sm font-bold text-go">真实经营模式已启用</div>
             <div className="text-xs leading-relaxed text-ink3">
               横幅已熄灭，切换全程已留痕（onboarding.real_mode_activated）。<br />
-              数字团队将继续以真实身份为您工作——回剧场看看。
+              数字团队将继续以真实身份为您工作——回经营主页看看。
             </div>
             <div className="flex items-center justify-center gap-3">
-              <a href="/" className="inline-block rounded-lg border border-gline bg-gold/10 px-5 py-2 text-sm text-gold no-underline hover:bg-gold/20">回到经营剧场 →</a>
+              <a href="/" className="inline-block rounded-lg border border-gline bg-gold/10 px-5 py-2 text-sm text-gold no-underline hover:bg-gold/20">回到经营主页 →</a>
               <a href="/app/c" target="_blank" className="inline-block rounded-lg border border-holo/40 bg-holo/10 px-5 py-2 text-sm text-holo no-underline hover:bg-holo/20">打开 C 端服务前台 ↗</a>
             </div>
           </div>

@@ -4,7 +4,7 @@
  * 事实源 = onboarding.status（数据模式 + LLM 装配）：
  *  - 数据为模拟种子 或 模型为内置 mock → 常显（宁可多提示，不可漏提示）
  *  - 两者均真实 → 自动熄灭
- * 挂载点：P0 经营剧场顶栏下方 + Bridge 舰桥顶栏下方（全覆盖所有页面）。
+ * 挂载点：P0 经营主页顶栏下方 + Bridge 工作台顶栏下方（全覆盖所有页面）。
  */
 import { useEffect, useState } from "react";
 import { ensureDemoLogin, trpc } from "../lib/trpc";

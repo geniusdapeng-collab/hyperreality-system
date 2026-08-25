@@ -1,5 +1,5 @@
 /**
- * P4 决断队列（F7：待办收件箱 · 统一审查面板；PRD P4-①②③④⑤ 逐条对账）
+ * P4 审批中心（F7：待办收件箱 · 统一审查面板；PRD P4-①②③④⑤ 逐条对账）
  *  - 队列=approvals 表统一投影（F5.1 全来源）；分级：高危→双人（F5.4/L2.6）、越围栏 review→必审、其余→逐步审
  *  - 选中展开原生审批卡：diff 对照表（前删线/后高亮，P4E1）+ 命中规则随行 + 影响面 + 执行回执位说明 + 三手势（P4E2）
  *  - 为什么这样改（P4E3）：依据事件 #E / 引用记忆 / 模型档与积分全展示（事件库投影 F1.12，关键数字来自回执 L3.6）
@@ -117,7 +117,7 @@ export default function P4() {
     } else {
       await trpc.approvals.decide.mutate({ approvalId: a.approval_id, gesture: g });
     }
-    setBanner({ level: "info", text: "决断已写回事件库 + 记忆校准（F5.5/F1.7）；采纳后执行回执位待外部确认（F1.1/E3.7 不宣称完成）" });
+    setBanner({ level: "info", text: "审批已写回事件库 + 记忆校准（F5.5/F1.7）；采纳后执行回执位待外部确认（F1.1/E3.7 不宣称完成）" });
     await load();
   }, [load]);
 
@@ -225,7 +225,7 @@ export default function P4() {
     <Bridge left={left} right={right}>
       <div className="flex min-h-full flex-col">
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-h1 font-black tracking-wider">决断队列</h2>
+          <h2 className="text-h1 font-black tracking-wider">审批中心</h2>
           <span className="text-[11px] tracking-[.2em] text-ink3">P4 · DECISION INBOX</span>
           <span className="flex-1" />
           {canApprove && batchable.length > 0 && (

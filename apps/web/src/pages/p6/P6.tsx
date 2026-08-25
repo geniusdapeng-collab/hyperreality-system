@@ -1,5 +1,5 @@
 /**
- * P6 装备库（F10：Agent 能力商店 · 技能广场；PRD P6-①②③④⑤ 逐条对账）
+ * P6 技能中心（F10：Agent 能力商店 · 技能广场；PRD P6-①②③④⑤ 逐条对账）
  *  - P6E1 意识系统建议横幅（F8.4 ≥3 次/周高频检测；一键固化→触发器 F4.7 / 生成草稿→p6_create / 驳回降权 E8.3；
  *    确认前不产生任何自动化 L4.4；超时态 >10s 显「分析中」可关闭）
  *  - P6E2 官方套件（金边传说·随 Bundle 分发；安装/已安装状态；绑定围栏可见；「已装给谁」→P8）
@@ -88,7 +88,7 @@ export default function P6() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
-  // 轮询口径（D6）：装备库 15s 静默刷新
+  // 轮询口径（D6）：技能中心 15s 静默刷新
   useEffect(() => {
     const t = setInterval(() => void load(true), 15_000);
     return () => clearInterval(t);
@@ -260,7 +260,7 @@ export default function P6() {
     <Bridge
       left={
         <>
-          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">装备库 · ARMORY</div>
+          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">技能中心 · ARMORY</div>
           {[
             ["#sec-official", "✦ 官方套件", `金边 · ${officials.length}`],
             ["#sec-team", "✧ 团队技能", `银边 · ${teams.length}`],
@@ -283,7 +283,7 @@ export default function P6() {
             onClick={() => nav("/")}
             className="mt-2 w-full cursor-pointer rounded-lg border border-line px-3 py-2 text-caption text-ink3 hover:border-holo/40 hover:text-ink2"
           >
-            ← 返回主甲板
+            ← 返回工作台
           </button>
         </>
       }
@@ -309,7 +309,7 @@ export default function P6() {
     >
       <div className="px-1">
         <div className="mb-4 flex items-baseline gap-3">
-          <h2 className="text-[20px] font-black text-ink">装备库</h2>
+          <h2 className="text-[20px] font-black text-ink">技能中心</h2>
           <span className="text-caption text-ink3">Agent 能力商店 · 技能广场</span>
           <span className="font-mono text-micro text-ink3">F8.2 · F8.4</span>
         </div>
@@ -338,7 +338,7 @@ export default function P6() {
                 <div className="flex items-center gap-3">
                   <span className="text-[18px]">🤖</span>
                   <div className="flex-1">
-                    <b className="text-body text-ink">舰桥副官建议</b>
+                    <b className="text-body text-ink">工作台副官建议</b>
                     {suggestions.length > 1 && (
                       <span className="ml-2 rounded border border-holo/40 px-1.5 py-0.5 text-micro text-holo">待确认 {suggestions.length} 条</span>
                     )}
@@ -566,7 +566,7 @@ function SkillWizard({
     setBusy(true);
     try {
       await trpc.skills.install.mutate({ skillId: created.skillId });
-      onDone(); // 完成后态：回装备库，新卡入「团队技能」（F8.3）
+      onDone(); // 完成后态：回技能中心，新卡入「团队技能」（F8.3）
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -582,7 +582,7 @@ function SkillWizard({
           {prefill?.fromSuggestion && <span className="font-mono text-micro text-holo">来自意识系统建议 {prefill.fromSuggestion}</span>}
         </div>
         {!canManage && ready && (
-          <BannerAlert level="warn">只读成员无创建权限（E2.6 隐藏非置灰——此页入口已在装备库隐藏）</BannerAlert>
+          <BannerAlert level="warn">只读成员无创建权限（E2.6 隐藏非置灰——此页入口已在技能中心隐藏）</BannerAlert>
         )}
         <div className="mt-3 grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-3">
@@ -673,7 +673,7 @@ function SkillWizard({
                     onClick={() => nav("/p6")}
                     className="cursor-pointer rounded-md border border-line px-4 py-2 text-body text-ink3 hover:text-ink2"
                   >
-                    返回装备库
+                    返回技能中心
                   </button>
                 </>
               ) : (

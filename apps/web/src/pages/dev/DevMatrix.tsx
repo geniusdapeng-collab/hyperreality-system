@@ -69,11 +69,11 @@ export default function DevMatrix() {
           <QuestCard eventId="E-8842" title="保温杯种草片·三镜渲染" action="镜头渲染中" done={2} total={3} status="running" />
         </Cell>
         <Cell label="review 待审查（琥珀呼吸）">
-          <QuestCard eventId="E-8843" title="抖音评论区差评分流" action="回复草稿待决断" done={2} total={3} status="review" />
+          <QuestCard eventId="E-8843" title="抖音评论区差评分流" action="回复草稿待审批" done={2} total={3} status="review" />
         </Cell>
         <Cell label="done 已完成 / queued 排队">
           <div className="space-y-2">
-            <QuestCard eventId="E-8844" title="早八点账号战报" done={3} total={3} status="done" />
+            <QuestCard eventId="E-8844" title="早八点账号日报" done={3} total={3} status="done" />
           </div>
         </Cell>
         <Cell label="failed 失败（红框）/ reconnecting 重连中">
@@ -81,7 +81,7 @@ export default function DevMatrix() {
         </Cell>
       </Section>
 
-      <Section name="HandoffCard 昨夜战报卡" spec="§5.3 · 默认/空态（禁显 0）">
+      <Section name="HandoffCard 昨夜日报卡" spec="§5.3 · 默认/空态（禁显 0）">
         <Cell label="默认（三栏大数字强一致 F4.4）">
           <HandoffCard data={{ deliveredAt: "08:30", fenceSnapshot: "ai-video-baseline/v1", done: 12, pending: 2, needHuman: 1, credits: 46 }} />
         </Cell>
@@ -90,7 +90,7 @@ export default function DevMatrix() {
         </Cell>
       </Section>
 
-      <Section name="TriGestureBar 决断三操纵杆" spec="§5.4 · 默认/过期禁用/权限隐藏">
+      <Section name="TriGestureBar 审批三操纵杆" spec="§5.4 · 默认/过期禁用/权限隐藏">
         <Cell label="默认三杆"><TriGestureBar /></Cell>
         <Cell label="expired 快照过期（E5.3 整组锁定+刷新）"><TriGestureBar expired /></Cell>
         <Cell label="无审批权（整组隐藏非置灰 L5.1）">
@@ -128,7 +128,7 @@ export default function DevMatrix() {
         <Cell label="SubCallMessage + SystemDivider">
           <div className="space-y-2.5">
             <SubCallMessage target="竞对账号采集" version="v1.3" receipt="synced">同类目均播 12.6w</SubCallMessage>
-            <SystemDivider time="22:00" summary="守夜战队出征（night.run.start 已落库）" />
+            <SystemDivider time="22:00" summary="夜班中心开工（night.run.start 已落库）" />
           </div>
         </Cell>
       </Section>
@@ -176,7 +176,7 @@ export default function DevMatrix() {
           <div className="space-y-2">
             <BannerAlert level="alert" actionLabel="去处理">夜班暂停超时，已触发强制隔离（E4.1）</BannerAlert>
             <BannerAlert level="warn">LLM 降级链生效中：旗舰 → 标准（L6.1 已留痕）</BannerAlert>
-            <BannerAlert level="info">战报将于 08:30 送达（F4.4）</BannerAlert>
+            <BannerAlert level="info">日报将于 08:30 送达（F4.4）</BannerAlert>
           </div>
         </Cell>
       </Section>
