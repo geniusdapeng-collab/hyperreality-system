@@ -283,7 +283,7 @@ export default function P6() {
             onClick={() => nav("/")}
             className="mt-2 w-full cursor-pointer rounded-lg border border-line px-3 py-2 text-caption text-ink3 hover:border-holo/40 hover:text-ink2"
           >
-            ← 返回主甲板
+            ← 返回工作台
           </button>
         </>
       }
@@ -338,7 +338,7 @@ export default function P6() {
                 <div className="flex items-center gap-3">
                   <span className="text-[18px]">🤖</span>
                   <div className="flex-1">
-                    <b className="text-body text-ink">舰桥副官建议</b>
+                    <b className="text-body text-ink">AI 副官建议</b>
                     {suggestions.length > 1 && (
                       <span className="ml-2 rounded border border-holo/40 px-1.5 py-0.5 text-micro text-holo">待确认 {suggestions.length} 条</span>
                     )}

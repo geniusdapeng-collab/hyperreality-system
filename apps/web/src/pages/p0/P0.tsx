@@ -52,7 +52,7 @@ function Starfield({ density = 110 }: { density?: number }) {
         st.y -= st.s; st.tw += 0.03;
         if (st.y < -4) { st.y = h + 4; st.x = Math.random() * w; }
         const a = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(st.tw));
-        ctx.fillStyle = `rgba(160,190,255,${a})`;
+        ctx.fillStyle = `rgba(255,120,150,${a})`;
         ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2); ctx.fill();
       }
       raf = requestAnimationFrame(tick);
@@ -241,12 +241,12 @@ export default function P0() {
 
   const showCeremony = ceremony < 5;
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-[#07070d]">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-bg950">
       <Starfield density={typeof window !== "undefined" && window.innerWidth < 768 ? 60 : 110} />
 
       {/* 顶栏（极简） */}
       <header className="relative z-20 flex items-center gap-3 px-4 py-2.5">
-        <span className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text font-bold text-transparent">视频经理</span>
+        <span className="bg-gradient-to-r from-gold to-gold2 bg-clip-text font-bold text-transparent">视频经理</span>
         <span className="text-xs text-ink3">经营剧场 · {data?.ceoName ?? "公司CEO"}</span>
         <span className="flex-1" />
         {msg && <span className="text-xs text-go">{msg}</span>}
@@ -255,7 +255,7 @@ export default function P0() {
           <button onClick={() => switchView("floor")} className={`px-2 py-0.5 ${view === "floor" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>职场</button>
           <button onClick={() => switchView("stage")} className={`px-2 py-0.5 ${view === "stage" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>舞台</button>
         </div>
-        <span className={`rounded border px-2 py-0.5 text-[11px] ${tone === "amber" ? "border-amber-400/60 text-amber-300" : tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
+        <span className={`rounded border px-2 py-0.5 text-[11px] ${tone === "amber" ? "border-amber-500/60 text-amber-600" : tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
           {MODE_TEXT[data?.mode ?? ""] ?? "…"}
         </span>
         <a href="/p1" className="rounded border border-line px-2 py-0.5 text-[11px] text-ink2 no-underline hover:border-gline">工作台</a>
@@ -269,13 +269,13 @@ export default function P0() {
       <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4">
         {view === "floor" && data?.floor ? (
           <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-95 opacity-0" : "opacity-100"}`}>
-            <div className="mb-1 flex items-center gap-2 px-1 text-[11px] text-ink3">
-              <span className="text-holo">{data.floor.scene.name}</span>
+            <div className="mb-1 flex items-center gap-2 px-1 text-[11px] text-ink2">
+              <span className="font-semibold text-holo">{data.floor.scene.name}</span>
               <span>·</span><span>{data.floor.agents.filter((a) => a.state === "working").length} 工作中</span>
-              <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-300" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
+              <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-600" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
               <span>·</span><span>{data.floor.agents.filter((a) => a.state === "idle").length} 待命</span>
               <span className="flex-1" />
-              <span>点员工看绩效 · 点举手者原地裁决</span>
+              <span className="text-ink2">点员工看绩效 · 点举手者原地裁决</span>
             </div>
             <FloorView
               floor={data.floor}
@@ -388,7 +388,7 @@ export default function P0() {
 
       {/* 开门仪式遮罩 */}
       {showCeremony && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#07070d] transition-opacity duration-700"
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-bg950 transition-opacity duration-700"
           style={{ opacity: ceremony >= 4 ? 0 : 1, pointerEvents: ceremony >= 4 ? "none" : "auto" }}>
           <div className="text-center">
             <div className={`mx-auto mb-4 h-3 w-3 rounded-full bg-gold transition-all duration-700 ${ceremony >= 2 ? "scale-[3] shadow-[0_0_60px_#ffd98a]" : "scale-100"}`} />

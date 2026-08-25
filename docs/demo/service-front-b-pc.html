@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WorkLoom · 云栖酒店 — 服务前台 B 端 PC 演示（镜像 P22 + Bridge）</title>
 <style>
-/* ===== 设计令牌：B 端 tokens.css 色板 + 统一暗金 #e9b558（C 端同族） ===== */
+/* ===== 设计令牌：B 端 tokens.css 色板 + 统一暗金 #ff2442（C 端同族） ===== */
 :root{
-  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
-  --nebula:#241b4d; --nebula2:#3a2a6e;
-  --gold:#e9b558; --gold2:#d69a3a; --goldhi:#ffe0a3; --ongold:#2a1500;
-  --holo:#45e0ff; --holo2:#2fa8ff;
-  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470; --need:#b45cff;
-  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
-  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(233,181,88,.45);
+  --bg950:#fff5f7; --bg900:#ffffff; --bg800:#fff0f4; --bg700:#ffe4ec;
+  --nebula:#ffe0ec; --nebula2:#e8e0ff;
+  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#ffc2d4; --ongold:#ffffff;
+  --holo:#4d96ff; --holo2:#6ec6ff;
+  --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d; --need:#b678ff;
+  --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
+  --card:rgba(255,255,255,.88); --line:rgba(255,36,66,.14); --gline:rgba(255,36,66,.32);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh;overflow-x:hidden}
@@ -161,7 +161,7 @@ tr:hover td{background:rgba(10,18,48,.4)}
       <button class="lnav" data-v="kb" onclick="location.hash='kb'"><div class="t">📚 知识中台</div><div class="m" id="mKb">集合 2 · 待审 1</div></button>
       <button class="lnav" data-v="tickets" onclick="location.hash='tickets'"><div class="t">🎫 工单台</div><div class="m" id="mTk">在列 3</div></button>
       <button class="lnav" data-v="stats" onclick="location.hash='stats'"><div class="t">📊 服务报表</div><div class="m">会话 2 · 问答 4</div></button>
-      <button class="lnav" style="margin-top:8px" onclick="toast('返回主甲板（/）')"><div class="t" style="font-size:11px;color:var(--ink3)">← 返回主甲板</div></button>
+      <button class="lnav" style="margin-top:8px" onclick="toast('返回主甲板（/）')"><div class="t" style="font-size:11px;color:var(--ink3)">← 返回工作台</div></button>
     </aside>
 
     <!-- 主区（apps/web/src/pages/p22/P22.tsx 镜像） -->
@@ -176,7 +176,7 @@ tr:hover td{background:rgba(10,18,48,.4)}
 
       <!-- 顶部 C 端入口卡（P22 QrPlaceholder + 渠道状态镜像） -->
       <div class="card" style="border-color:var(--gline);display:flex;align-items:center;gap:16px;padding:14px;margin-bottom:16px">
-        <svg viewBox="-1 -1 14 14" style="width:84px;height:84px;border-radius:4px;border:1px solid var(--line);background:#eaf1ff;padding:4px" id="qr"></svg>
+        <svg viewBox="-1 -1 14 14" style="width:84px;height:84px;border-radius:4px;border:1px solid var(--line);background:#33262b;padding:4px" id="qr"></svg>
         <div style="flex:1">
           <div style="font-size:13.5px;font-weight:700">🛎 C 端服务前台入口</div>
           <div style="margin-top:2px;font-size:11px;color:var(--ink2)">小程序级 H5：<a href="service-front-c.html" class="mono" style="color:var(--holo);text-decoration:none">/app/c ↗</a>——知识问答（带引用、不臆造）· 订单/会员查询 · 工单流转与结果推送</div>
@@ -341,7 +341,7 @@ tr:hover td{background:rgba(10,18,48,.4)}
     const on=f?(x%3!==1||y%3!==1):(x*7+y*13)%5<2;
     if(on)cells.push(`M${x} ${y}h1v1h-1z`);
   }
-  document.getElementById("qr").innerHTML=`<path d="${cells.join("")}" fill="#0a1230"/>`;
+  document.getElementById("qr").innerHTML=`<path d="${cells.join("")}" fill="#fff0f4"/>`;
 })();
 
 function toast(msg){

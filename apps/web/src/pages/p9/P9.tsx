@@ -133,7 +133,7 @@ export default function P9() {
         <div className="mt-0.5 text-body text-ink2">{run ? `班次 ${run.id}` : "—"}</div>
       </div>
       <a href="/" className="mb-1.5 block rounded-lg border border-line bg-card px-3 py-2.5 text-body text-ink2 no-underline hover:border-gline">
-        ← 返回主甲板（P1）
+        ← 返回工作台
       </a>
       <div className="mt-3 rounded-lg border border-line bg-card p-3">
         <div className="mb-1.5 text-caption font-bold text-holo">交接班预告（P9E5）</div>
@@ -222,7 +222,7 @@ export default function P9() {
           {!ready ? (
             <><SkeletonBlock lines={2} h={44} /><SkeletonBlock lines={4} /></>
           ) : !configured ? (
-            <EmptyState icon="🌙" title="夜班未配置" hint="去航道管制台（P5）配置守夜战队（F4.8）" actionLabel="去配置 →" />
+            <EmptyState icon="🌙" title="夜班未配置" hint="去规则与权限（P5）配置守夜战队（F4.8）" actionLabel="去配置 →" />
           ) : (
             <>
               <SystemDivider time="22:00" summary={`夜班开始 · 围栏快照 ${run?.fenceSnapshot ?? "—"} 已写入事件 · 候选清单 ${run?.candidateCount ?? 0} 项已确认（F4.1/F2.6）`} />

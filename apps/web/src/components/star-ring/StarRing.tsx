@@ -141,7 +141,7 @@ export function StarRing() {
       const r = (await trpc.threads.dispatch.mutate({ title: text, presetKey: "director" })) as DispatchResult;
       if (r.kind === "clarify") {
         pushMsg({
-          role: "agent", action: "航线待确认", receipt: "unverified", refId: r.threadId,
+          role: "agent", action: "任务待确认", receipt: "unverified", refId: r.threadId,
           text: r.question ?? "请补充目标与时间（含糊指令不建任务 F3.2）",
         });
       } else if (isQuestion(text)) {
@@ -151,7 +151,7 @@ export function StarRing() {
         } else {
           pushMsg({
             role: "agent", action: "已转立项处理", receipt: "unverified", refId: r.threadId,
-            text: `该问句被路由为任务（${r.mode ?? "quest"}），线程 ${r.threadId ?? "—"} 已建立，可到 P2 任务舱跟进。`,
+            text: `该问句被路由为任务（${r.mode ?? "quest"}），线程 ${r.threadId ?? "—"} 已建立，可到 P2 任务页跟进。`,
             linkTo: r.threadId ? `/p2/${encodeURIComponent(r.threadId)}` : undefined,
           });
         }
@@ -159,7 +159,7 @@ export function StarRing() {
         // quest 立项：不离开当前页，给 P2 下钻口
         pushMsg({
           role: "agent", action: "总导演已接单", receipt: "unverified", refId: r.threadId,
-          text: `已立项 ${r.threadId ?? "—"}（状态 ${r.status ?? "queued"}）：「${text}」。点击跳任务舱跟进执行。`,
+          text: `已立项 ${r.threadId ?? "—"}（状态 ${r.status ?? "queued"}）：「${text}」。点击跳任务页跟进执行。`,
           linkTo: r.threadId ? `/p2/${encodeURIComponent(r.threadId)}` : undefined,
         });
       }
@@ -267,7 +267,7 @@ export function StarRing() {
                 >
                   {m.text}
                   {m.linkTo && (
-                    <a href={m.linkTo} className="ml-1 text-holo underline">→ 任务舱跟进</a>
+                    <a href={m.linkTo} className="ml-1 text-holo underline">→ 任务页跟进</a>
                   )}
                 </AgentActionMessage>
               ))

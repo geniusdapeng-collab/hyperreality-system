@@ -116,7 +116,7 @@ export default function P3() {
         <div className="space-y-3 p-3.5">
           {/* 页头 */}
           <div className="flex items-center gap-2">
-            <a href="/" className="text-caption text-holo no-underline">← 主甲板</a>
+            <a href="/" className="text-caption text-holo no-underline">← 工作台</a>
             <span className="text-h2 font-black text-ink">掌上战报</span>
             <span className="text-micro tracking-[.2em] text-ink3">P3 · HANDOFF</span>
           </div>
@@ -127,7 +127,7 @@ export default function P3() {
             <><SkeletonBlock lines={2} h={56} /><SkeletonBlock lines={4} /></>
           ) : !nightConfigured ? (
             /* p3_empty：夜班未启用（F4.8） */
-            <EmptyState icon="🌙" title="守夜战队尚未出征" hint="去航道管制台（P5）配置夜班，明早 08:30 战报送达" actionLabel="去配置 →" />
+            <EmptyState icon="🌙" title="守夜战队尚未出征" hint="去规则与权限（P5）配置夜班，明早 08:30 战报送达" actionLabel="去配置 →" />
           ) : (
             <>
               {/* P3E1 三栏计数头（与 P1 交接班卡强一致 F4.4；点击筛选） */}

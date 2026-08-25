@@ -46,11 +46,11 @@ export function DispatchBar({
               maxLength={500}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) onSubmit?.(); }}
-              placeholder="设定航线…（一句话派遣，≤500 字 · F3.1）"
+              placeholder="说出一句话目标…（一句话派遣，≤500 字 · F3.1）"
               className="w-full bg-transparent text-ink outline-none placeholder:text-ink3"
             />
           ) : (
-            (state === "empty" ? "设定航线…（一句话派遣，≤500 字 · F3.1）" : value)
+            (state === "empty" ? "说出一句话目标…（一句话派遣，≤500 字 · F3.1）" : value)
           )}
         </div>
         {/* 三态 pill（主线 Quest 默认选中·金边发光） */}

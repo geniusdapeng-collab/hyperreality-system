@@ -216,6 +216,12 @@ b("高危 Agent 写动作缺 approvalRef 被拒（L3.5）", async () => {
   assert(threw, "高危无授权应拒");
 });
 b("高危 Agent 带 approvalRef 放行", async () => {
+  // P1-8：approvalRef 必须指向真实审批行——先造行再引用
+  await qApp(
+    `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot)
+     VALUES ($1,$2,$3,$4,'inapp','approved','l4_chairman','{}') ON CONFLICT (event_id, channel) DO NOTHING`,
+    [`apr-${SFX}`, scope.tenantId, scope.workspaceId, `E-APR-${SFX}`],
+  );
   const r = await gatewayAppend(gw, { ...scope, actor: { id: "desktop-agent", type: "agent", fenceBindings: ["R2"], highRisk: true }, approvalRef: `apr-${SFX}` }, draftOf("desktop.gui", "desktop-agent"));
   assert(r.eventId, "应落库");
 });
@@ -241,9 +247,11 @@ b("zod 非法事件被拒且不落库", async () => {
   assert(threw, "附录 E 校验应拒");
 });
 b("gatewayAppendIdempotent 自带 ID 重复丢弃", async () => {
-  const ev = { ...draftOf("price.adjust"), event_id: "E-8801" };
-  const r = await gatewayAppendIdempotent(gw, agentCtx(), ev as never);
-  eq(r.deduped, true, "种子重复应幂等");
+  const ev = { ...draftOf("price.adjust"), event_id: `E-RPL-${SFX}` };
+  const r1 = await gatewayAppendIdempotent(gw, agentCtx(), ev as never);
+  eq(r1.deduped, false, "回放首写落库");
+  const r2 = await gatewayAppendIdempotent(gw, agentCtx(), ev as never);
+  eq(r2.deduped, true, "回放重复幂等丢弃");
 });
 b("事件 context tenant/workspace 强制覆写防伪造", async () => {
   const r = await gatewayAppend(gw, agentCtx(), { ...draftOf("order.list"), context: { tenant_id: "tenant-evil", workspace_id: "ws-evil", time: new Date().toISOString() } });
@@ -1246,7 +1254,6 @@ h("D15-② 流水线：提案 → 双人复核 → 完成上架全链路", async
   eq(row.rows[0]!.level, "industry", "已置 industry");
   eq(row.rows[0]!.desensitized, true, "已置脱敏");
   await qApp(`DELETE FROM skill_publish_reviews WHERE skill_id=$1`, [skillId]); // 清理（FK 顺序：先审核单后技能）
-  await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
 });
 h("D15-② 流水线：提案人禁止自批", async () => {
   const { proposePublish, reviewPublish } = await import("@workloom/base/skills");
@@ -1257,7 +1264,6 @@ h("D15-② 流水线：提案人禁止自批", async () => {
   try { await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-001", gesture: "approve" }); } catch { threw = true; }
   assert(threw, "自批必拒");
   await qApp(`DELETE FROM skill_publish_reviews WHERE id=$1`, [p.reviewId]);
-  await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
 });
 h("D15-② 流水线：驳回必填原因 + 重复复核幂等", async () => {
   const { proposePublish, reviewPublish } = await import("@workloom/base/skills");
@@ -1272,7 +1278,6 @@ h("D15-② 流水线：驳回必填原因 + 重复复核幂等", async () => {
   const dup = await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-003", gesture: "approve" });
   eq(dup.deduped, true, "终态后手势幂等");
   await qApp(`DELETE FROM skill_publish_reviews WHERE id=$1`, [p.reviewId]);
-  await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
 });
 h("D15-④ 吊销：吊销技能禁止新安装（kill switch）", async () => {
   const { revokeSkill, installSkill } = await import("@workloom/base/skills");
@@ -1282,25 +1287,21 @@ h("D15-④ 吊销：吊销技能禁止新安装（kill switch）", async () => {
   let threw = false;
   try { await installSkill(app, gw, scope, { skillId, by: "MEM-001" }); } catch (err) { threw = String((err as Error).message).includes("吊销"); }
   assert(threw, "吊销后安装必拒");
-  await qApp(`DELETE FROM skill_revocations WHERE skill_id=$1`, [skillId]);
-  await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
 });
 h("D15-④ 吊销：装配围栏并集排除吊销技能", async () => {
   const { revokeSkill, installSkill, resolveAgentFenceBindings } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-revasm-${SFX}`;
   // 绑定用 R5：种子安装行（skill-revenue-manager）快照含 R1/R2，用 R2 会被种子行干扰
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','装配吊销','1.0.0','d','["R5"]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','装配吊销','1.0.0','d','["R3"]','b',true)`, [skillId]);
   await installSkill(app, gw, scope, { skillId, by: "MEM-001" });
-  const ag = await qApp<{ id: string }>(`SELECT id FROM agents WHERE workspace_id=$1 AND preset_key='content-agent'`, [scope.workspaceId]);
+  const ag = await qApp<{ id: string }>(`SELECT id FROM agents WHERE workspace_id=$1 AND preset_key='pricing-agent'`, [scope.workspaceId]);
   const before = await resolveAgentFenceBindings(app, scope, ag.rows[0]!.id);
-  assert(before.includes("R5"), "吊销前并入");
+  assert(before.includes("R3"), "吊销前并入");
   await revokeSkill(app, gw, scope, { skillId, reason: "测试吊销", by: "MEM-001" });
   const after = await resolveAgentFenceBindings(app, scope, ag.rows[0]!.id);
-  assert(!after.includes("R5"), "吊销后并集收缩");
+  assert(!after.includes("R3"), "吊销后并集收缩");
   const { uninstallSkill } = await import("@workloom/base/skills");
-  await qApp(`DELETE FROM skill_revocations WHERE skill_id=$1`, [skillId]);
   await uninstallSkill(app, gw, scope, { skillId, by: "MEM-001" });
-  await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
 });
 h("D15-④ 吊销：重复吊销幂等", async () => {
   const { revokeSkill } = await import("@workloom/base/skills");
@@ -1310,8 +1311,6 @@ h("D15-④ 吊销：重复吊销幂等", async () => {
   const r2 = await revokeSkill(app, gw, scope, { skillId, reason: "第二次", by: "MEM-001" });
   eq(r1.deduped, false, "首次生效");
   eq(r2.deduped, true, "重复幂等");
-  await qApp(`DELETE FROM skill_revocations WHERE skill_id=$1`, [skillId]);
-  await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
 });
 h("D15-⑤ 版本通道：安装记版本快照，升版后可检出更新", async () => {
   const { installSkill, listSkillUpdates, uninstallSkill } = await import("@workloom/base/skills");
@@ -1325,7 +1324,6 @@ h("D15-⑤ 版本通道：安装记版本快照，升版后可检出更新", asy
   eq(ups[0]!.installedVersion, "1.0.0", "快照=安装时版本");
   eq(ups[0]!.currentVersion, "1.1.0", "当前=新版");
   await uninstallSkill(app, gw, scope, { skillId, by: "MEM-001" });
-  await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
 });
 h("#42 publish_reviews 跨工作区越权被拒（RLS 收口）", async () => {
   // 本区上下文伪造他区审核单：WITH CHECK 拒；读他区单：USING 0 行
@@ -1545,6 +1543,11 @@ l("desktop-agent 高危无逐次授权拒绝", async () => {
   assert(threw, "无授权拒");
 });
 l("desktop-agent 高危带逐次授权放行", async () => {
+  await qApp(
+    `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot)
+     VALUES ($1,$2,$3,$4,'inapp','approved','l4_chairman','{}') ON CONFLICT (event_id, channel) DO NOTHING`,
+    [`apr-desktop-${SFX}`, scope.tenantId, scope.workspaceId, `E-APRD-${SFX}`],
+  );
   const r = await gatewayAppend(gw, { ...scope, actor: { id: "desktop-agent", type: "agent", fenceBindings: ["R2"], highRisk: true }, approvalRef: `apr-desktop-${SFX}` }, draftOf("desktop.gui", "desktop-agent"));
   assert(r.eventId, "授权放行");
 });
@@ -2669,16 +2672,32 @@ h2("融合·LLM 降级链：死端配置被拒 → mock 兜底应答不断链", 
   RC("裁决节拍幂等：连跑两次不重复裁决、不重复事件", async () => {
     const arc = await getArchive();
     try {
-      await qApp(
-        `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
-         VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
-        [`apr-r12-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r12-${SFX}`, JSON.stringify({ action: "price.adjust", params: { price: 480 }, base_price: 458 })]);
-      const r1 = await runQueueBeat(app, scope);
-      const evCount = await countEvents("ceo.decision");
-      const r2 = await runQueueBeat(app, scope);
-      eq(r2.decided, 0, "二次节拍零裁决（pending 已清空）");
-      eq(await countEvents("ceo.decision"), evCount, "二次节拍零新事件");
-      assert(r1.decided >= 1, "首次节拍有裁决");
+      // 队列隔离（D32 修复）：节拍每轮处理 ≤20 条 l2_captain 待批——历史用例遗留的待批会被
+      // r1/r2 分批消化（escalate 也发 ceo.decision 事件但不计入 decided），造成计数假失败；
+      // 先快照并暂cancel 本区存量 l2_captain 待批，finally 恢复，保证队列里只有本用例插入的一条
+      const leftovers = await qApp<{ approval_id: string }>(
+        `UPDATE approvals SET status='rejected' WHERE workspace_id=$1 AND status='pending' AND tier='l2_captain' RETURNING approval_id`,
+        [scope.workspaceId],
+      );
+      try {
+        await qApp(
+          `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+           VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l2_captain') ON CONFLICT (event_id, channel) DO NOTHING`,
+          [`apr-r12-${SFX}`, scope.tenantId, scope.workspaceId, `E-apr-r12-${SFX}`, JSON.stringify({ action: "price.adjust", params: { price: 480 }, base_price: 458 })]);
+        const r1 = await runQueueBeat(app, scope);
+        const evCount = await countEvents("ceo.decision");
+        const r2 = await runQueueBeat(app, scope);
+        eq(r2.decided, 0, "二次节拍零裁决（pending 已清空）");
+        eq(await countEvents("ceo.decision"), evCount, "二次节拍零新事件");
+        assert(r1.decided >= 1, "首次节拍有裁决");
+      } finally {
+        if (leftovers.rowCount) {
+          await qApp(
+            `UPDATE approvals SET status='pending' WHERE workspace_id=$1 AND approval_id = ANY($2::text[])`,
+            [scope.workspaceId, leftovers.rows.map((x) => x.approval_id)],
+          );
+        }
+      }
     } finally {
       await restoreArchive(arc);
       await qApp(`DELETE FROM approvals WHERE approval_id=$1`, [`apr-r12-${SFX}`]);
@@ -2744,6 +2763,12 @@ h2("融合·LLM 降级链：死端配置被拒 → mock 兜底应答不断链", 
   RC("成绩单精确性：2 裁决+1 简报+1 熔断后计数精确匹配", async () => {
     const arc = await getArchive();
     try {
+      // 队列隔离（同 R-11，D32）：历史遗留 l2_captain 待批会被节拍一并裁决，污染计数
+      const leftovers = await qApp<{ approval_id: string }>(
+        `UPDATE approvals SET status='rejected' WHERE workspace_id=$1 AND status='pending' AND tier='l2_captain' RETURNING approval_id`,
+        [scope.workspaceId],
+      );
+      try {
       const before = await buildScorecard(app, scope);
       await qApp(
         `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
@@ -2765,9 +2790,14 @@ h2("融合·LLM 降级链：死端配置被拒 → mock 兜底应答不断链", 
       eq(after.decisions, before.decisions + 2, "裁决 +2");
       eq(after.briefings, before.briefings + 1, "简报 +1");
       eq(after.breakerTrips, before.breakerTrips + 1, "熔断 +1");
+      } finally {
+        if (leftovers.rowCount) {
+          await qApp(`UPDATE approvals SET status='pending' WHERE workspace_id=$1 AND approval_id = ANY($2::text[])`, [scope.workspaceId, leftovers.rows.map((x) => x.approval_id)]);
+        }
+        await qApp(`DELETE FROM approvals WHERE approval_id IN ($1,$2)`, [`apr-r17a-${SFX}`, `apr-r17b-${SFX}`]);
+      }
     } finally {
       await restoreArchive(arc);
-      await qApp(`DELETE FROM approvals WHERE approval_id IN ($1,$2)`, [`apr-r17a-${SFX}`, `apr-r17b-${SFX}`]);
     }
   });
 

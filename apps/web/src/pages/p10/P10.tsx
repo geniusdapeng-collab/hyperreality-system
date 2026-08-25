@@ -221,7 +221,7 @@ export default function P10() {
         onClick={() => nav("/")}
         className="mt-2 w-full cursor-pointer rounded-lg border border-line px-3 py-2 text-caption text-ink3 hover:border-holo/40 hover:text-ink2"
       >
-        ← 返回主甲板
+        ← 返回工作台
       </button>
     </>
   );

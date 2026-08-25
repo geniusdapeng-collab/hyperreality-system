@@ -360,7 +360,7 @@ export function EmployeeCardDrawer({
                 onClick={() => void dispatch()}
                 className="mt-2 cursor-pointer rounded-lg gold-grad px-4 py-1.5 text-caption font-black text-ongold disabled:opacity-40"
               >
-                建线程并跳 P2 任务舱 →
+                建线程并跳 P2 任务页 →
               </button>
             </div>
           )}

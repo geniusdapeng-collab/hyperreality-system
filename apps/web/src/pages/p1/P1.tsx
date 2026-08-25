@@ -1,5 +1,5 @@
 /**
- * P1 主甲板·舰桥（F3：真实 API 接线版；PRD P1-①②③ 逐条对账）
+ * P1 工作台·舰桥（F3：真实 API 接线版；PRD P1-①②③ 逐条对账）
  *  - 左栏 ConversationList：📌 置顶（守夜战队频道/昨夜战报）+ 待办（审批请求 badge）+ 任务线程（状态点实时）+ 问答
  *  - 中栏 MessageFlow：系统分隔线 → 交接班卡（P1E3，三计数与 P3 强一致 F4.4）→ KPI 投影（一企一档 history_curve 真实数据）
  *    → 巡检雷达推送（P1E4，一键派单接 inspection.dispatch；无异常显「昨夜一切正常」）
@@ -287,12 +287,12 @@ export default function P1() {
     <Bridge left={left} right={right}>
       <div className="flex min-h-full flex-col">
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-h1 font-black tracking-wider">主甲板 · 舰桥</h2>
+          <h2 className="text-h1 font-black tracking-wider">工作台 · 总览</h2>
           <span className="text-[11px] tracking-[.2em] text-ink3">
-            P1 · MAIN DECK{isCommunity ? " · 社区版" : ""}{demo ? ` · demo=${demo}` : ""}
+            P1 · OVERVIEW{isCommunity ? " · 社区版" : ""}{demo ? ` · demo=${demo}` : ""}
           </span>
           <span className="flex-1" />
-          {/* 本页主理员工（主甲板=总导演；点击 → P8 员工档案） */}
+          {/* 本页主理员工（工作台=总导演；点击 → P8 员工档案） */}
           <HostAgent presetKey="director" fallbackName="总导演" />
         </div>
 
@@ -379,7 +379,7 @@ export default function P1() {
               <EmptyState
                 icon="🌌"
                 title="今夜风平浪静"
-                hint="还没有会话、待办与异常——@ 一位 Agent 或说出第一句话，舰队即刻启航"
+                hint="还没有会话、待办与异常——@ 一位 Agent 或说出第一句话，团队即刻开工"
               />
             )}
           </div>
@@ -389,7 +389,7 @@ export default function P1() {
         {clarify && (
           <div className="mt-3">
             <BannerAlert level="info" actionLabel="知道了" onAction={() => setClarify(null)}>
-              航线待确认（未建任务）：{clarify}
+              任务待确认（未建任务）：{clarify}
             </BannerAlert>
           </div>
         )}

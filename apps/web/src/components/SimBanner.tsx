@@ -40,7 +40,7 @@ export function SimBanner() {
   const mockLlm = !st.llm.real;
   if (!simData && !mockLlm) return null;
   return (
-    <div className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-400/50 bg-amber-400/10 px-4 py-2 text-[12px] text-amber-200 backdrop-blur">
+    <div className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-500/50 bg-amber-100/80 px-4 py-2 text-[12px] text-amber-800 backdrop-blur">
       <span aria-hidden>⚠️</span>
       <span className="min-w-0 flex-1">
         {simData && mockLlm && (
@@ -56,7 +56,7 @@ export function SimBanner() {
       </span>
       <a
         href="/onboarding"
-        className="shrink-0 rounded border border-amber-300/60 bg-amber-300/15 px-3 py-1 font-bold text-amber-100 no-underline transition-colors hover:bg-amber-300/30"
+        className="shrink-0 rounded border border-amber-500/60 bg-amber-200/60 px-3 py-1 font-bold text-amber-900 no-underline transition-colors hover:bg-amber-300/60"
       >
         接入真实数据 →
       </a>

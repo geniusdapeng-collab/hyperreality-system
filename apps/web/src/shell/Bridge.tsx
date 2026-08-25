@@ -24,9 +24,9 @@ function StarField() {
         className="absolute inset-0 animate-drift"
         style={{
           background:
-            "radial-gradient(60% 45% at 18% 8%, rgb(36 27 77 / .55), transparent 70%)," +
-            "radial-gradient(50% 40% at 85% 20%, rgb(58 42 110 / .38), transparent 70%)," +
-            "radial-gradient(70% 50% at 50% 110%, rgb(36 27 77 / .45), transparent 70%)",
+            "radial-gradient(60% 45% at 18% 8%, rgb(255 224 236 / .7), transparent 70%)," +
+            "radial-gradient(50% 40% at 85% 20%, rgb(232 224 255 / .6), transparent 70%)," +
+            "radial-gradient(70% 50% at 50% 110%, rgb(255 233 226 / .65), transparent 70%)",
         }}
       />
       {/* 星点层（确定性伪随机分布；随 drift 同层缓漂） */}
@@ -34,15 +34,15 @@ function StarField() {
         className="absolute inset-0 animate-drift"
         style={{
           backgroundImage:
-            "radial-gradient(1px 1px at 12% 22%, rgb(234 241 255 / .8) 50%, transparent 51%)," +
-            "radial-gradient(1px 1px at 34% 68%, rgb(234 241 255 / .5) 50%, transparent 51%)," +
-            "radial-gradient(1.5px 1.5px at 57% 15%, rgb(69 224 255 / .6) 50%, transparent 51%)," +
-            "radial-gradient(1px 1px at 72% 47%, rgb(234 241 255 / .7) 50%, transparent 51%)," +
-            "radial-gradient(1px 1px at 88% 78%, rgb(234 241 255 / .45) 50%, transparent 51%)," +
+            "radial-gradient(1px 1px at 12% 22%, rgb(255 122 158 / .55) 50%, transparent 51%)," +
+            "radial-gradient(1px 1px at 34% 68%, rgb(255 122 158 / .35) 50%, transparent 51%)," +
+            "radial-gradient(1.5px 1.5px at 57% 15%, rgb(77 150 255 / .5) 50%, transparent 51%)," +
+            "radial-gradient(1px 1px at 72% 47%, rgb(255 36 66 / .4) 50%, transparent 51%)," +
+            "radial-gradient(1px 1px at 88% 78%, rgb(255 122 158 / .4) 50%, transparent 51%)," +
             "radial-gradient(1.5px 1.5px at 25% 88%, rgb(255 181 69 / .5) 50%, transparent 51%)," +
-            "radial-gradient(1px 1px at 45% 40%, rgb(234 241 255 / .55) 50%, transparent 51%)," +
-            "radial-gradient(1px 1px at 66% 90%, rgb(234 241 255 / .6) 50%, transparent 51%)," +
-            "radial-gradient(1px 1px at 94% 10%, rgb(234 241 255 / .5) 50%, transparent 51%)," +
+            "radial-gradient(1px 1px at 45% 40%, rgb(255 122 158 / .4) 50%, transparent 51%)," +
+            "radial-gradient(1px 1px at 66% 90%, rgb(255 122 158 / .4) 50%, transparent 51%)," +
+            "radial-gradient(1px 1px at 94% 10%, rgb(255 122 158 / .35) 50%, transparent 51%)," +
             "radial-gradient(1.5px 1.5px at 8% 55%, rgb(69 224 255 / .4) 50%, transparent 51%)",
         }}
       />
@@ -83,7 +83,7 @@ export function Bridge({
     <div className="min-h-screen bg-bg950">
       <StarField />
       <div className="relative flex min-h-screen items-start justify-center py-8">
-        <div className="relative w-bridge overflow-hidden rounded-bridge border border-line bg-gradient-to-b from-[#0a1230eb] to-[#050a1af5] shadow-[0_30px_80px_rgba(0,0,0,.55)]">
+        <div className="relative w-bridge overflow-hidden rounded-bridge border border-line bg-gradient-to-b from-[#fffffff2] to-[#fff5f7f5] shadow-[0_30px_80px_rgba(255,36,66,.12)]">
           <CornerTicks />
 
           {/* 顶栏（原型 V4.0 .abar chrome 条） */}
@@ -103,12 +103,12 @@ export function Bridge({
                 <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#7a5410" strokeWidth="1.1" />
                 <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#1b1206" />
               </svg>
-              <span className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-gold to-gold2 bg-clip-text text-transparent">
                 视频经理
               </span>
             </div>
             <span className="text-xs text-ink3">
-              HyperReality · <b className="font-semibold text-ink2">视频创作工作室</b>
+              WorkLoom · <b className="font-semibold text-ink2">视频创作工作室</b>
             </span>
             <span className="flex-1" />
             <PlanSwitcher onPlan={setPlan} />

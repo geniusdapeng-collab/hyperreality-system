@@ -1,5 +1,5 @@
 /**
- * P5 航道管制台（F8：群权限管理 · 规则围栏；PRD P5-①②③④⑤ 逐条对账）
+ * P5 规则与权限（F8：群权限管理 · 规则围栏；PRD P5-①②③④⑤ 逐条对账）
  *  - 左栏版本历史（P5E1：active/rolled_back/出厂基线 🔒；单调守卫只可加严 L2.1）+ 生效范围统计
  *  - 中央规则列表（P5E2：级别 pill auto/review/block/需介入 + 来源 + 30 天触发数；基线 🔒 集团强制 F2.3）
  *  - 自然语言新增群规（P5E3：转写草稿 → 结构化预览 → dry-run → 审批；未确认不生效 L2.4）
@@ -202,7 +202,7 @@ export default function P5() {
     <Bridge left={left} right={right}>
       <div className="flex min-h-full flex-col">
         <div className="mb-3 flex items-baseline gap-3">
-          <h2 className="text-h1 font-black tracking-wider">航道管制台</h2>
+          <h2 className="text-h1 font-black tracking-wider">规则与权限</h2>
           <span className="text-[11px] tracking-[.2em] text-ink3">P5 · FENCE CONTROL</span>
         </div>
 
