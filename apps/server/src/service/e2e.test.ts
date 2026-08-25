@@ -147,8 +147,9 @@ afterAll(async () => {
     try {
       const pg = (await import("pg")).default;
       const pool = new pg.Pool({ connectionString: DB_URL });
-      await pool.query(`DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog'))`);
-      await pool.query(`DELETE FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog')`);
+      // 仅清理本套件 upsert 产生的测试文档（标题带 RUN 前缀 e2e- 开头）；种子基线与预置库（FAQ/送物/报修）一律保留
+      await pool.query(`DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE title LIKE 'e2e-%')`);
+      await pool.query(`DELETE FROM kb_documents WHERE title LIKE 'e2e-%'`);
       await pool.end();
     } catch { /* 清理失败不阻断 */ }
 
@@ -627,11 +628,11 @@ describe("F C 端旅程 · 场景分支", () => {
 
   it("低置信拒答转单：answer 拒答 + ticketDraft，confirm 后建 other 单（前厅部）", async () => {
     const { token } = await cSession(`${RUN}-fl`, "h5", "203.0.113.112");
-    const r = await chat(token, "附近地铁站怎么走", {}, "203.0.113.112");
+    const r = await chat(token, "火星移民船票怎么买", {}, "203.0.113.112");
     expect(String(r.answer)).toContain("无法准确回答");
     expect(r.citations).toEqual([]);
     expect(r.ticketDraft).toMatchObject({ kind: "other" });
-    const ok = await chat(token, "附近地铁站怎么走", { confirmTicket: true, idempotencyKey: `${RUN}-fl-1` }, "203.0.113.112");
+    const ok = await chat(token, "火星移民船票怎么买", { confirmTicket: true, idempotencyKey: `${RUN}-fl-1` }, "203.0.113.112");
     expect((ok.ticket as { kind: string; dept: string })).toMatchObject({ kind: "other", dept: "前厅部" });
   });
 

@@ -40,8 +40,8 @@ async function main() {
   {
     const pg = (await import("pg")).default;
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://postgres:workloom@localhost:5432/workloom_im" });
-    await pool.query(`DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog'))`);
-    await pool.query(`DELETE FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog')`);
+    await pool.query(`DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog','kbd-delivery-catalog','kbd-repair-catalog') AND id NOT LIKE 'kbd-faq-%')`);
+    await pool.query(`DELETE FROM kb_documents WHERE id NOT IN ('kbd-ws-yunqi-notice','kbd-service-catalog','kbd-delivery-catalog','kbd-repair-catalog') AND id NOT LIKE 'kbd-faq-%'`);
     await pool.end();
   }
 

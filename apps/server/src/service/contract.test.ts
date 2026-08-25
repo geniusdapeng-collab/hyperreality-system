@@ -165,7 +165,7 @@ describe("契约 · chat（H5/H6/M9）", () => {
     const { token } = await makeSession(`${RUN}-c2`);
     const r = (await (await req("/chat", {
       method: "POST",
-      body: JSON.stringify({ text: "附近地铁站怎么走" }),
+      body: JSON.stringify({ text: "火星移民船票怎么买" }),
     }, token)).json()) as Record<string, unknown>;
     expect(r.confidence as number).toBeLessThan(0.5);
     expect((r.citations as unknown[]).length).toBe(0);

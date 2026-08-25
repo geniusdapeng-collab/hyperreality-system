@@ -282,14 +282,15 @@ const statsRouter = router({
       [scope.workspaceId],
     );
     const tckRows = await svcQuery<{
-      total: string; done: string; sla_breached: string; avg_rating: string | null;
+      total: string; total_all: string; done: string; sla_breached: string; avg_rating: string | null;
     }>(
       scope.workspaceId,
       `SELECT
          count(*) FILTER (WHERE created_at >= date_trunc('day', now()))::text AS total,
+         count(*)::text AS total_all,
          count(*) FILTER (WHERE status='done')::text AS done,
          count(*) FILTER (WHERE sla_due_at < now() AND status NOT IN ('done','closed'))::text AS sla_breached,
-         avg((payload->'rating'->>'score')::numeric)::text AS avg_rating
+         avg(COALESCE((payload->'rating'->>'score')::numeric, (result->'rating'->>'score')::numeric))::text AS avg_rating
        FROM c_tickets WHERE workspace_id=$1`,
       [scope.workspaceId],
     );
@@ -304,7 +305,8 @@ const statsRouter = router({
       groundedRate: Number(m.answered) === 0 ? null : Number((Number(m.grounded) / Number(m.answered)).toFixed(3)),
       avgLatencyMs: m.avg_latency === null ? null : Math.round(Number(m.avg_latency)),
       ticketsToday: total,
-      completionRate: total === 0 ? null : Number((Number(t.done) / Math.max(total, 1)).toFixed(3)),
+      // 完结率=累计完结/累计工单（恒 ∈[0,1]；此前误用「全量完结÷今日新增」，数据量大时 >1）
+      completionRate: Number(t.total_all) === 0 ? null : Number((Number(t.done) / Number(t.total_all)).toFixed(3)),
       slaBreached: Number(t.sla_breached),
       avgRating: t.avg_rating === null ? null : Number(Number(t.avg_rating).toFixed(2)),
     };
