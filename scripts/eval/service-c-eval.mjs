@@ -64,7 +64,8 @@ async function main() {
     const answered = (r.citations?.length ?? 0) > 0 && !String(r.answer).includes("转专人") && !String(r.answer).includes("不敢随意作答") && r.intent === "kb_qa";
     const refused = !answered && (r.ticketDraft != null || String(r.answer).includes("转") || String(r.answer).includes("不敢"));
     const factsHit = (c.facts ?? []).filter((f) => String(r.answer).replace(/\s/g, "").includes(f.replace(/\s/g, "")));
-    const citationOk = (r.citations ?? []).some((ci) => ci.documentTitle === c.doc);
+    // citationOk：引用须命中金标指定文档或其备选（FAQ 预置库多文档命中时按 docAlt 兼容）
+    const citationOk = (r.citations ?? []).some((ci) => ci.documentTitle === c.doc || (c.docAlt ?? []).includes(ci.documentTitle));
     const isTicket = r.intent === "service_request" && r.ticketDraft != null;
     const pass = c.expect === "answer"
       ? answered && citationOk && factsHit.length === (c.facts ?? []).length
