@@ -106,6 +106,18 @@ if updates:
     L.append("2. 门禁：smoke=`pnpm -r typecheck`｜standard=+`pnpm test`｜full=+全场景套件｜runtime-gate=+dsh-gate E6")
     L.append("3. 失败立即回滚该批并在本文件标「⛔ 阻塞」；全绿 → push 并标「✅ 已发布(hash)」")
     L.append("4. dsh 永远单独一批；IM 试点全绿后其余三仓同版跟升")
+    L.append("")
+    L.append("## 三、新能力评估（人工裁决区 · 大版本升级必填）")
+    L.append("")
+    L.append("> 底层升级常带来新能力而非仅修复。下列大跨度项请逐项评估「能否产品化」，结论写回本文件。组件 repo 地址见 oss-components.json。")
+    L.append("")
+    L.append("| 组件 | 跨度 | CHANGELOG | 新能力线索与产品化设想（人工填写） |")
+    L.append("|---|---|---|---|")
+    for _, n, cur, lat, cad, gate, notes in updates:
+        def major(v):
+            m2 = re.match(r"v?(\d+)", str(v)); return int(m2.group(1)) if m2 else 0
+        span = "⚠ major" if major(lat) > major(cur) else "minor/patch"
+        L.append(f"| `{n}` | {cur} → {lat}（{span}） | 见 repo releases |  |")
 else:
     L.append("## 本周期全部到期组件均为最新 ✅")
     L.append("")

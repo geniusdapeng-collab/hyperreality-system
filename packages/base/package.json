@@ -39,11 +39,11 @@
     "jose": "6.2.9",
     "pg": "8.23.0",
     "yaml": "2.9.0",
-    "zod": "^4.0.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/pg": "^8.11.0",
-    "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }

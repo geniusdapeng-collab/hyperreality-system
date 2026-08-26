@@ -86,9 +86,10 @@ async function seedDemo(client: SqlClient): Promise<void> {
         await indexChunks(client, wsId, String(doc.id), String(doc.content_md));
       }
     }
-    // 酒店演示会员/订单
-    const dmEmpty = await client.query(`SELECT 1 FROM demo_members WHERE workspace_id=$1 LIMIT 1`, [wsId]);
-    if (dmEmpty.rows.length === 0) {
+    // 酒店演示会员/订单（e2e 契约 fixture M-1001/M-1002：不按空表门控——
+    // seed.ts 的扩充运行态会先占表导致本 fixture 被跳过（D36 新装环境 e2e 七连挂根因）；
+    // INSERT 均 ON CONFLICT DO NOTHING 幂等，无条件执行）
+    {
       await client.query(
         `INSERT INTO demo_members (member_id, workspace_id, name, phone, tier, points) VALUES
            ('M-1001',$1,'张伟','13800000001','金卡',2680),

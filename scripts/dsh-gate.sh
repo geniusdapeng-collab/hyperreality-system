@@ -19,8 +19,12 @@ fail() { printf "❌ %s\n" "$1" >&2; exit 1; }
 step "0. 准备：锁版 dsh 依赖 + node-pty 原生模块"
 cd "$GATE"
 [ -d node_modules ] || pnpm install --ignore-workspace
-PTY=$(find node_modules/.pnpm -path "*linux-x64*pty.node" -o -path "*darwin-*pty.node" 2>/dev/null | head -1)
-[ -n "$PTY" ] || pnpm rebuild node-pty --ignore-workspace >/dev/null 2>&1 || fail "node-pty 构建失败（需 Xcode CLT / build-essential）"
+# node-pty 仅当依赖图里存在时才需要预构建（dsh ≥0.1.1-rc.2 已移除该依赖）；
+# find 目录不存在时返回非零，须 || true 兜底（set -euo pipefail 下防静默中止）
+if [ -d node_modules/.pnpm ] && ls node_modules/.pnpm 2>/dev/null | grep -q "^node-pty@"; then
+  PTY=$(find node_modules/.pnpm -path "*linux-x64*pty.node" -o -path "*darwin-*pty.node" 2>/dev/null | head -1 || true)
+  [ -n "$PTY" ] || pnpm rebuild node-pty --ignore-workspace >/dev/null 2>&1 || fail "node-pty 构建失败（需 Xcode CLT / build-essential）"
+fi
 mkdir -p out
 rm -f "$AUDIT"
 DSH="$GATE/node_modules/.bin/dsh"

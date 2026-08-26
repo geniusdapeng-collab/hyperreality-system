@@ -19,20 +19,20 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
-    "@trpc/server": "11.18.0",
     "@hyperreality/video-studio": "workspace:*",
+    "@trpc/server": "11.18.0",
     "@workloom/base": "workspace:*",
     "@workloom/db": "workspace:*",
     "@workloom/runtime": "workspace:*",
     "@workloom/shared": "workspace:*",
-    "hono": "4.13.2",
-    "jose": "6.2.9",
-    "zod": "^4.0.0"
+    "hono": "4.13.5",
+    "jose": "6.2.10",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.9.0"
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
   }
 }
