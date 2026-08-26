@@ -78,6 +78,8 @@ pnpm db:seed                         # 演示种子（可选；短视频域另�
 
 ## 附：开源组件更新（oss-watch）
 
+> 可选提醒：本机制不做任何强制检查——只有当你（或你的 Agent）主动发起时才执行；平时想看看有没有可更新项，`pnpm oss:plan` 即可。
+
 - 一键触发：`pnpm oss:watch`（扫描到期组件 → 生成 `docs/oss-update-plan.md`）；`pnpm oss:plan` 只看计划。
 - 周期：dsh/前端工具链/浏览器自动化=周检，其余=月检，litellm 等有投毒史组件=事件驱动。
 - 纪律：扫描可自动，**升级永不自动**——圈定范围 → 逐项升级 → 按 gate 过门禁（smoke/standard/full/runtime-gate）→ 全绿才发布；dsh 永远单独一批。

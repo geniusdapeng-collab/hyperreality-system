@@ -105,7 +105,7 @@ if updates:
     L.append("1. 每项单独 commit：`pnpm update <pkg>@<latest>` → 更新 oss-components.json 的 current")
     L.append("2. 门禁：smoke=`pnpm -r typecheck`｜standard=+`pnpm test`｜full=+全场景套件｜runtime-gate=+dsh-gate E6")
     L.append("3. 失败立即回滚该批并在本文件标「⛔ 阻塞」；全绿 → push 并标「✅ 已发布(hash)」")
-    L.append("4. dsh 永远单独一批；IM 试点全绿后其余三仓同版跟升")
+    L.append("4. dsh 永远单独一批；发布前建议先做仓库快照（git bundle）")
     L.append("")
     L.append("## 三、新能力评估（人工裁决区 · 大版本升级必填）")
     L.append("")

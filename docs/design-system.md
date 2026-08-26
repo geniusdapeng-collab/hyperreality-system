@@ -129,7 +129,7 @@
 1. 令牌只改 `tokens.css`，组件只消费令牌——任何项目接到同步时，先比对 `tokens.css` 与本规范的 §二 色板；
 2. 新项目接入：复制 `tokens.css` → 跑「纯色验证」（主色按钮/语义四色/文字三级各截一屏）→ 再走查组件；
 3. 行业 Bundle 的 `floor-scene.json` 主题色必须从本规范 §3.5 的浅色域内选取；
-4. 本文件变更需同步到所有底座仓库 `docs/design-system.md` + 根目录 `/design-system/` 包（当前覆盖：workloom / workloom-im / workloom-hotel / hyperreality-system / videomanager）。
+4. 本文件变更时，须同步更新仓库根目录 `/design-system/` 包并保持一致（多仓维护者自行评估是否同步其他仓，单仓开发者忽略本条）。
 
 ---
 
