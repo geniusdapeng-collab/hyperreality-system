@@ -33,7 +33,8 @@
     "capabilities:pptx": "python3 scripts/build-capability-pptx.py",
     "postinstall": "node scripts/postinstall-note.js || true",
     "oss:watch": "bash scripts/oss-watch.sh",
-    "oss:plan": "bash scripts/oss-watch.sh --show"
+    "oss:plan": "bash scripts/oss-watch.sh --show",
+    "db:seed:boost": "tsx --env-file=.env scripts/seed-boost.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
