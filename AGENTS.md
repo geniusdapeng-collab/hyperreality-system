@@ -75,3 +75,10 @@ pnpm db:seed                         # 演示种子（可选；短视频域另�
 | `skills/official/` | 自带技能：industry-entry / product-feedback / demo-mirror / cross-platform-review / deal-flow / ripping-reverse |
 | `scripts/` | `suite*.ts` 测试套件、`seed*.ts` 种子、`release-gate.ts` 发布门禁、`agent-tour.sh` 能力巡游、`preview-all.sh` 三端预览 |
 | `docs/` | 设计规范、方案、测试目录、**capability-map.md**、**agent-computer-guide.md** |
+
+## 附：开源组件更新（oss-watch）
+
+- 一键触发：`pnpm oss:watch`（扫描到期组件 → 生成 `docs/oss-update-plan.md`）；`pnpm oss:plan` 只看计划。
+- 周期：dsh/前端工具链/浏览器自动化=周检，其余=月检，litellm 等有投毒史组件=事件驱动。
+- 纪律：扫描可自动，**升级永不自动**——圈定范围 → 逐项升级 → 按 gate 过门禁（smoke/standard/full/runtime-gate）→ 全绿才发布；dsh 永远单独一批。
+- 完整机制：`skills/oss-watch/SKILL.md`；组件登记：`oss-components.json`（新装依赖必须同步登记）。

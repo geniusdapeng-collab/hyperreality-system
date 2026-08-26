@@ -1,0 +1,361 @@
+{
+  "meta": {
+    "name": "WorkLoom 开源组件清单（oss-watch）",
+    "version": 1,
+    "updated": "2026-08-26",
+    "rule": "凡进入运行时的开源组件必须登记于此；四仓底座公共段保持一致；AGPL 仅独立进程形态"
+  },
+  "components": [
+    {
+      "name": "@deepseek-ai/dsh",
+      "repo": "https://github.com/deepseek-ai/harness",
+      "channel": "npm",
+      "current": "0.1.1-rc.1",
+      "cadence": "weekly",
+      "gate": "runtime-gate",
+      "scope": "packages/runtime/dsh-gate",
+      "notes": "Agent 运行时地基（DeepSeek Harness）锁版+内部 fork；永远单独一批升级，必过 E6 回归与 H-5 kill -9 重放"
+    },
+    {
+      "name": "computer-use",
+      "repo": "https://github.com/anthropics/computer-use（沙箱技能快照 /root/.codebuddy/skills/computer-use）",
+      "channel": "skill",
+      "current": "sandbox-snapshot-2026-08",
+      "cadence": "weekly",
+      "gate": "standard",
+      "scope": "沙箱能力",
+      "notes": "三层感知（CDP/AXTree/截图）；publish-rpa 的 BrowserDriver 上游"
+    },
+    {
+      "name": "playwright",
+      "repo": "https://github.com/microsoft/playwright",
+      "channel": "npm",
+      "current": "（随 computer-use 运行环境）",
+      "cadence": "weekly",
+      "gate": "standard",
+      "scope": "packages/base/publish-rpa",
+      "notes": "publish-rpa 浏览器驱动层；适配器经 BrowserDriver 接口隔离不直 import"
+    },
+    {
+      "name": "stagehand",
+      "repo": "https://github.com/browserbase/stagehand",
+      "channel": "github",
+      "current": "选型在案（剧本主路径）",
+      "cadence": "weekly",
+      "gate": "smoke",
+      "scope": "浏览器自动化分层执行面",
+      "notes": "MIT，2026-07 复核活跃"
+    },
+    {
+      "name": "browser-use",
+      "repo": "https://github.com/browser-use/browser-use",
+      "channel": "github",
+      "current": "选型在案（长尾冷启动探索）",
+      "cadence": "weekly",
+      "gate": "smoke",
+      "scope": "浏览器自动化分层执行面",
+      "notes": "MIT，78k+ stars"
+    },
+    {
+      "name": "vite",
+      "repo": "https://github.com/vitejs/vite",
+      "channel": "npm",
+      "current": "7.3.6",
+      "cadence": "weekly",
+      "gate": "standard",
+      "scope": "apps/web, apps/webc",
+      "notes": "前端工具链，与 @vitejs/plugin-react、@tailwindcss/vite 同批联动"
+    },
+    {
+      "name": "react",
+      "repo": "https://github.com/facebook/react",
+      "channel": "npm",
+      "current": "19.2.8",
+      "cadence": "monthly",
+      "gate": "full",
+      "scope": "apps/web, apps/webc",
+      "notes": "React 19，与 react-dom 同批"
+    },
+    {
+      "name": "react-router",
+      "repo": "https://github.com/remix-run/react-router",
+      "channel": "npm",
+      "current": "7.18.2",
+      "cadence": "monthly",
+      "gate": "full",
+      "scope": "apps/web",
+      "notes": ""
+    },
+    {
+      "name": "@tanstack/react-query",
+      "repo": "https://github.com/TanStack/query",
+      "channel": "npm",
+      "current": "5.101.4",
+      "cadence": "monthly",
+      "gate": "full",
+      "scope": "apps/web",
+      "notes": ""
+    },
+    {
+      "name": "@trpc/server",
+      "repo": "https://github.com/trpc/trpc",
+      "channel": "npm",
+      "current": "11.18.0",
+      "cadence": "monthly",
+      "gate": "full",
+      "scope": "apps/server, apps/web(@trpc/client)",
+      "notes": "server/client 必须同版同批"
+    },
+    {
+      "name": "hono",
+      "repo": "https://github.com/honojs/hono",
+      "channel": "npm",
+      "current": "4.13.2",
+      "cadence": "monthly",
+      "gate": "full",
+      "scope": "apps/server",
+      "notes": "MIT；与 @hono/node-server 同批"
+    },
+    {
+      "name": "tailwindcss",
+      "repo": "https://github.com/tailwindlabs/tailwindcss",
+      "channel": "npm",
+      "current": "4.3.3",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "apps/web, apps/webc",
+      "notes": "v4 令牌制，升级后须过 Candy 设计系统纯色验证"
+    },
+    {
+      "name": "pg",
+      "repo": "https://github.com/brianc/node-postgres",
+      "channel": "npm",
+      "current": "8.23.0",
+      "cadence": "monthly",
+      "gate": "full",
+      "scope": "root, packages/base",
+      "notes": "PG 驱动；现方案为原生 pg（原方案 drizzle 选型未启用，见 notes）"
+    },
+    {
+      "name": "zod",
+      "repo": "https://github.com/colinhacks/zod",
+      "channel": "npm",
+      "current": "4.x",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "apps/server, packages/base",
+      "notes": ""
+    },
+    {
+      "name": "jose",
+      "repo": "https://github.com/panva/jose",
+      "channel": "npm",
+      "current": "6.2.9",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "apps/server, packages/base",
+      "notes": "JWT/JWS"
+    },
+    {
+      "name": "tsx",
+      "repo": "https://github.com/privatenumber/tsx",
+      "channel": "npm",
+      "current": "4.x",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "root, apps/server",
+      "notes": ""
+    },
+    {
+      "name": "vitest",
+      "repo": "https://github.com/vitest-dev/vitest",
+      "channel": "npm",
+      "current": "3.x",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "root, packages/base",
+      "notes": ""
+    },
+    {
+      "name": "typescript",
+      "repo": "https://github.com/microsoft/TypeScript",
+      "channel": "npm",
+      "current": "5.9.x",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "全仓",
+      "notes": ""
+    },
+    {
+      "name": "litellm",
+      "repo": "https://github.com/BerriAI/litellm",
+      "channel": "docker",
+      "current": "v1.89.3-stable（哈希 pin）",
+      "cadence": "event",
+      "gate": "full",
+      "scope": "模型网关（VPC）",
+      "notes": "⚠ 2026-03 PyPI 供应链投毒史 + CVE-2026-42208（KEV）——强制哈希 pin + cosign 验签；安全告警即查不等周期"
+    },
+    {
+      "name": "mem0",
+      "repo": "https://github.com/mem0ai/mem0",
+      "channel": "docker",
+      "current": "自托管内核（选型在案）",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "组织记忆引擎",
+      "notes": "Apache-2.0"
+    },
+    {
+      "name": "presidio",
+      "repo": "https://github.com/microsoft/presidio",
+      "channel": "docker",
+      "current": "独立服务进程（选型在案）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "PII 识别与脱敏",
+      "notes": "MIT"
+    },
+    {
+      "name": "langfuse",
+      "repo": "https://github.com/langfuse/langfuse",
+      "channel": "docker",
+      "current": "v3 自托管（选型在案）",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "可观测性",
+      "notes": "2026-01 被 ClickHouse 收购；v3 footprint 重，边缘节点轻量导出契约对接"
+    },
+    {
+      "name": "deepeval",
+      "repo": "https://github.com/confident-ai/deepeval",
+      "channel": "github",
+      "current": "CI 质量门（选型在案）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "LLM 回归评测",
+      "notes": "Apache-2.0"
+    },
+    {
+      "name": "promptfoo",
+      "repo": "https://github.com/promptfoo/promptfoo",
+      "channel": "npm",
+      "current": "红队评测（选型在案）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "LLM 红队/多模型对比",
+      "notes": "MIT"
+    },
+    {
+      "name": "skyvern",
+      "repo": "https://github.com/Skyvern-AI/skyvern",
+      "channel": "docker",
+      "current": "选型在案（视觉抗改版）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "浏览器自动化分层执行面",
+      "notes": "⚠ AGPL-3.0，仅独立进程"
+    },
+    {
+      "name": "gui-agents",
+      "repo": "https://github.com/simular-ai/gui-agents",
+      "channel": "github",
+      "current": "选型在案（Agent-S3）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "桌面 GUI 操控",
+      "notes": "Apache-2.0；与沙箱 computer-use 能力对照复核"
+    },
+    {
+      "name": "openadapt",
+      "repo": "https://github.com/OpenAdaptAI/OpenAdapt",
+      "channel": "github",
+      "current": "选型在案（录制回放）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "流程固化",
+      "notes": "MIT"
+    },
+    {
+      "name": "wrenai",
+      "repo": "https://github.com/Canner/WrenAI",
+      "channel": "docker",
+      "current": "独立进程（选型在案）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "消息图谱 NL 检索（G1）",
+      "notes": "Apache-2.0；仅用 governed text-to-SQL 引擎"
+    },
+    {
+      "name": "lago",
+      "repo": "https://github.com/getlago/lago",
+      "channel": "docker",
+      "current": "停车场（可选独立计费进程）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "计量计费",
+      "notes": "⚠ AGPL-3.0，仅独立部署"
+    },
+    {
+      "name": "copilotkit",
+      "repo": "https://github.com/CopilotKit/CopilotKit",
+      "channel": "npm",
+      "current": "选型在案（AG-UI 组件库）",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "Agent 卡片/审批组件",
+      "notes": "MIT；仅作组件库，消息流由 dsh 承接"
+    },
+    {
+      "name": "echarts",
+      "repo": "https://github.com/apache/echarts",
+      "channel": "npm",
+      "current": "选型在案",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "工作台图表",
+      "notes": "Apache-2.0"
+    },
+    {
+      "name": "tauri",
+      "repo": "https://github.com/tauri-apps/tauri",
+      "channel": "github",
+      "current": "2.x（桌面壳）",
+      "cadence": "monthly",
+      "gate": "standard",
+      "scope": "apps/desktop",
+      "notes": "Apache-2.0/MIT",
+      "tag_prefix": "tauri-v"
+    },
+    {
+      "name": "pgvector",
+      "repo": "https://github.com/pgvector/pgvector",
+      "channel": "docker",
+      "current": "PG17+pgvector（docker workloom-im-pg）",
+      "cadence": "monthly",
+      "gate": "full",
+      "scope": "数据存储",
+      "notes": "PostgreSQL License"
+    },
+    {
+      "name": "litestream",
+      "repo": "https://github.com/benbjohnson/litestream",
+      "channel": "github",
+      "current": "选型在案（社区版备份）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "边缘节点 SQLite 备份",
+      "notes": "Apache-2.0"
+    },
+    {
+      "name": "browserskill",
+      "repo": "https://github.com/Tencent/BrowserSkill",
+      "channel": "github",
+      "current": "观察项（2026-08-26 评估：Borrow 协议可借鉴）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "浏览器桥接对照组",
+      "notes": "MIT；publish-rpa 真机发布的权限模型参照，暂不入运行时"
+    }
+  ]
+}

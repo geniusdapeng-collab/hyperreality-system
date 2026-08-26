@@ -1,0 +1,142 @@
+{
+ "@deepseek-ai/dsh": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "0.1.1-rc.2"
+ },
+ "computer-use": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "playwright": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "1.62.1"
+ },
+ "stagehand": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "v2.2.0"
+ },
+ "browser-use": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "0.13.8"
+ },
+ "vite": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "8.2.2"
+ },
+ "react": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "19.2.8"
+ },
+ "react-router": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "8.3.0"
+ },
+ "@tanstack/react-query": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "5.102.5"
+ },
+ "@trpc/server": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "11.18.0"
+ },
+ "hono": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "4.13.5"
+ },
+ "tailwindcss": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "4.3.3"
+ },
+ "pg": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "8.23.0"
+ },
+ "zod": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "4.4.3"
+ },
+ "jose": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "6.2.10"
+ },
+ "tsx": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "4.23.12"
+ },
+ "vitest": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "4.1.11"
+ },
+ "typescript": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "7.0.2"
+ },
+ "litellm": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "mem0": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "presidio": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "langfuse": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "deepeval": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "v4.1.8"
+ },
+ "promptfoo": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "0.122.0"
+ },
+ "skyvern": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "gui-agents": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "openadapt": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "v1.14.0"
+ },
+ "wrenai": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "lago": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "copilotkit": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "4.9.1"
+ },
+ "echarts": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "6.1.0"
+ },
+ "tauri": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "2.11.5"
+ },
+ "pgvector": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ },
+ "litestream": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": "v0.5.16"
+ },
+ "browserskill": {
+  "last_scan": 1787738962.6607935,
+  "latest_seen": null
+ }
+}
