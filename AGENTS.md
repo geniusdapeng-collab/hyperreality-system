@@ -62,6 +62,7 @@ pnpm db:seed                         # 演示种子（可选；短视频域另�
 - 发布前必须跑：`pnpm release:gate`（未全过禁止发布，见 `docs/release-checklist.md`）
 - 改事件/号源代码后跑：`pnpm db:verify-chain`
 - **UI 改动必须用浏览器能力实际打开页面截图核对**，禁止"改了就算完成"
+- 改了能力面（脚本/包/技能/演示页）必须跑 `pnpm capabilities` 重新生成人类版导览；`pnpm capabilities:check` 校验同步
 
 ## 5. 仓库速览
 

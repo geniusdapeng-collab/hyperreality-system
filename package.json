@@ -27,7 +27,11 @@
     "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts",
     "release:gate": "tsx --env-file=.env scripts/release-gate.ts",
     "agent:tour": "bash scripts/agent-tour.sh",
-    "preview:all": "bash scripts/preview-all.sh"
+    "preview:all": "bash scripts/preview-all.sh",
+    "capabilities": "node scripts/generate-capabilities.mjs",
+    "capabilities:check": "node scripts/generate-capabilities.mjs --check",
+    "capabilities:pptx": "python3 scripts/build-capability-pptx.py",
+    "postinstall": "node scripts/postinstall-note.js || true"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
