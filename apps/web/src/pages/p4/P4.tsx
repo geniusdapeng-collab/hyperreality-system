@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { APPROVAL_STATUS_TEXT, actionText, dictText, shortId } from "../../lib/display";
+import { APPROVAL_STATUS_TEXT, actionText, dictText, shortId , payloadText } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import {
   BannerAlert,
@@ -340,11 +340,11 @@ export default function P4() {
               <div className="mb-3 grid grid-cols-2 gap-2.5">
                 <div className="rounded-lg border border-line bg-bg800/60 p-3">
                   <div className="mb-1 text-micro tracking-wider text-ink3">调整前</div>
-                  <div className="font-mono text-body text-ink3 line-through">{JSON.stringify(selected.snapshot.before ?? selected.event?.decision.before ?? null)}</div>
+                  <div className="font-mono text-body text-ink3 line-through">{payloadText(selected.snapshot.before ?? selected.event?.decision.before ?? null, 120) || "—"}</div>
                 </div>
                 <div className="rounded-lg border border-holo/35 bg-holo/5 p-3">
                   <div className="mb-1 text-micro tracking-wider text-holo">调整后（高亮）</div>
-                  <div className="font-mono text-body text-holo">{JSON.stringify(selected.snapshot.after ?? selected.event?.decision.after ?? null)}</div>
+                  <div className="font-mono text-body text-holo">{payloadText(selected.snapshot.after ?? selected.event?.decision.after ?? null, 120) || "—"}</div>
                 </div>
               </div>
               {selected.event && selected.event.rule_impact.length > 0 && (

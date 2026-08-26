@@ -78,7 +78,11 @@ export default function ChatPage({
       if (cached.length > 0) {
         setMsgs(cached);
       } else {
+        const history = (cfg.demoHistory ?? []).map((m) => ({
+          id: nextId(), role: m.role, text: m.text, shown: m.role === "user" ? m.text.length : 0, ts: Date.now(),
+        }));
         setMsgs([
+          ...history,
           { id: nextId(), role: "ai", text: tpl(cfg.welcomeText), shown: 0, ts: Date.now() },
         ]);
       }

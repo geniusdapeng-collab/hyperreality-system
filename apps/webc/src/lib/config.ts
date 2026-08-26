@@ -35,6 +35,8 @@ export interface FrontConfig {
   serviceEntries: ServiceEntry[];
   /** 会员等级展示映射：后端 level → 前端展示文案 */
   memberLevels: Record<string, { label: string }>;
+  /** 演示对话历史（首开非空·全场景运行态剧本；可选） */
+  demoHistory?: Array<{ role: "user" | "ai"; text: string }>;
   /** 可关闭的底部 Tab */
   enableTabs: TabKey[];
   supportPhone: string;
