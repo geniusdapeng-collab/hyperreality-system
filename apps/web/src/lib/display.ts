@@ -174,11 +174,30 @@ const ACTION_PART_TEXT: Record<string, string> = {
   query: "查询",
   adjust: "调整",
   reply: "回复",
+  fetch: "抓取",
+  reconcile: "核销",
+  consolidate: "整理",
+  dispatch: "派发",
+  send: "发送",
+  boost: "加热",
+  attribute: "归因",
+  scan: "扫描",
+  capture: "捕获",
+  nurture: "培育",
+  promote: "推广",
+  report: "播报",
+  snapshot: "快照",
+  gesture: "手势",
+  segment: "分群",
+  draft: "起草",
+  memo: "备忘",
+  refund: "退款",
+  deliver: "投递",
 };
 
 /** 动作码人性化：先查表，未收录则按「域·动作」末段翻译兜底，永不裸奔原始码 */
 export function actionText(action: string): string {
-  const hit = ACTION_TEXT[action] ?? ACTION_TEXT_EXT[action];
+  const hit = ACTION_TEXT[action] ?? ACTION_TEXT_EXT[action] ?? ACTION_OPS_TEXT[action];
   if (hit) return hit;
   const parts = action.split(".");
   const tail = parts[parts.length - 1] ?? action;
@@ -234,4 +253,122 @@ export function latencyText(ms: number | null | undefined): string {
   if (ms == null) return "—";
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+// —— 行动者/员工代号 → 中文名（F-CN1：界面不出现 reconcile-agent/guest-success 这类原始 ID）——
+/** preset_key / actor id → 中文名。成员编号（MEM-xxx）与事件编号（E-xxx）属代号，原样保留 */
+export const ACTOR_TEXT: Record<string, string> = {
+  // 酒店域
+  "reconcile-agent": "对账 Agent",
+  "competitor-agent": "竞对 Agent",
+  "channel-watcher": "渠道哨兵 Agent",
+  "ai-receptionist": "AI 接待员",
+  "content-agent": "内容 Agent",
+  "voice-front-agent": "语音前台 Agent",
+  "guest-success": "住客满意 Agent",
+  "owner-cockpit": "业主驾驶舱 Agent",
+  "groupbuy-agent": "团购 Agent",
+  "pricing-agent": "调价 Agent",
+  "desktop-agent": "桌面 Agent",
+  "review-agent": "评价 Agent",
+  "coupon-operator": "券运营 Agent",
+  "lead-concierge": "线索管家 Agent",
+  "company-ceo": "公司 CEO",
+  captain: "编排官",
+  system: "系统",
+  "night-shift": "夜班中心",
+  // 视频域常见
+  director: "总导演",
+  producer: "制片人",
+  editor: "剪辑师",
+  renderer: "渲染师",
+  publisher: "发布专员",
+  "data-analyst": "数据看板官",
+  "script-writer": "剧本师",
+};
+
+/**
+ * 行动者人性化：先查表；未收录的 xxx-agent 去后缀查词根；MEM-/E-/T- 等编号原样；
+ * 其余下划线/连字符串转空格分词（永不裸奔原始 ID）
+ */
+export function actorText(id: string): string {
+  if (!id) return "—";
+  const hit = ACTOR_TEXT[id];
+  if (hit) return hit;
+  if (/^(MEM|E|T|VID|R|G)-/.test(id)) return id; // 编号类保留
+  if (id.endsWith("-agent")) {
+    const root = id.slice(0, -6);
+    return `${ACTOR_TEXT[root] ?? root.replace(/[-_]/g, " ")} Agent`;
+  }
+  return id.replace(/[-_]/g, " ");
+}
+
+/** 夜班/运营高频动作码补录（F-CN1） */
+export const ACTION_OPS_TEXT: Record<string, string> = {
+  // 夜班/运营高频动作码（点式全量，F-CN1；与种子/套件动作码对齐）
+  "approval.gesture": "审批手势",
+  "ask.answer": "问询应答",
+  "audience.segment": "客群分群",
+  "booking.confirm": "订单确认",
+  "campaign.publish": "活动发布",
+  "campaign.schedule": "活动排期",
+  "competitor.fetch": "竞对抓取",
+  "content.publish": "内容发布",
+  "conversion.attribute": "成交归因",
+  "coupon.create": "创建券",
+  "coupon.promote": "券推广",
+  "funnel.weekly": "漏斗周报",
+  "geo.publish": "GEO 发布",
+  "guest.care.send": "住客关怀",
+  "inspection.scan": "巡检扫描",
+  "intent.radar.report": "意图雷达播报",
+  "lead.assign": "线索分派",
+  "lead.capture": "线索捕获",
+  "lead.nurture": "线索培育",
+  "live.campaign": "直播活动",
+  "market.scan": "市场扫描",
+  "member.referral": "会员转介绍",
+  "memory.consolidate": "记忆整理",
+  "night.package.deliver": "夜班日报投递",
+  "night.run.start": "夜班开始",
+  "order.reconcile": "对账核销",
+  "order.refund": "订单退款",
+  "render.review": "渲染审片",
+  "review.asset.boost": "好评加热",
+  "review.reply": "回复评价",
+  "script.draft": "脚本起草",
+  "strategy.memo": "策略备忘",
+  "thread.dispatch": "任务派发",
+  "visibility.snapshot": "曝光快照",
+  // 裸词别名（历史数据兼容）
+  reconcile: "对账核销",
+  fetch: "竞对抓取",
+  send: "发送",
+  answer: "即时应答",
+  dispatch: "任务派发",
+  boost: "加热推广",
+  weekly: "周报汇总",
+  attribute: "成交归因",
+  referral: "转介绍跟进",
+  "morning-briefing": "晨报",
+  consolidate: "记忆整理",
+  deliver: "夜班投递",
+  start: "开始",
+  scan: "巡检扫描",
+};
+
+/** 行动载荷人性化：常见 JSON 键 → 中文键值对；非对象原样返回（F-CN1） */
+const PAYLOAD_KEY_TEXT: Record<string, string> = {
+  diff: "差异", rounds: "轮次", card: "竞对", price: "价格", sku: "单品", count: "数量",
+  note: "备注", occ: "入住率", revpar: "RevPAR", adr: "均价", score: "评分", status: "状态",
+};
+export function payloadText(after: unknown, maxLen = 160): string {
+  if (after == null) return "";
+  if (typeof after !== "object") return String(after).slice(0, maxLen);
+  const parts = Object.entries(after as Record<string, unknown>).map(([k, v]) => {
+    const key = PAYLOAD_KEY_TEXT[k] ?? k;
+    const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+    return `${key} ${val}`;
+  });
+  return parts.join(" · ").slice(0, maxLen);
 }

@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { actionText } from "../../lib/display";
+import { actionText, actorText, payloadText } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import {
   AgentActionMessage,
@@ -127,7 +127,7 @@ export default function P9() {
   /* ---------- 左栏：班组导航 ---------- */
   const left = (
     <>
-      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">夜班中心 · NIGHT SQUAD</div>
+      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">夜班中心 · 班组频道</div>
       <div className="mb-1.5 rounded-lg border border-gline bg-gold/6 px-3 py-2.5">
         <div className="text-caption text-gold">📌 班组群（本页）</div>
         <div className="mt-0.5 text-body text-ink2">{run ? `班次 ${run.id}` : "—"}</div>
@@ -153,7 +153,7 @@ export default function P9() {
   /* ---------- 右栏：班组信息 ---------- */
   const right = (
     <>
-      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">班组信息 · SQUAD</div>
+      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">班组信息 · 概览</div>
       <div className="mb-3 rounded-lg border border-line bg-card p-3">
         <div className="mb-1.5 text-caption font-bold text-holo">班组状态（F4.8 状态机）</div>
         <NightStatusPill state={pillState} window="22:00–08:00" />
@@ -195,7 +195,7 @@ export default function P9() {
         {/* GroupHeader */}
         <div className="mb-3 flex items-center gap-3">
           <h2 className="text-h1 font-black tracking-wider">夜班中心频道</h2>
-          <span className="text-[11px] tracking-[.2em] text-ink3">P9 · NIGHT SQUAD</span>
+          <span className="text-[11px] tracking-[.2em] text-ink3">P9 · 夜班班组</span>
           <span className="flex-1" />
           {!readonly && configured && run?.status === "running" && <EmergencyBrake onConfirm={() => void doPause()} />}
           {!readonly && configured && run?.status === "paused" && (
@@ -231,7 +231,7 @@ export default function P9() {
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{String((ev.decision.after as { text?: string })?.text ?? "")}</HumanBubble>;
                 }
                 if (ev.who.type === "system") {
-                  return <SystemDivider key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)} summary={`${ev.who.id} · ${actionText(ev.decision.action)}（已落库）`} />;
+                  return <SystemDivider key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)} summary={`${actorText(ev.who.id)} · ${actionText(ev.decision.action)}（已落库）`} />;
                 }
                 // 需介入卡（红框，L4.2 夜间不确定不执行）+ 一键派单（P9E3）
                 const blocked = ev.rule_impact?.some((r) => r.result === "blocked");
@@ -241,7 +241,7 @@ export default function P9() {
                       key={ev.event_id}
                       severity="p0"
                       eventId={ev.event_id}
-                      title={`需介入：${ev.who.id} · ${actionText(ev.decision.action)}${ev.object.id ? `（${ev.object.id}）` : ""}`}
+                      title={`需介入：${actorText(ev.who.id)} · ${actionText(ev.decision.action)}${ev.object.id ? `（${ev.object.id}）` : ""}`}
                       source={ev.object.type}
                       onDispatch={() => {
                         void trpc.inspection.dispatch.mutate({ anomalyEventId: ev.event_id, presetKey: "comment-operator" })
@@ -254,7 +254,7 @@ export default function P9() {
                 return (
                   <AgentActionMessage
                     key={ev.event_id}
-                    sender={ev.who.id}
+                    sender={actorText(ev.who.id)}
                     version={ev.who.version ?? ""}
                     action={actionText(ev.decision.action)}
                     eventId={ev.event_id}
@@ -262,8 +262,7 @@ export default function P9() {
                     rules={(ev.rule_impact ?? []).map((r) => `${r.rule_id} ${r.version}${r.result === "review" ? " · 未生效待审批" : ""}`)}
                     credits={ev.model_trace?.credits}
                   >
-                    {typeof ev.decision.after === "object" && ev.decision.after !== null
-                      ? JSON.stringify(ev.decision.after).slice(0, 160) : ""}
+                    {payloadText(ev.decision.after)}
                   </AgentActionMessage>
                 );
               })}

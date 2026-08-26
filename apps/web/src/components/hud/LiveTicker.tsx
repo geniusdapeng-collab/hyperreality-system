@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { actionLabel } from "./gateAgentMap";
+import { actorText } from "../../lib/display";
 
 /** Mock 兜底（模拟态口径，仅在线路断开/无事件时展示） */
 const MOCK_ITEMS = [
@@ -35,7 +36,7 @@ export function LiveTicker() {
       const r = await trpc.captain.theater.query();
       const rows = (r.ticker ?? []) as TickerRow[];
       if (rows.length > 0) {
-        setItems(rows.map((t) => `${t.who} · ${actionLabel(t.action)}`));
+        setItems(rows.map((t) => `${actorText(t.who)} · ${actionLabel(t.action)}`));
         setMock(false);
       }
     } catch {

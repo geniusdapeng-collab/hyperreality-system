@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { COMMON_STATUS_TEXT, THREAD_MODE_TEXT, actionText, dictText, shortId } from "../../lib/display";
+import { COMMON_STATUS_TEXT, THREAD_MODE_TEXT, actionText, actorText, dictText, payloadText, shortId } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import {
   AgentActionMessage,
@@ -305,7 +305,7 @@ export default function P2() {
                   return (
                     <AgentActionMessage
                       key={ev.event_id}
-                      sender={ev.who.id}
+                      sender={actorText(ev.who.id)}
                       version={ev.who.version ?? ""}
                       action="创作参谋·应答"
                       eventId={ev.event_id}
@@ -319,7 +319,7 @@ export default function P2() {
                 return (
                   <AgentActionMessage
                     key={ev.event_id}
-                    sender={ev.who.id}
+                    sender={actorText(ev.who.id)}
                     version={ev.who.version ?? ""}
                     action={actionText(ev.decision.action)}
                     eventId={ev.event_id}
@@ -327,9 +327,7 @@ export default function P2() {
                     rules={(ev.rule_impact ?? []).map((r) => `${r.rule_id} ${r.version}`)}
                     credits={ev.model_trace?.credits}
                   >
-                    {typeof ev.decision.after === "object" && ev.decision.after !== null
-                      ? JSON.stringify(ev.decision.after).slice(0, 160)
-                      : String(ev.decision.after ?? "")}
+                    {payloadText(ev.decision.after)}
                   </AgentActionMessage>
                 );
               })}

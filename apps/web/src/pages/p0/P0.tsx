@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { actionText } from "../../lib/display";
+import { actionText, actorText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
 import { useAskRailPadding } from "../../lib/useAskRail";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
@@ -332,7 +332,7 @@ export default function P0() {
       <div className="relative z-10 overflow-hidden border-t border-line/60 bg-panel/60 py-1.5 backdrop-blur">
         <div className="flex animate-[ticker_36s_linear_infinite] gap-8 whitespace-nowrap text-[11px] text-ink3">
           {(data?.ticker ?? []).concat(data?.ticker ?? []).map((e, i) => (
-            <span key={i}><b className="text-ink2">{actionText(e.action)}</b> · {e.who}</span>
+            <span key={i}><b className="text-ink2">{actionText(e.action)}</b> · {actorText(e.who)}</span>
           ))}
           {!data?.ticker.length && <span>实况待命中……</span>}
         </div>
