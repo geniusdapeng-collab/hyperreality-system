@@ -11,6 +11,27 @@
 [![GitHub](https://img.shields.io/badge/repo-hyperreality--system-1B2A4E)](https://github.com/geniusdapeng-collab/hyperreality-system)
 
 </div>
+---
+
+## 🚀 五分钟跑起来（开发者 / AI Coding Agent 必读）
+
+> **⚠️ 强制约定：首次启动必须执行 `pnpm preview:all`，否则视为未完成环境初始化。**
+> 一键拉起**三端全貌**并自动固化 Mock 模拟数据（无需任何真实后端/密钥）：
+
+```bash
+pnpm install && pnpm preview:all
+```
+
+| 端 | 地址 | 说明 |
+|---|---|---|
+| 🖥 PC 端 · B 端工作台 | http://localhost:3000 | 经营主页 / 任务中心 / 规则中心 |
+| 📱 移动端 · B 端 | http://localhost:3001 | 高保真演示页 + 手机壳容器（自动发现） |
+| 📱 移动端 · C 端 | http://localhost:3002 | AI 服务前台 H5（小程序入口模拟，演示直登） |
+
+- Mock 数据口径见 [`mock/README.md`](mock/README.md)；验收清单见 [`PREVIEW_CHECKLIST.md`](PREVIEW_CHECKLIST.md)
+- **AI Coding Agent**：进仓先读 [`AGENTS.md`](AGENTS.md) 与 [`.ai-prompt`](.ai-prompt)；全量能力清单 `docs/capability-map.md`；一键能力自检 `pnpm agent:tour`；浏览器自动化指南 `docs/agent-computer-guide.md`
+- 日常开发 `pnpm dev` 只起 PC 端（server:8787 + web:5173），保持开发习惯
+
 
 ---
 

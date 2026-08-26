@@ -23,7 +23,18 @@ python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '{"action"
 python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '{"action": "screenshot"}'
 ```
 
-## 1. 一键能力巡游（强烈建议进仓第一件事）
+## 1. 首次启动：先看三端全貌（强制）
+
+```bash
+pnpm preview:all     # 一键拉起三端 + Mock 数据固化（无需真实后端/密钥）
+#  🖥 PC 端 B 端工作台        http://localhost:3000
+#  📱 B 端移动（高保真+手机壳） http://localhost:3001
+#  📱 C 端 AI 服务前台 H5      http://localhost:3002
+```
+
+**未完成 preview:all 视为环境初始化未完成。** 验收清单：`PREVIEW_CHECKLIST.md`；Mock 口径：`mock/README.md`。
+
+## 2. 一键能力巡游（强烈建议进仓第一件事）
 
 ```bash
 bash scripts/agent-tour.sh          # 环境+数据+服务+浏览器四层自检（约 1~3 分钟）
@@ -33,7 +44,7 @@ bash scripts/agent-tour.sh --full   # 追加种子编排 + 全部测试套件 + 
 巡游全绿 = 你已掌握本仓全部能力的调用方式。**全量能力清单见 [`docs/capability-map.md`](docs/capability-map.md)**；
 浏览器操作完整指南见 [`docs/agent-computer-guide.md`](docs/agent-computer-guide.md)。
 
-## 2. 系统怎么跑起来
+## 3. 系统怎么跑起来
 
 ```bash
 docker start workloom-im-pg          # PG17 + pgvector（如未创建见 docker-compose.yml）
@@ -45,14 +56,14 @@ pnpm db:seed                         # 演示种子（可选；短视频域另�
 验证服务就绪：`curl -s -o /dev/null -w "%{http_code}" http://localhost:5173` 返回 `200`。
 （8787 无 `/healthz`，以进程监听为准；跑测试前**先停掉残留的 8787/5173 服务**，否则 E2E 打错库、后台节拍污染断言。）
 
-## 3. 验证纪律（本仓库硬性要求）
+## 4. 验证纪律（本仓库硬性要求）
 
 - 改完代码必须跑：`pnpm suite`（445 条）；
 - 发布前必须跑：`pnpm release:gate`（未全过禁止发布，见 `docs/release-checklist.md`）
 - 改事件/号源代码后跑：`pnpm db:verify-chain`
 - **UI 改动必须用浏览器能力实际打开页面截图核对**，禁止"改了就算完成"
 
-## 4. 仓库速览
+## 5. 仓库速览
 
 | 目录 | 内容 |
 |---|---|
@@ -61,5 +72,5 @@ pnpm db:seed                         # 演示种子（可选；短视频域另�
 | `packages/base` | 底座包：workdata（事件/RLS）、fence-engine（围栏 DSL）、publish-rpa（全平台 RPA 发布）等 |
 | `bundles/` | 行业 Bundle：`ai-video/`（短视频创作域）、`hotel/` |
 | `skills/official/` | 自带技能：industry-entry / product-feedback / demo-mirror / cross-platform-review / deal-flow / ripping-reverse |
-| `scripts/` | `suite*.ts` 测试套件、`seed*.ts` 种子、`release-gate.ts` 发布门禁、`agent-tour.sh` 能力巡游 |
+| `scripts/` | `suite*.ts` 测试套件、`seed*.ts` 种子、`release-gate.ts` 发布门禁、`agent-tour.sh` 能力巡游、`preview-all.sh` 三端预览 |
 | `docs/` | 设计规范、方案、测试目录、**capability-map.md**、**agent-computer-guide.md** |

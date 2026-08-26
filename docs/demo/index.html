@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkLoom 演示导航 · 三端全貌</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh; padding: 32px 20px 60px;
+    background: linear-gradient(160deg, #fff5f7 0%, #ffeef4 50%, #fdf0ff 100%);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #4a2b33;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 26px; color: #d4002a; }
+  .sub { margin-top: 6px; font-size: 13px; color: #8a4b5a; }
+  .runtime {
+    margin: 22px 0; padding: 18px; border-radius: 16px; background: #fff;
+    border: 1px solid #ffd6de; box-shadow: 0 6px 20px rgba(212,0,42,.06);
+  }
+  .runtime h2 { font-size: 15px; margin-bottom: 12px; color: #d4002a; }
+  .ends { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .end {
+    display: block; text-decoration: none; border-radius: 12px; padding: 14px;
+    border: 1px solid #ffe1e8; background: #fffafb; color: #4a2b33;
+  }
+  .end:hover { border-color: #ff7a9e; }
+  .end b { display: block; font-size: 14px; color: #d4002a; }
+  .end small { font-size: 12px; color: #8a4b5a; }
+  .end .url { font-family: ui-monospace, monospace; font-size: 11px; color: #b07a88; margin-top: 6px; display: block; }
+  h3 { margin: 26px 0 10px; font-size: 15px; color: #d4002a; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .card {
+    background: #fff; border: 1px solid #ffe1e8; border-radius: 12px; padding: 12px 14px;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .card .n { font-size: 13px; font-family: ui-monospace, monospace; word-break: break-all; }
+  .card a { font-size: 12px; color: #d4002a; text-decoration: none; white-space: nowrap; }
+  .card a:hover { text-decoration: underline; }
+  .empty { font-size: 13px; color: #b07a88; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>WorkLoom 演示导航</h1>
+  <div class="sub">三端全貌 · 高保真演示页 · 全部由 <code>pnpm preview:all</code> 一键拉起（Mock 数据模式）</div>
+
+  <div class="runtime">
+    <h2>运行时三端（真实系统 + 模拟数据）</h2>
+    <div class="ends">
+      <a class="end" href="http://localhost:3000" target="_blank">
+        <b>PC 端 · B 端工作台</b>
+        <small>经营主页 / 任务中心 / 规则中心 / 装配中心</small>
+        <span class="url">http://localhost:3000</span>
+      </a>
+      <a class="end" href="http://localhost:3001" target="_blank">
+        <b>移动端 · B 端（高保真 + 手机壳）</b>
+        <small>本页即 3001；下方案例页均可套手机壳预览</small>
+        <span class="url">http://localhost:3001</span>
+      </a>
+      <a class="end" href="http://localhost:3002" target="_blank">
+        <b>移动端 · C 端（AI 服务前台 H5）</b>
+        <small>小程序入口的 H5 模拟版：对话 / 服务 / 工单 / 我的</small>
+        <span class="url">http://localhost:3002</span>
+      </a>
+    </div>
+  </div>
+
+  <h3>📱 高保真演示页（自动发现本目录全部页面）</h3>
+  <div id="list" class="grid"><div class="empty">加载中…</div></div>
+</div>
+<script>
+// 优先读 preview:all 生成的页面清单；无清单时回退目录索引解析
+function render(names) {
+  const list = document.getElementById("list");
+  if (!names.length) { list.innerHTML = '<div class="empty">未发现演示页</div>'; return; }
+  list.innerHTML = names.map(n => `
+    <div class="card">
+      <span class="n">${n}</span>
+      <span>
+        <a href="./${n}" target="_blank">打开</a> ·
+        <a href="./shell.html?page=${encodeURIComponent(n)}" target="_blank">手机壳</a>
+      </span>
+    </div>`).join("");
+}
+fetch("./.manifest.json").then(r => r.ok ? r.json() : Promise.reject()).then(m => render(m.files || []))
+.catch(() => fetch("./").then(r => r.text()).then(html => {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  render([...doc.querySelectorAll("a")]
+    .map(a => a.getAttribute("href") || "")
+    .filter(h => h.endsWith(".html") && !["index.html", "shell.html"].includes(h))
+    .sort());
+}).catch(() => {
+  document.getElementById("list").innerHTML = '<div class="empty">目录索引不可用（请用 pnpm preview:all 启动后访问）</div>';
+}));
+</script>
+</body>
+</html>

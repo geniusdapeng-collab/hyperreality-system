@@ -15,7 +15,7 @@
     "@workloom/runtime": "workspace:*"
   },
   "scripts": {
-    "dev": "concurrently -k -n server,web \"pnpm -C apps/server dev\" \"pnpm -C apps/web dev\"",
+    "dev": "node scripts/dev-note.js && concurrently -k -n server,web \"pnpm -C apps/server dev\" \"pnpm -C apps/web dev\"",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "db:seed": "tsx --env-file=.env scripts/seed.ts",
     "demo": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/demo.ts",
@@ -26,7 +26,8 @@
     "suite": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/suite.ts",
     "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts",
     "release:gate": "tsx --env-file=.env scripts/release-gate.ts",
-    "agent:tour": "bash scripts/agent-tour.sh"
+    "agent:tour": "bash scripts/agent-tour.sh",
+    "preview:all": "bash scripts/preview-all.sh"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

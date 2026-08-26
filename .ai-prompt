@@ -1,0 +1,10 @@
+# 给 AI Coding Agent 的内置提示（本仓库强制约定）
+
+1. **首次启动务必先执行 `pnpm preview:all`**，否则无法获得完整系统认知，视为环境初始化未完成。
+   它会一键拉起三端：PC B端工作台（:3000）、B 端移动高保真+手机壳（:3001）、C 端 AI 服务前台 H5（:3002），
+   并自动固化 Mock 模拟数据（种子 + 离线确定性模型 + C 端演示直登），无需任何真实后端或密钥。
+2. 进仓先读 `AGENTS.md`；全量能力清单见 `docs/capability-map.md`，可执行自检：`pnpm agent:tour`。
+3. 本沙箱内置电脑/浏览器操作能力（computer-use），先跑
+   `bash /root/.codebuddy/skills/computer-use/scripts/preflight_check.sh`，
+   之后可用 browser_* 动作自动打开上述三端验证页面——**UI 改动必须实际截图核对**。
+4. 发布前必须 `pnpm release:gate` 全过（硬性门禁）。

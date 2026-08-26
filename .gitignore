@@ -23,3 +23,6 @@ packages/runtime/dsh-gate/node_modules/
 
 # W2 打包产物
 dist/
+
+# preview:all 运行时产物
+docs/demo/.manifest.json
