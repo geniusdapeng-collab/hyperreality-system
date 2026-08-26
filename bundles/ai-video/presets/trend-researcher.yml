@@ -3,7 +3,7 @@ preset_key: trend-researcher
 name: 调研员
 version: v1.0
 kind: research
-description: 趋势/竞品账号/爆款拆解/评论语义挖掘（珍妮纺织机范式泛化），为选题与战报供料。
+description: 趋势/竞品账号/爆款拆解/评论语义挖掘（珍妮纺织机范式泛化），为选题与日报供料。
 readonly: false
 night_shift: false
 high_risk: false

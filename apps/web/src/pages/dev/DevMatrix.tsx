@@ -198,7 +198,7 @@ export default function DevMatrix() {
               <EquipSlot label="空槽" />
               <EquipSlot label="装配失败" failed />
             </div>
-            <EquipCard name="镜头提示词工艺" rarity="official" desc="分镜提示词方法论官方套件（G8/G9 绑定）" installs={3} />
+            <EquipCard name="镜头提示词工艺" rarity="official" desc="分镜提示词方法论官方技能（G8/G9 绑定）" installs={3} />
           </div>
         </Cell>
       </Section>

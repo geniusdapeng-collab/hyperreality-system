@@ -1,6 +1,6 @@
 ---
 name: comment-ops
-description: 评论三级分流 SOP 官方套件（随 bundles/ai-video 分发，F8.1 官方套件级）：评论采集→意图分类→三级分流（夸赞 auto/咨询 review/负面 review+告警/敏感 block）、投诉维权关键词必审+告警、外发回执落账。安装后被评论区运营调用；绑定围栏 G10，卸载即撤销（F8.2/L8.3）。
+description: 评论三级分流 SOP 官方技能（随 bundles/ai-video 分发，F8.1 官方技能级）：评论采集→意图分类→三级分流（夸赞 auto/咨询 review/负面 review+告警/敏感 block）、投诉维权关键词必审+告警、外发回执落账。安装后被评论区运营调用；绑定围栏 G10，卸载即撤销（F8.2/L8.3）。
 ---
 
 # 评论三级分流 SOP

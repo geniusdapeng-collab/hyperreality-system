@@ -16,7 +16,7 @@
     { "type": "video_asset", "label": "视频素材" },
     { "type": "final_video", "label": "成片" },
     { "type": "publish_task", "label": "发布任务" },
-    { "type": "account_metric", "label": "账号指标", "note": "账号/视频时序指标（播放/完播/互动/转化）；阈值告警与战报的事实源；G16 复用其登录风控上下文" },
+    { "type": "account_metric", "label": "账号指标", "note": "账号/视频时序指标（播放/完播/互动/转化）；阈值告警与日报的事实源；G16 复用其登录风控上下文" },
     { "type": "comment", "label": "评论", "note": "采集原始评论；意图分类 praise/thanks/consult/after_sale/negative/crisis/sensitive 后驱动 G10 三级分流" },
     { "type": "comment_reply", "label": "评论回复" },
     { "type": "video_project", "label": "视频项目", "note": "项目主档；算力预算挂项目级 budget_ledger，超预算触发 G11 暂停渲染提交" },

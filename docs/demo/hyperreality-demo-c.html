@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>星芒好物 · AI 服务前台 C 端演示（镜像 apps/webc）</title>
 <style>
-/* ===== 设计令牌：逐值镜像 apps/webc/src/styles/tokens.css（深空底 #0a1230 + 暗金 #e9b558，service-front.config.json theme） ===== */
+/* ===== 设计令牌：逐值镜像 apps/webc/src/styles/tokens.css（深空底 #ffffff + 暗金 #ff2442，service-front.config.json theme） ===== */
 :root{
-  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
-  --gold:#e9b558; --gold2:#d69a3a; --goldhi:#ffe0a3; --ongold:#2a1500;
-  --holo:#45e0ff; --holo2:#2fa8ff;
-  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470;
-  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
-  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(233,181,88,.45);
+  --bg950:#fff5f7; --bg900:#ffffff; --bg800:#fff0f4; --bg700:#ffe4ec;
+  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#d4002a; --ongold:#ffffff;
+  --holo:#4d96ff; --holo2:#6ec6ff;
+  --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d;
+  --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
+  --card:rgba(255,255,255,.88); --line:rgba(255,36,66,.14); --gline:rgba(255,36,66,.45);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh}
@@ -25,7 +25,7 @@ input,textarea,select{font-family:inherit}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes tabIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
 @keyframes typingDot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
-@keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(233,181,88,.5)}100%{box-shadow:0 0 0 9px rgba(233,181,88,0)}}
+@keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(255,36,66,.5)}100%{box-shadow:0 0 0 9px rgba(255,36,66,0)}}
 @keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
 .fadein{animation:fadeUp .38s cubic-bezier(.22,1,.36,1) both}
 .tabin{animation:tabIn .24s ease-out both}
@@ -36,11 +36,11 @@ input,textarea,select{font-family:inherit}
 .demo-bar .src{font-size:10px;color:var(--ink3);width:100%;margin-top:2px}
 .demo-bar .src b{color:var(--holo);font-weight:400;font-family:"JetBrains Mono",monospace}
 .demo-bar a{font-size:11px;color:var(--ink3);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:2px 10px}
-.demo-bar a.on{color:var(--gold);border-color:var(--gline);background:rgba(233,181,88,.08)}
+.demo-bar a.on{color:var(--gold);border-color:var(--gline);background:rgba(255,36,66,.08)}
 
 /* ===== 手机壳（tokens.css .phone-shell 镜像：390px 居中） ===== */
 .shell{width:390px;height:min(812px,calc(100vh - 100px));margin:10px auto 30px;border-radius:28px;border:1px solid var(--line);
-  box-shadow:0 24px 80px rgba(0,0,0,.6);background:var(--bg800);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  box-shadow:0 24px 80px rgba(51,38,43,.2);background:var(--bg800);display:flex;flex-direction:column;overflow:hidden;position:relative}
 /* 微信小程序胶囊位状态栏 */
 .statusbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 4px;font-size:12px;color:var(--ink)}
 .capsule{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:99px;overflow:hidden}
@@ -60,45 +60,45 @@ input,textarea,select{font-family:inherit}
 .badge{position:absolute;top:-3px;right:-8px;min-width:14px;height:14px;border-radius:99px;background:var(--alert);color:#fff;font-size:8.5px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 3px}
 
 /* ===== PageHeader（common.tsx 镜像） ===== */
-.phead{position:sticky;top:0;z-index:5;height:52px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:rgba(10,18,48,.9);backdrop-filter:blur(8px);padding:0 16px}
+.phead{position:sticky;top:0;z-index:5;height:52px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96);backdrop-filter:blur(8px);padding:0 16px}
 .phead h1{font-size:17px;font-weight:600}
 .phead .rt{font-size:12px;color:var(--ink2)}
 
 /* ===== 通用卡件 ===== */
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px}
 .chip{display:inline-block;border-radius:99px;border:1px solid;padding:1px 8px;font-size:10px}
-.chip-go{border-color:rgba(61,255,178,.5);background:rgba(61,255,178,.1);color:var(--go)}
-.chip-gold{border-color:rgba(233,181,88,.5);background:rgba(233,181,88,.1);color:var(--gold)}
-.chip-holo{border-color:rgba(69,224,255,.5);background:rgba(69,224,255,.1);color:var(--holo)}
+.chip-go{border-color:rgba(34,200,138,.5);background:rgba(34,200,138,.1);color:var(--go)}
+.chip-gold{border-color:rgba(255,36,66,.5);background:rgba(255,36,66,.1);color:var(--gold)}
+.chip-holo{border-color:rgba(77,150,255,.5);background:rgba(77,150,255,.1);color:var(--holo)}
 .gold-btn{width:100%;height:44px;border-radius:99px;background:var(--gold);color:var(--ongold);font-size:14px;font-weight:500}
 .gold-btn:disabled{opacity:.4}
 .route-tag{font-size:9px;color:var(--ink3);font-family:"JetBrains Mono",monospace;padding:4px 16px 0;opacity:.8}
-#toast{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:#101c44;border:1px solid var(--gline);color:var(--goldhi);border-radius:8px;padding:7px 14px;font-size:11px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:84%;text-align:center}
+#toast{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;background:#33262b;border:1px solid var(--gline);color:var(--goldhi);border-radius:8px;padding:7px 14px;font-size:11px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:84%;text-align:center}
 #toast.show{opacity:1}
 
 /* ===== 对话页（ChatPage.tsx 镜像） ===== */
-.welcome{border-bottom:1px solid var(--line);background:linear-gradient(to bottom,rgba(18,30,69,.6),var(--bg800));padding:14px 16px 12px}
+.welcome{border-bottom:1px solid var(--line);background:linear-gradient(to bottom,rgba(255,228,236,.8),var(--bg800));padding:14px 16px 12px}
 .qchip{flex-shrink:0;border-radius:99px;border:1px solid var(--gline);background:var(--card);padding:6px 12px;font-size:12px;color:var(--goldhi)}
 .msg-user{max-width:80%;border-radius:16px;border-bottom-right-radius:4px;background:var(--gold);color:var(--ongold);padding:10px 14px;font-size:13.5px;line-height:1.6}
 .msg-ai{max-width:82%;border-radius:16px;border-top-left-radius:4px;border:1px solid var(--line);background:var(--card);padding:10px 14px;font-size:13.5px;line-height:1.6}
-.avatar{width:28px;height:28px;border-radius:99px;border:1px solid var(--gline);background:rgba(233,181,88,.1);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:2px}
+.avatar{width:28px;height:28px;border-radius:99px;border:1px solid var(--gline);background:rgba(255,36,66,.1);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:2px}
 .cursor{display:inline-block;width:6px;height:14px;background:var(--gold);vertical-align:middle;margin-left:2px;animation:typingDot 1s infinite}
-.cite{margin-top:8px;border-radius:12px;border:1px solid rgba(69,224,255,.3);background:rgba(69,224,255,.05);overflow:hidden}
+.cite{margin-top:8px;border-radius:12px;border:1px solid rgba(77,150,255,.3);background:rgba(77,150,255,.05);overflow:hidden}
 .cite-head{width:100%;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:11px;color:var(--holo)}
-.cite-body{border-top:1px solid rgba(69,224,255,.2);padding:8px 12px;display:none}
+.cite-body{border-top:1px solid rgba(77,150,255,.2);padding:8px 12px;display:none}
 .cite.open .cite-body{display:block;animation:fadeUp .3s both}
-.cite-item{border-radius:8px;background:rgba(5,10,26,.6);padding:8px}
+.cite-item{border-radius:8px;background:rgba(255,240,244,.9);padding:8px}
 .cite-item p:first-child{font-size:11px;font-weight:500;color:var(--holo)}
 .cite-item p:last-child{font-size:11px;line-height:1.6;color:var(--ink2);margin-top:4px}
-.tnotice{margin-top:8px;display:flex;gap:10px;align-items:flex-start;border-radius:12px;border:1px solid rgba(255,194,77,.4);background:rgba(255,194,77,.1);padding:12px}
-.tnotice .ic{width:28px;height:28px;border-radius:99px;background:rgba(255,194,77,.2);color:var(--warn);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
-.confirm{margin-top:8px;border-radius:12px;border:1px solid var(--gline);background:rgba(233,181,88,.06);padding:12px}
+.tnotice{margin-top:8px;display:flex;gap:10px;align-items:flex-start;border-radius:12px;border:1px solid rgba(255,170,51,.4);background:rgba(255,170,51,.1);padding:12px}
+.tnotice .ic{width:28px;height:28px;border-radius:99px;background:rgba(255,170,51,.2);color:var(--warn);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+.confirm{margin-top:8px;border-radius:12px;border:1px solid var(--gline);background:rgba(255,36,66,.06);padding:12px}
 .confirm .acts{display:flex;gap:8px;margin-top:10px}
 .confirm .acts button{flex:1;height:34px;border-radius:99px;font-size:12px}
 .confirm .yes{background:var(--gold);color:var(--ongold);font-weight:500}
 .confirm .no{border:1px solid var(--line);color:var(--ink2)}
 .ordercard{margin-top:8px;border-radius:12px;border:1px solid var(--gline);background:var(--card);overflow:hidden}
-.ordercard .hd{display:flex;justify-content:space-between;background:rgba(233,181,88,.1);padding:6px 12px;font-size:11px;color:var(--gold)}
+.ordercard .hd{display:flex;justify-content:space-between;background:rgba(255,36,66,.1);padding:6px 12px;font-size:11px;color:var(--gold)}
 .inputbar{border-top:1px solid var(--line);background:var(--bg800);padding:10px 12px 14px;display:flex;gap:8px}
 .inputbar input{flex:1;height:40px;border-radius:99px;border:1px solid var(--line);background:var(--bg900);padding:0 16px;font-size:13.5px;color:var(--ink);outline:none}
 .inputbar input:focus{border-color:var(--gline)}
@@ -109,7 +109,7 @@ input,textarea,select{font-family:inherit}
 /* ===== 服务大厅（ServicePage.tsx 镜像 · serviceEntries 配置驱动） ===== */
 .svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
 .svc-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;border-radius:16px;border:1px solid var(--line);background:var(--card);padding:16px;text-align:left}
-.svc-card .ic{width:40px;height:40px;border-radius:12px;background:rgba(233,181,88,.1);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600}
+.svc-card .ic{width:40px;height:40px;border-radius:12px;background:rgba(255,36,66,.1);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600}
 .svc-card .t{font-size:14px;font-weight:500;color:var(--ink)}
 .svc-card .d{font-size:11px;line-height:1.6;color:var(--ink3)}
 .svc-card .s{margin-top:auto;font-size:10px;color:var(--gold)}
@@ -126,7 +126,7 @@ input,textarea,select{font-family:inherit}
 .tl-node .bar{position:absolute;left:4.5px;top:16px;bottom:0;width:1px;background:var(--line)}
 .tl-node:last-child .bar{display:none}
 /* 评价弹层 */
-.sheet-mask{position:absolute;inset:0;z-index:20;background:rgba(4,6,15,.7);backdrop-filter:blur(2px)}
+.sheet-mask{position:absolute;inset:0;z-index:20;background:rgba(51,38,43,.32);backdrop-filter:blur(2px)}
 .sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;border-radius:24px 24px 0 0;border-top:1px solid var(--gline);background:var(--bg800);padding:20px 20px 26px;animation:fadeUp .3s both}
 .star{width:34px;height:34px}
 .star path{fill:none;stroke:var(--ink3);stroke-width:1.5}
@@ -141,7 +141,7 @@ input,textarea,select{font-family:inherit}
 
 /* ===== 我的（MePage.tsx 镜像） ===== */
 .member-card{border-radius:16px;border:1px solid var(--gline);background:linear-gradient(135deg,var(--bg700),var(--bg800),var(--bg900));padding:16px;overflow:hidden}
-.bchip{border-radius:99px;background:rgba(233,181,88,.1);padding:4px 10px;font-size:10.5px;color:var(--goldhi)}
+.bchip{border-radius:99px;background:rgba(255,36,66,.1);padding:4px 10px;font-size:10.5px;color:var(--goldhi)}
 .row-card{width:100%;display:flex;align-items:center;justify-content:space-between;border-radius:16px;border:1px solid var(--line);background:var(--card);padding:14px 16px;text-align:left}
 </style>
 </head>
@@ -210,8 +210,8 @@ input,textarea,select{font-family:inherit}
     </div>
     <!-- form -->
     <div class="scroll" id="svcForm" style="display:none;padding:16px">
-      <div style="display:flex;align-items:center;gap:8px;border-radius:12px;border:1px solid var(--gline);background:rgba(233,181,88,.05);padding:10px 12px;font-size:12px;color:var(--goldhi);margin-bottom:16px">
-        <span id="svcFormIcon" style="width:24px;height:24px;border-radius:8px;background:rgba(233,181,88,.15);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">换</span>
+      <div style="display:flex;align-items:center;gap:8px;border-radius:12px;border:1px solid var(--gline);background:rgba(255,36,66,.05);padding:10px 12px;font-size:12px;color:var(--goldhi);margin-bottom:16px">
+        <span id="svcFormIcon" style="width:24px;height:24px;border-radius:8px;background:rgba(255,36,66,.15);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">换</span>
         <span id="svcFormMeta">工单类型已预填：售后退换 · 售后专员 2 小时内响应</span>
       </div>
       <label class="form-field"><span>标题 *</span><input id="svcTitle2" placeholder="例如：保温杯不保温申请换新"></label>
@@ -224,8 +224,8 @@ input,textarea,select{font-family:inherit}
     <!-- done -->
     <div class="scroll" id="svcDone" style="display:none">
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 32px;text-align:center">
-        <div class="pop" style="width:64px;height:64px;border-radius:99px;border:1px solid rgba(61,255,178,.5);background:rgba(61,255,178,.1);display:flex;align-items:center;justify-content:center">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3dffb2" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+        <div class="pop" style="width:64px;height:64px;border-radius:99px;border:1px solid rgba(34,200,138,.5);background:rgba(34,200,138,.1);display:flex;align-items:center;justify-content:center">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22c88a" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
         </div>
         <h2 style="margin-top:16px;font-size:17px;font-weight:600">工单已提交</h2>
         <p class="mono" style="margin-top:8px;font-size:13px;color:var(--gold)" id="svcDoneId">···003</p>
@@ -283,7 +283,7 @@ input,textarea,select{font-family:inherit}
       <div class="member-card">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:12px">
-            <div class="avatar orb" style="width:48px;height:48px;font-size:16px;margin:0;background:rgba(233,181,88,.15)">予</div>
+            <div class="avatar orb" style="width:48px;height:48px;font-size:16px;margin:0;background:rgba(255,36,66,.15)">予</div>
             <div>
               <p style="font-size:15px;font-weight:600">陈小予</p>
               <p style="margin-top:2px;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gold)">
@@ -293,7 +293,7 @@ input,textarea,select{font-family:inherit}
           </div>
           <div style="text-align:right"><p class="orb" style="font-size:20px;color:var(--goldhi)">2680</p><p style="font-size:10px;color:var(--ink3)">当前积分</p></div>
         </div>
-        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid rgba(233,181,88,.25);padding-top:12px">
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid rgba(255,36,66,.25);padding-top:12px">
           <span class="bchip">7 天无理由退换</span><span class="bchip">30 天质量问题免费换新</span><span class="bchip">整机质保 2 年</span><span class="bchip">顺丰 16:00 前当日发</span>
         </div>
       </div>
@@ -307,7 +307,7 @@ input,textarea,select{font-family:inherit}
       </button>
       <div class="row-card">
         <div><p style="font-size:13px">联系客服</p><p style="margin-top:2px;font-size:11px;color:var(--ink3)">400-900-6688</p></div>
-        <span style="width:32px;height:32px;border-radius:99px;background:rgba(69,224,255,.1);color:var(--holo);display:flex;align-items:center;justify-content:center">
+        <span style="width:32px;height:32px;border-radius:99px;background:rgba(77,150,255,.1);color:var(--holo);display:flex;align-items:center;justify-content:center">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
         </span>
       </div>
@@ -359,7 +359,7 @@ function toast(m){const t=document.getElementById("toast");t.textContent=m;t.cla
 /* ================= 对话页（ChatPage 打字机镜像；数据 seed cv-xm-001） ================= */
 const flow = document.getElementById("chatFlow");
 function scrollBottom(){ flow.scrollTop = flow.scrollHeight; }
-function addTime(t){ flow.insertAdjacentHTML("beforeend", `<div style="display:flex;justify-content:center;padding:4px 0"><span style="border-radius:99px;background:rgba(18,30,69,.7);padding:2px 10px;font-size:10px;color:var(--ink3)">${t}</span></div>`); }
+function addTime(t){ flow.insertAdjacentHTML("beforeend", `<div style="display:flex;justify-content:center;padding:4px 0"><span style="border-radius:99px;background:rgba(255,228,236,.9);padding:2px 10px;font-size:10px;color:var(--ink3)">${t}</span></div>`); }
 function addUser(text){
   flow.insertAdjacentHTML("beforeend", `<div class="fadein" style="display:flex;justify-content:flex-end;margin-bottom:12px"><div class="msg-user">${text}</div></div>`);
   scrollBottom();
@@ -525,7 +525,7 @@ function tkOpen(id){
       </div>`).join("")}
     </div>
     ${t.status==="已完成" && t.rated ? `<div class="card fadein" style="margin-top:8px;padding:14px;text-align:center"><p style="font-size:12px;color:var(--goldhi)">我的评价</p><p style="margin-top:6px;color:var(--gold);font-size:18px;letter-spacing:4px">★★★★★</p><p style="margin-top:6px;font-size:11px;color:var(--ink2)">${t.result}</p><button class="pressable" style="margin-top:10px;border-radius:99px;border:1px solid var(--line);padding:5px 14px;font-size:11px;color:var(--ink2)" onclick="openRate()">修改评价</button></div>` : ""}
-    ${t.status==="已完成" && !t.rated ? `<button class="pressable" style="margin-top:8px;width:100%;height:44px;border-radius:99px;border:1px solid var(--gline);background:rgba(233,181,88,.1);color:var(--gold);font-size:13.5px;font-weight:500" onclick="openRate()">评价本次服务</button>` : ""}
+    ${t.status==="已完成" && !t.rated ? `<button class="pressable" style="margin-top:8px;width:100%;height:44px;border-radius:99px;border:1px solid var(--gline);background:rgba(255,36,66,.1);color:var(--gold);font-size:13.5px;font-weight:500" onclick="openRate()">评价本次服务</button>` : ""}
   `;
   d.scrollTop = 0;
 }

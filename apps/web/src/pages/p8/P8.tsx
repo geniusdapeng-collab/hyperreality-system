@@ -66,7 +66,7 @@ const ROLE_LABEL: Record<string, string> = {
   channel: "渠道",
 };
 const ROLE_SCOPE: Record<string, string> = {
-  owner: "紧急制动 · 航道立法 · 船员任免（规则手册 §3.1 舰长三权）",
+  owner: "紧急制动 · 规则制定 · 成员任免（规则手册 §3.1 CEO 三权）",
   manager: "跨账号/多工作室继承与审计 · 审批",
   readonly: "只读视图 · 无写入口（E2.6）",
   group: "集团视角",

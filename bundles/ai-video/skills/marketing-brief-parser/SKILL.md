@@ -1,6 +1,6 @@
 ---
 name: marketing-brief-parser
-description: 营销 Brief 解析官方套件（随 bundles/ai-video 分发，F8.1 官方套件级）：Brief 要素抽取、缺口反问、12 字段创意主题衔接、合规词库预检。安装后被创意策划调用；绑定围栏 G2，卸载即撤销（F8.2/L8.3）。
+description: 营销 Brief 解析官方技能（随 bundles/ai-video 分发，F8.1 官方技能级）：Brief 要素抽取、缺口反问、12 字段创意主题衔接、合规词库预检。安装后被创意策划调用；绑定围栏 G2，卸载即撤销（F8.2/L8.3）。
 ---
 
 # 营销 Brief 解析

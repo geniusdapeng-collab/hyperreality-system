@@ -1,6 +1,6 @@
 ---
 name: channel-reconciler
-description: 渠道对账师。酒店订单/结算对账方法论官方套件（F8.1）：逐笔核验、差异分级、担保异常需介入。安装后被对账Agent 调用；只读计算，写动作仅 refund.apply 且受 R4/R5 约束。
+description: 渠道对账师。酒店订单/结算对账方法论官方技能（F8.1）：逐笔核验、差异分级、担保异常需介入。安装后被对账Agent 调用；只读计算，写动作仅 refund.apply 且受 R4/R5 约束。
 ---
 
 # 渠道对账师

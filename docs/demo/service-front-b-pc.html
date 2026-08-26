@@ -9,7 +9,7 @@
 :root{
   --bg950:#fff5f7; --bg900:#ffffff; --bg800:#fff0f4; --bg700:#ffe4ec;
   --nebula:#ffe0ec; --nebula2:#e8e0ff;
-  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#ffc2d4; --ongold:#ffffff;
+  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#d4002a; --ongold:#ffffff;
   --holo:#4d96ff; --holo2:#6ec6ff;
   --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d; --need:#b678ff;
   --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
@@ -56,7 +56,7 @@ input,select{font-family:inherit}
 
 /* ===== 舰桥框架（Bridge 镜像：1180px + 圆角 20px + 四角金刻度） ===== */
 .bridge{position:relative;width:1180px;margin:12px auto 40px;border-radius:20px;border:1px solid var(--line);
-  background:linear-gradient(to bottom,rgba(10,18,48,.92),rgba(5,10,26,.96));box-shadow:0 30px 80px rgba(0,0,0,.55);overflow:hidden}
+  background:linear-gradient(to bottom,rgba(255,255,255,.95),rgba(255,245,247,.96));box-shadow:0 30px 80px rgba(0,0,0,.55);overflow:hidden}
 .tick{position:absolute;width:18px;height:18px;border:2px solid var(--gold);z-index:10;pointer-events:none}
 .tick.tl{top:-1px;left:-1px;border-radius:20px 0 0 0;border-right:0;border-bottom:0}
 .tick.tr{top:-1px;right:-1px;border-radius:0 20px 0 0;border-left:0;border-bottom:0}
@@ -64,10 +64,10 @@ input,select{font-family:inherit}
 .tick.br{bottom:-1px;right:-1px;border-radius:0 0 20px 0;border-left:0;border-top:0}
 
 /* ===== 顶栏（Bridge .abar 镜像） ===== */
-.abar{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);background:rgba(4,6,15,.9);backdrop-filter:blur(12px);padding:10px 18px}
+.abar{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96);backdrop-filter:blur(12px);padding:10px 18px}
 .logo{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:900;letter-spacing:.05em}
 .logo .diamond{width:16px;height:16px;transform:rotate(45deg);border-radius:3px;background:linear-gradient(135deg,var(--gold),var(--gold2));box-shadow:0 0 14px rgba(233,181,88,.6)}
-.logo .name{background:linear-gradient(to right,#fff6e3,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo .name{background:linear-gradient(to right,#ff7a9e,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
 .navlink{border-radius:4px;border:1px solid var(--line);padding:2px 8px;font-size:11px;color:var(--ink2);text-decoration:none;cursor:pointer}
 .navlink.gold{border-color:var(--gline);color:var(--gold)}
 .night-pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;border:1px solid rgba(69,224,255,.4);background:rgba(69,224,255,.07);padding:6px 14px;font-size:11.5px}
@@ -110,10 +110,10 @@ input,select{font-family:inherit}
 .inp{border-radius:6px;border:1px solid var(--line);background:var(--bg900);padding:6px 10px;font-size:13.5px;color:var(--ink);outline:none}
 .inp:focus{border-color:rgba(69,224,255,.5)}
 table{width:100%;border-collapse:collapse;font-size:11px}
-th{font-weight:400;color:var(--ink3);font-size:10px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);background:rgba(10,18,48,.6)}
+th{font-weight:400;color:var(--ink3);font-size:10px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);background:rgba(255,240,244,.9)}
 td{padding:8px 12px;border-bottom:1px solid rgba(96,140,255,.12);color:var(--ink2)}
 tr:last-child td{border-bottom:0}
-tr:hover td{background:rgba(10,18,48,.4)}
+tr:hover td{background:rgba(255,228,236,.7)}
 .tabbtn{border-radius:6px;padding:6px 14px;font-size:13.5px;font-weight:700;color:var(--ink3);border:1px solid var(--line)}
 .tabbtn.on{border:none;color:var(--ongold)}
 .banner{display:flex;align-items:center;gap:10px;border-radius:8px;border:1px solid rgba(61,255,178,.4);background:rgba(61,255,178,.06);padding:8px 12px;font-size:12px;color:var(--go);margin-bottom:12px}
@@ -123,7 +123,7 @@ tr:hover td{background:rgba(10,18,48,.4)}
 .metric .v{margin-top:4px;font-family:"Orbitron","JetBrains Mono",monospace;font-size:16px;font-weight:700}
 .metric .h{margin-top:2px;font-size:10px;color:var(--ink3)}
 /* 抽屉（P22 docDrawer / timelineFor 镜像） */
-.mask{position:fixed;inset:0;z-index:60;background:rgba(4,6,15,.6)}
+.mask{position:fixed;inset:0;z-index:60;background:rgba(51,38,43,.32)}
 .drawer{position:fixed;top:0;bottom:0;right:0;z-index:61;width:440px;overflow-y:auto;border-left:1px solid var(--line);background:var(--bg950);padding:16px;box-shadow:-20px 0 60px rgba(0,0,0,.5)}
 .tl-ev{position:relative;border-left:1px solid var(--line);padding:0 0 14px 14px}
 .tl-ev .dot{position:absolute;left:-5px;top:4px;width:8px;height:8px;border-radius:99px;background:var(--ink3)}
@@ -149,7 +149,7 @@ tr:hover td{background:rgba(10,18,48,.4)}
     <span style="flex:1"></span>
     <a class="navlink" style="border-color:var(--gline);color:var(--gold)">🛎 服务前台</a>
     <a class="navlink gold">董事长视图</a>
-    <button class="night-pill" onclick="toast('进入守夜战队频道（P9）')"><span class="dot pulse"></span><b style="color:var(--holo)">守夜战队 · 巡航中</b><span class="mono" style="font-size:10px;color:var(--ink3)">22:00–08:00 · ×4</span></button>
+    <button class="night-pill" onclick="toast('进入夜班团队频道（P9）')"><span class="dot pulse"></span><b style="color:var(--holo)">夜班团队 · 巡航中</b><span class="mono" style="font-size:10px;color:var(--ink3)">22:00–08:00 · ×4</span></button>
     <button class="brake" onclick="toast('紧急制动需二次确认（P9 落地，演示态不触发）')">⛔ 紧急制动</button>
   </header>
   <div class="sim-banner">⚠ 模拟数据横幅（D24）：当前为演示工作区投影 · 数据全部来自 scripts/seed.ts「AI 服务前台」段 + scripts/eval 评测报告 · 落地向导可接入真实数据</div>
@@ -241,7 +241,7 @@ tr:hover td{background:rgba(10,18,48,.4)}
               <button class="btn" onclick="toast('指纹比对：官网暂无更新（fp-a91c）')">🔍 检查更新（diffScan）</button>
             </div>
             <div class="mono" style="margin-top:6px;font-size:10px;color:var(--ink3)" id="siteIdLine">sourceId: kbs-official-site</div>
-            <div id="siteResult" style="margin-top:6px;border-radius:4px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:6px 8px;font-size:10px;line-height:1.6;color:var(--ink2);display:none"></div>
+            <div id="siteResult" style="margin-top:6px;border-radius:4px;border:1px solid var(--line);background:rgba(255,240,244,.9);padding:6px 8px;font-size:10px;line-height:1.6;color:var(--ink2);display:none"></div>
           </div>
           <div class="card" style="padding:14px">
             <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--holo)">🔎 试检索（search · 混合检索投影）</div>
@@ -421,7 +421,7 @@ function doSearch(){
   for(const k in HITS) if(q.includes(k)){hits=HITS[k];break;}
   const box=document.getElementById("hits");
   if(!hits){ box.innerHTML=`<div style="font-size:10px;color:var(--warn)">无命中——可考虑补充知识文档</div>`; return; }
-  box.innerHTML=hits.map(h=>`<div class="fadein" style="border-radius:4px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:6px 8px">
+  box.innerHTML=hits.map(h=>`<div class="fadein" style="border-radius:4px;border:1px solid var(--line);background:rgba(255,240,244,.9);padding:6px 8px">
     <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--ink2)">${h[0]}</span><span class="orb" style="color:var(--holo)">${h[2].toFixed(2)}</span></div>
     <div style="margin-top:2px;font-size:10px;line-height:1.6;color:var(--ink3)">${h[1]}</div></div>`).join("");
 }
@@ -442,7 +442,7 @@ function openDoc(id){
     <div class="card" style="margin-top:12px;padding:12px">
       <div style="margin-bottom:6px;font-size:10px;font-weight:700;color:var(--ink2)">内容预览（检索索引投影）</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        ${d.preview.map(p=>`<div style="border-radius:4px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:6px 8px">
+        ${d.preview.map(p=>`<div style="border-radius:4px;border:1px solid var(--line);background:rgba(255,240,244,.9);padding:6px 8px">
           <div style="font-size:10px;font-weight:700;color:var(--ink2)">${p[0]}</div>
           <div style="margin-top:2px;font-size:10px;line-height:1.6;color:var(--ink3)">${p[1]}</div></div>`).join("")}
       </div>
@@ -496,13 +496,13 @@ function renderTk(){
       <div style="margin-top:4px;font-size:10px;color:var(--ink3)">
         ${t.dept?`部门 ${t.dept}`:"未分派"}${t.assignee?` · 处理人 ${t.assignee}`:""} · SLA ${t.sla}${t.rating!==null?` · 满意度 ${t.rating} 分`:""} · 创建于 ${t.created}
       </div>
-      ${assignFor===t.id?`<div style="margin-top:8px;display:flex;align-items:center;gap:8px;border-radius:6px;border:1px solid var(--gline);background:rgba(10,18,48,.6);padding:8px 10px">
+      ${assignFor===t.id?`<div style="margin-top:8px;display:flex;align-items:center;gap:8px;border-radius:6px;border:1px solid var(--gline);background:rgba(255,240,244,.9);padding:8px 10px">
         <span style="font-size:10px;color:var(--goldhi)">分派到</span>
         <select class="inp" style="padding:4px 8px;font-size:11px" id="asDept"><option>客服部</option><option>工程部</option><option>客房部</option><option>前厅部</option></select>
         <input class="inp" style="width:144px;padding:4px 8px;font-size:11px" placeholder="处理人（可选）" id="asWho">
         <button class="btn btn-grad gold-grad" style="padding:4px 10px" onclick="doAssign('${t.id}')">确认分派</button>
         <button class="btn" onclick="assignFor=null;renderTk()">取消</button></div>`:""}
-      ${completeFor===t.id?`<div style="margin-top:8px;display:flex;align-items:center;gap:8px;border-radius:6px;border:1px solid rgba(61,255,178,.4);background:rgba(10,18,48,.6);padding:8px 10px">
+      ${completeFor===t.id?`<div style="margin-top:8px;display:flex;align-items:center;gap:8px;border-radius:6px;border:1px solid rgba(61,255,178,.4);background:rgba(255,240,244,.9);padding:8px 10px">
         <span style="font-size:10px;color:var(--go)">处理结果</span>
         <input class="inp" style="flex:1;padding:4px 8px;font-size:11px" placeholder="如：已上门更换灯泡并确认恢复正常" id="cpResult">
         <button class="btn btn-go" style="padding:4px 10px" onclick="doComplete('${t.id}')">确认办结</button>

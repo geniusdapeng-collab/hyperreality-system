@@ -309,7 +309,7 @@ export default function P7() {
                   <div className="mb-1.5 text-[22px]">{SLOT_ICON[s.id] ?? "🧩"}</div>
                   <h4 className="text-body font-bold text-ink2">{s.label}</h4>
                   <p className={`mt-1 text-micro leading-relaxed ${s.failed ? "text-alert" : "text-ink3"}`}>{s.summary}</p>
-                  {s.go && <p className="mt-1 text-micro text-holo">{s.go === "p5" ? "→ P5 规则与权限" : "→ P8 员工名册"}</p>}
+                  {s.go && <p className="mt-1 text-micro text-holo">{s.go === "p5" ? "→ P5 规则与权限" : "→ P8 团队成员"}</p>}
                 </button>
               ))}
             </div>

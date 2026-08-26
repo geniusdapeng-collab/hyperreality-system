@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>云栖酒店 · 服务前台掌上战报 B 端移动演示（镜像 P3 范式）</title>
+<title>云栖酒店 · 服务前台掌上日报 B 端移动演示（镜像 P3 范式）</title>
 <style>
 /* ===== 设计令牌：tokens.css 逐值（深空底 #fff0f4 + 暗金 #ff2442 + 全息青细线） ===== */
 :root{
   --bg950:#fff5f7; --bg900:#ffffff; --bg800:#fff0f4; --bg700:#ffe4ec;
-  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#ffc2d4; --ongold:#ffffff;
+  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#d4002a; --ongold:#ffffff;
   --holo:#4d96ff; --holo2:#6ec6ff;
   --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d;
   --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
@@ -30,13 +30,13 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 /* ===== 演示控制条 ===== */
 .demo-bar{max-width:430px;margin:0 auto;padding:10px 14px 0;display:flex;flex-wrap:wrap;gap:6px}
 .demo-bar a{font-size:11px;color:var(--ink3);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:2px 10px}
-.demo-bar a.on{color:var(--gold);border-color:var(--gline);background:rgba(233,181,88,.08)}
+.demo-bar a.on{color:var(--gold);border-color:var(--gline);background:rgba(255,36,66,.08)}
 .demo-bar .src{width:100%;font-size:10px;color:var(--ink3);margin-top:2px}
 .demo-bar .src b{color:var(--holo);font-weight:400;font-family:"JetBrains Mono",monospace}
 
 /* ===== 手机壳（P3 §4.2 真机框镜像：375px · 44px 圆角） ===== */
-.phone{width:375px;margin:10px auto 30px;border-radius:44px;border:1px solid var(--line);background:var(--bg900);box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
-.phone-notch{display:flex;justify-content:center;border-bottom:1px solid var(--line);background:rgba(4,6,15,.8);padding:8px 0}
+.phone{width:375px;margin:10px auto 30px;border-radius:44px;border:1px solid var(--line);background:var(--bg900);box-shadow:0 30px 80px rgba(51,38,43,.2);overflow:hidden}
+.phone-notch{display:flex;justify-content:center;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96);padding:8px 0}
 .phone-notch span{width:64px;height:6px;border-radius:99px;background:var(--bg700)}
 .body{padding:14px;display:flex;flex-direction:column;gap:12px;min-height:640px;padding-bottom:8px}
 
@@ -52,27 +52,27 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 /* ===== 组件 ===== */
 .card{border-radius:16px;border:1px solid var(--line);background:var(--card);padding:14px}
 .chip{display:inline-block;border-radius:4px;border:1px solid;padding:1px 6px;font-size:10px}
-.chip-go{border-color:rgba(61,255,178,.4);color:var(--go)}
-.chip-warn{border-color:rgba(255,194,77,.4);color:var(--warn)}
-.chip-holo{border-color:rgba(69,224,255,.4);color:var(--holo)}
+.chip-go{border-color:rgba(34,200,138,.4);color:var(--go)}
+.chip-warn{border-color:rgba(255,170,51,.4);color:var(--warn)}
+.chip-holo{border-color:rgba(77,150,255,.4);color:var(--holo)}
 .chip-gold{border-color:var(--gline);color:var(--goldhi)}
 .chip-line{border-color:var(--line);color:var(--ink3)}
-.chip-alert{border-color:rgba(255,84,112,.4);color:var(--alert)}
-.count-btn{border-radius:12px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:10px 8px;text-align:center}
-.count-btn.on{border-color:var(--gline);background:rgba(233,181,88,.08)}
+.chip-alert{border-color:rgba(255,77,109,.4);color:var(--alert)}
+.count-btn{border-radius:12px;border:1px solid var(--line);background:rgba(255,240,244,.9);padding:10px 8px;text-align:center}
+.count-btn.on{border-color:var(--gline);background:rgba(255,36,66,.08)}
 .count-btn .n{font-family:"Orbitron","JetBrains Mono",monospace;font-size:28px;font-weight:700}
 .count-btn .l{margin-top:2px;font-size:10px;color:var(--ink2)}
 .act-btn{min-height:44px;border-radius:12px;border:1px solid;font-size:13.5px;font-weight:700;padding:0 12px}
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:80;border-radius:99px;border:1px solid var(--gline);background:var(--bg800);padding:8px 18px;font-size:12px;color:var(--goldhi);box-shadow:0 8px 30px rgba(0,0,0,.5);animation:fadeUp .25s both}
-.banner{border-radius:12px;border:1px solid rgba(61,255,178,.4);background:rgba(61,255,178,.06);padding:8px 12px;font-size:12px;color:var(--go);display:flex;align-items:center;gap:8px}
-.banner.warn{border-color:rgba(255,194,77,.4);background:rgba(255,194,77,.06);color:var(--warn)}
+.banner{border-radius:12px;border:1px solid rgba(34,200,138,.4);background:rgba(34,200,138,.06);padding:8px 12px;font-size:12px;color:var(--go);display:flex;align-items:center;gap:8px}
+.banner.warn{border-color:rgba(255,170,51,.4);background:rgba(255,170,51,.06);color:var(--warn)}
 .route-tag{font-size:9px;color:var(--ink3);font-family:"JetBrains Mono",monospace;opacity:.8}
 </style>
 </head>
 <body>
 
 <div class="demo-bar">
-  <a href="#report" data-v="report">战报</a><a href="#tickets" data-v="tickets">工单</a><a href="#kb" data-v="kb">知识库</a><a href="#me" data-v="me">我的</a>
+  <a href="#report" data-v="report">日报</a><a href="#tickets" data-v="tickets">工单</a><a href="#kb" data-v="kb">知识库</a><a href="#me" data-v="me">我的</a>
   <div class="src" id="srcLine"></div>
 </div>
 
@@ -80,14 +80,14 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   <div class="phone-notch"><span></span></div>
   <div class="body">
 
-    <!-- ============ 战报（apps/web/src/pages/p3/P3.tsx 范式 + P22 stats 投影） ============ -->
+    <!-- ============ 日报（apps/web/src/pages/p3/P3.tsx 范式 + P22 stats 投影） ============ -->
     <section class="view" id="v-report">
       <div style="display:flex;align-items:center;gap:8px">
         <a style="font-size:11px;color:var(--holo);text-decoration:none;cursor:pointer" onclick="toast('返回主甲板（/）')">← 工作台</a>
-        <span style="font-size:16px;font-weight:900">服务前台 · 掌上战报</span>
+        <span style="font-size:16px;font-weight:900">服务前台 · 掌上日报</span>
         <span style="font-size:10px;letter-spacing:.2em;color:var(--ink3)">P3 范式</span>
       </div>
-      <div class="route-tag">镜像：apps/web/src/pages/p3/P3.tsx（战报体系）· 数据 P22 stats.overview + scripts/eval</div>
+      <div class="route-tag">镜像：apps/web/src/pages/p3/P3.tsx（日报体系）· 数据 P22 stats.overview + scripts/eval</div>
       <div id="bannerBox"></div>
 
       <!-- 今日服务概览（P3E1 三栏计数头范式，点击筛选） -->
@@ -105,11 +105,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
       </div>
 
       <!-- 服务预警（SLA 超时；P22 insights alert 范式） -->
-      <div class="card" style="border-color:rgba(255,84,112,.5);background:rgba(255,84,112,.06)">
+      <div class="card" style="border-color:rgba(255,77,109,.5);background:rgba(255,77,109,.06)">
         <div style="margin-bottom:4px;font-size:13.5px;font-weight:700;color:var(--alert)">▲ 服务预警 · SLA 超时风险</div>
         <div style="font-size:11px;line-height:1.7;color:var(--ink2)">工单 <span class="mono" style="color:var(--holo)">tck-seed-001</span>「8306 空调不制冷」高优先级处理中已 3 小时，距 SLA 截止（08/24 02:32）不足 18 小时未办结将升级——请催办工程部王师傅。</div>
         <div style="margin-top:8px;display:flex;gap:8px">
-          <button class="act-btn pressable" style="flex:1;border-color:rgba(255,84,112,.55);color:var(--alert)" onclick="toast('已催办 王师傅（pushMessage mock:true）')">催办处理人</button>
+          <button class="act-btn pressable" style="flex:1;border-color:rgba(255,77,109,.55);color:var(--alert)" onclick="toast('已催办 王师傅（pushMessage mock:true）')">催办处理人</button>
           <button class="act-btn pressable" style="flex:1;border-color:var(--gline);color:var(--goldhi)" onclick="location.hash='tickets'">去工单台 →</button>
         </div>
       </div>
@@ -170,7 +170,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
         </div>
       </div>
       <!-- 待审批准（P22 pendingReviews + approveDocument 镜像） -->
-      <div class="card" id="pendCard" style="border-color:rgba(255,194,77,.35)">
+      <div class="card" id="pendCard" style="border-color:rgba(255,170,51,.35)">
         <div style="display:flex;gap:10px;align-items:flex-start">
           <span style="font-size:16px">📝</span>
           <div style="flex:1">
@@ -179,7 +179,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
             <div style="margin-top:2px;font-size:10px;color:var(--ink3)">来源 https://www.yunqi-hotel.example · 定时 0 3 * * *</div>
           </div>
         </div>
-        <button class="act-btn pressable" style="width:100%;margin-top:10px;border-color:rgba(61,255,178,.5);color:var(--go)" onclick="approve()">✓ 批准生效（kb.publish）</button>
+        <button class="act-btn pressable" style="width:100%;margin-top:10px;border-color:rgba(34,200,138,.5);color:var(--go)" onclick="approve()">✓ 批准生效（kb.publish）</button>
       </div>
       <div class="card">
         <div style="font-size:11px;font-weight:700;color:var(--holo)">🔎 试检索</div>
@@ -197,7 +197,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
       <div class="route-tag">镜像：apps/web/src/shell/Bridge.tsx 顶栏身份 + NightStatusPill</div>
       <div class="card" style="border-color:var(--gline)">
         <div style="display:flex;align-items:center;gap:12px">
-          <div style="width:48px;height:48px;border-radius:99px;border:1px solid var(--gline);background:rgba(233,181,88,.12);display:flex;align-items:center;justify-content:center" class="orb"><span style="font-size:16px;color:var(--gold)">刘</span></div>
+          <div style="width:48px;height:48px;border-radius:99px;border:1px solid var(--gline);background:rgba(255,36,66,.12);display:flex;align-items:center;justify-content:center" class="orb"><span style="font-size:16px;color:var(--gold)">刘</span></div>
           <div style="flex:1">
             <div style="font-size:15px;font-weight:600">刘经理</div>
             <div style="margin-top:2px;font-size:11px;color:var(--ink2)">值班经理 · 服务前台管理</div>
@@ -205,9 +205,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
           <span class="chip chip-gold">owner</span>
         </div>
       </div>
-      <button class="card pressable" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px" onclick="toast('进入守夜战队频道（P9）')">
+      <button class="card pressable" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px" onclick="toast('进入夜班团队频道（P9）')">
         <span class="pulse" style="width:8px;height:8px;border-radius:99px;background:var(--holo);box-shadow:0 0 10px var(--holo)"></span>
-        <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--holo)">守夜战队 · 巡航中</div><div style="font-size:10px;color:var(--ink3)">22:00–08:00 · 并行 ×4</div></div>
+        <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--holo)">夜班团队 · 巡航中</div><div style="font-size:10px;color:var(--ink3)">22:00–08:00 · 并行 ×4</div></div>
         <span style="color:var(--ink3)">›</span>
       </button>
       <button class="card pressable" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px" onclick="toast('打开 PC 舰桥 /p22（演示：见 service-front-b-pc.html）')">
@@ -228,7 +228,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
   <!-- 底 Tab -->
   <nav class="tabbar">
-    <button data-v="report" onclick="location.hash='report'"><span class="ic">📊</span>战报</button>
+    <button data-v="report" onclick="location.hash='report'"><span class="ic">📊</span>日报</button>
     <button data-v="tickets" onclick="location.hash='tickets'"><span class="ic">🎫</span>工单</button>
     <button data-v="kb" onclick="location.hash='kb'"><span class="ic">📚</span>知识库</button>
     <button data-v="me" onclick="location.hash='me'"><span class="ic">👤</span>我的</button>
@@ -252,7 +252,7 @@ function countTap(el,name){
 /* ===== 路由 ===== */
 const VIEWS=["report","tickets","kb","me"];
 const SRC={
-  report:"镜像：apps/web/src/pages/p3/P3.tsx 战报范式 · 数据 P22 stats.overview + scripts/eval",
+  report:"镜像：apps/web/src/pages/p3/P3.tsx 日报范式 · 数据 P22 stats.overview + scripts/eval",
   tickets:"镜像：apps/web/src/pages/p22/P22.tsx ticketsSection · /p22?tab=tickets 移动重排",
   kb:"镜像：apps/web/src/pages/p22/P22.tsx kbSection · /p22?tab=kb 移动重排",
   me:"镜像：apps/web/src/shell/Bridge.tsx 顶栏身份 + NightStatusPill"
@@ -280,8 +280,8 @@ function renderTk(){
   if(!todo.length){box.innerHTML=`<div class="card" style="text-align:center;padding:24px"><div style="font-size:13px;font-weight:700;color:var(--go)">✓ 待办已清空</div><div style="margin-top:4px;font-size:11px;color:var(--ink2)">全部工单已办结，结果已 pushMessage 通知 C 端</div></div>`;return;}
   box.innerHTML=todo.map(t=>{
     const acts=[];
-    if(t.status==="assigned")acts.push(`<button class="act-btn pressable" style="flex:1;border-color:rgba(69,224,255,.4);color:var(--holo)" onclick="advance('${t.id}')">▶ 开始处理</button>`);
-    acts.push(`<button class="act-btn pressable" style="flex:1;border-color:rgba(61,255,178,.5);color:var(--go)" onclick="complete('${t.id}')">✓ 办结</button>`);
+    if(t.status==="assigned")acts.push(`<button class="act-btn pressable" style="flex:1;border-color:rgba(77,150,255,.4);color:var(--holo)" onclick="advance('${t.id}')">▶ 开始处理</button>`);
+    acts.push(`<button class="act-btn pressable" style="flex:1;border-color:rgba(34,200,138,.5);color:var(--go)" onclick="complete('${t.id}')">✓ 办结</button>`);
     return `<div class="card fadein">
       <div style="display:flex;align-items:center;gap:8px">
         <span class="mono" style="font-size:10px;color:var(--ink3)">${t.id}</span>
@@ -318,7 +318,7 @@ function doSearch(){
   else if(q.includes("送物")||q.includes("矿泉"))hits=[["商品与服务目录 · 免费送物清单","矿泉水（每日 2 瓶免费）、牙刷套装、梳子等。",0.91]];
   const box=document.getElementById("hits");
   if(!hits){box.innerHTML=`<div style="font-size:10px;color:var(--warn)">无命中——可考虑补充知识文档</div>`;return;}
-  box.innerHTML=hits.map(h=>`<div class="fadein" style="border-radius:8px;border:1px solid var(--line);background:rgba(10,18,48,.6);padding:8px;margin-bottom:6px">
+  box.innerHTML=hits.map(h=>`<div class="fadein" style="border-radius:8px;border:1px solid var(--line);background:rgba(255,240,244,.9);padding:8px;margin-bottom:6px">
     <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--ink2)">${h[0]}</span><span class="orb" style="color:var(--holo)">${h[2].toFixed(2)}</span></div>
     <div style="margin-top:2px;font-size:10px;line-height:1.6;color:var(--ink3)">${h[1]}</div></div>`).join("");
 }

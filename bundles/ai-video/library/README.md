@@ -1,6 +1,6 @@
 # 视频经理 · 技能内容库（SuperMickey 复刻资料）
 
-> 来源：`super-mickey`（master，v2.12.1）。本目录为**资料库**，不逐个登记进 bundle.json skills（官方技能套件见 `skills/` 8 件）；
+> 来源：`super-mickey`（master，v2.12.1）。本目录为**资料库**，不逐个登记进 bundle.json skills（官方技能见 `skills/` 8 件）；
 > 供数码员工 prompt 引用与组织记忆 RAG 检索（拆解台账 §6）。
 
 ## 目录清单

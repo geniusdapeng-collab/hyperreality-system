@@ -3,7 +3,7 @@
 quest: account-ops
 name: 账号经营管线
 version: v1
-description: 定时采集账号/视频数据→阈值告警→早八点战报；评论采集→意图分类→G10 三级分流→回复/转人工
+description: 定时采集账号/视频数据→阈值告警→早八点日报；评论采集→意图分类→G10 三级分流→回复/转人工
 schedule: 7x24
 steps:
   - step_key: metrics-collect
@@ -16,7 +16,7 @@ steps:
     owner: metrics-watcher
     outputs: [account_metric]       # 越限即告警事件，不擅自处置
   - step_key: daily-brief
-    name: 早八点战报
+    name: 早八点日报
     owner: metrics-watcher
     cron: "0 8 * * *"
     outputs: [account_metric]       # 日报推送至经营群
@@ -41,5 +41,5 @@ steps:
   - step_key: trend-scan
     name: 趋势/竞品/爆款扫描
     owner: trend-researcher
-    cron: "0 7 * * *"               # 每日一次，供战报与选题引用
+    cron: "0 7 * * *"               # 每日一次，供日报与选题引用
     outputs: [insight]

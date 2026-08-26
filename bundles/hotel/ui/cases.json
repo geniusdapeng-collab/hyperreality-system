@@ -28,7 +28,7 @@
     {
       "page": "p1",
       "name": "夜班交接",
-      "expect": "package_generated 显昨夜战报卡"
+      "expect": "package_generated 显昨夜日报卡"
     },
     {
       "page": "p1",
@@ -207,7 +207,7 @@
     },
     {
       "page": "p9",
-      "name": "打包·战报",
+      "name": "打包·日报",
       "expect": "package_generated 快照"
     },
     {

@@ -2,7 +2,7 @@
  * P6 技能中心（F10：Agent 能力商店 · 技能广场；PRD P6-①②③④⑤ 逐条对账）
  *  - P6E1 意识系统建议横幅（F8.4 ≥3 次/周高频检测；一键固化→触发器 F4.7 / 生成草稿→p6_create / 驳回降权 E8.3；
  *    确认前不产生任何自动化 L4.4；超时态 >10s 显「分析中」可关闭）
- *  - P6E2 官方套件（金边传说·随 Bundle 分发；安装/已安装状态；绑定围栏可见；「已装给谁」→P8）
+ *  - P6E2 官方技能（金边传说·随 Bundle 分发；安装/已安装状态；绑定围栏可见；「已装给谁」→P8）
  *  - P6E3 团队技能（银边）/ 行业共享（铜边 · 已脱敏 ✓ L8.1；调用次数与采纳率公开=F8.5 事件投影）
  *  - P6E4 零代码新建技能「打造新装备」→ /p6/create 三要素向导（F8.3；「不能做什么」自动转围栏声明）
  *  - 技能广场四环（components/p6/*）：
@@ -11,7 +11,7 @@
  *    ②组合环：技能链（爆款种草/合规发布两条样例链，查看步骤 + 编译为管线 toast 占位）
  *    ③进化环：冷藏区（连续 4 周零命中降权展示，Mock 兜底）+ 进化提案（驳回样本修订建议，批准 toast 占位）
  *    ④生产环：拉片反推（jenny-loom-research v2 + 上传占位）+ forge 自建入口（沿用 /p6/create）
- * 状态变体：p6 默认 / p6_create 创建；加载骨架 G10；空态仅官方套件+新建入口（F8.1）；
+ * 状态变体：p6 默认 / p6_create 创建；加载骨架 G10；空态仅官方技能+新建入口（F8.1）；
  *   错误态安装拒绝+原因（L8.2/E8.2）；权限态社区版不显行业共享区（F7.2）+ readonly 隐藏全部动作（E2.6 隐藏非置灰）；
  *   完成后态创建成功→团队技能 v1 进版本管理（F8.3）
  * 数据来源：skills router（list/installs/usage=F8.5 投影/forge/dryRun/awareness.*）+ workspace.profile（阶段）
@@ -262,7 +262,7 @@ export default function P6() {
         <>
           <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">技能中心 · ARMORY</div>
           {[
-            ["#sec-official", "✦ 官方套件", `金边 · ${officials.length}`],
+            ["#sec-official", "✦ 官方技能", `金边 · ${officials.length}`],
             ["#sec-team", "✧ 团队技能", `银边 · ${teams.length}`],
             ...(showIndustry ? [["#sec-industry", "❖ 行业共享", `铜边 · ${industries.length}`] as const] : []),
             ["#sec-chains", "⛓ 技能链", "组合环 · 2 条样例"],
@@ -406,16 +406,16 @@ export default function P6() {
               onInstall={(id) => void install(id)}
             />
 
-            {/* 空态（F8.1）：未安装任何技能 → 仅显官方套件 + 新建入口 */}
+            {/* 空态（F8.1）：未安装任何技能 → 仅显官方技能 + 新建入口 */}
             {nothingInstalled && (
               <div className="mb-3">
-                <EmptyState title="尚未装备任何技能" hint="从官方套件开始——安装即绑定围栏（F8.2），卸载即撤销（L8.3）" />
+                <EmptyState title="尚未装备任何技能" hint="从官方技能开始——安装即绑定围栏（F8.2），卸载即撤销（L8.3）" />
               </div>
             )}
 
-            {/* P6E2 官方套件（金边传说） */}
+            {/* P6E2 官方技能（金边传说） */}
             <div id="sec-official" className="mb-2 text-caption font-bold tracking-wider text-ink2">
-              官方套件 · 随行业 Bundle 分发（金边传说）
+              官方技能 · 随行业 Bundle 分发（金边传说）
             </div>
             <div className="mb-5 grid grid-cols-3 gap-3">
               {officials.map(renderCard)}

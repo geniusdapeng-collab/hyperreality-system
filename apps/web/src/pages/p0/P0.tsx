@@ -363,7 +363,7 @@ export default function P0() {
             <div className="mb-1 text-sm font-bold text-ink">{pick.name}</div>
             <div className="text-xs text-ink3">岗位：{pick.presetKey}</div>
             <div className="mt-2 text-xs">绩效态：<b className={pick.grade === "表扬" ? "text-go" : pick.grade === "辅导" ? "text-warn" : "text-ink2"}>{pick.grade}</b></div>
-            <a href="/p8" className="mt-3 block rounded border border-line px-3 py-1.5 text-center text-xs text-holo no-underline hover:border-gline">去名册看全部（工作台 P8）</a>
+            <a href="/p8" className="mt-3 block rounded border border-line px-3 py-1.5 text-center text-xs text-holo no-underline hover:border-gline">去团队成员看全部（工作台 P8）</a>
             <button onClick={() => setPick(null)} className="mt-2 w-full rounded border border-line py-1.5 text-xs text-ink3">关闭</button>
           </div>
         </div>

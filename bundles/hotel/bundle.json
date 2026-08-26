@@ -4,7 +4,7 @@
   "workloom": {
     "industry": "hotel",
     "displayName": "WorkLoom for Hotels · 未来前台（演示 Bundle）",
-    "description": "酒店版行业差异资产包：7 个 Agent preset + 基线围栏包 + 对象/阶段枚举 + 一店一档 Schema + 官方技能套件（PRD V2.5 §2.2/§2.3）",
+    "description": "酒店版行业差异资产包：7 个 Agent preset + 基线围栏包 + 对象/阶段枚举 + 一店一档 Schema + 官方技能（PRD V2.5 §2.2/§2.3）",
     "provides": {
       "presets": [
         "presets/pricing-agent.yml",

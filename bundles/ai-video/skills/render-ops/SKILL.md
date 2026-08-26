@@ -1,6 +1,6 @@
 ---
 name: render-ops
-description: 渲染提交纪律官方套件（随 bundles/ai-video 分发，F8.1 官方套件级）：渲染脚本 CMS 版本链管理、三档提交（手动/批量/自动化连锁）、binding-manifest 强制、RenderPipelineGuard 渲染前检查、失败诊断与回填。安装后被渲染师调用；绑定围栏 G8，卸载即撤销（F8.2/L8.3）。
+description: 渲染提交纪律官方技能（随 bundles/ai-video 分发，F8.1 官方技能级）：渲染脚本 CMS 版本链管理、三档提交（手动/批量/自动化连锁）、binding-manifest 强制、RenderPipelineGuard 渲染前检查、失败诊断与回填。安装后被渲染师调用；绑定围栏 G8，卸载即撤销（F8.2/L8.3）。
 ---
 
 # 渲染提交纪律

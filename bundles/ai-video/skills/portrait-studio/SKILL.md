@@ -1,6 +1,6 @@
 ---
 name: portrait-studio
-description: 定妆照纪律官方套件（随 bundles/ai-video 分发，F8.1 官方套件级）：lead 8 角度/supporting 4/prop 三档、studio/uploaded/text 三模式、真实参考图纪律、PortraitGuard 无定妆照禁渲染。安装后被打定妆照美术指导调用；绑定围栏 G5，卸载即撤销（F8.2/L8.3）。
+description: 定妆照纪律官方技能（随 bundles/ai-video 分发，F8.1 官方技能级）：lead 8 角度/supporting 4/prop 三档、studio/uploaded/text 三模式、真实参考图纪律、PortraitGuard 无定妆照禁渲染。安装后被打定妆照美术指导调用；绑定围栏 G5，卸载即撤销（F8.2/L8.3）。
 ---
 
 # 定妆照纪律

@@ -4,7 +4,7 @@
   "workloom": {
     "industry": "ai-video",
     "displayName": "视频经理 · AI视频制作智能经营系统",
-    "description": "AI视频行业差异资产包：25 个数码员工 preset（制作班组 21 + 经营班组 4）+ G1-G10 基线围栏包 + 3 条 Quest 管线 + 对象/阶段枚举 + 8 个官方技能套件 + SuperMickey 技能内容库（fusion-design §2/§3/§4/§5）",
+    "description": "AI视频行业差异资产包：25 个数码员工 preset（制作班组 21 + 经营班组 4）+ G1-G10 基线围栏包 + 3 条 Quest 管线 + 对象/阶段枚举 + 8 个官方技能 + SuperMickey 技能内容库（fusion-design §2/§3/§4/§5）",
     "provides": {
       "presets": [
         "presets/director.yml",
