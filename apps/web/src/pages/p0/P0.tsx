@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { actionText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
+import { useAskRailPadding } from "../../lib/useAskRail";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
 
 /* ================= 类型 ================= */
@@ -156,6 +157,7 @@ function TypeBubble({ text, tone }: { text: string; tone: string }) {
 
 /* ================= 主组件 ================= */
 export default function P0() {
+  const railW = useAskRailPadding();
   const [data, setData] = useState<Theater | null>(null);
   const [queue, setQueue] = useState<ChairmanItem[]>([]);
   const [pick, setPick] = useState<Satellite | null>(null);
@@ -241,7 +243,7 @@ export default function P0() {
 
   const showCeremony = ceremony < 5;
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-bg950">
+    <div style={{ paddingRight: railW }} className="relative flex h-screen flex-col overflow-hidden bg-bg950">
       <Starfield density={typeof window !== "undefined" && window.innerWidth < 768 ? 60 : 110} />
 
       {/* 顶栏（极简） */}

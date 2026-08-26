@@ -191,6 +191,21 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
 .note{font-size:9.5px;color:var(--ink3);margin-top:8px;line-height:1.7}
 .skcat{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* Ask 首 tab 对话气泡（镜像 PC AskRail 消息组件） */
+.am-hb{display:flex;justify-content:flex-end;margin-bottom:10px}
+.am-hb>div{max-width:84%;border:1px solid rgba(77,150,255,.4);background:rgba(77,150,255,.08);border-radius:12px;border-top-right-radius:4px;padding:9px 12px;font-size:12.5px;line-height:1.7;color:var(--ink)}
+.am-am{display:flex;justify-content:flex-start;margin-bottom:10px}
+.am-am>div{max-width:92%;border:1px solid var(--line);background:var(--card,rgba(255,255,255,.88));border-radius:12px;border-top-left-radius:4px;padding:9px 12px}
+.am-am .mh{display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:11px;flex-wrap:wrap}
+.am-am .mh b{font-size:12px}.am-am .ac{font-size:12px;font-weight:600;color:var(--holo)}
+.am-am .bd{font-size:12.5px;line-height:1.7;color:var(--ink2)}
+.am-tag{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:0 6px;font-size:10px;font-weight:700;line-height:1.6}
+.am-tag.ok{color:var(--go)}.am-tag.amber{color:var(--warn)}
+.am-quest{margin-top:8px;border:1px solid var(--gline);border-radius:8px;background:rgba(255,36,66,.05);padding:8px 12px;font-size:11px}
+
+/* 交互定稿：移动端单一入口=首 tab 对话页，中央凸起入口收起 */
+.mstar{display:none !important}
 </style>
 </head>
 <body>
@@ -234,6 +249,25 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
   </div>
 
   <!-- ===== 日报（P3 掌上日报镜像） ===== -->
+  <!-- Ask 首 tab 对话页（交互定稿：移动端对话框=最左 tab 首屏） -->
+  <div class="screen" id="s-ask">
+    <div class="rowbet" style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:17px;font-weight:900">Ask · AI 助手对话</span><span class="note">全局常驻 · ⌘K 唤起</span></div>
+    <div id="askMsgs" style="margin-top:12px">
+<div class="am-hb"><div>评论区有新增负面吗</div></div>
+<div class="am-am"><div><div class="mh"><b>AI 助手</b><span class="am-tag ok">✓ 已生效</span></div><div class="ac">AI 助手 · 应答</div><div class="bd">有，抖音侧 3 条负面评论聚类为「价格质疑」（G10 三级分流命中 review）。评论Agent 已生成回复草稿待您审批，其余夸赞类已 auto 放行。</div></div></div>
+<div class="am-hb"><div>汇总本周各平台播放数据</div></div>
+<div class="am-am"><div><div class="mh"><b>总导演</b><span class="am-tag amber">⚠ 未核实</span></div><div class="ac">总导演 已接单</div><div class="bd">明确任务已自动立项（quest），产出将投递掌上日报（/p3）。</div><div class="am-quest"><b style="color:var(--goldhi)">quest 立项卡 · 本周播放数据汇总</b><div style="font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3);margin-top:3px">排队中 · →任务中心跟进</div></div></div></div>
+    </div>
+    <div style="display:flex;gap:6px;overflow-x:auto;margin-top:4px;white-space:nowrap">
+      <button class="btn" style="flex:none;font-size:11px" onclick="mAskSend('片库脚本进展如何')">⚡ 片库进展</button>
+      <button class="btn" style="flex:none;font-size:11px" onclick="mAskSend('本周哪条内容数据最好')">⚡ 本周爆款</button>
+      <button class="btn" style="flex:none;font-size:11px" onclick="mAskSend('汇报当前经营概况')">⚡ 经营概况</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;position:sticky;bottom:10px">
+      <input id="askIn" placeholder="问点什么，或派个任务…" style="flex:1;background:var(--bg950);border:1px solid var(--gline);border-radius:999px;padding:10px 14px;color:var(--ink);font-size:12.5px;outline:none" onkeydown="if(event.key==='Enter')mAskSend(this.value)">
+      <button class="btn gold" style="border-radius:999px;background:linear-gradient(135deg,#ff7a9e,#ff2442);color:#fff;border:none;font-weight:700" onclick="mAskSend(document.getElementById('askIn').value)">发送</button>
+    </div>
+  </div>
   <div class="screen" id="s-report">
     <div class="greet"><span class="t1">掌上日报</span><span class="t2">P3 · HANDOFF</span></div>
     <div class="card gold">
@@ -467,10 +501,11 @@ h3.ct{font-size:11px;color:var(--ink3);font-weight:500;margin-bottom:8px}
   </div>
 
   <div class="tabbar">
+    <div class="tab" data-s="ask"><span class="ic">✦</span>Ask</div>
     <div class="tab" data-s="report"><span class="ic">📊</span>日报</div>
     <div class="tab" data-s="msg"><span class="ic">💬</span>消息<span class="badge">3</span></div>
-    <div class="tab" data-s="appr" style="margin-right:28px"><span class="ic">⚖️</span>审批<span class="badge">2</span></div>
-    <div class="tab" data-s="lib" style="margin-left:28px"><span class="ic">🎬</span>片库</div>
+    <div class="tab" data-s="appr"><span class="ic">⚖️</span>审批<span class="badge">2</span></div>
+    <div class="tab" data-s="lib"><span class="ic">🎬</span>片库</div>
     <div class="tab" data-s="skill"><span class="ic">✦</span>技能</div>
     <div class="tab" data-s="me"><span class="ic">👤</span>我的</div>
     <!-- AI 助手 StarRing（底部中央凸起 · 单击快捷条 / 双击进 P0 数字职场；待批红点呼吸加速） -->
@@ -622,5 +657,18 @@ function medOpen(name,meta,emoji){
 }
 function medClose(){document.getElementById('medMask').classList.remove('open');document.getElementById('medEmp').classList.remove('open')}
 </script>
+
+<script>
+/* Ask 首 tab 应答（演示拟真；真实走 threads.dispatch） */
+function mAskSend(q){
+  q=String(q||"").trim();if(!q)return;
+  const box=document.getElementById('askMsgs'),inp=document.getElementById('askIn');if(inp)inp.value='';
+  box.insertAdjacentHTML('beforeend','<div class="am-hb"><div>'+q.replace(/</g,'&lt;')+'</div></div>');
+  const reply=(t)=>{box.insertAdjacentHTML('beforeend','<div class="am-am"><div><div class="mh"><b>AI 助手</b><span class="am-tag ok">✓ 已生效</span></div><div class="ac">AI 助手 · 应答</div><div class="bd">'+t+'</div></div></div>');box.scrollTop=box.scrollHeight};
+  const quest=(t)=>{box.insertAdjacentHTML('beforeend','<div class="am-am"><div><div class="mh"><b>总导演</b><span class="am-tag amber">⚠ 未核实</span></div><div class="ac">总导演 已接单</div><div class="bd">已立项执行：「'+t.slice(0,24)+'」，每一步先请您确认再动手。</div><div class="am-quest"><b style="color:var(--goldhi)">quest 立项卡 · '+t.slice(0,14)+'</b><div style="font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3);margin-top:3px">排队中 · →任务中心跟进</div></div></div></div>');box.scrollTop=box.scrollHeight};
+  if(/片库|脚本|渲染/.test(q))return reply("片库 231 条（新增 3 条）；在渲染 2 条：保温杯种草片三镜渲染 14/19，预计 18:40 完成；排队 1 条。");if(/播放|数据|爆款/.test(q))return reply("全平台播放 32.8w（▲18.2%）：抖音 21.4w / 小红书 7.9w / B站 3.5w；爆款「保温杯测评」完播 38.4% · 涨粉 +1,204。");if(/负面|评论|差评/.test(q))return reply("今日评论 214 条：夸赞 161（auto）/ 咨询 41（已回）/ 负面 12（3 条价格质疑待您审批）。敏感词 0 命中。");if(/审批|待审/.test(q))return reply("待您审批 2 件：① L4 · Dou+ 加投 ¥3,000（超上限）；② L3 · 年度框架商单 ¥80,000/年。无越围栏高危项。");if(/概况|怎么样|经营/.test(q))return reply("昨日审批 14 件（L2 下沉率 86%），全平台播放 32.8w（▲18.2%）；夜班巡检 5/5 完成；2 件谨慎上浮请您定。");return quest(q)
+}
+</script>
+
 </body>
 </html>

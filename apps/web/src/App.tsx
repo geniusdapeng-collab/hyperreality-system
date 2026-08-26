@@ -15,10 +15,14 @@ import P10 from "./pages/p10/P10";
 import DevMatrix from "./pages/dev/DevMatrix";
 import Onboarding from "./pages/onboarding/Onboarding";
 import { Bridge } from "./shell/Bridge";
+import { StarRing } from "./components/star-ring/StarRing";
 
 /** 阶段三路由：页面自包 Bridge（注入真实左右栏）；/dev 矩阵保持壳内平铺 */
 export default function App() {
   return (
+    <>
+
+    <StarRing />
     <Routes>
       <Route path="/" element={<P0 />} />
       <Route path="/p1" element={<P1 />} />
@@ -39,5 +43,6 @@ export default function App() {
       <Route path="/dev" element={<Bridge><DevMatrix /></Bridge>} />
       <Route path="*" element={<P0 />} />
     </Routes>
+  </>
   );
 }

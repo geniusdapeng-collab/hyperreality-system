@@ -10,8 +10,8 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { EmergencyBrake, NightStatusPill } from "../components/hud";
 import { LiveTicker } from "../components/hud/LiveTicker";
-import { StarRing } from "../components/star-ring/StarRing";
 import { SimBanner } from "../components/SimBanner";
+import { useAskRailPadding } from "../lib/useAskRail";
 import { COMMON_STATUS_TEXT, dictText } from "../lib/display";
 import { PlanSwitcher } from "./PlanSwitcher";
 
@@ -79,8 +79,10 @@ export function Bridge({
   // 当前版本（F7.2）：社区版隐藏夜班胶囊与制动杆（隐藏非置灰 E2.6；F12 权限态演示）
   const [plan, setPlan] = useState<string | null>(null);
   const community = plan === "community";
+  // AskRail 布局协作：右侧通栏 Ask 对话框常驻，主区预留其宽度（320 展开/56 收起）
+  const railW = useAskRailPadding();
   return (
-    <div className="min-h-screen bg-bg950">
+    <div className="min-h-screen bg-bg950" style={{ paddingRight: railW }}>
       <StarField />
       <div className="relative flex min-h-screen items-start justify-center py-8">
         <div className="relative w-bridge overflow-hidden rounded-bridge border border-line bg-gradient-to-b from-[#fffffff2] to-[#fff5f7f5] shadow-[0_30px_80px_rgba(255,36,66,.12)]">
@@ -164,9 +166,6 @@ export function Bridge({
           </div>
         </div>
       </div>
-
-      {/* AI 助手 StarRing：全局 Ask 入口（所有页面生效；⌘K 唤起，双击进 /p0 经营主页） */}
-      <StarRing />
     </div>
   );
 }

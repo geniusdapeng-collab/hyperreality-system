@@ -14,9 +14,10 @@
   --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d; --need:#b678ff;
   --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
   --card:rgba(255,255,255,.88); --line:rgba(255,36,66,.14); --gline:rgba(255,36,66,.32);
+  --railw:320px; /* AskRail 展开 320px / 收起 56px（镜像生产 askrail-width 布局协作） */
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh;overflow-x:hidden}
+body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh;overflow-x:hidden;padding-right:var(--railw)}
 .mono{font-family:"JetBrains Mono",ui-monospace,monospace;white-space:nowrap}
 .orb{font-family:"Orbitron","JetBrains Mono",ui-monospace,monospace}
 ::selection{background:rgba(255,181,69,.35)}
@@ -388,6 +389,59 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
 .xpbar .tr i{display:block;height:100%;background:linear-gradient(90deg,var(--holo2),var(--holo))}
 .xpbar .tx{font-family:ui-monospace,monospace;font-size:10px;color:var(--holo)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* AskRail 右侧固定通栏对话框（镜像生产 StarRing.tsx：320px 展开 / 56px 图标条收起 · 全页面常驻） */
+#askrail{position:fixed;top:0;right:0;bottom:0;width:var(--railw);z-index:65;display:flex;flex-direction:column;
+ border-left:1px solid var(--gline);background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
+ box-shadow:-20px 0 60px rgba(214,0,42,.10)}
+#askrail .ar-head{display:flex;align-items:center;gap:8px;border-bottom:1px solid #ebdde0;padding:10px 12px;background:#fff0f4}
+#askrail .ar-logo{position:relative;width:32px;height:32px;flex:none;border-radius:50%;
+ background:linear-gradient(135deg,#ff7a9e,#ff2442 45%,#ff2442);box-shadow:0 0 16px rgba(255,36,66,.22);
+ display:flex;align-items:center;justify-content:center;border:0;cursor:pointer}
+#askrail .ar-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:999px;
+ border:1px solid rgba(255,77,109,.45);background:#ff4d6d;color:#fff;font-size:10px;font-weight:700;
+ display:flex;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 0 10px rgba(255,77,109,.45);
+ font-family:ui-monospace,monospace}
+#askrail .ar-title{font-size:11.5px;font-weight:900;letter-spacing:.04em;color:var(--gold);white-space:nowrap}
+#askrail .ar-route{font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3);margin-top:1px}
+#askrail .ar-hbtn{border:1px solid var(--gline);border-radius:999px;padding:2px 8px;font-size:10px;color:var(--gold);background:transparent;white-space:nowrap;cursor:pointer}
+#askrail .ar-hbtn.dim{border-color:var(--line);color:var(--ink3)}
+#askrail .ar-hbtn:hover{border-color:var(--gold);color:var(--goldhi)}
+#askrail .ar-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px;min-height:0}
+#askrail .ar-chips{display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid rgba(255,36,66,.12);padding:8px 12px 0}
+#askrail .ar-chips .kbd-chip{border:1px solid rgba(77,150,255,.35);border-radius:999px;background:transparent;color:var(--holo);padding:3px 10px;font-size:10px;cursor:pointer}
+#askrail .ar-chips .kbd-chip:hover{border-color:var(--gline);color:var(--gold)}
+#askrail .ar-input{padding:10px 12px 12px;display:flex;gap:8px}
+#askrail .ar-input input{flex:1;min-width:0;border:1px solid var(--gline);border-radius:999px;background:#ffffff;color:var(--ink);
+ padding:8px 12px;font-size:12px;outline:none;font-family:inherit}
+#askrail .ar-input input::placeholder{color:var(--ink3)}
+#askrail .ar-send{flex:none;border:0;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:900;color:#ffffff;
+ background:linear-gradient(135deg,#ff7a9e,#ff2442 45%,#ff2442);cursor:pointer}
+#askrail .ar-send:disabled{opacity:.4;cursor:not-allowed}
+.ar-hb{display:flex;justify-content:flex-end}
+.ar-hb>div{max-width:84%;border:1px solid rgba(77,150,255,.4);border-radius:12px;border-top-right-radius:4px;
+ background:rgba(77,150,255,.08);padding:8px 12px;font-size:12px;line-height:1.7;color:var(--ink)}
+.ar-am{display:flex;justify-content:flex-start}
+.ar-am>div{max-width:94%;border:1px solid var(--line);border-radius:12px;border-top-left-radius:4px;background:var(--card,rgba(255,255,255,.88));padding:9px 12px}
+.ar-am .ar-meta{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.ar-am .ar-meta b{font-size:12px}
+.ar-am .ar-action{font-size:12px;font-weight:600;color:var(--holo)}
+.ar-am .ar-text{margin-top:4px;font-size:12px;line-height:1.7;color:var(--ink2)}
+.ar-quest{margin-top:8px;border:1px solid var(--gline);border-radius:8px;background:rgba(255,36,66,.05);padding:8px 12px}
+.ar-cite{margin-top:8px;border:1px solid rgba(77,150,255,.3);border-radius:8px;background:rgba(77,150,255,.04);padding:8px 12px}
+.ar-tag{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:0 6px;font-size:10px;font-weight:700;line-height:1.6}
+.ar-tag.ok{color:var(--go)}.ar-tag.amber{color:var(--warn)}.ar-tag.warn{color:var(--alert)}
+@keyframes arthk{0%,60%,100%{opacity:.25}30%{opacity:1}}
+.ar-thinking span{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--gold);margin-right:4px;animation:arthk 1s infinite}
+.ar-thinking span:nth-child(2){animation-delay:.15s}.ar-thinking span:nth-child(3){animation-delay:.3s}
+#askrail.rail-min{align-items:center;padding:12px 0;gap:12px}
+#askrail.rail-min .ar-vtext{writing-mode:vertical-rl;font-size:10px;letter-spacing:.25em;color:var(--gold);font-weight:700}
+#askrail.rail-min .ar-x{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:11px;color:var(--ink3);background:transparent;cursor:pointer}
+#askrail.rail-min .ar-x:hover{border-color:var(--gline);color:var(--gold)}
+@media (max-width:860px){#askrail{display:none}body{padding-right:0 !important}}
+
+/* AskRail 定稿：PC 单一入口为右侧通栏，旧悬浮球入口隐藏（交互收敛 D35） */
+.star-ring{display:none !important}
 </style>
 </head>
 <body>
@@ -1711,5 +1765,94 @@ function revokeGo(){revokeReset();toast('已收权：captain.transit revoke → 
 if(location.hash){const h=location.hash.slice(1);if(document.getElementById('v-'+h))gotoV(h)}
 else p0Enter(); // 默认落地 P0 经营主页（生产 P0 为默认首页）· 每日首访开门礼
 </script>
+<aside id="askrail" aria-label="Ask · AI 助手对话"></aside>
+
+<script>
+/* ===== AskRail 右侧固定通栏对话框（自包含；镜像生产 StarRing.tsx 交互定稿） ===== */
+(function(){
+ const q=(s)=>document.querySelector(s);
+ const esc=(s)=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+ const toast=(t)=>{if(window.toast)window.toast(t)};
+ const CLAPPER=(s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="7" width="20" height="13" rx="2.5" fill="#ffffff"/><path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#ffffff"/><path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#ff2442" stroke-width="1.1"/><path d="M10.2 11.4v5.6l4.8-2.8z" fill="#ff2442"/></svg>`;
+ const AR_CHIPS=[["p10",["片库脚本进展如何","本周哪条内容数据最好"]],["p4",["这批审批有高危项吗","汇总今日待审重点"]],["p2",["这线程卡在哪一步","预估剩余积分消耗"]],["p1",["昨夜经营有什么异常","今天优先级最高的三件事"]]];
+ const AR_DEFAULT_CHIPS=["汇报当前经营概况","有哪些待我审批的事项"];
+ const AR_PENDING=2, SENDER="总导演";
+ let arCollapsed=false,arSending=false,arSeq=0;
+ const AR_MSGS=[];
+ const arHuman=(t)=>`<div class="ar-hb"><div>${t}</div></div>`;
+ const arReceipt=(r)=>r==="synced"?'<span class="ar-tag ok">✓ 已生效</span>':r==="failed"?'<span class="ar-tag warn">✗ 失败</span>':'<span class="ar-tag amber">⚠ 未核实</span>';
+ const arAgent=(o)=>`<div class="ar-am"><div><div class="ar-meta"><b>${o.sender||"AI 助手"}</b><span class="mono" style="font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3)">${o.refId}</span>${arReceipt(o.receipt)}</div><div class="ar-action">${o.action}</div><div class="ar-text">${o.text}</div>${o.extra||""}</div></div>`;
+ const arQuestCard=(title,threadId,agent)=>`<div class="ar-quest"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:12px;color:var(--goldhi)">quest 立项卡 · ${title}</b><span class="ar-tag amber">排队中</span></div><div style="font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3);margin-top:4px">线程 ${threadId} · 执行 ${agent} · →任务中心</div><button class="ar-hbtn" style="margin-top:8px" onclick="location.hash='p2'">→ 任务中心跟进</button></div>`;
+  AR_MSGS.push(
+  {role:"human",html:arHuman("评论区有新增负面吗")},
+  {role:"agent",html:arAgent({action:"AI 助手 · 应答",refId:"事件 ···8846",receipt:"synced",text:"有，抖音侧 3 条负面评论聚类为「价格质疑」（G10 三级分流命中 review）。评论Agent 已生成回复草稿待您审批（审批 ···8871），其余夸赞类已 auto 放行回执落账。"})},
+  {role:"human",html:arHuman("汇总本周各平台播放数据")},
+  {role:"agent",html:arAgent({sender:SENDER,action:SENDER+" 已接单",refId:"线程 ···9106",receipt:"unverified",text:"明确任务已自动立项（quest），产出将投递掌上日报（/p3）。",extra:arQuestCard("本周播放数据汇总","···9106","数据看板官")})});
+ function arRouteLabel(v){return v==="p0"?"/":v==="floor"?"/（办公区）":v==="ask"?"#ask":"#"+v}
+ function arRender(){
+  const rail=q("#askrail");if(!rail)return;
+  if(arCollapsed){
+   document.documentElement.style.setProperty("--railw","56px");
+   rail.className="rail-min";
+   rail.innerHTML=`<button class="ar-logo" onclick="window.__arExpand()" title="展开 Ask 对话栏" style="width:40px;height:40px">${CLAPPER(22)}<span class="ar-badge">${AR_PENDING}</span></button><div class="ar-vtext">ASK · AI 助手</div><div style="flex:1"></div><button class="ar-x" onclick="window.__arExpand()" title="展开（⌘K）">⇤</button>`;
+   return;
+  }
+  document.documentElement.style.setProperty("--railw","320px");
+  rail.className="";
+  const v=(location.hash||"#p0").slice(1).split("/")[0];
+  const chips=(AR_CHIPS.find(c=>c[0]===v)||[])[1]||AR_DEFAULT_CHIPS;
+  rail.innerHTML=`
+   <div class="ar-head">
+    <span class="ar-logo">${CLAPPER(18)}</span>
+    <div style="min-width:0"><div class="ar-title">Ask · AI 助手对话</div><div class="ar-route" id="arRoute">${arRouteLabel(v)} · 全局常驻</div></div>
+    <span class="ar-badge" style="position:static">${AR_PENDING}</span>
+    <span style="flex:1"></span>
+    <button class="ar-hbtn" onclick="location.hash='p0'">进经营主页 →</button>
+    <button class="ar-hbtn dim" onclick="window.__arCollapse()" title="收起为图标条">⇥</button>
+   </div>
+   <div class="ar-msgs" id="arMsgs">${AR_MSGS.map(m=>m.html).join("")}</div>
+   <div class="ar-chips" id="arChips">${chips.map(c=>`<button class="kbd-chip" onclick="window.__arSend('${c}')">⚡ ${c}</button>`).join("")}</div>
+   <div class="ar-input"><input id="arIn" maxlength="500" placeholder="问点什么，或派个任务…（⌘K 唤起）" onkeydown="if(event.key==='Enter')window.__arSend(this.value)"><button class="ar-send" id="arSendBtn" onclick="window.__arSend(q('#arIn').value)">发送</button></div>`;
+  const m=q("#arMsgs");if(m)m.scrollTop=m.scrollHeight;
+ }
+ function arSyncRoute(){
+  if(arCollapsed)return;
+  const v=(location.hash||"#p0").slice(1).split("/")[0];
+  const r=q("#arRoute");if(r)r.textContent=arRouteLabel(v)+" · 全局常驻";
+  const chips=(AR_CHIPS.find(c=>c[0]===v)||[])[1]||AR_DEFAULT_CHIPS;
+  const box=q("#arChips");if(box)box.innerHTML=chips.map(c=>`<button class="kbd-chip" onclick="window.__arSend('${c}')">⚡ ${c}</button>`).join("");
+ }
+ function arAnswer(q2){
+    if(/片库|脚本|渲染/.test(q2))return arAgent({action:"AI 助手 · 应答",refId:"事件 ···9104",receipt:"synced",text:"片库 231 条（官方 11 · 新增 deal-flow/cross-platform-review/ripping-reverse 3 条）；在渲染 2 条：保温杯种草片三镜渲染 14/19（渲染师小燃），预计 18:40 完成；排队 1 条。"});
+  if(/播放|数据|爆款/.test(q2))return arAgent({action:"AI 助手 · 应答",refId:"事件 ···8846",receipt:"synced",text:"全平台播放 32.8w（▲18.2%）：抖音 21.4w / 小红书 7.9w / B站 3.5w；本周爆款「保温杯测评」完播 38.4% · 涨粉 +1,204，已入爆款库打标。"});
+  if(/负面|评论|差评/.test(q2))return arAgent({action:"AI 助手 · 应答",refId:"事件 ···8846",receipt:"synced",text:"今日评论 214 条：夸赞 161（auto）/ 咨询 41（review 已回）/ 负面 12（3 条价格质疑待您审批，9 条已回闭环）。敏感词 0 命中。"});
+  if(/审批|高危|待审/.test(q2))return arAgent({action:"AI 助手 · 应答",refId:"事件 ···8871",receipt:"synced",text:"当前待您审批 2 件：① L4 董事长级 · Dou+ 加投 ¥3,000（超营销上限 · 审批 ···9064）；② L3 公司CEO级 · 年度框架商单 ¥80,000/年（G15 锚定 · 审批 ···9061）。无越围栏高危项。"});
+  if(/概况|怎么样|经营/.test(q2))return arAgent({action:"AI 助手 · 应答",refId:"事件 ···8999",receipt:"synced",text:"当前经营概况：昨日审批 14 件（L2 下沉率 86%），全平台播放 32.8w（▲18.2%）；夜班班组巡航完成 5/5 巡检；2 件谨慎上浮请您定。"});
+  return arAgent({sender:SENDER,action:SENDER+" 已接单",refId:"线程 ···9108",receipt:"unverified",text:`已立项执行：「${esc(q2.slice(0,24))}」，每一步先请您确认再动手。`,extra:arQuestCard(esc(q2.slice(0,14)),"···9108",SENDER)});
+ }
+ function arSend(raw){
+  const q2=String(raw||"").trim();if(!q2||arSending)return;
+  if(arCollapsed)window.__arExpand();
+  const inp=q("#arIn");if(inp)inp.value="";
+  arSending=true;const btn=q("#arSendBtn");if(btn){btn.disabled=true;btn.textContent="…"}
+  AR_MSGS.push({role:"human",html:arHuman(esc(q2))});
+  const thinkId=++arSeq;
+  AR_MSGS.push({role:"agent",html:`<div class="ar-am" data-think="${thinkId}"><div><div class="ar-meta"><b>AI 助手</b><span style="font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3)">正在思考</span></div><div class="ar-thinking" style="padding:4px 0"><span></span><span></span><span></span></div></div></div>`});
+  arRender();
+  setTimeout(()=>{
+   const i=AR_MSGS.findIndex(m=>m.html.includes(`data-think="${thinkId}"`));
+   if(i>=0)AR_MSGS[i]={role:"agent",html:arAnswer(q2)};
+   arSending=false;arRender();
+  },900);
+ }
+ window.__arSend=arSend;window.__arCollapse=()=>{arCollapsed=true;arRender()};window.__arExpand=()=>{arCollapsed=false;arRender()};
+ window.addEventListener("hashchange",arSyncRoute);
+ document.addEventListener("keydown",e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();window.__arExpand();const i=q("#arIn");if(i){i.focus();toast("Ask · AI 助手对话已唤起（⌘K）")}}
+ });
+ arRender();
+})();
+</script>
+
 </body>
 </html>
