@@ -29,7 +29,7 @@ export function KpiGauge({
       {/* 扫描线纹理（§5.7） */}
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ background: "repeating-linear-gradient(0deg, transparent 0 3px, rgba(69,224,255,.03) 3px 4px)" }}
+        style={{ background: "repeating-linear-gradient(0deg, transparent 0 3px, rgba(77,150,255,.03) 3px 4px)" }}
       />
       <div className="relative text-micro tracking-[.12em] text-ink2">{name}</div>
       <div className="relative my-1 font-orb text-[22px] font-bold text-ink">{value}</div>

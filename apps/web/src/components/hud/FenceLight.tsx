@@ -10,10 +10,10 @@ import { FENCE_LEVEL_TEXT } from "../../lib/display";
 export type FenceLevel4 = "auto" | "review" | "block" | "need";
 
 const META: Record<FenceLevel4, { label: string; color: string; anim?: string; glow: string }> = {
-  auto: { label: FENCE_LEVEL_TEXT.auto!, color: "bg-go", glow: "rgba(61,255,178,.6)" },
-  review: { label: FENCE_LEVEL_TEXT.review!, color: "bg-warn", anim: "animate-pulse-warn", glow: "rgba(255,194,77,.6)" },
-  block: { label: FENCE_LEVEL_TEXT.block!, color: "bg-alert", anim: "animate-pulse-alert", glow: "rgba(255,84,112,.6)" },
-  need: { label: "需介入", color: "bg-need", anim: "animate-pulse-warn", glow: "rgba(180,92,255,.6)" },
+  auto: { label: FENCE_LEVEL_TEXT.auto!, color: "bg-go", glow: "rgba(34,200,138,.6)" },
+  review: { label: FENCE_LEVEL_TEXT.review!, color: "bg-warn", anim: "animate-pulse-warn", glow: "rgba(255,170,51,.6)" },
+  block: { label: FENCE_LEVEL_TEXT.block!, color: "bg-alert", anim: "animate-pulse-alert", glow: "rgba(255,77,109,.6)" },
+  need: { label: "需介入", color: "bg-need", anim: "animate-pulse-warn", glow: "rgba(182,120,255,.6)" },
 };
 
 export function FenceLight({

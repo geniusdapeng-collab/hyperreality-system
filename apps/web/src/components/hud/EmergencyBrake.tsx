@@ -15,7 +15,7 @@ export function EmergencyBrake({ onConfirm }: { onConfirm?: () => void }) {
         <button
           type="button"
           onClick={() => { onConfirm?.(); setArming(false); }}
-          className="cursor-pointer rounded-lg border border-alert bg-alert/20 px-3.5 py-1.5 text-xs font-extrabold tracking-wider text-alert shadow-[0_0_16px_rgba(255,84,112,.4)]"
+          className="cursor-pointer rounded-lg border border-alert bg-alert/20 px-3.5 py-1.5 text-xs font-extrabold tracking-wider text-alert shadow-[0_0_16px_rgba(255,77,109,.4)]"
         >
           ⚠ 确认制动（全端 ≤60s 生效）
         </button>

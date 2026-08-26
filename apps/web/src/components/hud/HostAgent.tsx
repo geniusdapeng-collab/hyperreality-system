@@ -64,7 +64,7 @@ export function HostAgent({
         </span>
       </span>
       <span
-        className={`ml-1 inline-block h-1.5 w-1.5 rounded-full ${agent?.status === "ready" ? "bg-go shadow-[0_0_8px_rgba(61,255,178,.7)]" : "bg-ink3"}`}
+        className={`ml-1 inline-block h-1.5 w-1.5 rounded-full ${agent?.status === "ready" ? "bg-go shadow-[0_0_8px_rgba(34,200,138,.7)]" : "bg-ink3"}`}
       />
       <span className="text-caption text-gold">→</span>
     </button>

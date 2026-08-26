@@ -15,9 +15,9 @@ export function XpBar({
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   return (
     <div className="flex items-center gap-2.5">
-      <div className="h-[9px] flex-1 overflow-hidden rounded-full bg-[rgba(96,140,255,.14)]">
+      <div className="h-[9px] flex-1 overflow-hidden rounded-full bg-[rgba(77,150,255,.14)]">
         <div
-          className="relative h-full rounded-full shadow-[0_0_12px_rgba(255,181,69,.55)]"
+          className="relative h-full rounded-full shadow-[0_0_12px_rgba(255,36,66,.55)]"
           style={{
             width: `${pct}%`,
             background: "linear-gradient(90deg, var(--color-gold2), var(--color-gold), var(--color-goldhi))",

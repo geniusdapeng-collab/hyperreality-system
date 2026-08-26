@@ -54,7 +54,7 @@ export function SkeletonBlock({ lines = 3, h = 14 }: { lines?: number; h?: numbe
         >
           <div
             className="absolute inset-y-0 w-1/3 animate-skflow"
-            style={{ background: "linear-gradient(100deg, transparent, rgba(234,241,255,.09), transparent)" }}
+            style={{ background: "linear-gradient(100deg, transparent, rgba(255,255,255,.10), transparent)" }}
           />
         </div>
       ))}

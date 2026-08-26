@@ -65,7 +65,7 @@ export function QuestCard({
             key={i}
             className={`h-2 w-2 rounded-full ${
               i < done
-                ? "bg-gold shadow-[0_0_8px_rgba(255,181,69,.7)]"
+                ? "bg-gold shadow-[0_0_8px_rgba(255,36,66,.7)]"
                 : i === done && status === "running"
                   ? "bg-holo animate-pulse-hud"
                   : "bg-bg700"

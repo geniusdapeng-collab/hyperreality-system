@@ -181,7 +181,7 @@ export function EmployeeCardDrawer({
             <div className="flex items-center gap-3">
               <div
                 className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border-2 border-gline text-[26px]"
-                style={{ background: "linear-gradient(135deg, rgba(212,175,55,.35), rgba(69,224,255,.18) 60%, rgba(36,27,77,.5))" }}
+                style={{ background: "linear-gradient(135deg, rgba(212,175,55,.35), rgba(77,150,255,.18) 60%, rgba(36,27,77,.5))" }}
               >
                 {kindEmoji(agent)}
               </div>
@@ -255,7 +255,7 @@ export function EmployeeCardDrawer({
               <div className="rounded-lg border border-line bg-bg800/40 p-2.5">
                 <div className="text-micro text-ink3">在线状态</div>
                 <div className={`mt-0.5 text-caption font-bold ${statusCls}`}>
-                  {agent.online && <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-holo shadow-[0_0_6px_rgba(69,224,255,.8)]" />}
+                  {agent.online && <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-holo shadow-[0_0_6px_rgba(77,150,255,.8)]" />}
                   {statusText}
                 </div>
                 {agent.nightShift && <div className="text-[9.5px] text-ink3">夜班窗口 {nightRange} 自动上线</div>}

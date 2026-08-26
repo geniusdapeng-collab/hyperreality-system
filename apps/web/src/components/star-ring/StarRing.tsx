@@ -304,7 +304,7 @@ export function StarRing() {
         />
         <ClapperIcon />
         {pendingCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-alert/70 bg-alert px-1 font-orb text-micro font-bold text-ink shadow-[0_0_10px_rgba(255,84,112,.7)]">
+          <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-alert/70 bg-alert px-1 font-orb text-micro font-bold text-ink shadow-[0_0_10px_rgba(255,77,109,.7)]">
             {pendingCount}
           </span>
         )}

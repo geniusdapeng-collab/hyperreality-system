@@ -9,9 +9,9 @@ import { EventIdChip } from "./EventIdChip";
 export type RadarSeverity = "p0" | "p1" | "p2";
 
 const SEV_META: Record<RadarSeverity, { pill: string; border: string; bg: string }> = {
-  p0: { pill: "bg-alert/15 text-alert border-alert/55", border: "border-alert/40", bg: "rgba(255,84,112,.06)" },
-  p1: { pill: "bg-warn/15 text-warn border-warn/50", border: "border-warn/40", bg: "rgba(255,194,77,.05)" },
-  p2: { pill: "bg-holo/10 text-holo border-holo/40", border: "border-holo/30", bg: "rgba(69,224,255,.04)" },
+  p0: { pill: "bg-alert/15 text-alert border-alert/55", border: "border-alert/40", bg: "rgba(255,77,109,.06)" },
+  p1: { pill: "bg-warn/15 text-warn border-warn/50", border: "border-warn/40", bg: "rgba(255,170,51,.05)" },
+  p2: { pill: "bg-holo/10 text-holo border-holo/40", border: "border-holo/30", bg: "rgba(77,150,255,.04)" },
 };
 
 export function RadarAlertCard({
@@ -36,7 +36,7 @@ export function RadarAlertCard({
       {/* 雷达扫动（4s/圈；reduced-motion 降级静态——tokens.css 全局纪律） */}
       <div
         className="pointer-events-none absolute -top-8 -right-8 h-[150px] w-[150px] animate-sweep rounded-full"
-        style={{ background: "conic-gradient(from 0deg, rgba(69,224,255,.16), transparent 60deg)" }}
+        style={{ background: "conic-gradient(from 0deg, rgba(77,150,255,.16), transparent 60deg)" }}
       />
       <div className="relative flex items-center gap-2.5">
         <span className={`rounded border px-2 py-0.5 font-orb text-caption font-black ${m.pill}`}>

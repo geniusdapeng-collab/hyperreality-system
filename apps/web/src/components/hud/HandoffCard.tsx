@@ -50,9 +50,9 @@ export function HandoffCard({
       {/* 三栏大数字（Orbitron 发光；战果✓绿 / 待审批◆琥珀 / 求援▲红——固定语义 §6） */}
       <div className="grid grid-cols-3 gap-2.5">
         {[
-          { n: data.done, label: "战果 ✓", cls: "text-go", glow: "0_0_18px_rgba(61,255,178,.45)" },
-          { n: data.pending, label: "待审批 ◆", cls: "text-warn", glow: "0_0_18px_rgba(255,194,77,.45)" },
-          { n: data.needHuman, label: "求援 ▲", cls: "text-alert", glow: "0_0_18px_rgba(255,84,112,.45)" },
+          { n: data.done, label: "战果 ✓", cls: "text-go", glow: "0_0_18px_rgba(34,200,138,.45)" },
+          { n: data.pending, label: "待审批 ◆", cls: "text-warn", glow: "0_0_18px_rgba(255,170,51,.45)" },
+          { n: data.needHuman, label: "求援 ▲", cls: "text-alert", glow: "0_0_18px_rgba(255,77,109,.45)" },
         ].map((c) => (
           <div key={c.label} className="rounded-lg border border-line bg-bg800/60 px-3 py-2.5 text-center">
             <div

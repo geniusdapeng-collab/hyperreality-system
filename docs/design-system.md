@@ -1,7 +1,8 @@
-# WorkLoom 视觉规范标准（Candy Design System v1.0）
+# WorkLoom 视觉规范标准（Candy Design System v1.1）
 
 > **适用**：所有使用 WorkLoom 底座的产品前端（PC 端 apps/web、C 端 apps/webc、移动端演示页、各行业 Bundle 经营剧场）。
 > **事实源**：`apps/web/src/styles/tokens.css`（Tailwind v4 令牌制，只写 @theme）。一切颜色以令牌为准，禁止组件内硬编码品牌色。
+> **组件库**：仓库根目录 `/design-system/` 为统一设计资源包（v1.1 起）——`design_spec.md`（面向 AI Agent 的规范+代码示例）、`tokens.web.css` / `tokens.webc.css`、`components.css`（.wl-* 可复用组件类）。改样式先改包内文件，再按 §六 同步。
 > **定位**：小红书式糖果色——年轻、时尚、轻盈。深色星空时代（v1 深空蓝）已于 v3.4.0 终结。
 
 ---
@@ -128,4 +129,32 @@
 1. 令牌只改 `tokens.css`，组件只消费令牌——任何项目接到同步时，先比对 `tokens.css` 与本规范的 §二 色板；
 2. 新项目接入：复制 `tokens.css` → 跑「纯色验证」（主色按钮/语义四色/文字三级各截一屏）→ 再走查组件；
 3. 行业 Bundle 的 `floor-scene.json` 主题色必须从本规范 §3.5 的浅色域内选取；
-4. 本文件变更需同步到：workloom / workloom-im / workloom-hotel / hyperreality-system 四仓 `docs/design-system.md`。
+4. 本文件变更需同步到所有底座仓库 `docs/design-system.md` + 根目录 `/design-system/` 包（当前覆盖：workloom / workloom-im / workloom-hotel / hyperreality-system / videomanager）。
+
+---
+
+## 七、v1.1 新增（2026-08-26）
+
+### 7.1 组件库封装（/design-system/components.css）
+
+按钮四变体、输入框、卡片、标签、弹窗、横幅、空态、骨架屏、AskRail、手机壳全部封装为 `.wl-*` 类，含悬停/点击/加载/禁用/focus 五态，框架无关（纯 HTML 演示页亦可直接 link 使用）。代码示例见 `/design-system/design_spec.md` §5–§6。
+
+### 7.2 模块色块（页面分区淡底）
+
+同页多业务模块用淡底色块分区：蜜桃雾 `#fff0f4`（核心经营）/ 淡蓝莓 `#f0f7ff`（信息数据）/ 淡薄荷 `#f0fbf6`（自动化）/ 淡蜜桃 `#fff6ec`（待办审批）/ 淡葡萄 `#f7f2ff`（需介入/AI）。**纪律 D34-1**：必须「淡底 + 配套浅灰描边 + 16px 圆角」三件套齐用。
+
+### 7.3 AI 助手 AskRail
+
+PC 右侧通栏 **展开 320px / 收起 56px**，主区 `padding-right` 让位；≤860px 不渲染通栏（移动端走首 tab 对话页）。**纪律 D34-3**：收起态必须有图标条锚点，禁直接隐藏。
+
+### 7.4 手机壳边框
+
+移动端演示页手机壳左右 1px 边框固定 `#e5dce0`（**纪律 D34-2**：不可丢不可加深）；底 tab 栏 `rgb(255 255 255 / .96)`，选中项珊瑚色。
+
+### 7.5 文案命名纪律（客户视角）
+
+技能（非套件）· 各行业 Agent 名（前厅 Agent 等，非「总导演」串台）· 经营主页（非剧场）· 日报（非战报）· 审批（非决断/裁决）· 全景档案。完整对照表见 `/design-system/design_spec.md` §8。
+
+### 7.6 辉光令牌化追齐
+
+hud 组件辉光/阴影 rgba 旧深空色值已全部按糖果令牌色相替换（透明度不变）：金辉光 `rgba(255,36,66,*)`、青辉光 `rgba(77,150,255,*)`、绿 `rgba(34,200,138,*)`、琥珀 `rgba(255,170,51,*)`、红 `rgba(255,77,109,*)`、紫 `rgba(182,120,255,*)`。新增辉光一律取令牌 RGB 展开，禁止手写旧值。

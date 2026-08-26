@@ -97,7 +97,7 @@ function HumanCard({ h }: { h: HumanRow }) {
           <div className="truncate text-caption text-ink3">{ROLE_LABEL[h.role] ?? h.role}</div>
         </div>
         <span
-          className={`inline-block h-2 w-2 rounded-full ${h.online ? "bg-go shadow-[0_0_8px_rgba(61,255,178,.7)]" : "bg-ink3"}`}
+          className={`inline-block h-2 w-2 rounded-full ${h.online ? "bg-go shadow-[0_0_8px_rgba(34,200,138,.7)]" : "bg-ink3"}`}
           title={h.online ? "在线（近 24h 有活动留痕）" : "离线"}
         />
       </div>
@@ -147,7 +147,7 @@ function AgentCard({ a, onOpen }: { a: AgentRow; onOpen: (id: string) => void })
           <div className="flex items-center gap-1.5 text-body font-bold text-ink">
             <span className="truncate">{a.name}</span>
             {a.online && (
-              <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-holo shadow-[0_0_8px_rgba(69,224,255,.8)]" title="夜班在线（M4 窗口内自动上线）" />
+              <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-holo shadow-[0_0_8px_rgba(77,150,255,.8)]" title="夜班在线（M4 窗口内自动上线）" />
             )}
           </div>
           <div className="truncate text-caption text-ink3">
