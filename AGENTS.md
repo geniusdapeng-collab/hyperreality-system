@@ -66,13 +66,24 @@ bash scripts/agent-tour.sh --full   # 追加种子编排 + 全部测试套件 + 
 
 ## 3. 系统怎么跑起来
 
+**一键安装（克隆后推荐第一条命令）：**
+
 ```bash
-docker start workloom-im-pg          # PG17 + pgvector（如未创建见 docker-compose.yml）
-pnpm install                         # npm 源受限时用 registry.npmmirror.com
-pnpm dev                             # server :8787（tRPC /trpc/*）+ web :5173
-pnpm db:seed                         # 演示种子（可选；短视频域另有 db:seed:video）
+pnpm setup                # = scripts/bootstrap.sh：环境检查 → .env 补全 → pnpm install
+                          # → PG17+pgvector（docker compose 自动建容器）→ 迁移+全部种子
+                          # → computer-use 桌面栈（Ubuntu+root 自动装；--with-computer 强制 / --skip-computer 跳过）
+                          # 幂等，可重复跑；全新 Ubuntu 机器实测 10/10 全绿
 ```
 
+手动分步（等价于上面一条命令）：
+
+```bash
+docker compose up -d postgres    # PG17 + pgvector（首次自动建容器 workloom-im-pg）
+cp .env.example .env             # 首次必须（db:* 脚本依赖 --env-file=.env）
+pnpm install                     # npm 源受限时用 registry.npmmirror.com
+pnpm db:migrate && pnpm db:seed  # 迁移 + 演示种子
+pnpm dev                         # server :8787（tRPC /trpc/*）+ web :5173
+```
 验证服务就绪：`curl -s -o /dev/null -w "%{http_code}" http://localhost:5173` 返回 `200`。
 （8787 无 `/healthz`，以进程监听为准；跑测试前**先停掉残留的 8787/5173 服务**，否则 E2E 打错库、后台节拍污染断言。）
 

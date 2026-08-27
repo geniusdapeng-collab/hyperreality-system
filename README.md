@@ -21,7 +21,7 @@
 - 🏨 **行业 Bundle（垂直能力包）**：bundles/ai-video/ · bundles/hotel/
 - 🖐 **操作电脑能力（本仓自带 · 可装生产工作站）**：computer-use 三层感知（65 动作） · HTTP 远程驱动 + MCP server
 - 🤖 **AI 自动化引擎（系统内置能力）**：围栏 DSL 引擎 · L2 编排（ASK/QUEST） · 夜班自动运行 · 模型路由 · 全平台 RPA 发布 · 五元事件 + RLS 隔离 等 14 项
-- ✅ **验证与质量（工程纪律）**：主测试套件 · 发布门禁 · 五元事件验链 · Agent 能力巡游 · 环境自检
+- ✅ **验证与质量（工程纪律）**：一键安装（bootstrap） · 主测试套件 · 发布门禁 · 五元事件验链 · Agent 能力巡游 · 环境自检
 - 🎁 **演示与交付资产**：高保真演示页 ×6 · 官网静态站 · 自带技能 ×6 · 能力导览 PPT · Mock 数据体系
 
 > 📖 完整能力导览（含截图与体验路径）：[docs/capabilities.auto.md](docs/capabilities.auto.md) ｜ 🤖 AI Agent 入口：[AGENTS.md](AGENTS.md) ｜ 🎯 首启必跑：`pnpm preview:all`
@@ -35,7 +35,8 @@
 > 一键拉起**三端全貌**并自动固化 Mock 模拟数据（无需任何真实后端/密钥）：
 
 ```bash
-pnpm install && pnpm preview:all
+pnpm setup && pnpm preview:all
+# pnpm setup = 一键安装：环境检查 → .env → 依赖 → PG 数据库 → 迁移种子 → 可选「操作电脑」桌面栈（幂等）
 ```
 
 | 端 | 地址 | 说明 |

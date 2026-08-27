@@ -18,7 +18,7 @@ pnpm install && pnpm preview:all
 
 无需任何真实后端或密钥：Mock 数据（种子 + 离线确定性模型 + 演示直登）已固化，详见 mock/README.md。
 
-## 📦 能力总览（31 项）
+## 📦 能力总览（32 项）
 
 ### 🖥 三端应用（开箱即看）
 
@@ -65,6 +65,7 @@ pnpm install && pnpm preview:all
 
 | 能力 | 一句话 | 怎么体验 |
 |---|---|---|
+| **一键安装（bootstrap）** | 克隆后一条命令装好全部能力：环境/依赖/PG/迁移种子/桌面栈，幂等 | `pnpm setup` |
 | **主测试套件** | 数百条场景用例逐条执行 | `pnpm suite` |
 | **发布门禁** | 未全过禁止发布（硬性） | `pnpm release:gate` |
 | **五元事件验链** | 事件链完整性校验 | `pnpm db:verify-chain` |

@@ -1,7 +1,7 @@
 {
  "repo": "hyperreality",
  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）",
- "generatedAt": "2026-08-27T00:58:23.914Z",
+ "generatedAt": "2026-08-27T01:23:56.830Z",
  "demoPages": [
   "hyperreality-demo-c.html",
   "hyperreality-demo-mobile.html",
@@ -145,6 +145,11 @@
    "icon": "✅",
    "title": "验证与质量（工程纪律）",
    "items": [
+    {
+     "name": "一键安装（bootstrap）",
+     "how": "`pnpm setup`",
+     "desc": "克隆后一条命令装好全部能力：环境/依赖/PG/迁移种子/桌面栈，幂等"
+    },
     {
      "name": "主测试套件",
      "how": "`pnpm suite`",

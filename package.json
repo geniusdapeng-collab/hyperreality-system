@@ -41,7 +41,9 @@
     "computer:stop": "bash packages/base/computer-use/toolkit/stop_desktop.sh",
     "computer:serve": "tsx packages/base/computer-use/serve.ts",
     "computer:mcp": "tsx packages/base/computer-use/mcp.ts",
-    "computer:smoke": "tsx packages/base/computer-use/smoke.ts"
+    "computer:smoke": "tsx packages/base/computer-use/smoke.ts",
+    "setup": "bash scripts/bootstrap.sh",
+    "setup:full": "bash scripts/bootstrap.sh --with-computer"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

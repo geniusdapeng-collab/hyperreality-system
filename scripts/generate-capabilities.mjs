@@ -79,6 +79,7 @@ if (engine.length) groups.push({
 });
 
 const quality = [
+  has("setup") && { name: "一键安装（bootstrap）", how: "`pnpm setup`", desc: "克隆后一条命令装好全部能力：环境/依赖/PG/迁移种子/桌面栈，幂等" },
   has("suite") && { name: "主测试套件", how: "`pnpm suite`", desc: "数百条场景用例逐条执行" },
   has("suite:geo") && { name: "GEO 域套件", how: "`pnpm suite:geo`", desc: "GEO 双域专项" },
   has("suite:hotel") && { name: "酒店域套件", how: "`pnpm suite:hotel`", desc: "酒店域专项" },

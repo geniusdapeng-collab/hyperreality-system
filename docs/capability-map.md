@@ -32,6 +32,7 @@
 
 | 能力 | 调用 | 验证 |
 |---|---|---|
+| **一键安装（克隆后第一条命令）** | `pnpm setup`（scripts/bootstrap.sh：环境检查→.env→依赖→PG→迁移种子→可选桌面栈，幂等） | 汇总 PASS/FAIL=0 阻断 |
 | **三端全貌一键预览（首启强制）** | `pnpm preview:all`（scripts/preview-all.sh）→ PC:3000 / B移动:3001（高保真+手机壳）/ C移动:3002（H5 服务前台），强制 Mock 模式 | 三端均可访问，验收见 `PREVIEW_CHECKLIST.md` |
 | 环境一屏自检 | `pnpm doctor`（scripts/doctor.sh） | 退出码 0 无 ❌ 阻断项 |
 | 数据库（PG17+pgvector） | `docker start workloom-im-pg`（初始建库见 `docker-compose.yml`） | health=healthy |
