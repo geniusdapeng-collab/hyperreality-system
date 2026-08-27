@@ -70,7 +70,7 @@ pnpm db:seed                         # 演示种子（可选；短视频域另�
 |---|---|
 | `apps/server` | tRPC 服务端（:8787） |
 | `apps/web` / `apps/webc` | B 端 PC 工作台 / C 端 H5（:5173） |
-| `packages/base` | 底座包：workdata（事件/RLS）、fence-engine（围栏 DSL）、publish-rpa（全平台 RPA 发布）等 |
+| `packages/base` | 底座包：workdata（事件/RLS）、fence-engine（围栏 DSL）、publish-rpa（全平台 RPA 发布）、computer-use（生产级电脑/浏览器自动操作，见 docs/computer-use-production.md）等 |
 | `bundles/` | 行业 Bundle：`ai-video/`（短视频创作域）、`hotel/` |
 | `skills/official/` | 自带技能：industry-entry / product-feedback / demo-mirror / cross-platform-review / deal-flow / ripping-reverse |
 | `scripts/` | `suite*.ts` 测试套件、`seed*.ts` 种子、`release-gate.ts` 发布门禁、`agent-tour.sh` 能力巡游、`preview-all.sh` 三端预览 |

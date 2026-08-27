@@ -19,6 +19,7 @@
     "./service-channels": "./service-channels/index.ts",
     "./tenancy": "./tenancy/index.ts",
     "./wizard": "./wizard/index.ts",
+    "./computer-use": "./computer-use/index.ts",
     "./asset-cms": "./asset-cms/index.ts",
     "./publish-rpa": "./publish-rpa/index.ts",
     "./social-listening": "./social-listening/index.ts",

@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["workdata", "fence-engine", "model-router", "night-shift", "review-console", "tenancy", "service-kb", "service-dialog", "service-ticket", "service-channels", "testing"]
+  "include": ["workdata", "fence-engine", "model-router", "night-shift", "review-console", "tenancy", "service-kb", "service-dialog", "service-ticket", "service-channels", "testing", "computer-use"]
 }

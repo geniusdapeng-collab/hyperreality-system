@@ -1,0 +1,29 @@
+[tool.flake8]
+max-line-length = 120
+extend-ignore = [
+    "E501",  # line too long - 由 max-line-length 控制
+    "W503",  # line break before binary operator - PEP 8 已修正
+    "E203",  # whitespace before ':' - black 兼容
+]
+per-file-ignores = [
+    "__init__.py:F401",  # imported but unused (re-export)
+]
+exclude = [
+    "__pycache__",
+    ".mypy_cache",
+    "tests/",
+]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+exclude = ["tests/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

@@ -21,6 +21,21 @@
 | 人类旁观窗口（noVNC） | 预检后打开 6080 端口预览 | 用户可实时观看 |
 | 屏幕录制 | `start_recording` → 操作 → `stop_recording` | `/workspace/computer-use-recordings/` |
 
+### L0+ 生产级 computer-use（packages/base/computer-use/，2026-08 新增）
+
+沙箱能力的生产移植版 + 两项增强，用于专用工作站部署（数字员工的"身体"）。
+详见 [`computer-use-production.md`](computer-use-production.md) 与模块 README（`packages/base/computer-use/README.md`）。
+
+| 能力 | 调用 | 验证 |
+|---|---|---|
+| 工作站一键安装/预检（去硬编码，路径可配） | `pnpm computer:preflight`（toolkit/preflight_check.sh，env COMPUTER_USE_INSTALL_DIR） | 退出码 0 |
+| 任意动作执行（65 个，CLI 透传） | `pnpm computer '{"action":"browser_snapshot"}'` | 返回 JSON |
+| HTTP 远程驱动服务（增强，大脑/手分离） | `COMPUTER_USE_TOKEN=<令牌> pnpm computer:serve` → POST :9763/action | /health 探活 + 401 鉴权 |
+| MCP server（增强，Agent 原生发现） | `pnpm computer:mcp`（stdio JSON-RPC，4 tools） | initialize/tools/list 握手 |
+| publish-rpa 驱动注入 | `asPublishRpaDriver(new ToolkitDriver())`（driver.ts） | BrowserDriver 同形接口 |
+| 端到端冒烟（12 项，需图形环境） | `pnpm computer:smoke` | PASS=12 FAIL=0 |
+| 单测（CI 安全，8 例） | `pnpm vitest run packages/base/computer-use` | 全绿 |
+
 ## L1 运行层 · 把系统跑起来
 
 | 能力 | 调用 | 验证 |

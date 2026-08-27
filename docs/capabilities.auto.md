@@ -1,7 +1,7 @@
 # hyperreality · 能力导览（人类版）
 
 > 视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）
-> 本文件由 `node scripts/generate-capabilities.mjs` 从代码事实**自动生成**（2026-08-26），
+> 本文件由 `node scripts/generate-capabilities.mjs` 从代码事实**自动生成**（2026-08-27），
 > 请勿手改——能力变更后重跑生成器即可。Agent 版机器清单见 docs/capability-map.md。
 
 ## 🚀 5 分钟体验路径
