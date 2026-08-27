@@ -18,8 +18,16 @@ for a in "$@"; do
   esac
 done
 
-CU_DIR="${COMPUTER_USE_DIR:-/root/.codebuddy/skills/computer-use}"
-CU="$CU_DIR/scripts/computer_tool.py"
+# computer-use 路径探测：仓内 toolkit 优先（生产/自有环境），沙箱技能兜底（CodeBuddy 沙箱）——两者同栈同源
+if [ -f "packages/base/computer-use/toolkit/computer_tool.py" ]; then
+  CU_DIR="${COMPUTER_USE_DIR:-packages/base/computer-use/toolkit}"
+  CU="$CU_DIR/computer_tool.py"
+  CU_PREFLIGHT="$CU_DIR/preflight_check.sh"
+else
+  CU_DIR="${COMPUTER_USE_DIR:-/root/.codebuddy/skills/computer-use}"
+  CU="$CU_DIR/scripts/computer_tool.py"
+  CU_PREFLIGHT="$CU_DIR/scripts/preflight_check.sh"
+fi
 PASS=0; FAIL=0; SKIPPED=0
 ok()   { printf "  ✅ %s\n" "$1"; PASS=$((PASS+1)); }
 bad()  { printf "  ❌ %s\n" "$1"; FAIL=$((FAIL+1)); }
@@ -34,10 +42,10 @@ echo "   仓库：$(basename "$(pwd)") · 时间：$(date '+%F %T')"
 sec "L0 环境层 · computer-use 电脑/浏览器操作能力"
 if [ "$SKIP_DESKTOP" = "1" ]; then
   skip "按 --skip-desktop 跳过桌面层"
-elif [ ! -f "$CU_DIR/scripts/preflight_check.sh" ]; then
-  bad "computer-use 技能缺失（$CU_DIR）→ 无法操作浏览器；请确认沙箱技能已安装"
+elif [ ! -f "$CU_PREFLIGHT" ]; then
+  bad "computer-use 工具栈缺失（$CU_DIR）→ 无法操作浏览器；请确认仓内 packages/base/computer-use/toolkit 完整"
 else
-  if bash "$CU_DIR/scripts/preflight_check.sh" >/tmp/agent-tour-preflight.log 2>&1; then
+  if bash "$CU_PREFLIGHT" >/tmp/agent-tour-preflight.log 2>&1; then
     ok "preflight 通过（Xvfb:1 · CDP:9222 · VNC:5900 · noVNC:6080）"
     CONN=$(python3 "$CU" '{"action": "browser_connect"}' 2>/dev/null || true)
     if echo "$CONN" | grep -q '"status": "connected"'; then

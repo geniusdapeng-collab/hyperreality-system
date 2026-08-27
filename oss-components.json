@@ -18,13 +18,13 @@
     },
     {
       "name": "computer-use",
-      "repo": "https://github.com/anthropics/computer-use（沙箱技能快照 /root/.codebuddy/skills/computer-use）",
+      "repo": "https://github.com/anthropics/computer-use（已 vendor 进仓：packages/base/computer-use/toolkit，与沙箱技能同栈）",
       "channel": "skill",
-      "current": "sandbox-snapshot-2026-08",
+      "current": "repo-vendored-2026-08",
       "cadence": "weekly",
       "gate": "standard",
-      "scope": "沙箱能力",
-      "notes": "三层感知（CDP/AXTree/截图）；publish-rpa 的 BrowserDriver 上游"
+      "scope": "packages/base/computer-use",
+      "notes": "三层感知（CDP/AXTree/截图）；生产工作站能力底座；publish-rpa 的 BrowserDriver 上游"
     },
     {
       "name": "playwright",

@@ -19,6 +19,7 @@
 
 - 🖥 **三端应用（开箱即看）**：PC 端 · B 端工作台 · 移动端 · B 端高保真 · 移动端 · C 端 AI 服务前台
 - 🏨 **行业 Bundle（垂直能力包）**：bundles/ai-video/ · bundles/hotel/
+- 🖐 **操作电脑能力（本仓自带 · 可装生产工作站）**：computer-use 三层感知（65 动作） · HTTP 远程驱动 + MCP server
 - 🤖 **AI 自动化引擎（系统内置能力）**：围栏 DSL 引擎 · L2 编排（ASK/QUEST） · 夜班自动运行 · 模型路由 · 全平台 RPA 发布 · 五元事件 + RLS 隔离 等 14 项
 - ✅ **验证与质量（工程纪律）**：主测试套件 · 发布门禁 · 五元事件验链 · Agent 能力巡游 · 环境自检
 - 🎁 **演示与交付资产**：高保真演示页 ×6 · 官网静态站 · 自带技能 ×6 · 能力导览 PPT · Mock 数据体系
@@ -45,6 +46,7 @@ pnpm install && pnpm preview:all
 
 - Mock 数据口径见 [`mock/README.md`](mock/README.md)；验收清单见 [`PREVIEW_CHECKLIST.md`](PREVIEW_CHECKLIST.md)
 - **AI Coding Agent**：进仓先读 [`AGENTS.md`](AGENTS.md) 与 [`.ai-prompt`](.ai-prompt)；全量能力清单 `docs/capability-map.md`；一键能力自检 `pnpm agent:tour`；浏览器自动化指南 `docs/agent-computer-guide.md`
+- **🖐 操作电脑能力（本仓自带 · 可装生产）**：`packages/base/computer-use/` 65 动作三层感知，`pnpm computer:preflight && pnpm computer:smoke` 即验；专用工作站一键安装 + HTTP/MCP 远程驱动见 [`docs/computer-use-production.md`](docs/computer-use-production.md)
 - 日常开发 `pnpm dev` 只起 PC 端（server:8787 + web:5173），保持开发习惯
 
 

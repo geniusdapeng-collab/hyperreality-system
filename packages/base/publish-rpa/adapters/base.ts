@@ -3,7 +3,8 @@
  *
  * 统一接口：loginCheck → upload(video, cover, caption, tags, schedule) → receiptProbe
  * 隔离纪律：适配器只依赖注入的 BrowserDriver 接口——不 import playwright（依赖未装），
- *          生产由 desktop 桌面包内嵌 Playwright/Chromium 实现本接口（Mac 桌面包首发）。
+ *          生产两条路径：① desktop 桌面包内嵌 Playwright/Chromium 实现本接口（Mac 桌包首发）；
+ *          ② 专用工作站：packages/base/computer-use 的 asPublishRpaDriver(ToolkitDriver) 直接注入。
  * 风控纪律：模拟人工节奏（打字延迟/分页等待）、登录态由用户本人在桌面包完成
  *          （凭据只存本机，credentials 表引用不落明文）。
  */

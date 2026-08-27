@@ -1,13 +1,16 @@
-# WorkLoom 沙箱电脑/浏览器自动操作指南（给 AI Coding Agent）
+# WorkLoom 电脑/浏览器自动操作指南（给 AI Coding Agent）
 
-> 目标读者：在沙箱中运行、调试、验证 WorkLoom 系统的 AI Coding Agent。
+> 目标读者：在**任意环境**（开发沙箱 / 自有开发机 / 生产专用工作站）中运行、调试、验证 WorkLoom 系统的 AI Coding Agent——本能力仓内自带，不依赖沙箱。
 > 读完本文，你应当能够：**自动打开浏览器操作运行中的 WorkLoom 三端页面，完成"打开 → 导航 → 点击 → 输入 → 验证 → 截图"的完整闭环**，并理解如何把这套能力接到系统内置的 publish-rpa 真机发布链路上。
 
 ---
 
 ## 1. 能力全景：你有哪些"手"
 
-沙箱内置 **computer-use** 能力（技能目录 `/root/.codebuddy/skills/computer-use/`），采用三层感知架构。**优先用 L1，能不用 L3 就不用 L3**：
+**本仓自带 computer-use 能力**（`packages/base/computer-use/`，与 CodeBuddy 沙箱技能同栈同源），
+**不依赖沙箱——克隆本仓即可用，也可一键装到生产专用工作站**（部署见 [`computer-use-production.md`](computer-use-production.md)）。
+沙箱旧路径 `/root/.codebuddy/skills/computer-use/` 与仓内 toolkit 命令可互换，本文一律使用仓内首选入口 `pnpm computer`。
+能力采用三层感知架构。**优先用 L1，能不用 L3 就不用 L3**：
 
 | 层 | 通道 | 范围 | Token 成本 | 精度 | 典型动作 |
 |---|---|---|---|---|---|
@@ -20,7 +23,7 @@
 所有桌面交互统一走一个入口：
 
 ```bash
-python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '<action_json>'
+pnpm computer '<action_json>'   # 仓内首选入口（等价于 python3 packages/base/computer-use/toolkit/computer_tool.py）
 ```
 
 ---
@@ -30,7 +33,7 @@ python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '<action_j
 ### 2.1 预检（强制第一步）
 
 ```bash
-bash /root/.codebuddy/skills/computer-use/scripts/preflight_check.sh
+pnpm computer:preflight     # 即 packages/base/computer-use/toolkit/preflight_check.sh
 ```
 
 它会自动完成：安装（如缺）→ 启动 Xvfb 桌面（`:1`，1280x800，openbox）→ x11vnc（5900）→ noVNC/websockify（6080）→ Chromium（CDP :9222）→ 截图能力自检。**退出码 0 才能继续**；非 0 则先 `stop_desktop.sh` 再重跑一次，仍失败就把报错交给用户。
@@ -58,26 +61,27 @@ pnpm exec tsx --env-file=.env scripts/seed.ts
 以下剧本于 2026-08-26 在本仓库实测通过：自动打开 Web 端 → 读取页面结构 → 点击导航 → 截图。
 
 ```bash
-CU=/root/.codebuddy/skills/computer-use/scripts/computer_tool.py
+# CU 为仓内首选入口（等价于 python3 packages/base/computer-use/toolkit/computer_tool.py）
+CU="pnpm computer"
 
 # ① 连接 CDP（返回已打开标签页列表）
-python3 $CU '{"action": "browser_connect"}'
+$CU '{"action": "browser_connect"}'
 
 # ② 打开 WorkLoom Web 端
-python3 $CU '{"action": "browser_goto", "url": "http://localhost:5173"}'
+$CU '{"action": "browser_goto", "url": "http://localhost:5173"}'
 
 # ③ 抓页面无障碍结构（零 token，返回全部 StaticText/button/link）
-python3 $CU '{"action": "browser_snapshot"}'
+$CU '{"action": "browser_snapshot"}'
 
 # ④ 点击导航（支持 text= 选择器；点击后 URL 变为 /p21 等即成功）
-python3 $CU '{"action": "browser_click", "selector": "text=董事长视图"}'
-python3 $CU '{"action": "browser_url"}'        # 验证当前 URL
+$CU '{"action": "browser_click", "selector": "text=董事长视图"}'
+$CU '{"action": "browser_url"}'        # 验证当前 URL
 
 # ⑤ 表单输入（登录、审批意见、一句话目标等场景）
-python3 $CU '{"action": "browser_fill", "selector": "#input", "value": "文本"}'
+$CU '{"action": "browser_fill", "selector": "#input", "value": "文本"}'
 
 # ⑥ 截图取证（L3，成本高，关键节点用）
-python3 $CU '{"action": "screenshot"}'
+$CU '{"action": "screenshot"}'
 ```
 
 **验证优先级**（成本从低到高）：`browser_url` / `browser_snapshot`（0）→ `accessibility_tree`（0）→ `window_list`（≈0）→ `browser_screenshot(jpeg, q=50)`（约 200–500）→ 全屏 `screenshot`（约 1000–2000）。
@@ -93,20 +97,22 @@ python3 $CU '{"action": "screenshot"}'
 
 ### 更多动作
 
-完整动作参考表：`/root/.codebuddy/skills/computer-use/docs/action-reference.md`。
+完整动作参考表：`packages/base/computer-use/toolkit/docs/action-reference.md`。
 常用补充：`browser_links`（抽链接）、`browser_human_click`（拟人点击，过风控站点用）、`browser_random_scroll`、`accessibility_tree`、`wait_for_window`、`window_list`、`start_recording` / `stop_recording`（录屏，先就位再开录）。
 
 ---
 
 ## 4. 接到系统内置能力：publish-rpa 真机发布
 
-WorkLoom 的**系统内**浏览器自动化在 `packages/base/publish-rpa/`（fusion-design §7）：
+**系统内**浏览器自动化在 `packages/base/publish-rpa/`（fusion-design §7，本仓自带）：
 
 - 六平台适配器（douyin / xiaohongshu / bilibili / youtube 参考实现，tiktok / shipinhao 占位）
 - 统一接口：`loginCheck → upload(video, cover, caption, tags, schedule) → receiptProbe`
 - **隔离纪律：适配器不 import playwright**，只依赖注入的 `BrowserDriver` 接口（`adapters/base.ts`）
 
-这意味着：**把沙箱 CDP 上的 Playwright 实例包装成 `BrowserDriver` 注入，RPA 发布链路即在真浏览器中跑起来**。接口与方法映射：
+这意味着：**把 CDP 上的 Playwright 实例包装成 `BrowserDriver` 注入，RPA 发布链路即在真浏览器中跑起来**。
+本仓已内置现成适配器——`packages/base/computer-use/driver.ts` 的 `asPublishRpaDriver(new ToolkitDriver())`
+把仓内 computer-use 驱动包装成 BrowserDriver 同形接口（沙箱/工作站通用）；手动映射关系如下：
 
 | `BrowserDriver` 方法 | Playwright 实现 |
 |---|---|
@@ -118,7 +124,7 @@ WorkLoom 的**系统内**浏览器自动化在 `packages/base/publish-rpa/`（fu
 | `waitForSelector(sel, {timeoutMs})` | `page.waitForSelector(sel, {timeout}).then(Boolean).catch(()=>false)` |
 | `wait(ms)` | `new Promise(r => setTimeout(r, ms))` |
 
-接入示例（在桌面包或沙箱脚本中）：
+接入示例（在桌面包、专用工作站或沙箱脚本中）：
 
 ```ts
 import { chromium } from "playwright";           // 桌面包内嵌；沙箱可直接连 CDP
@@ -157,7 +163,7 @@ const driver: BrowserDriver = {
 
 ## 6. 一分钟自检清单
 
-- [ ] `preflight_check.sh` 退出码 0
+- [ ] `pnpm computer:preflight` 退出码 0
 - [ ] noVNC 6080 预览已打开给用户
 - [ ] `docker ps` 中 workloom-im-pg healthy
 - [ ] `curl localhost:5173` 返回 200

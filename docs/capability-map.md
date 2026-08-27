@@ -7,32 +7,24 @@
 
 ---
 
-## L0 环境层 · 沙箱电脑/浏览器操作（computer-use）
+## L0 环境层 · 电脑/浏览器自动操作（computer-use，本仓自带，生产可用）
 
-沙箱内置三层感知桌面操作能力（技能目录 `/root/.codebuddy/skills/computer-use/`）。
+本仓 `packages/base/computer-use/` 自带三层感知桌面操作能力（65 个动作，**克隆即可用，
+也可一键装到生产专用工作站**）。CodeBuddy 沙箱技能路径 `/root/.codebuddy/skills/computer-use/` 与仓内 toolkit 同栈同源、命令可互换。
 **这是最容易被第三方 Agent 忽略、也最关键的一项**——详见 [`agent-computer-guide.md`](agent-computer-guide.md)。
 
 | 能力 | 调用 | 验证 |
 |---|---|---|
-| 桌面预检（一键拉起 Xvfb/浏览器/VNC） | `bash /root/.codebuddy/skills/computer-use/scripts/preflight_check.sh` | 退出码 0 |
-| L1 浏览器 DOM 操作（零 token） | `computer_tool.py '{"action":"browser_goto"/"browser_snapshot"/"browser_click"/"browser_fill", ...}'` | 返回 JSON 含 url/snapshot |
-| L2 全 GUI 无障碍树（零 token） | `computer_tool.py '{"action":"accessibility_tree","app_name":"chromium"}'` | 返回语义树 |
-| L3 截图/键鼠（高 token，兜底） | `computer_tool.py '{"action":"screenshot"/"left_click"/"type"/"key", ...}'` | base64 图像 |
+| 桌面预检（一键拉起 Xvfb/浏览器/VNC） | `pnpm computer:preflight`（仓内 toolkit/preflight_check.sh，安装路径可用 COMPUTER_USE_INSTALL_DIR 覆盖） | 退出码 0 |
+| L1 浏览器 DOM 操作（零 token，32 动作） | `pnpm computer '{"action":"browser_goto"/"browser_snapshot"/"browser_click"/"browser_fill", ...}'` | 返回 JSON 含 url/snapshot |
+| L2 全 GUI 无障碍树（零 token） | `pnpm computer '{"action":"accessibility_tree","app_name":"chromium"}'` | 返回语义树 |
+| L3 截图/键鼠（高 token，兜底） | `pnpm computer '{"action":"screenshot"/"left_click"/"type"/"key", ...}'` | base64 图像 |
 | 人类旁观窗口（noVNC） | 预检后打开 6080 端口预览 | 用户可实时观看 |
 | 屏幕录制 | `start_recording` → 操作 → `stop_recording` | `/workspace/computer-use-recordings/` |
-
-### L0+ 生产级 computer-use（packages/base/computer-use/，2026-08 新增）
-
-沙箱能力的生产移植版 + 两项增强，用于专用工作站部署（数字员工的"身体"）。
-详见 [`computer-use-production.md`](computer-use-production.md) 与模块 README（`packages/base/computer-use/README.md`）。
-
-| 能力 | 调用 | 验证 |
-|---|---|---|
-| 工作站一键安装/预检（去硬编码，路径可配） | `pnpm computer:preflight`（toolkit/preflight_check.sh，env COMPUTER_USE_INSTALL_DIR） | 退出码 0 |
-| 任意动作执行（65 个，CLI 透传） | `pnpm computer '{"action":"browser_snapshot"}'` | 返回 JSON |
+| 生产工作站一键安装（增强） | `sudo bash packages/base/computer-use/toolkit/install.sh`（部署指南 [`computer-use-production.md`](computer-use-production.md)） | `pnpm computer:smoke` 12 项全绿 |
 | HTTP 远程驱动服务（增强，大脑/手分离） | `COMPUTER_USE_TOKEN=<令牌> pnpm computer:serve` → POST :9763/action | /health 探活 + 401 鉴权 |
 | MCP server（增强，Agent 原生发现） | `pnpm computer:mcp`（stdio JSON-RPC，4 tools） | initialize/tools/list 握手 |
-| publish-rpa 驱动注入 | `asPublishRpaDriver(new ToolkitDriver())`（driver.ts） | BrowserDriver 同形接口 |
+| publish-rpa 驱动注入 | `asPublishRpaDriver(new ToolkitDriver())`（packages/base/computer-use/driver.ts） | BrowserDriver 同形接口 |
 | 端到端冒烟（12 项，需图形环境） | `pnpm computer:smoke` | PASS=12 FAIL=0 |
 | 单测（CI 安全，8 例） | `pnpm vitest run packages/base/computer-use` | 全绿 |
 

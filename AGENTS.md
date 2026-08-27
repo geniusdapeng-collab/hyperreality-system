@@ -2,26 +2,46 @@
 
 > 你正在 HyperReality（AI 视频创作工作台）仓库中工作。本文件是你进入仓库后**最先要读**的文件。
 
-## 0. 最重要的一件事：你有"手"
+## 0. 最重要的一件事：你有"手"（本仓自带，生产可用）
 
-本仓库运行在带图形桌面的沙箱中，**内置了完整的电脑/浏览器自动操作能力**（computer-use）。
+**本仓自带完整的电脑/浏览器自动操作能力**（`packages/base/computer-use/`，65 个动作，三层感知：
+L1 浏览器 DOM 级零 token / L2 全 GUI 语义树零 token / L3 截图像素级兜底）——**不依赖任何沙箱，
+克隆本仓即可用**；在专用工作站/宿主机上同样可安装运行（生产部署见 §0.1）。
 不要只用 curl 和日志判断系统行为——你可以像人一样打开浏览器、点击、输入、截图，对运行中的系统做端到端验证。
 
 **30 秒上手（照抄即可）：**
 
 ```bash
 # 1. 预检（自动安装/拉起 Xvfb 桌面 + Chromium CDP:9222 + VNC:5900/noVNC:6080），必须最先跑
-bash /root/.codebuddy/skills/computer-use/scripts/preflight_check.sh
+pnpm computer:preflight          # 即 packages/base/computer-use/toolkit/preflight_check.sh
 
 # 2. 连接浏览器并打开本系统 Web 端
-python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '{"action": "browser_connect"}'
-python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '{"action": "browser_goto", "url": "http://localhost:5173"}'
+pnpm computer '{"action": "browser_connect"}'
+pnpm computer '{"action": "browser_goto", "url": "http://localhost:5173"}'
 
 # 3. 读页面结构（零 token）、点击、截图
-python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '{"action": "browser_snapshot"}'
-python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '{"action": "browser_click", "selector": "text=工作台"}'
-python3 /root/.codebuddy/skills/computer-use/scripts/computer_tool.py '{"action": "screenshot"}'
+pnpm computer '{"action": "browser_snapshot"}'
+pnpm computer '{"action": "browser_click", "selector": "text=工作台"}'
+pnpm computer '{"action": "screenshot"}'
 ```
+
+> 兼容说明：若你运行在 CodeBuddy 开发沙箱中，沙箱技能的旧路径
+> `/root/.codebuddy/skills/computer-use/` 与本仓 toolkit 同栈同源，命令可互换；
+> 本仓 `pnpm computer ...` 是首选入口。端到端自检：`pnpm computer:smoke`（12 项全绿=就绪）。
+
+### 0.1 把这套能力装到生产环境（专用工作站）
+
+本能力的全部组件（Xvfb/Chromium CDP/AT-SPI/xdotool/OCR/录屏）都是开源件，仓内 toolkit 自带一键安装器。
+给系统配一台专用 Ubuntu 机器（物理机/VM/容器均可），即可拥有与开发环境完全相同的"操作电脑"能力：
+
+```bash
+sudo bash packages/base/computer-use/toolkit/install.sh   # 装齐整套桌面栈（一次性）
+pnpm computer:preflight && pnpm computer:smoke             # 拉起 + 12 项端到端自检
+COMPUTER_USE_TOKEN=<强令牌> pnpm computer:serve            # HTTP 远程驱动（大脑/手分离）
+pnpm computer:mcp                                          # 或以 MCP server 供 Agent 原生调用
+```
+
+完整部署指南（三种形态 + 安全基线）：[`docs/computer-use-production.md`](docs/computer-use-production.md)。
 
 ## 1. 首次启动：先看三端全貌（强制）
 

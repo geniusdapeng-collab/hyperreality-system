@@ -49,6 +49,14 @@ if (bundles.length) groups.push({
   items: bundles.map((b) => ({ name: `bundles/${b}/`, how: `见 bundles/${b}/ 目录`, desc: "围栏/技能/员工/对象/管线一键装配" })),
 });
 
+if (basePkgs.includes("computer-use")) groups.push({
+  icon: "🖐", title: "操作电脑能力（本仓自带 · 可装生产工作站）",
+  items: [
+    { name: "computer-use 三层感知（65 动作）", how: "`pnpm computer:preflight && pnpm computer:smoke`", desc: "L1 浏览器 DOM 零 token / L2 全 GUI 语义树 / L3 像素兜底——克隆即可用，不依赖沙箱" },
+    { name: "HTTP 远程驱动 + MCP server", how: "`pnpm computer:serve` / `pnpm computer:mcp`", desc: "大脑/手分离：专用工作站被云端 Agent/CI 远程驱动（docs/computer-use-production.md）" },
+  ],
+});
+
 const engine = [
   ["fence-engine", "围栏 DSL 引擎", "事前裁决：支持 in/contains_any 列表语义"],
   ["captain", "L2 编排（ASK/QUEST）", "一句话目标自动拆解多步骤并派发"],

@@ -18,7 +18,7 @@ pnpm install && pnpm preview:all
 
 无需任何真实后端或密钥：Mock 数据（种子 + 离线确定性模型 + 演示直登）已固化，详见 mock/README.md。
 
-## 📦 能力总览（29 项）
+## 📦 能力总览（31 项）
 
 ### 🖥 三端应用（开箱即看）
 
@@ -34,6 +34,13 @@ pnpm install && pnpm preview:all
 |---|---|---|
 | **bundles/ai-video/** | 围栏/技能/员工/对象/管线一键装配 | 见 bundles/ai-video/ 目录 |
 | **bundles/hotel/** | 围栏/技能/员工/对象/管线一键装配 | 见 bundles/hotel/ 目录 |
+
+### 🖐 操作电脑能力（本仓自带 · 可装生产工作站）
+
+| 能力 | 一句话 | 怎么体验 |
+|---|---|---|
+| **computer-use 三层感知（65 动作）** | L1 浏览器 DOM 零 token / L2 全 GUI 语义树 / L3 像素兜底——克隆即可用，不依赖沙箱 | `pnpm computer:preflight && pnpm computer:smoke` |
+| **HTTP 远程驱动 + MCP server** | 大脑/手分离：专用工作站被云端 Agent/CI 远程驱动（docs/computer-use-production.md） | `pnpm computer:serve` / `pnpm computer:mcp` |
 
 ### 🤖 AI 自动化引擎（系统内置能力）
 

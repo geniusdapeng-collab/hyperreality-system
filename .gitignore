@@ -26,3 +26,7 @@ dist/
 
 # preview:all 运行时产物
 docs/demo/.manifest.json
+
+# Python（computer-use toolkit 运行缓存）
+__pycache__/
+*.pyc

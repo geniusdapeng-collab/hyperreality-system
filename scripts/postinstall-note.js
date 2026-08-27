@@ -17,6 +17,11 @@ ${C.mag}╔═══════════════════════
 ║     📱 B 端移动（手机壳）     http://localhost:3001                  ║
 ║     📱 C 端 AI 服务前台      http://localhost:3002                  ║
 ║                                                                    ║
+║  ${C.yel}▶ 本仓自带"操作电脑"能力（65 动作·不依赖沙箱·可装生产）：${C.mag}  ║
+║  ${C.cyn}   pnpm computer:preflight && pnpm computer:smoke${C.mag}           ║
+║     专用工作站一键安装 + HTTP/MCP 远程驱动：                        ║
+║     docs/computer-use-production.md                               ║
+║                                                                    ║
 ║  📖 能力导览（人类版）：docs/capabilities.auto.md                   ║
 ║  🎞  能力导览 PPT：docs/capability-tour.pptx                        ║
 ║  🤖 AI Coding Agent：请先读 AGENTS.md 与 .ai-prompt                 ║

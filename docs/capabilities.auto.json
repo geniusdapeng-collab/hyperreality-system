@@ -1,7 +1,7 @@
 {
  "repo": "hyperreality",
  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）",
- "generatedAt": "2026-08-27T00:23:40.203Z",
+ "generatedAt": "2026-08-27T00:58:23.914Z",
  "demoPages": [
   "hyperreality-demo-c.html",
   "hyperreality-demo-mobile.html",
@@ -46,6 +46,22 @@
      "name": "bundles/hotel/",
      "how": "见 bundles/hotel/ 目录",
      "desc": "围栏/技能/员工/对象/管线一键装配"
+    }
+   ]
+  },
+  {
+   "icon": "🖐",
+   "title": "操作电脑能力（本仓自带 · 可装生产工作站）",
+   "items": [
+    {
+     "name": "computer-use 三层感知（65 动作）",
+     "how": "`pnpm computer:preflight && pnpm computer:smoke`",
+     "desc": "L1 浏览器 DOM 零 token / L2 全 GUI 语义树 / L3 像素兜底——克隆即可用，不依赖沙箱"
+    },
+    {
+     "name": "HTTP 远程驱动 + MCP server",
+     "how": "`pnpm computer:serve` / `pnpm computer:mcp`",
+     "desc": "大脑/手分离：专用工作站被云端 Agent/CI 远程驱动（docs/computer-use-production.md）"
     }
    ]
   },
