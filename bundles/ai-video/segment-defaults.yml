@@ -1,0 +1,19 @@
+# 客群默认安装清单（§2.2 槽⑤班组装配的客群化默认配置）
+# 用途：新工作区按客群一键初始化——预装技能（ordered：首屏展示顺序=销售叙事顺序）、启用 preset、围栏 patch。
+# 纪律：清单只决定「默认装什么、什么前置」，运行时仍全量过围栏瀑布（L8.3）；客户后续可自助加装技能市场任意技能。
+# 客户旅程：audit_only（只读体检 1-2 周）→ 影子模式（3 天）→ 正式托管。
+version: ai-video-segment-defaults/v1
+segments:
+
+  # ========== 质检模式（Audit-Only · 只读体检期）· 零风险先行 ==========
+  audit_only:
+    label: 质检模式（只读体检期）
+    pitch: 先体检，再托管——社媒账号只读扫描，系统不动一根手指，当场出《账号快速体检报告》
+    fence_patch: fences/patches/audit-only-patch.yml
+    presets: [metrics-watcher, review-analyst, insight-analyst, trend-researcher, intel-collector, intel-reviewer, intel-competitor, intel-verifier, intel-binder, compliance-officer, settlement-clerk]  # 全部为只读/分析岗，无对外写通道（对外写由 audit-only patch 物理兜底 block）
+    skills_ordered:  # 首屏顺序 = 四线巡检叙事：快扫当场见效→情报深挖→评论口碑→评审复盘
+      - fast-scan  # 旗舰：账号快照快扫，15-30 分钟当场出《账号快速体检报告》（售前验货与接入基线）
+      - jenny-loom-research  # 情报五站：高潜素材/竞对空位深挖（只读入库）
+      - marketing-brief-parser  # 营销 Brief 解析（只读分析）
+      - comment-ops  # 评论与口碑：三级分流监控（回复动作被 patch block，只出候选草稿）
+      - director-review  # 内容评审方法论：存量内容质量复盘打分

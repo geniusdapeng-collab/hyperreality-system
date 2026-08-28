@@ -4,7 +4,7 @@
   "workloom": {
     "industry": "ai-video",
     "displayName": "视频经理 · AI视频制作智能经营系统",
-    "description": "AI视频行业差异资产包：25 个数码员工 preset（制作班组 21 + 经营班组 4）+ G1-G10 基线围栏包 + 3 条 Quest 管线 + 对象/阶段枚举 + 8 个官方技能 + SuperMickey 技能内容库（fusion-design §2/§3/§4/§5）",
+    "description": "AI视频行业差异资产包：25 个数码员工 preset（制作班组 21 + 经营班组 4）+ G1-G10 基线围栏包（含 audit_only 质检模式 patch：先体检再托管，体检期一切对外写操作物理 block）+ 3 条 Quest 管线 + 对象/阶段枚举 + 9 个官方技能（含 fast-scan 账号快照快扫：15-30 分钟当场出《账号快速体检报告》）+ SuperMickey 技能内容库（fusion-design §2/§3/§4/§5）+ segment-defaults 客群默认装配清单",
     "provides": {
       "presets": [
         "presets/director.yml",
@@ -33,8 +33,12 @@
         "presets/metrics-watcher.yml",
         "presets/comment-operator.yml"
       ],
-      "fences": ["fences/ai-video-baseline.yml"],
+      "fences": [
+        "fences/ai-video-baseline.yml",
+        "fences/patches/audit-only-patch.yml"
+      ],
       "skills": [
+        "skills/fast-scan/SKILL.md",
         "skills/jenny-loom-research/SKILL.md",
         "skills/marketing-brief-parser/SKILL.md",
         "skills/shot-prompt-craft/SKILL.md",
@@ -54,7 +58,10 @@
         "pipelines/account-ops.yml"
       ],
       "library": ["library/"],
-      "ui": ["ui/cases.json"]
+      "ui": ["ui/cases.json"],
+      "segment_defaults": [
+        "segment-defaults.yml"
+      ]
     }
   }
 }
