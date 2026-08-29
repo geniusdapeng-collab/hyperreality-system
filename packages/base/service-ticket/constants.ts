@@ -1,5 +1,5 @@
 /**
- * service-ticket · 酒店工单预置常量（类型 + 部门路由表）
+ * service-ticket · 工单预置常量（类型 + 部门路由表，行业中性）
  * 路由表可注入覆盖（assignTicket 参数）；缺省走本表。
  */
 
@@ -13,12 +13,12 @@ export const TICKET_KIND_LABELS: Record<TicketKind, string> = {
   other: "其他",
 };
 
-/** 默认部门路由表（酒店口径）：delivery→客房部 / repair→工程部 / complaint→值班经理 / other→前台 */
+/** 默认部门路由表（行业中性口径）：delivery→配送组 / repair→工程部 / complaint→值班经理 / other→服务台 */
 export const DEFAULT_DEPT_ROUTES: Record<TicketKind, string> = {
-  delivery: "客房部",
+  delivery: "配送组",
   repair: "工程部",
   complaint: "值班经理",
-  other: "前台",
+  other: "服务台",
 };
 
 export const TICKET_PRIORITIES = ["normal", "high", "urgent"] as const;

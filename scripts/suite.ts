@@ -137,28 +137,28 @@ async function activeRules(): Promise<RuntimeRule[]> {
 /* ================= A · 意图路由（三模式 + clarify，34 条） ================= */
 const a = C("A");
 for (const [text, mode] of [
-  ["请问上周 OCC 多少？", "ask"], ["查一下昨天的入住率", "ask"], ["统计本月差评分布", "ask"],
-  ["什么是保底价？", "ask"], ["为什么周末房价高？", "ask"], ["哪家渠道评分最低？", "ask"],
-  ["今天天气怎么样？", "ask"], ["现在满房了吗？", "ask"], ["问一下夜班跑完了吗", "ask"], ["房价是多少", "ask"],
+  ["请问上周涨粉多少？", "ask"], ["查一下昨天的播放量", "ask"], ["统计本月评论分布", "ask"],
+  ["什么是底价报价？", "ask"], ["为什么周末流量高？", "ask"], ["哪家账号评分最低？", "ask"],
+  ["今天天气怎么样？", "ask"], ["现在视频过审了吗？", "ask"], ["问一下夜班跑完了吗", "ask"], ["报价是多少", "ask"],
 ] as const) a(`ask 句式「${text.slice(0, 12)}」→ ask`, () => eq(ruleBasedRoute(text).mode, mode, "路由"));
 for (const text of ["逐步生成三版文案，每一步给我审", "一步步来，先草稿给我看", "我们商量着调价", "先采集再让我确认每一步", "每一步都要我点头", "先出个初稿给我看再定"]) {
   a(`agent 句式「${text.slice(0, 10)}」→ agent`, () => eq(ruleBasedRoute(text).mode, "agent", "路由"));
 }
-for (const text of ["把周五雅致大床房调价 5%", "回复携程那条 2 分差评", "今晚夜班跑一遍对账", "把竞对价格拉一遍", "生成下周小红书文案", "把 812 房间关房", "退款给订单 1001", "调价到 ¥468", "帮我把差评都回了", "跑一轮巡检"]) {
+for (const text of ["把周五种草片报价上调 5%", "回复抖音那条 2 分差评", "今晚夜班跑一遍对账", "把竞对账号拉一遍", "生成下周小红书文案", "把违规视频下架", "退款给订单 1001", "报价调到 ¥468", "帮我把差评都回了", "跑一轮巡检"]) {
   a(`quest 句式「${text.slice(0, 10)}」→ quest`, () => eq(ruleBasedRoute(text).mode, "quest", "路由"));
 }
 for (const text of ["帮我看看", "看看", "在吗？", "你好", "怎么处理？", "怎么样了？", "嗯", "？？？"]) {
   a(`含糊「${text}」→ clarify 反问`, () => eq(ruleBasedRoute(text).kind, "clarify", "含糊应反问"));
 }
 a("空字符串 → clarify", () => eq(ruleBasedRoute("").kind, "clarify", "空输入"));
-a("500 字长指令不炸", () => { const r = ruleBasedRoute("把周五雅致大床房调价 5%".repeat(50)); assert(r.kind === "routed", "长文本应可路由"); });
+a("500 字长指令不炸", () => { const r = ruleBasedRoute("把周五种草片报价上调 5%".repeat(50)); assert(r.kind === "routed", "长文本应可路由"); });
 a("LLM 分类器正常 JSON", async () => {
   const c = new LlmIntentClassifier(async () => '{"mode":"ask","rationale":"查询"}');
   eq((await routeIntent("随便", c)).via, "llm", "LLM 路由");
 });
 a("LLM 输出垃圾 → 规则兜底", async () => {
   const c = new LlmIntentClassifier(async () => "我不是 JSON");
-  eq((await routeIntent("请问 OCC", c)).via, "rule", "垃圾回落");
+  eq((await routeIntent("请问涨粉", c)).via, "rule", "垃圾回落");
 });
 a("LLM 输出 markdown 包裹 JSON 可解析", async () => {
   const c = new LlmIntentClassifier(async () => '```json\n{"mode":"quest","rationale":"x"}\n```');
@@ -166,7 +166,7 @@ a("LLM 输出 markdown 包裹 JSON 可解析", async () => {
 });
 a("LLM 输出越权 mode → 规则兜底", async () => {
   const c = new LlmIntentClassifier(async () => '{"mode":"hack","rationale":"x"}');
-  eq((await routeIntent("请问 OCC", c)).via, "rule", "白名单外回落");
+  eq((await routeIntent("请问涨粉", c)).via, "rule", "白名单外回落");
 });
 a("提示词注入不劫持分类（分隔符内为数据）", async () => {
   let promptSeen = "";
@@ -1740,7 +1740,7 @@ n("压测：审批批量 50 建 50 批", async () => {
 const o = C("O");
 
 o("晨间问数：口语化提问路由 ask + NL 检索可达", async () => {
-  const r = ruleBasedRoute("请问上周 OCC 多少？");
+  const r = ruleBasedRoute("请问上周涨粉多少？");
   eq(r.mode, "ask", "问数路由 ask");
   const nl = await nlSearchEvents(app, scope, "上周的调价记录", new MockNlTranslator());
   assert(nl.page !== undefined || nl.degraded, "NL 检索可达（正常或降级）");
@@ -2174,7 +2174,7 @@ async function runCases(list: Case[], label: string): Promise<number> {
 const e2eCases: Case[] = [];
 const h2 = (name: string, run: Case["run"]) => { const n = e2eCases.length + 1; e2eCases.push({ id: `H-${String(n).padStart(2, "0")}`, name, run }); };
 
-const PORT = 8787;
+const PORT = Number(process.env.SUITE_PORT ?? 8787); // 可用 SUITE_PORT 避开本机 8787 占用（多仓并跑场景）
 const BASE = `http://localhost:${PORT}`;
 
 async function api<T = unknown>(path: string, opts: { method?: string; token?: string; body?: unknown } = {}): Promise<{ status: number; data: T }> {
@@ -3332,7 +3332,7 @@ const svcPassed = await runCases(cases, "服务层用例");
 console.log("▸ 启动 HTTP E2E 段（spawn server）……");
 const server = spawn("pnpm", ["-C", "apps/server", "start"], {
   cwd: new URL("..", import.meta.url).pathname,
-  env: { ...process.env },
+  env: { ...process.env, SERVER_PORT: String(PORT) },
   stdio: "ignore",
 });
 try {

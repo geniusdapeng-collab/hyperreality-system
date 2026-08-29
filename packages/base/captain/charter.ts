@@ -19,13 +19,13 @@ export const charterSchema = z.object({
     persona: z.string().default("稳健经营型"),
   }).default(() => ({ name: "公司CEO", persona: "稳健经营型" })),
   autonomy: z.object({
-    price_band: z.tuple([z.number(), z.number()]).default(() => [0.85, 1.15] as [number, number]),
-    procurement_cap: z.number().default(5000),
-    campaign_cap: z.number().default(2000),
-  }).default(() => ({ price_band: [0.85, 1.15] as [number, number], procurement_cap: 5000, campaign_cap: 2000 })),
+    price_band: z.tuple([z.number(), z.number()]).default(() => [0.9, 1.2] as [number, number]),
+    procurement_cap: z.number().default(1000),
+    campaign_cap: z.number().default(500),
+  }).default(() => ({ price_band: [0.9, 1.2] as [number, number], procurement_cap: 1000, campaign_cap: 500 })),
   /** L4 必请示清单（只紧不松：运行期只可加、不可减） */
   escalate: z.array(z.string()).default([
-    "修改保底价/安全禁区相关",
+    "低于底价报价/安全禁区相关",
     "单月累计让利超上限",
     "围栏规则放宽（任何放宽）",
     "新渠道/新平台上线",
@@ -40,9 +40,9 @@ export const charterSchema = z.object({
   }).default(() => ({ daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" as const })),
   circuit_breaker: z.object({
     window_days: z.number().int().default(14),
-    kpi_floor: z.record(z.string(), z.number()).default(() => ({ occ: 0.7 })),
+    kpi_floor: z.record(z.string(), z.number()).default(() => ({ completion_rate: 0.25 })),
     tightened: z.boolean().default(false), // 熔断后=true：自治边界已收紧一档
-  }).default(() => ({ window_days: 14, kpi_floor: { occ: 0.7 }, tightened: false })),
+  }).default(() => ({ window_days: 14, kpi_floor: { completion_rate: 0.25 }, tightened: false })),
   grant: z.object({
     event_id: z.string(),
     granted_by: z.string(),

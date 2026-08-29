@@ -68,7 +68,7 @@ export interface RouterPolicy {
   taskCreditLimit: number;
 }
 
-/** 默认策略（酒店演示口径；工作区覆盖经 F6.7 机制位 policy 参数） */
+/** 默认策略（演示口径；工作区覆盖经 F6.7 机制位 policy 参数） */
 export const DEFAULT_POLICY: RouterPolicy = {
   chains: {
     flagship: ["mock-flagship-a", "mock-flagship-b", "mock-standard-c"],

@@ -220,8 +220,9 @@ ${item.action} ${JSON.stringify(item.params)}
       }
       if (!applied) return; // 他处已裁决：本拍不再写 ceo.decision 事件（P0-4）
       const expected: ExpectedOutcome = {
-        metric: "occ_hold",
-        target: 0.7, // 基线：决策后 OCC 不低于宪章下限（行业事实面注册后可细化）
+        metric: "kpi_hold",
+        // 基线：决策后核心 KPI 不低于宪章熔断下限（取 kpi_floor 首项；行业事实面注册后可细化）
+        target: Object.values(charter.circuit_breaker.kpi_floor)[0] ?? 0,
         review_at: new Date(Date.now() + 3 * 86400e3).toISOString(),
         note: "决策日记：3 天后回测（decision.outcome）",
       };

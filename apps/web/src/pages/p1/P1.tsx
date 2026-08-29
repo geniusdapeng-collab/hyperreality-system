@@ -4,7 +4,7 @@
  *  - 中栏 MessageFlow：系统分隔线 → 交接班卡（P1E3，三计数与 P3 强一致 F4.4）→ KPI 投影（一企一档 history_curve 真实数据）
  *    → 巡检雷达推送（P1E4，一键派单接 inspection.dispatch；无异常显「昨夜一切正常」）
  *  - 右栏：档案 chips / 夜班班组状态卡 / 在线成员人机混编（P1E6）/ 渠道巡检状态
- *  - 底部：航线设定台（P1E1，Enter/启航→threads.dispatch；含糊→反问不建任务 F3.2）+ 快捷目标（P1E7，F3.5 酒店 6 条）
+ *  - 底部：航线设定台（P1E1，Enter/启航→threads.dispatch；含糊→反问不建任务 F3.2）+ 快捷目标（P1E7，F3.5 快捷目标集）
  * 状态变体：p1 默认 / p1_loading 骨架屏 / p1_empty 空态 / p1_community 社区版权限（隐藏夜班+Quest 快捷目标，F7.2/L2.2 隐藏非置灰）
  * 轮询：线程/夜班 5s，其余 10s（F3.4/D6）
  * 演示走查：?demo=p1_loading|p1_empty|p1_community 强制状态态（仅演示，数据接线不变）
@@ -35,7 +35,7 @@ interface ThreadRow {
   id: string; title: string; mode: string; status: string;
   progress_done: number; progress_total: number; agent_id: string | null; created_at: string;
 }
-interface Me { identity: { plan: string; name: string; role: string }; capabilities: { quest: boolean; nightShift: boolean; inspection: boolean } }
+interface Me { identity: { plan: string; name: string; role: string; memberNo: string }; capabilities: { quest: boolean; nightShift: boolean; inspection: boolean } }
 interface ArchiveShape {
   brand?: string;
   property?: { name: string; city: string; rooms: number; star: string };
@@ -314,7 +314,7 @@ export default function P1() {
           <div className="flex-1 space-y-3.5">
             <SystemDivider
               time={new Date().toTimeString().slice(0, 5)}
-              summary={`${profile?.archive?.brand ?? "视频经理 · 演示工作室"} · ${me?.identity.name ?? ""} 已上线（演示身份 MEM-V01 陈主理）`}
+              summary={`${profile?.archive?.brand ?? "视频经理 · 演示工作室"} · ${me?.identity.name ?? ""} 已上线（演示身份 ${me?.identity.memberNo ?? ""} ${me?.identity.name ?? ""}）`}
             />
 
             {/* P1E3 交接班卡（夜班未启用 → 空态「去配置」F4.8） */}

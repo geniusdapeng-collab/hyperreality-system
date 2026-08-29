@@ -1,6 +1,7 @@
 /**
  * service · 对话（接口对齐 packages/base/service-dialog 签名；表结构为底座迁移版）
- * 意图流水线（M8：与 packages/base/service-dialog/intents.ts 同一张规则表 ruleBasedIntent）：
+ * 意图流水线（M8：与 packages/base/service-dialog/intents.ts 同一张规则表 ruleBasedIntent；
+ *   底座规则表行业中性，本酒店示例域的行业词经 HOTEL_INTENT_EXT 注入取并集）：
  *   complaint（投诉）> biz_query（订单/会员/房价/工单进度）> service_request（报修服务类，产 ticketDraft）
  *   > kb_qa（KB 检索三档分流）> chat（规则未命中兜底）
  *   疑问句（几点/时间/吗/呢/怎么/如何）优先 kb_qa 不建单；「修/修一下/坏了」直连 service_request。
@@ -9,7 +10,7 @@
  * 命中 KB 必带 citations，无据不答（诚实拒答）。
  * 全量消息落 c_messages（stats.overview 聚合数据源；mock 仅在响应标注）。
  */
-import { ruleBasedIntent } from "@workloom/base/service-dialog";
+import { ruleBasedIntent, type IntentRuleExtension } from "@workloom/base/service-dialog";
 import { ensureServiceSchema } from "./store.js";
 import { searchKB, type KbHit } from "./kb.js";
 import { llmCall } from "./llm.js";
@@ -37,7 +38,14 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${seq.toString(36).padStart(3, "0")}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/* ================= 意图（M8：复用 base 同一张规则表） ================= */
+/* ================= 意图（M8：复用 base 同一张规则表 + 本域行业词扩展） ================= */
+
+/** 酒店示例域扩展词表（M8 评测校准口径；底座规则表保持行业中性，行业词由本域注入） */
+const HOTEL_INTENT_EXT: IntentRuleExtension = {
+  biz_query: ["房费", "房价", "房型", "大床房", "双床房", "套房", "标间", "订房"],
+  service_request: ["换床单", "续住"],
+  kb_qa: ["早餐", "停车", "健身房", "泳池", "退房", "入住"],
+};
 
 /** 工单进度查询（server 侧特有 biz_query 子类，先于规则表判定） */
 const RE_TICKET_STATUS = /工单.*(进度|状态|怎么样)|进度.*工单/;
@@ -47,7 +55,7 @@ const RE_CATALOG = /房价|房型|多少钱|价格/;
 
 export function classify(text: string): { intent: Intent; tool?: BizToolName } {
   if (RE_TICKET_STATUS.test(text)) return { intent: "biz_query", tool: "query_ticket" };
-  const ruled = ruleBasedIntent(text);
+  const ruled = ruleBasedIntent(text, HOTEL_INTENT_EXT);
   if (ruled === "complaint") return { intent: "complaint" };
   if (ruled === "service_request") return { intent: "service_request" };
   if (ruled === "biz_query") {

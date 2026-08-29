@@ -16,8 +16,8 @@ import type pg from "pg";
 import { gatewayAppend } from "../workdata/gateway.js";
 import {
   aggregateBySource,
+  DEFAULT_CHECKS,
   DEFAULT_PROBES,
-  HOTEL_CHECKS,
   runChecks,
   type CheckDef,
   type Finding,
@@ -164,7 +164,7 @@ export async function listOpenAnomalyKeys(app: pg.Pool, scope: Scope, day: Date)
 }
 
 /**
- * 跑一轮巡检（默认检项=酒店四检，F9.1；时刻=每日 07:00 可配，由触发器引擎 F4.7 调度——
+ * 跑一轮巡检（默认检项=底座四检，F9.1；时刻=每日 07:00 可配，由触发器引擎 F4.7 调度——
  * 首版演示手动/触发器调用 runInspectionScan，定时挂接见 B9 tickTriggers）
  */
 export async function runInspectionScan(
@@ -220,7 +220,7 @@ async function scanOnce(
 ): Promise<ScanReport> {
   await assertReadonlyPreset(app, scope); // L9.1 前置
   const snapshot = opts.snapshot ?? (await loadSnapshot(app, scope));
-  const findings = runChecks(opts.checks ?? HOTEL_CHECKS, snapshot, (opts.probes as never) ?? DEFAULT_PROBES);
+  const findings = runChecks(opts.checks ?? DEFAULT_CHECKS, snapshot, (opts.probes as never) ?? DEFAULT_PROBES);
 
   const effective = findings.filter((f) => f.status !== "nodata");
   const okCount = effective.filter((f) => f.status === "ok").length;

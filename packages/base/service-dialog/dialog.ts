@@ -109,7 +109,7 @@ export interface HandleMessageResult {
 
 /* ================= 确定性辅助（纯函数） ================= */
 
-/** service_request → 工单类型映射（酒店口径） */
+/** service_request → 工单类型映射（通用口径） */
 export function ticketKindForServiceRequest(text: string): TicketDraftKind {
   if (/修|坏|漏水|空调|热水|灯|马桶|电视/.test(text)) return "repair";
   if (/送|拿|打扫|换|加一|多要|再来/.test(text)) return "delivery";
@@ -118,7 +118,7 @@ export function ticketKindForServiceRequest(text: string): TicketDraftKind {
 
 /** biz_query → 工具调用描述（工具契约，由 server 层执行） */
 export function bizToolFor(text: string, cUserId: string): ToolCallRequest {
-  if (/账单|房费|押金|发票/.test(text)) return { tool: "biz.query_bill", params: { cUserId } };
+  if (/账单|押金|发票/.test(text)) return { tool: "biz.query_bill", params: { cUserId } };
   if (/积分|会员|余额/.test(text)) return { tool: "biz.query_member", params: { cUserId } };
   return { tool: "biz.query_orders", params: { cUserId } };
 }
@@ -248,7 +248,7 @@ export async function handleMessage(
     } else {
       mock = true;
       degraded = true;
-      answer = `[mock] 您好，我是云栖酒店智能客服。您说的「${input.text.slice(0, 20)}」我已收到，可继续咨询住店问题。`;
+      answer = `[mock] 您好，我是智能客服。您说的「${input.text.slice(0, 20)}」我已收到，可继续咨询。`;
       confidence = 0.3;
     }
   }

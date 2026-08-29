@@ -1,6 +1,6 @@
 /**
  * inspection · 巡检项定义与确定性探针（F9.1）
- *  - 巡检项由行业包定义：酒店=5–8 渠道价格 / 房态 / 评价 / 违规（PRD M9.2 原文口径）
+ *  - 巡检项由行业包定义（如渠道价格 / 状态同步 / 评价 / 违规，PRD M9.2 原文口径）
  *  - 探针为纯函数：输入只读快照（loadSnapshot 取自 profiles.archive / 事件流），输出 Finding 列表
  *  - 探针可注入（演示/测试用）；默认探针不编造数据——快照缺项时该检项记「无数据」而非假异常
  */
@@ -16,8 +16,8 @@ export interface CheckDef {
   name: string;
 }
 
-/** 酒店巡检项清单（F9.1；US9.5：新行业只配置检项清单即获得完整巡检能力） */
-export const HOTEL_CHECKS: CheckDef[] = [
+/** 底座默认巡检项清单（F9.1；US9.5：新行业只配置检项清单即获得完整巡检能力——经 checks 参数覆盖） */
+export const DEFAULT_CHECKS: CheckDef[] = [
   { id: "chk-channel-price", kind: "channel_price", name: "5–8 渠道价格一致性" },
   { id: "chk-room-state", kind: "room_state", name: "房态同步" },
   { id: "chk-review", kind: "review", name: "新评价扫描" },
@@ -51,7 +51,7 @@ export interface InspectionSnapshot {
 
 export type Probe = (check: CheckDef, snapshot: InspectionSnapshot) => Finding[];
 
-/* ---------- 默认酒店探针（确定性；阈值与 seed/围栏同源，不新增数值） ---------- */
+/* ---------- 默认探针（确定性；阈值与 seed/围栏同源，不新增数值） ---------- */
 
 const channelPriceProbe: Probe = (check, s) => {
   if (!s.channels || s.channels.length === 0) {

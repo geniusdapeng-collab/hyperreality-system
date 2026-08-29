@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateBySource,
-  HOTEL_CHECKS,
+  DEFAULT_CHECKS,
   runChecks,
   type Finding,
   type InspectionSnapshot,
@@ -34,7 +34,7 @@ const snapshot: InspectionSnapshot = {
 
 describe("巡检探针（F9.1 酒店四检，确定性）", () => {
   it("渠道价格：offline 高优 / parity=false 中优 / 正常项", () => {
-    const findings = runChecks(HOTEL_CHECKS, snapshot);
+    const findings = runChecks(DEFAULT_CHECKS, snapshot);
     const price = findings.filter((f) => f.checkId === "chk-channel-price");
     expect(price).toHaveLength(3);
     expect(price.find((f) => f.objectId === `飞猪-${RUN}`)).toMatchObject({ status: "anomaly", severity: "high" });
@@ -43,17 +43,17 @@ describe("巡检探针（F9.1 酒店四检，确定性）", () => {
   });
 
   it("差评 ≤3 分高优；违规列表空=正常；快照缺项=nodata 不计正常", () => {
-    const findings = runChecks(HOTEL_CHECKS, snapshot);
+    const findings = runChecks(DEFAULT_CHECKS, snapshot);
     expect(findings.find((f) => f.objectId === `rv-${RUN}`)).toMatchObject({ status: "anomaly", severity: "high" });
     expect(findings.find((f) => f.checkId === "chk-violation")).toMatchObject({ status: "ok" });
-    const nodata = runChecks(HOTEL_CHECKS, {});
+    const nodata = runChecks(DEFAULT_CHECKS, {});
     expect(nodata.every((f) => f.status === "nodata")).toBe(true);
   });
 });
 
 describe("同源聚合（E9.2）与去重键（L9.3）", () => {
   it("同 source 异常合并为一条摘要，严重度取最高", () => {
-    const groups = aggregateBySource(runChecks(HOTEL_CHECKS, snapshot));
+    const groups = aggregateBySource(runChecks(DEFAULT_CHECKS, snapshot));
     const priceGroup = groups.find((g) => g.source === "channel_price");
     expect(priceGroup).toMatchObject({ count: 2, severity: "high" });
     expect(groups.find((g) => g.source === "review")).toMatchObject({ count: 1, severity: "high" });

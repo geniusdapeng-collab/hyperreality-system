@@ -25,8 +25,8 @@ const STOPCHARS = new Set([..."什么怎几多哪吗呢了的要是可有在把�
 const SYNONYMS: Array<[string, string]> = [
   ["早饭", "早餐"], ["网", "wifi"], ["无线", "wifi"], ["上网", "wifi"], ["网络", "wifi"],
 ];
-/** 弱词表：单独命中不构成「区分度证据」的泛用词 */
-const WEAK_TOKENS = new Set(["时间", "免费", "收费", "可以", "服务", "房间", "酒店", "半天", "一份", "一瓶", "东西", "地方", "怎么", "如何", "一下", "价格", "多少钱", "客房", "住客", "客人", "前台", "工作", "两张", "一张", "几位", "一些"]);
+/** 弱词表：单独命中不构成「区分度证据」的泛用词（行业中性；行业域弱词由调用方经 weakTokens 注入取并集） */
+const WEAK_TOKENS = new Set(["时间", "免费", "收费", "可以", "服务", "半天", "一份", "一瓶", "东西", "地方", "怎么", "如何", "一下", "价格", "多少钱", "工作", "两张", "一张", "几位", "一些"]);
 
 export function tokenizeQuery(query: string): string[] {
   const tokens = new Set<string>();
@@ -54,7 +54,12 @@ export function tokenizeQuery(query: string): string[] {
 export function scoreChunkFallback(
   query: string,
   chunk: { heading: string; content: string },
+  /** 行业域弱词（可选）：与底座弱词表取并集（行业域的专属泛用词由各行业域层注入） */
+  extraWeakTokens?: ReadonlySet<string>,
 ): number {
+  const weak: ReadonlySet<string> = extraWeakTokens
+    ? new Set([...WEAK_TOKENS, ...extraWeakTokens])
+    : WEAK_TOKENS;
   const tokens = tokenizeQuery(query);
   if (tokens.length === 0) return 0;
   const stripHyphen = (t: string) => t.toLowerCase().replace(/(?<=[a-z0-9])-(?=[a-z0-9])/g, "");
@@ -64,7 +69,7 @@ export function scoreChunkFallback(
   let headHits = 0;
   for (const t of tokens) {
     if (hay.includes(t)) matched += 1;
-    if (head.includes(t) && !WEAK_TOKENS.has(t)) headHits += 1; // 弱词命中标题不构成主题信号（「收费」不该点亮「收费送物」）
+    if (head.includes(t) && !weak.has(t)) headHits += 1; // 弱词命中标题不构成主题信号（「收费」不该点亮「收费送物」）
   }
   if (matched === 0) return 0;
   const coverage = matched / tokens.length;
@@ -81,7 +86,7 @@ export function scoreChunkFallback(
   // ③ 单个区分度 token 命中（非弱词，如「拖鞋」「蛋糕」「红酒」）
   const matchedTokens = tokens.filter((t) => hay.includes(t));
   const contentHits = matchedTokens.filter((t) => stripHyphen(chunk.content).includes(t)).length;
-  const distinctive = matchedTokens.filter((t) => !WEAK_TOKENS.has(t) && !/^[a-z0-9]$/.test(t));
+  const distinctive = matchedTokens.filter((t) => !weak.has(t) && !/^[a-z0-9]$/.test(t));
   let floor = 0;
   if (headHits > 0) floor = Math.max(floor, 0.55 + 0.05 * Math.min(headHits, 3) + coverage * 0.2);
   if (contentHits >= 2) floor = Math.max(floor, 0.5 + 0.04 * Math.min(contentHits, 4) + coverage * 0.2);

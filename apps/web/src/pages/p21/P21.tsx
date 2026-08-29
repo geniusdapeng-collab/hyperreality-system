@@ -78,9 +78,9 @@ export default function P21() {
   // 授权向导
   const [clauses, setClauses] = useState<Record<string, boolean>>({});
   const [identityOk, setIdentityOk] = useState(false);
-  const [priceBand, setPriceBand] = useState<[number, number]>([0.85, 1.15]);
-  const [procCap, setProcCap] = useState(5000);
-  const [campCap, setCampCap] = useState(2000);
+  const [priceBand, setPriceBand] = useState<[number, number]>([0.9, 1.2]);
+  const [procCap, setProcCap] = useState(1000);
+  const [campCap, setCampCap] = useState(500);
 
   const load = async () => {
     await ensureDemoLogin();

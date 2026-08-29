@@ -302,7 +302,10 @@ export async function diffScan(input: { workspaceId: string; sourceId: string })
 /**
  * 检索（H4 修复全表扫描）：SQL 侧候选召回（content/heading ILIKE ANY 关键词数组，LIMIT 100），
  * JS 侧与 base 一致的 2-gram 切词（tokenizeQuery）+ scoreChunkFallback 精排（score 归一化 0..1）。
+ * 弱词表：底座行业中性默认 + 本酒店示例域弱词（房间/酒店/客房/住客/客人/前台）注入取并集。
  */
+/** 酒店示例域弱词（注入 base scoreChunkFallback，与底座弱词表取并集；行为与原底座内置口径一致） */
+const HOTEL_WEAK_TOKENS: ReadonlySet<string> = new Set(["房间", "酒店", "客房", "住客", "客人", "前台"]);
 export async function searchKB(input: { workspaceId: string; query: string; limit?: number }): Promise<KbHit[]> {
   await ensureServiceSchema();
   const terms = tokenizeQuery(input.query);
@@ -320,7 +323,7 @@ export async function searchKB(input: { workspaceId: string; query: string; limi
   return rows
     .map((x) => ({
       content: x.content, heading: x.heading, documentTitle: x.title, documentId: x.document_id,
-      score: scoreChunkFallback(input.query, { heading: x.heading, content: x.content }),
+      score: scoreChunkFallback(input.query, { heading: x.heading, content: x.content }, HOTEL_WEAK_TOKENS),
     }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)

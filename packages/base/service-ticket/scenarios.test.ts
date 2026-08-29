@@ -233,9 +233,7 @@ describe("C2 创建 · 类型/幂等/SLA", () => {
 /* ================= C3. 部门路由表 ================= */
 
 describe("C3 分派 · 部门路由表", () => {
-  const routes: Array<[TicketKind, string]> = [
-    ["delivery", "客房部"], ["repair", "工程部"], ["complaint", "值班经理"], ["other", "前台"],
-  ];
+  const routes: Array<[TicketKind, string]> = TICKET_KINDS.map((k) => [k, DEFAULT_DEPT_ROUTES[k]]);
   for (const [kind, dept] of routes) {
     it(`${kind} → ${dept}`, async () => {
       const db = wireTicketDb(new FakeDb());

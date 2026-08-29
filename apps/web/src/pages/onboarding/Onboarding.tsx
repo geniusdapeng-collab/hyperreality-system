@@ -306,13 +306,13 @@ export default function Onboarding() {
           <div className="space-y-4 rounded-xl border border-line bg-panel/70 p-5">
             <div className="text-sm font-bold">经营主体 <span className="text-xs font-normal text-ink3">写入门店档案，成为数字团队的上下文</span></div>
             <label className="block text-xs text-ink3">主体名称
-              <input className={`${inputCls} mt-1`} value={bizName} onChange={(e) => setBizName(e.target.value)} placeholder="如：云栖酒店" />
+              <input className={`${inputCls} mt-1`} value={bizName} onChange={(e) => setBizName(e.target.value)} placeholder="如：星芒好物" />
             </label>
             <label className="block text-xs text-ink3">行业
-              <input className={`${inputCls} mt-1`} value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="如：酒店民宿 / 餐饮 / 内容制作" />
+              <input className={`${inputCls} mt-1`} value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="如：短视频 MCN / 内容工作室 / 品牌自播" />
             </label>
             <label className="block text-xs text-ink3">经营简介（可选）
-              <textarea className={`${inputCls} mt-1 h-20 resize-none`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="门店位置、房型规模、经营重点……数字员工会以此为背景工作" />
+              <textarea className={`${inputCls} mt-1 h-20 resize-none`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="主营平台、账号矩阵、经营重点……数字员工会以此为背景工作" />
             </label>
             <div className="flex items-center justify-between pt-1">
               <button className="text-xs text-ink3 underline" onClick={() => setStep(3)}>跳过</button>

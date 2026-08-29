@@ -22,7 +22,9 @@ const item = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("决策三级分流（已拍板三条件）", () => {
-  const c = activeCharter(); // 带 ±15%，采购上限 5000
+  const c = activeCharter();
+  // 默认值动态引用（CAP 模式：默认值调整不破测试）
+  const CAP = defaultCharter().autonomy;
 
   it("不可逆操作（退款/发布/围栏/宪章）→ 一律重大", () => {
     expect(classifyDecision(c, item({ action: "order.refund" })).tier).toBe("major");
@@ -31,9 +33,9 @@ describe("决策三级分流（已拍板三条件）", () => {
   });
 
   it("金额 > 2×上限 → 重大；<30% → 微；中间 → 常规", () => {
-    expect(classifyDecision(c, item({ action: "procurement.create", amountCtx: { amount: 12000 } })).tier).toBe("major"); // >10000
-    expect(classifyDecision(c, item({ action: "procurement.create", amountCtx: { amount: 800 } })).tier === "micro" || classifyDecision(c, item({ action: "procurement.create", amountCtx: { amount: 800 } })).tier === "standard").toBe(true);
-    expect(classifyDecision(c, item({ action: "procurement.create", amountCtx: { amount: 3000 } })).tier).toBe("standard");
+    expect(classifyDecision(c, item({ action: "procurement.create", amountCtx: { amount: CAP.procurement_cap * 2 + 1 } })).tier).toBe("major");
+    expect(classifyDecision(c, item({ action: "procurement.create", amountCtx: { amount: Math.floor(CAP.procurement_cap * 0.2) } })).tier).toBe("micro");
+    expect(classifyDecision(c, item({ action: "procurement.create", amountCtx: { amount: CAP.procurement_cap } })).tier).toBe("standard");
   });
 
   it("价格微调（可逆）→ 微决策", () => {

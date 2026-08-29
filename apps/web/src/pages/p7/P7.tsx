@@ -50,7 +50,7 @@ export default function P7() {
   const [wizardErr, setWizardErr] = useState("");
   const [draft, setDraft] = useState({
     slug: "", displayName: "", version: "0.1.0", changelog: "",
-    fenceRef: "ai-video-baseline/v1", ownerMemberNo: "MEM-V01",
+    fenceRef: "ai-video-baseline/v1", ownerMemberNo: "",
   });
 
   const load = useCallback(async (silent = false, slug?: string | null) => {
@@ -58,7 +58,7 @@ export default function P7() {
     try {
       await ensureDemoLogin();
       const [meR, mem, st] = await Promise.all([
-        trpc.members.me.query() as Promise<{ identity: { role: string } }>,
+        trpc.members.me.query() as Promise<{ identity: { role: string; memberNo: string } }>,
         trpc.members.list.query() as Promise<MemberRow[]>,
         trpc.bundles.status.query(slug ? { slug } : {}) as Promise<StatusResp>,
       ]);
@@ -66,6 +66,8 @@ export default function P7() {
       setMembers(mem);
       setData(st);
       if (!slug) setSelectedSlug(st.selected?.slug ?? st.activeSlug);
+      // 草稿 owner 默认取当前登录身份（不写死演示成员号；仍可手改）
+      setDraft((d) => (d.ownerMemberNo ? d : { ...d, ownerMemberNo: meR.identity.memberNo }));
     } catch (e) {
       setBanner({ level: "alert", text: `装配投影加载失败：${e instanceof Error ? e.message : String(e)}` });
     } finally {
@@ -124,7 +126,7 @@ export default function P7() {
       const r = await trpc.bundles.createDraft.mutate(draft) as { eventId: string; slug: string };
       setWizardOpen(false);
       setBanner({ level: "info", text: `行业草稿「${draft.displayName}」已创建（草稿态不进分发 §2.3，留痕 ${r.eventId}）——填充五槽后过校验即可激活` });
-      setDraft({ slug: "", displayName: "", version: "0.1.0", changelog: "", fenceRef: "ai-video-baseline/v1", ownerMemberNo: "MEM-V01" });
+      setDraft((d) => ({ slug: "", displayName: "", version: "0.1.0", changelog: "", fenceRef: "ai-video-baseline/v1", ownerMemberNo: d.ownerMemberNo }));
       await load(true, r.slug);
       setSelectedSlug(r.slug);
     } catch (e) {

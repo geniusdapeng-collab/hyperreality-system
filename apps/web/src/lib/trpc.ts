@@ -31,9 +31,9 @@ export const trpc = createTRPCClient<AppRouter>({
   ],
 });
 
-/** 演示身份自动登录（种子成员；演示工作区 video-studio） */
+/** 演示身份自动登录（种子成员；工作区/成员经 VITE_DEMO_WORKSPACE / VITE_DEMO_MEMBER 可配，默认演示工作区 video-studio） */
 export async function ensureDemoLogin(memberNo = "MEM-V01"): Promise<void> {
   if (getToken()) return;
-  const r = await trpc.auth.loginAs.mutate({ workspaceSlug: (import.meta.env.VITE_WS_SLUG ?? "video-studio"), memberNo: (import.meta.env.VITE_MEMBER_NO ?? memberNo) });
+  const r = await trpc.auth.loginAs.mutate({ workspaceSlug: (import.meta.env.VITE_DEMO_WORKSPACE ?? "video-studio"), memberNo: (import.meta.env.VITE_DEMO_MEMBER ?? memberNo) });
   setToken(r.token);
 }

@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { FakeDb } from "../testing/fake-pg.js";
-import { routeIntent, ruleBasedIntent, type IntentLlm } from "./intents.js";
+import { routeIntent, ruleBasedIntent, type IntentLlm, type IntentRuleExtension } from "./intents.js";
 import {
   bizToolFor, classifyConfidence, handleMessage, ticketKindForServiceRequest,
   CONFIDENCE_HIGH, CONFIDENCE_MEDIUM,
@@ -17,6 +17,13 @@ import type { KbSearchHit } from "../service-kb/search.js";
 
 const WS = "ws-scen-dlg";
 const TENANT = "tenant-demo";
+
+/** 测试用酒店域扩展词表（与 apps server 层酒店示例域注入口径一致；底座规则表本身行业中性） */
+const HOTEL_EXT: IntentRuleExtension = {
+  biz_query: ["房费", "房价", "房型", "大床房", "双床房", "套房", "标间", "订房"],
+  service_request: ["换床单", "续住"],
+  kb_qa: ["早餐", "停车", "健身房", "泳池", "退房", "入住"],
+};
 
 /* ================= FakeDb 接线（c_conversations / c_messages） ================= */
 
@@ -91,9 +98,9 @@ describe("B1 意图路由 · 规则表优先级", () => {
     expect(ruleBasedIntent("我的会员积分还有多少余额")).toBe("biz_query");
   });
 
-  it("biz_query：房价查询（房型词+多少钱）", () => {
-    expect(ruleBasedIntent("豪华大床房多少钱一晚")).toBe("biz_query"); // 含房型词「大床房」→ 业务查询
-    expect(ruleBasedIntent("房价多少")).toBe("biz_query");
+  it("biz_query：房价查询（房型词+多少钱，行业词经扩展表注入）", () => {
+    expect(ruleBasedIntent("豪华大床房多少钱一晚", HOTEL_EXT)).toBe("biz_query"); // 含房型词「大床房」→ 业务查询
+    expect(ruleBasedIntent("房价多少", HOTEL_EXT)).toBe("biz_query");
   });
 
   it("kb_qa：非房语境的价格疑问走知识库（面膜多少钱/加床多少钱）", () => {
@@ -122,7 +129,7 @@ describe("B1 意图路由 · 规则表优先级", () => {
     expect(ruleBasedIntent("帮我送两瓶矿泉水")).toBe("service_request");
     expect(ruleBasedIntent("房间需要打扫")).toBe("service_request");
     expect(ruleBasedIntent("帮我开发票")).toBe("service_request");
-    expect(ruleBasedIntent("我要续住一晚")).toBe("service_request");
+    expect(ruleBasedIntent("我要续住一晚", HOTEL_EXT)).toBe("service_request"); // 行业词「续住」经扩展表注入
   });
 
   it("kb_qa：政策/早餐/wifi/停车/退房/入住类问句", () => {

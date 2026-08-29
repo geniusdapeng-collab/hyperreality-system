@@ -50,8 +50,6 @@ interface Overview {
 }
 
 type Tab = "kb" | "tickets" | "stats";
-
-const DEPTS = ["客服部", "工程部", "客房部", "前厅部"];
 const TICKET_STATUS: Array<{ key: string; label: string }> = [
   { key: "", label: "全部" },
   ...["created", "assigned", "processing", "done", "closed"].map((key) => ({ key, label: TICKET_STATUS_TEXT[key] ?? key })),
@@ -122,8 +120,10 @@ export default function P22() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [fStatus, setFStatus] = useState("");
   const [fDept, setFDept] = useState("");
+  /** 部门集合数据驱动（从工单实际部门聚合，不写死行业部门名） */
+  const [depts, setDepts] = useState<string[]>([]);
   const [assignFor, setAssignFor] = useState<string | null>(null);
-  const [assignDept, setAssignDept] = useState(DEPTS[0]!);
+  const [assignDept, setAssignDept] = useState("");
   const [assignee, setAssignee] = useState("");
   const [completeFor, setCompleteFor] = useState<string | null>(null);
   const [completeResult, setCompleteResult] = useState("");
@@ -170,6 +170,10 @@ export default function P22() {
       const input = { ...(status ? { status } : {}), ...(dept ? { dept } : {}) };
       const r = await trpc.service.tickets.list.query(Object.keys(input).length > 0 ? input : undefined) as { tickets: Ticket[] };
       setTickets(r.tickets);
+      // 无部门过滤的全量拉取时聚合部门集合（过滤 chip/分派下拉的选项源）
+      if (!dept) {
+        setDepts((prev) => [...new Set([...prev, ...r.tickets.map((t) => t.dept).filter((d): d is string => !!d)])].sort());
+      }
     } catch (e) { fail(e); }
   }, [fail]);
 
@@ -551,7 +555,7 @@ export default function P22() {
             <input
               value={siteUrl}
               onChange={(e) => setSiteUrl(e.target.value)}
-              placeholder="https://hotel.example.com"
+              placeholder="https://www.example.com"
               className="flex-1 rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
             />
             <button
@@ -643,7 +647,7 @@ export default function P22() {
         ))}
         <span className="mx-2 text-line">|</span>
         <span className="mr-1 text-caption font-bold text-ink2">部门</span>
-        {["", ...DEPTS].map((d) => (
+        {["", ...depts].map((d) => (
           <button
             key={d || "all"}
             type="button"
@@ -678,7 +682,7 @@ export default function P22() {
                 {t.status === "created" && (
                   <button
                     type="button"
-                    onClick={() => { setAssignFor(t.id); setCompleteFor(null); }}
+                    onClick={() => { setAssignFor(t.id); setCompleteFor(null); setAssignDept(t.dept ?? depts[0] ?? ""); }}
                     className="cursor-pointer rounded border border-gline px-2 py-0.5 text-micro font-bold text-goldhi hover:border-gold/60"
                   >
                     分派
@@ -721,7 +725,7 @@ export default function P22() {
                     onChange={(e) => setAssignDept(e.target.value)}
                     className="rounded border border-line bg-bg900 px-2 py-1 text-caption text-ink outline-none"
                   >
-                    {DEPTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                    {[...new Set([assignDept, ...depts])].filter(Boolean).map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                   <input
                     value={assignee}
@@ -731,7 +735,7 @@ export default function P22() {
                   />
                   <button
                     type="button"
-                    disabled={busy === `tk-${t.id}`}
+                    disabled={busy === `tk-${t.id}` || !assignDept}
                     onClick={() => void doAssign()}
                     className="cursor-pointer rounded gold-grad px-2.5 py-1 text-caption font-bold text-ongold disabled:opacity-40"
                   >
