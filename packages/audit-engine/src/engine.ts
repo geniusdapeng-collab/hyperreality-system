@@ -1,11 +1,12 @@
 /**
- * 引擎编排：runFastScan（社媒账号快照快扫）
- * 纪律（fast-scan SKILL.md 四）：
- *  - 时间纪律：软预算默认 30 分钟，逐线检查耗时，超时后剩余线标注 not-covered 出部分报告；
- *  - 降级纪律：某数据源缺失 → 该线标注 not-covered / partial，不阻塞整体；
- *  - 估算透明：所有 Finding 估算必须带 confidence 与计算口径（分析器层已强制）。
+ * 引擎编排（行业薄封装）：LINE_ORDER + precheckLine 组装 LineDef[]，逐线执行/软预算/降级/
+ * 编号/排序纪律全部交给 @workloom/audit-core 内核 runFastScan，本层只做：
+ *  1) 社媒四线的检线定义（precheck 数据源覆盖度预判）；
+ *  2) 对外 API 适配——行业报告视图（一账号一份 + 矩阵总览 + Top10）形状保持不变。
  * 输出：一账号一份 + 矩阵总览 + 按估算挽回降序 Top10。
  */
+import { runFastScan as runCoreFastScan } from "../../base/audit-core/index.js";
+import type { Finding as CoreFinding, LineDef } from "../../base/audit-core/index.js";
 import { analyzeAccount } from "./analyzers/account.js";
 import { analyzeComments } from "./analyzers/comments.js";
 import { analyzeContent } from "./analyzers/content.js";
@@ -16,9 +17,9 @@ import type {
   AuditLine,
   AuditReport,
   AuditSnapshot,
+  Coverage,
   FastScanOptions,
   Finding,
-  LineCoverage,
   Severity,
 } from "./types.js";
 
@@ -35,7 +36,7 @@ const ANALYZERS: Record<AuditLine, (s: AuditSnapshot, ctx: AnalyzerContext) => F
 /**
  * 数据源覆盖度预判：某线所需数据集全空 → not-covered；关键子集缺失 → partial。
  */
-function precheckLine(line: AuditLine, s: AuditSnapshot): { coverage: LineCoverage; note?: string } {
+function precheckLine(line: AuditLine, s: AuditSnapshot): { coverage: Coverage; note?: string } {
   switch (line) {
     case "account": {
       if (s.accounts.length === 0) return { coverage: "not-covered", note: "账号档案源缺失，账号健康线未覆盖" };
@@ -81,35 +82,44 @@ function sumByUnit(findings: Finding[]): Record<string, number> {
 
 /**
  * 快速体检主入口：快照 → 四线 → 报告。
+ * 行业薄封装：检线定义交给内核 runFastScan 执行，报告视图在本层适配。
  * 纯函数（除耗时计量）：同一快照 + 同一 now 必得同一报告正文。
  */
 export function runFastScan(snapshot: AuditSnapshot, opts: FastScanOptions = {}): AuditReport {
   const startedAt = Date.now();
-  const budgetMs = (opts.timeBudgetMinutes ?? 30) * 60_000;
-  const ctx: AnalyzerContext = {
-    now: opts.now ?? new Date(snapshot.generatedAt),
-  };
+  const now = opts.now ?? new Date(snapshot.generatedAt);
+  const timeBudgetMinutes = opts.timeBudgetMinutes ?? 30;
+  const budgetMs = timeBudgetMinutes * 60_000;
 
-  const coverage = {} as Record<AuditLine, LineCoverage>;
+  const coverage = {} as Record<AuditLine, Coverage>;
   const coverageNotes: string[] = [];
   const allFindings: Finding[] = [];
 
-  for (const line of LINE_ORDER) {
-    // 时间纪律：逐线检查软预算，超时后剩余线 not-covered（部分报告仍是有效交付）
-    if (Date.now() - startedAt > budgetMs) {
-      coverage[line] = "not-covered";
-      coverageNotes.push(`时间预算耗尽（${opts.timeBudgetMinutes ?? 30} 分钟），${line} 线未执行`);
-      continue;
+  if (budgetMs > 0) {
+    // 检线定义：precheck 数据源预判 + 行业分析器。
+    // 社媒 Finding 行业视图（结构化 calculation / estimatedImpact.currency）对内核为不透明负载，
+    // 内核只做编号/线归属/排序透传，对象原样流回，故此处仅在边界做一次类型适配。
+    const lines: LineDef<AuditSnapshot>[] = LINE_ORDER.map((line) => ({
+      line,
+      precheck: (s) => precheckLine(line, s),
+      analyze: (s) => ANALYZERS[line](s, { now }) as unknown as CoreFinding[],
+    }));
+    const core = runCoreFastScan(snapshot, lines, { now, softBudgetMs: budgetMs, topN: 10 });
+
+    for (const lr of core.lineResults) {
+      coverage[lr.line as AuditLine] = lr.coverage;
+      if (lr.note) coverageNotes.push(lr.note);
+      // 统一编号：FND-<LINE>-<全局序号>（覆盖内核线内序号，保持对外编号纪律不变）
+      for (const f of lr.findings as unknown as Finding[]) {
+        f.id = `FND-${lr.line.toUpperCase()}-${String(allFindings.length + 1).padStart(3, "0")}`;
+        allFindings.push(f);
+      }
     }
-    const pre = precheckLine(line, snapshot);
-    coverage[line] = pre.coverage;
-    if (pre.note) coverageNotes.push(pre.note);
-    if (pre.coverage === "not-covered") continue;
-    const findings = ANALYZERS[line](snapshot, ctx);
-    // 统一编号：FND-<LINE>-<全局序号>（报告可回溯）
-    for (const f of findings) {
-      f.id = `FND-${line.toUpperCase()}-${String(allFindings.length + 1).padStart(3, "0")}`;
-      allFindings.push(f);
+  } else {
+    // 时间纪律：预算非正（视为已耗尽）→ 全部线 not-covered 出部分报告
+    for (const line of LINE_ORDER) {
+      coverage[line] = "not-covered";
+      coverageNotes.push(`时间预算耗尽（${timeBudgetMinutes} 分钟），${line} 线未执行`);
     }
   }
 
@@ -157,7 +167,7 @@ export function runFastScan(snapshot: AuditSnapshot, opts: FastScanOptions = {})
 
   return {
     reportId: `RPT-${snapshot.snapshotId}`,
-    generatedAt: ctx.now.toISOString(),
+    generatedAt: now.toISOString(),
     snapshotId: snapshot.snapshotId,
     coverage,
     coverageNotes,
@@ -170,6 +180,6 @@ export function runFastScan(snapshot: AuditSnapshot, opts: FastScanOptions = {})
     },
     top10,
     elapsedMs: Date.now() - startedAt,
-    timeBudgetMinutes: opts.timeBudgetMinutes ?? 30,
+    timeBudgetMinutes,
   };
 }

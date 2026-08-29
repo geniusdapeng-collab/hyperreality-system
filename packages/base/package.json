@@ -8,6 +8,7 @@
     "./workdata": "./workdata/index.ts",
     "./im-channels": "./im-channels/index.ts",
     "./inspection": "./inspection/index.ts",
+    "./audit-core": "./audit-core/index.ts",
     "./skills": "./skills/index.ts",
     "./fence-engine": "./fence-engine/index.ts",
     "./model-router": "./model-router/index.ts",

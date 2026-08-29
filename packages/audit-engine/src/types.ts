@@ -3,23 +3,43 @@
  * 质检模式（audit_only）「账号快照快扫」的确定性检测引擎数据模型。
  * 方法论事实源：bundles/ai-video/skills/fast-scan/SKILL.md（四线扫描）。
  *
+ * 分层纪律：通用质检模型（Severity/Coverage/ImpactPeriod/ImpactConfidence…）
+ * 一律复用 @workloom/audit-core 内核（packages/base/audit-core，vendored from workloom-im），
+ * 本文件只保留社媒行业快照数据集、Finding 行业视图（FANS/LEADS 单位口径）与行业报告视图。
+ *
  * 数据流：连接器只读快照 → AuditSnapshot（归一化数据集）→ 四个分析器 → Finding[] → AuditReport。
  * 全程只读：引擎不触碰任何平台写接口，只读快照进、发现/报告出。
  */
 
-// ---------- 枚举 ----------
+// ---------- 内核通用类型（re-export，事实源在 audit-core） ----------
+
+import type {
+  Coverage,
+  EvidenceRef as CoreEvidenceRef,
+  Finding as CoreFinding,
+  ImpactConfidence,
+  ImpactPeriod,
+  Severity,
+} from "../../base/audit-core/index.js";
+
+export type {
+  Severity,
+  ImpactConfidence,
+  /** 兼容旧名：Confidence = ImpactConfidence */
+  ImpactConfidence as Confidence,
+  ImpactPeriod,
+  Coverage,
+  /** 兼容旧名：LineCoverage = Coverage */
+  Coverage as LineCoverage,
+  LineResult,
+  Analyzer,
+  LineDef,
+} from "../../base/audit-core/index.js";
+
+// ---------- 行业检线 ----------
 
 /** 四线：账号健康 / 内容健康 / 评论与口碑 / 转化健康（SKILL.md 步骤 2→5） */
 export type AuditLine = "account" | "content" | "comments" | "conversion";
-
-/** 严重度：P0=立即止损/合规红线，P1=显著渗漏需本周处理，P2=优化项 */
-export type Severity = "P0" | "P1" | "P2";
-
-/** 估算置信度：exact=可逐条勾稽的精确值；baseline=按账号/类目基准估算；estimate=经验估计 */
-export type Confidence = "exact" | "baseline" | "estimate";
-
-/** 估算口径周期 */
-export type ImpactPeriod = "one-off" | "monthly" | "yearly";
 
 /**
  * 估算计量单位（社媒口径，非 ISO 4217）：
@@ -140,13 +160,10 @@ export interface AuditSnapshot {
   sensitiveWords: string[];
 }
 
-// ---------- 发现（输出） ----------
+// ---------- 发现（输出；内核 Finding 的社媒行业视图） ----------
 
-/** 证据记录引用：指向快照中的具体单据 */
-export interface EvidenceRef {
-  /** 证据类别：account/video/comment/lead/violation */
-  kind: string;
-  id: string;
+/** 证据记录引用：指向快照中的具体单据（在内核 EvidenceRef 上扩展 fields 关键字段快照） */
+export interface EvidenceRef extends CoreEvidenceRef {
   /** 关键字段快照（审计留痕，原样透传） */
   fields?: Record<string, string | number>;
 }
@@ -164,18 +181,21 @@ export interface EstimatedImpact {
   /** 计量单位：FANS/LEADS/CNY（字段名与电商版一致，社媒版语义为计量单位） */
   currency: ImpactUnit;
   period: ImpactPeriod;
-  confidence: Confidence;
+  confidence: ImpactConfidence;
   /** 计算口径说明（如"按基准播放量×涨粉转化率0.3%"） */
   basis: string;
 }
 
-export interface Finding {
-  /** 引擎内唯一编号：FND-<线>-<序号> */
-  id: string;
+/**
+ * 一条体检发现（社媒行业视图）：
+ * 通用字段（id/severity/title）继承内核 Finding；行业字段为
+ * accountId 归属、description 描述、结构化 calculation 计算过程快照、estimatedImpact（FANS/LEADS 口径）。
+ * engine 适配层负责把它送入内核 runFastScan 执行（内核只做不透明的编号/排序透传）。
+ */
+export interface Finding extends Omit<CoreFinding, "line" | "detail" | "evidence" | "calculation" | "impact" | "suggestion" | "shopId"> {
   line: AuditLine;
-  severity: Severity;
+  /** 归属账号（矩阵快照时必填） */
   accountId: string;
-  title: string;
   /** 问题描述 + 建议动作 */
   description: string;
   suggestion: string;
@@ -185,9 +205,6 @@ export interface Finding {
 }
 
 // ---------- 报告（输出） ----------
-
-/** 单条线的覆盖度：covered=已扫描；partial=部分子项因数据缺失降级；not-covered=数据源缺失/超时未扫 */
-export type LineCoverage = "covered" | "partial" | "not-covered";
 
 /** 一账号一份 */
 export interface AccountReport {
@@ -211,13 +228,17 @@ export interface MatrixOverview {
   totalRecoverableByUnit: Record<string, number>;
 }
 
+/**
+ * 行业体检报告（对外 API 形状保持不变）：
+ * 由内核执行结果适配而来——一账号一份 + 矩阵总览 + Top10。
+ */
 export interface AuditReport {
   reportId: string;
   generatedAt: string;
   /** 快照引用（审计留痕） */
   snapshotId: string;
   /** 各线覆盖度（未覆盖的线在此标注，报告仍为有效部分报告） */
-  coverage: Record<AuditLine, LineCoverage>;
+  coverage: Record<AuditLine, Coverage>;
   /** 覆盖度备注（如"评论源缺失，口碑线降级"） */
   coverageNotes: string[];
   accounts: AccountReport[];
@@ -229,7 +250,7 @@ export interface AuditReport {
   timeBudgetMinutes: number;
 }
 
-/** runFastScan 选项 */
+/** runFastScan 选项（行业层；内核软预算/锚定钟由 engine 适配映射） */
 export interface FastScanOptions {
   /** 软时间预算（分钟），默认 30；超时后剩余线标注 not-covered 出部分报告 */
   timeBudgetMinutes?: number;
