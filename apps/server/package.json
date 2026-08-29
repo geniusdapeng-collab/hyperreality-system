@@ -27,6 +27,7 @@
     "@workloom/shared": "workspace:*",
     "hono": "4.13.5",
     "jose": "6.2.10",
+    "yaml": "2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

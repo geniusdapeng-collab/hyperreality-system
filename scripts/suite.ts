@@ -2428,6 +2428,133 @@ h2("onboarding 经营主体写入 + 启用真实模式（横幅熄灭）→ 复�
   await qApp(`UPDATE profiles SET archive=jsonb_set(archive,'{dataMode}','"simulated"'::jsonb) WHERE workspace_id=$1`, [scope.workspaceId]);
 });
 
+/* ---- D24+ 「起步方式」客群装配 E2E：先体检，再托管（chooseSegment 运行时能力） ----
+ * 独立全新工作区（不污染种子 yunqi 库）：audit_only 质检模式 → 幂等重跑 → managed 全量覆盖 */
+const SEG_WS = `ws-seg-${SFX}`;
+const SEG_SLUG = `seg-${SFX}`;
+let segToken = "";
+/** 新工作区作用域的查询助手（同 qApp 纪律：显式事务内 set_config 才生效） */
+async function qSeg<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<pg.QueryResult<T>> {
+  const c = await app.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.workspace_id', $1, true)", [SEG_WS]);
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+    const r = await c.query<T>(sql, params);
+    await c.query("COMMIT");
+    return r;
+  } catch (err) {
+    await c.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    c.release();
+  }
+}
+/** 库内 active 规则 → RuntimeRule（与 runtime loadActiveRules 同映射口径） */
+async function segActiveRules(): Promise<RuntimeRule[]> {
+  const rr = await qSeg<{ rule_id: string; version: string; name: string; level: RuntimeRule["level"]; is_baseline: boolean; match_spec: { object_types: string[]; actions: string[]; when: string } }>(
+    `SELECT rule_id, version, name, level, is_baseline, match_spec FROM fence_rules WHERE workspace_id=$1 AND status='active'`,
+    [SEG_WS],
+  );
+  return rr.rows.map((r) => ({
+    rule_id: r.rule_id, version: r.version, name: r.name, level: r.level,
+    is_baseline: r.is_baseline, objectTypes: r.match_spec.object_types, actions: r.match_spec.actions, when: r.match_spec.when,
+  }));
+}
+h2("起步方式·准备：全新工作区 + 成员 + 档案 + 登录签发", async () => {
+  await qSeg(`INSERT INTO workspaces (id, tenant_id, name, slug, industry) VALUES ($1,$2,$3,$4,'ai-video')`, [SEG_WS, scope.tenantId, `客群装配验收 ${SFX}`, SEG_SLUG]);
+  await qSeg(`INSERT INTO members (id, workspace_id, member_no, name, role) VALUES ($1,$2,'MEM-001','验收老板','owner')`, [`m-seg-${SFX}`, SEG_WS]);
+  await qSeg(`INSERT INTO profiles (workspace_id, tenant_id, industry, archive) VALUES ($1,$2,'ai-video','{}')`, [SEG_WS, scope.tenantId]);
+  const { data } = await api<{ result?: { data?: { token?: string } } }>("/trpc/auth.loginAs", { method: "POST", body: { workspaceSlug: SEG_SLUG, memberNo: "MEM-001" } });
+  segToken = data.result?.data?.token ?? "";
+  assert(segToken, "新工作区 loginAs 签发");
+});
+h2("onboarding.segments 返回 2 客群（audit_only 在售，含 key/label/pitch）", async () => {
+  const { data } = await api<{ result?: { data?: Array<{ key: string; label: string; pitch: string; presets: number; skills: number }> } }>("/trpc/onboarding.segments", { token: segToken });
+  const list = data.result?.data ?? [];
+  eq(list.length, 2, "2 客群");
+  const keys = list.map((s) => s.key);
+  for (const k of ["audit_only", "managed"]) assert(keys.includes(k), `含 ${k}`);
+  const ao = list.find((s) => s.key === "audit_only")!;
+  eq(ao.presets, 11, "audit_only 11 岗清单");
+  eq(ao.skills, 5, "audit_only 5 技能清单");
+  assert(ao.pitch.includes("先体检"), "audit_only pitch=先体检再托管");
+});
+h2("onboarding.chooseSegment 未知客群 → 400（严格校验不静默）", async () => {
+  const { data } = await api<{ error?: { data?: { httpStatus?: number }; message?: string } }>("/trpc/onboarding.chooseSegment", { method: "POST", token: segToken, body: { segment: "nope" } });
+  eq(data.error?.data?.httpStatus, 400, "未知客群 400");
+  assert((data.error?.message ?? "").includes("未知客群"), "错误信息列出可选项");
+});
+h2("onboarding.chooseSegment readonly 成员 → 403（E2.6 服务端强制）", async () => {
+  const { data } = await api<{ error?: { data?: { httpStatus?: number } } }>("/trpc/onboarding.chooseSegment", { method: "POST", token: tokenReadonly, body: { segment: "audit_only" } });
+  eq(data.error?.data?.httpStatus, 403, "readonly 403");
+});
+h2("chooseSegment audit_only：11 只读班底 + 5 技能 + 围栏全 block + 旅程 audit", async () => {
+  const { data } = await api<{ result?: { data?: { ok?: boolean; agents?: number; skillsInstalled?: number; skillsSkipped?: number; fencePatch?: string | null; fenceRulesApplied?: number; fenceDefaultLevel?: string | null; stage?: string } }; error?: { message?: string } }>(
+    "/trpc/onboarding.chooseSegment", { method: "POST", token: segToken, body: { segment: "audit_only" } });
+  const r = data.result?.data;
+  assert(r?.ok, `装配成功（${data.error?.message ?? ""}）`);
+  eq(r!.agents, 11, "11 名员工上岗");
+  eq(r!.skillsInstalled, 5, "5 项技能安装");
+  eq(r!.fencePatch, "ai-video-patch-audit-only/v1", "audit-only patch 应用");
+  eq(r!.fenceRulesApplied, 12, "12 条收紧规则");
+  eq(r!.fenceDefaultLevel, "block", "默认级别 block");
+  eq(r!.stage, "audit", "旅程=体检期");
+  // agents：恰好 audit_only 清单 11 岗（只读/分析班底，无平台写通道）
+  const ag = await qSeg<{ preset_key: string }>(`SELECT preset_key FROM agents WHERE workspace_id=$1 ORDER BY preset_key`, [SEG_WS]);
+  eq(ag.rows.map((x) => x.preset_key).join(","),
+    "compliance-officer,insight-analyst,intel-binder,intel-collector,intel-competitor,intel-reviewer,intel-verifier,metrics-watcher,review-analyst,settlement-clerk,trend-researcher",
+    "agents 恰为 audit_only 11 只读岗");
+  // skill_installs：5 项且含旗舰 fast-scan
+  const si = await qSeg<{ skill_id: string }>(`SELECT skill_id FROM skill_installs WHERE workspace_id=$1`, [SEG_WS]);
+  eq(si.rows.length, 5, "skill_installs 5 项");
+  assert(si.rows.some((x) => x.skill_id === "skill-fast-scan"), "旗舰 fast-scan 已装");
+  // 围栏：库内 active 规则 + 工作区默认级别 → 写类动作（公网发布）物理 block
+  const rules = await segActiveRules();
+  eq(rules.length, 12, "active 收紧规则 12 条（版本化滚动后单一生效版本）");
+  const dl = (await qSeg<{ dl: string }>(`SELECT archive->'fence'->>'defaultLevel' AS dl FROM profiles WHERE workspace_id=$1`, [SEG_WS])).rows[0]!.dl;
+  eq(dl, "block", "工作区默认级别事实源=block");
+  const v = judge({ object: { type: "publish_task", id: `pt-${SFX}` }, action: "publish.execute", params: {} }, rules, dl as RuntimeRule["level"]);
+  eq(v.level, "block", "公网发布（写类）被 block");
+  assert(v.impacts.some((i) => i.rule_id === "G9" && i.version === "ai-video-patch-audit-only/v1" && i.result === "blocked"), "G9 patch 版本命中留痕");
+  const v2 = judge({ object: { type: "desktop", id: "d1" }, action: "desktop.gui", params: {} }, rules, dl as RuntimeRule["level"]);
+  eq(v2.level, "block", "写类动作无规则命中 → default_level=block（宁可错杀）");
+  // 旅程档案 + 事件留痕
+  const j = await qSeg<{ journey: { segment: string; stage: string } }>(`SELECT archive->'journey' AS journey FROM profiles WHERE workspace_id=$1`, [SEG_WS]);
+  eq(j.rows[0]!.journey.segment, "audit_only", "journey.segment");
+  eq(j.rows[0]!.journey.stage, "audit", "journey.stage=audit");
+  const ev = await qSeg<{ n: string }>(`SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='onboarding.segment_activated'`, [SEG_WS]);
+  assert(Number(ev.rows[0]!.n) >= 1, "onboarding.segment_activated 留痕");
+});
+h2("chooseSegment audit_only 幂等重跑：不翻倍、已装跳过", async () => {
+  const { data } = await api<{ result?: { data?: { ok?: boolean; skillsInstalled?: number; skillsSkipped?: number } } }>(
+    "/trpc/onboarding.chooseSegment", { method: "POST", token: segToken, body: { segment: "audit_only" } });
+  eq(data.result?.data?.ok, true, "重跑成功");
+  eq(data.result?.data?.skillsInstalled, 0, "技能全部已装跳过");
+  eq(data.result?.data?.skillsSkipped, 5, "跳过 5 项");
+  const ag = await qSeg<{ n: string }>(`SELECT count(*)::text AS n FROM agents WHERE workspace_id=$1`, [SEG_WS]);
+  eq(Number(ag.rows[0]!.n), 11, "agents 仍 11（不翻倍）");
+  const fr = await qSeg<{ n: string }>(`SELECT count(*)::text AS n FROM fence_rules WHERE workspace_id=$1 AND status='active'`, [SEG_WS]);
+  eq(Number(fr.rows[0]!.n), 12, "active 规则仍 12（单一生效版本）");
+});
+h2("chooseSegment managed：全量 33 岗幂等覆盖（体检→托管旅程推进）", async () => {
+  const { data } = await api<{ result?: { data?: { ok?: boolean; agents?: number; stage?: string; fencePatch?: string | null } }; error?: { message?: string } }>(
+    "/trpc/onboarding.chooseSegment", { method: "POST", token: segToken, body: { segment: "managed" } });
+  const r = data.result?.data;
+  assert(r?.ok, `装配成功（${data.error?.message ?? ""}）`);
+  eq(r!.agents, 33, "33 人全量班组上岗");
+  eq(r!.stage, "managed", "旅程=托管期");
+  const ag = await qSeg<{ n: string }>(`SELECT count(*)::text AS n FROM agents WHERE workspace_id=$1`, [SEG_WS]);
+  eq(Number(ag.rows[0]!.n), 33, "agents 恰 33（upsert 覆盖不翻倍）");
+  const si = await qSeg<{ n: string }>(`SELECT count(*)::text AS n FROM skill_installs WHERE workspace_id=$1`, [SEG_WS]);
+  assert(Number(si.rows[0]!.n) >= 9, "全量技能安装（含体检期 5 项保留）");
+  const j = await qSeg<{ stage: string }>(`SELECT archive->'journey'->>'stage' AS stage FROM profiles WHERE workspace_id=$1`, [SEG_WS]);
+  eq(j.rows[0]!.stage, "managed", "journey.stage=managed");
+  // 只可收紧单调守卫：audit 期收紧为 block 的 G9，managed 无 patch 未放宽 → 仍 block
+  const g9 = await qSeg<{ level: string; version: string }>(`SELECT level, version FROM fence_rules WHERE workspace_id=$1 AND rule_id='G9' AND status='active'`, [SEG_WS]);
+  eq(g9.rows[0]!.level, "block", "G9 维持 block（只紧不松 F2.3）");
+});
+
 /* ---- D26 大版本融合 E2E：LLM 装配×节拍 / 开箱运行态 / 真实模式融合 / P21 互洽 / 降级链 ---- */
 h2("融合·LLM 装配后节拍真实推理（runBeat via=llm）→ 还原", async () => {
   llmStub = createServer((req, res) => {

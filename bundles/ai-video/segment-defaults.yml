@@ -2,7 +2,7 @@
 # 用途：新工作区按客群一键初始化——预装技能（ordered：首屏展示顺序=销售叙事顺序）、启用 preset、围栏 patch。
 # 纪律：清单只决定「默认装什么、什么前置」，运行时仍全量过围栏瀑布（L8.3）；客户后续可自助加装技能市场任意技能。
 # 客户旅程：audit_only（只读体检 1-2 周）→ 影子模式（3 天）→ 正式托管。
-version: ai-video-segment-defaults/v1
+version: ai-video-segment-defaults/v2
 segments:
 
   # ========== 质检模式（Audit-Only · 只读体检期）· 零风险先行 ==========
@@ -17,3 +17,20 @@ segments:
       - marketing-brief-parser  # 营销 Brief 解析（只读分析）
       - comment-ops  # 评论与口碑：三级分流监控（回复动作被 patch block，只出候选草稿）
       - director-review  # 内容评审方法论：存量内容质量复盘打分
+
+  # ========== 正式托管（Managed · 全量班组接管）· 体检报告之后 ==========
+  managed:
+    label: 正式托管（全量班组）
+    pitch: 体检报告看完再托管——制作+经营全量班组 7×24 接管账号矩阵，写类动作全量过围栏瀑布
+    fence_patch: null  # 无客群 patch：回到 ai-video-baseline/v2 基线（audit 期已收紧的规则按 F2.3 只紧不松保留）
+    presets: [ads-optimizer, audio-designer, comment-operator, compliance-officer, continuity-reviewer, creative-planner, creator-partner, deal-manager, director, distribution-operator, field-inspector, insight-analyst, intel-binder, intel-collector, intel-competitor, intel-reviewer, intel-verifier, ip-curator, metrics-watcher, micromotion-stylist, opening-designer, portrait-artist, post-editor, prd-specialist, prompt-fuser, publish-operator, render-operator, review-analyst, scene-designer, scriptwriter, settlement-clerk, trend-researcher, visual-director]  # 全量 33 岗（制作班组 21 + 经营班组 12）
+    skills_ordered:  # 首屏顺序 = 托管叙事：体检基线留存→情报→Brief→提示词工艺→定妆→渲染→发布→评论→复盘
+      - fast-scan  # 体检基线留存：托管后每月与基线 diff 出《整改闭环率》
+      - jenny-loom-research
+      - marketing-brief-parser
+      - shot-prompt-craft  # 镜头提示词工艺
+      - portrait-studio  # 定妆照工坊
+      - render-ops  # 渲染调度
+      - publish-ops  # 发布运营（过 G9 公网发布必审）
+      - comment-ops  # 评论与口碑运营（过 G10 系列）
+      - director-review  # 导演评审复盘

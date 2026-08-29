@@ -1,11 +1,12 @@
 /**
- * 落地向导（D24）——从「全模拟运行态」到「真实经营」的五步自动流程
+ * 落地向导（D24）——从「全模拟运行态」到「真实经营」的六步自动流程
  *
  * ① 环境自检（自动跑：DB/事件库/模型/数据模式）
  * ② 真实大模型（预设一键填 → 真实试调 → 通过才保存；保存即全链即时真实化，无需重启）
  * ③ 经营主体（名称/行业/简介 → 门店档案）
- * ④ 启用真实模式（翻转 dataMode，横幅熄灭；模拟期数据保留为「演示期」历史）
- * ⑤ AI 服务前台（可选）：官网抓取建知识库 / 文档入库 / 试营业测试问 / 生成 C 端入口
+ * ④ 起步方式（客群选择：质检模式 audit_only 推荐——先体检再托管；选择即装配班底+技能+围栏）
+ * ⑤ 启用真实模式（翻转 dataMode，横幅熄灭；模拟期数据保留为「演示期」历史）
+ * ⑥ AI 服务前台（可选）：官网抓取建知识库 / 文档入库 / 试营业测试问 / 生成 C 端入口
  *
  * 设计纪律：每一步都可跳过但状态如实回显；所有写操作经 onboarding.* 端点五元事件留痕。
  */
@@ -21,7 +22,30 @@ const PROVIDERS: Array<{ key: string; label: string; baseUrl: string; model: str
   { key: "custom", label: "自定义（OpenAI 兼容网关）", baseUrl: "", model: "" },
 ];
 
-const STEPS = ["环境自检", "真实大模型", "经营主体", "启用真实模式", "AI 服务前台"] as const;
+const STEPS = ["环境自检", "真实大模型", "经营主体", "起步方式", "启用真实模式", "AI 服务前台"] as const;
+
+/** 客群选项（onboarding.segments 返回形状） */
+interface SegmentOption {
+  key: string;
+  label: string;
+  pitch: string;
+  presets: number;
+  skills: number;
+  hasFencePatch: boolean;
+}
+
+/** 装配结果（onboarding.chooseSegment 返回形状） */
+interface AssemblyResult {
+  segment: string;
+  label: string;
+  stage: "audit" | "managed";
+  agents: number;
+  skillsInstalled: number;
+  skillsSkipped: number;
+  fencePatch: string | null;
+  fenceRulesApplied: number;
+  fenceDefaultLevel: string | null;
+}
 
 export default function Onboarding() {
   const [st, setSt] = useState<OnboardingStatus | null>(null);
@@ -44,7 +68,12 @@ export default function Onboarding() {
   const [note, setNote] = useState("");
   const [bizDone, setBizDone] = useState(false);
 
-  // 步骤④
+  // 步骤④ 起步方式（客群选择）
+  const [segments, setSegments] = useState<SegmentOption[]>([]);
+  const [assembling, setAssembling] = useState(false);
+  const [assembly, setAssembly] = useState<AssemblyResult | null>(null);
+
+  // 步骤⑤
   const [activating, setActivating] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -59,6 +88,10 @@ export default function Onboarding() {
       setBizName((v) => v || s.workspace.name);
       if (s.llm.real) setLlmDone(true);
     }).catch((e) => setErr((e as Error).message));
+    // 起步方式选项（audit_only 质检模式置顶并标推荐：先体检，再托管）
+    void (trpc.onboarding.segments.query() as Promise<SegmentOption[]>)
+      .then((list) => setSegments([...list].sort((a, b) => (a.key === "audit_only" ? -1 : b.key === "audit_only" ? 1 : 0))))
+      .catch(() => setSegments([]));
   }, []);
 
   const checks = useMemo(() => {
@@ -111,12 +144,23 @@ export default function Onboarding() {
     finally { setSaving(false); }
   };
 
+  // 选择起步方式：调用 chooseSegment 一次性装配（班底+技能+围栏 patch+旅程档案，事件留痕）
+  const choose = async (key: string) => {
+    setAssembling(true); setErr(""); setAssembly(null);
+    try {
+      const r = (await trpc.onboarding.chooseSegment.mutate({ segment: key })) as AssemblyResult;
+      setAssembly(r);
+      await reload();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setAssembling(false); }
+  };
+
   const activate = async () => {
     setActivating(true); setErr("");
     try {
       await trpc.onboarding.activateRealMode.mutate();
       await reload();
-      setStep(4);
+      setStep(5);
     } catch (e) { setErr((e as Error).message); }
     finally { setActivating(false); }
   };
@@ -185,8 +229,8 @@ export default function Onboarding() {
         {/* 步骤条 */}
         <div className="mb-6 flex gap-2">
           {STEPS.map((s, i) => (
-            <div key={s} className={`flex-1 rounded-lg border px-2 py-2 text-center text-xs ${i === step ? "border-gline bg-gold/10 text-gold" : i < step || (i === 1 && llmDone) || (i === 2 && bizDone) ? "border-go/40 text-go" : "border-line text-ink3"}`}>
-              {i < step || (i === 1 && llmDone) || (i === 2 && bizDone) ? "✓ " : `${i + 1}. `}{s}
+            <div key={s} className={`flex-1 rounded-lg border px-2 py-2 text-center text-xs ${i === step ? "border-gline bg-gold/10 text-gold" : i < step || (i === 1 && llmDone) || (i === 2 && bizDone) || (i === 3 && assembly) ? "border-go/40 text-go" : "border-line text-ink3"}`}>
+              {i < step || (i === 1 && llmDone) || (i === 2 && bizDone) || (i === 3 && assembly) ? "✓ " : `${i + 1}. `}{s}
             </div>
           ))}
         </div>
@@ -279,8 +323,63 @@ export default function Onboarding() {
           </div>
         )}
 
-        {/* ④ 启用真实模式 */}
-        {step === 3 && !done && (
+        {/* ④ 起步方式（客群选择：先体检，再托管） */}
+        {step === 3 && (
+          <div className="space-y-4 rounded-xl border border-line bg-panel/70 p-5">
+            <div className="text-sm font-bold">起步方式 <span className="text-xs font-normal text-ink3">选择即一次性装配数字班底 + 技能 + 围栏（全程留痕，可整体回滚）</span></div>
+            <div className="space-y-2">
+              {segments.map((s) => {
+                const recommended = s.key === "audit_only";
+                const active = assembly?.segment === s.key;
+                return (
+                  <button key={s.key} disabled={assembling} onClick={() => void choose(s.key)}
+                    className={`block w-full rounded-xl border p-4 text-left transition-colors disabled:opacity-50 ${active ? "border-go/60 bg-go/5" : recommended ? "border-gline bg-gold/5 hover:bg-gold/10" : "border-line bg-card hover:border-gline"}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-bold ${recommended ? "text-gold" : "text-ink"}`}>{s.label}</span>
+                      {recommended && <span className="rounded border border-gline bg-gold/15 px-1.5 py-0.5 text-[10px] text-gold">推荐</span>}
+                      {active && <span className="rounded border border-go/50 bg-go/10 px-1.5 py-0.5 text-[10px] text-go">已装配</span>}
+                      <span className="ml-auto text-[11px] text-ink3">{s.presets} 名员工 · {s.skills} 项技能</span>
+                    </div>
+                    <div className="mt-1 text-xs leading-relaxed text-ink3">{s.pitch}</div>
+                    {recommended && (
+                      <div className="mt-1.5 text-[11px] leading-relaxed text-ink2">
+                        先体检再托管 · 系统只读——不发帖、不回评、不私信 · 15–30 分钟出《账号快速体检报告》
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+              {segments.length === 0 && <div className="text-xs text-ink3">客群清单加载中……</div>}
+            </div>
+            {assembling && <div className="text-xs text-gold">装配中：上岗班底 → 安装技能 → 应用围栏 patch → 留痕……</div>}
+            {assembly && (
+              <div className="space-y-2 rounded-lg border border-go/50 bg-go/5 p-4">
+                <div className="text-xs font-bold text-go">✓ {assembly.label} 装配完成</div>
+                <div className="text-xs leading-relaxed text-ink2">
+                  {assembly.agents} 名员工上岗 · {assembly.skillsInstalled} 项技能安装{assembly.skillsSkipped > 0 ? `（${assembly.skillsSkipped} 项已装跳过）` : ""} ·{" "}
+                  {assembly.fencePatch
+                    ? `围栏模式：${assembly.fencePatch}${assembly.fenceDefaultLevel === "block" ? "（一切写操作物理 block）" : ""}，收紧规则 ${assembly.fenceRulesApplied} 条`
+                    : "围栏模式：基线"}
+                </div>
+                {assembly.stage === "audit" && (
+                  <div className="rounded border border-holo/40 bg-holo/10 px-3 py-2 text-[11px] leading-relaxed text-holo">
+                    体检期建议立即运行快照快扫：<code>pnpm audit:scan</code>——15–30 分钟出《账号快速体检报告》（一账号一份 + 矩阵总览，异常 P0/P1/P2 分级）。
+                    体检报告出来后，随时回到本步骤改选正式托管客群。
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-1">
+              <button className="text-xs text-ink3 underline" onClick={() => setStep(4)}>暂不选择，跳过</button>
+              <button className={btnCls} disabled={!assembly} onClick={() => setStep(4)}>
+                下一步：启用真实模式 →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ⑤ 启用真实模式 */}
+        {step === 4 && !done && (
           <div className="space-y-4 rounded-xl border border-gline bg-panel/70 p-5">
             <div className="text-sm font-bold text-gold">启用真实经营模式</div>
             <ul className="space-y-1.5 text-xs leading-relaxed text-ink2">
@@ -297,8 +396,8 @@ export default function Onboarding() {
           </div>
         )}
 
-        {/* ⑤ AI 服务前台（可选） */}
-        {step === 4 && !done && (
+        {/* ⑥ AI 服务前台（可选） */}
+        {step === 5 && !done && (
           <div className="space-y-4 rounded-xl border border-gline bg-panel/70 p-5">
             <div className="text-sm font-bold text-gold">启用 AI 服务前台（ToBToC · 可选）</div>
             <div className="text-xs leading-relaxed text-ink2">
