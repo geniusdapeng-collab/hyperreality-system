@@ -47,6 +47,21 @@ description: 账号快照快扫（快速体检）。售前/接入当场见效模
 - **时间纪律**：30 分钟硬上限；某数据源超时→该线标注"未覆盖"并降级出部分报告，不阻塞整体。
 - 不做什么：不做趋势预测（需观察期数据）、不做响应时长实测（需在线观察）、不做任何处置动作（只出建议，整改由客户在平台侧人工执行）。
 
+## 四·五、检测引擎锚点映射（packages/audit-engine）
+
+四线扫描由确定性检测引擎 `@workloom/audit-engine` 落地（纯函数分析器：同快照+同锚定时间必得同发现）。CLI 入口：`pnpm audit:scan`（scripts/audit-scan.ts，mock 快照→引擎→控制台报告→写事件库）。
+
+| 线（SKILL.md 步骤） | 分析器锚点 | 子项 → 红线/阈值常量 | 严重度口径 |
+| --- | --- | --- | --- |
+| 账号健康（步骤 2） | `src/analyzers/account.ts` | 限流信号 `LIMIT_DROP_RATIO=0.5` / `LIMIT_STREAK_MIN=3`（≥5 升 P0）；违规 `VIOLATION_WINDOW_DAYS=90`；敏感操作 `SENSITIVE_OPS_MAX=3`；矩阵搬运=同 contentHash 多号发布 | major 违规 P0 / 限流·搬运·敏感操作 P1 / 资料缺项 P2 |
+| 内容健康（步骤 3） | `src/analyzers/content.ts` | 断更 `STALE_DAYS_P1=7`（>14 升 P0）；节律达成 `CADENCE_MIN_RATIO=0.7`；低效选题 `LOW_COMPLETION=0.15` 占比 >50%（近 20 条样本 ≥10）；高潜素材 `HIT_MULTIPLE=3` 且 `REUSE_WINDOW_DAYS=30` 零复用；时段错配 `PEAK_SHARE_MIN=0.3` | 断更·低效聚集 P1 / 节律·复用·时段 P2 |
+| 评论与口碑（步骤 4） | `src/analyzers/comments.ts` | 负面 `NEGATIVE_HOURS_P1=24`（>72 升 P0）；高意向咨询 `INQUIRY_HOURS_P1=12`（>48 升 P0，每条计 `INQUIRY_LEAD_LOSS=0.5` 条线索流失）；敏感词=内置词库 ∪ 快照 sensitiveWords，未处置即 P0；高频问题 `FAQ_MIN_COUNT=3` / `FAQ_WINDOW_DAYS=30` | 敏感词 P0 / 负面·咨询超时 P1 / 高频问题 P2 |
+| 转化健康（步骤 5） | `src/analyzers/conversion.ts` | 主页组件=橱窗/预约/联系方式全无 P1（缺 1-2 项 P2，`NO_COMPONENT_LEAD_RATE=0.0002`）；私信自动回复未配置/失效 P1（`AUTOREPLY_LOSS_RATE=0.2`）；跟进断点 `LEAD_FOLLOWUP_HOURS=48`（每条计 1 条线索流失）；爆款未挂组件 `HIT_MULTIPLE=3` × `LEAD_CONV_RATE=0.001` | 全部 P1，组件缺项 P2 |
+| 汇总成报告（步骤 6） | `src/engine.ts` `runFastScan` | 软预算 `timeBudgetMinutes=30`；缺源降级 `precheckLine`；发现编号 `FND-<LINE>-<序号>`；一号一份 + 矩阵总览 + Top10（按估算挽回降序，FANS/LEADS 分单位不混算） | — |
+
+估算单位纪律：Finding.estimatedImpact.currency 在社媒版为计量单位（FANS=预估涨粉 / LEADS=预估线索 / CNY=金额），每条必须带 confidence（exact/baseline/estimate）与 basis 计算口径——与上文「估算口径透明」同纪律。
+
+
 ## 五、与其他技能的协作
 
 - 产出 → 账号经营管线 `account-ops`（持续观察接管：metrics-watcher 定时采集验证快扫发现，监测时变问题）

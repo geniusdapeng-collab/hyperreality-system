@@ -8,7 +8,9 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@workloom/audit-engine": "workspace:*",
     "@workloom/base": "workspace:*",
+    "@workloom/db": "workspace:*",
     "@workloom/runtime": "workspace:*",
     "@workloom/shared": "workspace:*",
     "pg": "8.23.0",
@@ -35,6 +37,7 @@
     "oss:watch": "bash scripts/oss-watch.sh",
     "oss:plan": "bash scripts/oss-watch.sh --show",
     "db:seed:boost": "tsx --env-file=.env scripts/seed-boost.ts",
+    "audit:scan": "tsx --env-file=.env scripts/audit-scan.ts",
     "computer": "tsx packages/base/computer-use/cli.ts",
     "computer:preflight": "bash packages/base/computer-use/toolkit/preflight_check.sh",
     "computer:start": "bash packages/base/computer-use/toolkit/start_desktop.sh",
