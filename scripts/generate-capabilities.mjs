@@ -45,8 +45,28 @@ groups.push({
 });
 
 if (bundles.length) groups.push({
-  icon: "🏨", title: "行业 Bundle（垂直能力包）",
-  items: bundles.map((b) => ({ name: `bundles/${b}/`, how: `见 bundles/${b}/ 目录`, desc: "围栏/技能/员工/对象/管线一键装配" })),
+  icon: "🎬", title: "行业 Bundle（垂直能力包）",
+  items: bundles.map((b) => {
+    // 从 bundle.json + segment-defaults.yml 读事实（单一事实源，防漂移）
+    let desc = "围栏/技能/员工/对象/管线一键装配";
+    try {
+      const bj = JSON.parse(readFileSync(join(ROOT, "bundles", b, "bundle.json"), "utf8"));
+      const prov = bj.workloom?.provides ?? {};
+      const nP = (prov.presets ?? []).length, nS = (prov.skills ?? []).length;
+      let segs = [];
+      try {
+        const segText = readFileSync(join(ROOT, "bundles", b, "segment-defaults.yml"), "utf8");
+        segs = [...segText.matchAll(/^  ([a-z_]+):\s*$/gm)].map((m) => m[1]);
+      } catch {}
+      const bits = [];
+      if (nP) bits.push(`${nP} 数字员工 presets`);
+      if (nS) bits.push(`${nS} 个官方技能`);
+      if (segs.length) bits.push(`${segs.length} 客群装配（${segs.join("/")}）`);
+      if (existsSync(join(ROOT, "bundles", b, "skills", "fast-scan", "SKILL.md"))) bits.push("含 fast-scan 快照快扫（15–30 分钟当场出体检报告）");
+      if (bits.length) desc = bits.join(" · ");
+    } catch {}
+    return { name: `bundles/${b}/`, how: `见 bundles/${b}/ 目录`, desc };
+  }),
 });
 
 if (basePkgs.includes("computer-use")) groups.push({

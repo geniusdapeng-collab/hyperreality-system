@@ -1,7 +1,7 @@
 {
  "repo": "hyperreality",
  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）",
- "generatedAt": "2026-08-27T01:23:56.830Z",
+ "generatedAt": "2026-08-29T08:24:06.701Z",
  "demoPages": [
   "hyperreality-demo-c.html",
   "hyperreality-demo-mobile.html",
@@ -34,18 +34,18 @@
    ]
   },
   {
-   "icon": "🏨",
+   "icon": "🎬",
    "title": "行业 Bundle（垂直能力包）",
    "items": [
     {
      "name": "bundles/ai-video/",
      "how": "见 bundles/ai-video/ 目录",
-     "desc": "围栏/技能/员工/对象/管线一键装配"
+     "desc": "25 数字员工 presets · 9 个官方技能 · 1 客群装配（audit_only） · 含 fast-scan 快照快扫（15–30 分钟当场出体检报告）"
     },
     {
      "name": "bundles/hotel/",
      "how": "见 bundles/hotel/ 目录",
-     "desc": "围栏/技能/员工/对象/管线一键装配"
+     "desc": "7 数字员工 presets · 3 个官方技能"
     }
    ]
   },
