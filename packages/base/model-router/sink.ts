@@ -30,11 +30,26 @@ export class GatewayEventSink implements EventSink {
     });
   }
 
-  async recordModelTrace(t: { model_id: string; tier: string; window: string; credits: number; action: string; reused?: boolean }) {
+  async recordModelTrace(t: { model_id: string; tier: string; window: string; credits: number; action: string; reused?: boolean; scene?: string; bill_to?: "tenant" | "platform" }) {
     await this.write(
-      { action: t.reused ? "memory.reuse" : "model.call", after: { action: t.action, model: t.model_id, reused: t.reused ?? false } },
+      { action: t.reused ? "memory.reuse" : "model.call", after: { action: t.action, model: t.model_id, reused: t.reused ?? false, scene: t.scene, bill_to: t.bill_to ?? "tenant" } },
       { model_id: t.model_id, tier: t.tier, window: t.window, credits: t.credits },
     );
+  }
+
+  async recordFeedback(fb: {
+    scene: string; action: string; thumbs: "up" | "down";
+    original_tier: string; escalated_tier?: string; adopted?: boolean; signal?: string;
+  }) {
+    // v3.0 反馈环：model.feedback 事件（路由质量周报数据源；append-only 可审计）
+    await this.write({
+      action: "model.feedback",
+      after: {
+        scene: fb.scene, task: fb.action, thumbs: fb.thumbs,
+        original_tier: fb.original_tier, escalated_tier: fb.escalated_tier ?? null,
+        adopted: fb.adopted ?? null, signal: fb.signal ?? null,
+      },
+    });
   }
 
   async recordDegradation(d: { from: string; to: string | null; reason: string; action: string }) {

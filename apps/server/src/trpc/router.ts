@@ -32,6 +32,7 @@ import {
 import { routeIntent, runAsk, runQuest } from "@workloom/runtime";
 import { LlmIntentClassifier, type IntentClassifier } from "@workloom/runtime";
 import { providerFromEnv, OpenAiCompatibleProvider } from "@workloom/base/model-router";
+import { routedLlmCall, resetLlmAssembly } from "../service/llm.js";
 import {
   loadCharter, parseCharter, transition, defaultCharter,
   runBriefingBeat, runQueueBeat, runDeviationBeat, runBreakerBeat, buildScorecard,
@@ -173,6 +174,8 @@ function persistLlmEnv(cfg: { provider: string; baseUrl: string; apiKey: string;
   writeFileSync(file, lines.filter((l, i) => l !== "" || i < lines.length - 1).join("\n"));
   cachedLlmCall = undefined; // 复位装配缓存（见 llmCall()/intentClassifier()）
   cachedClassifier = undefined;
+  cachedIndustry = undefined;
+  resetLlmAssembly(); // v3.0：模型池与行业策略缓存同步复位（写盘即全链生效免重启）
 }
 
 /** LLM 装配状态（真实=非 mock 且 baseUrl 齐备；apiKey 可空=免 key 网关） */
@@ -747,7 +750,7 @@ const threadsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       // F3.2 意图路由（B8 接线：真实模型分类 → 超时/异常规则兜底 → 含糊反问；via 留痕）
-      const intent = await routeIntent(input.title, intentClassifier());
+      const intent = await routeIntent(input.title, intentClassifier(scope));
       if (intent.kind === "clarify") {
         // 含糊指令：反问澄清，不盲目建任务
         return { kind: "clarify" as const, question: intent.clarifyQuestion, via: intent.via };
@@ -806,13 +809,13 @@ const threadsRouter = router({
       // ask 问询：即时应答（B8——取数为真、模型可插拔；不依赖 runImmediately 按钮）
       if (intent.mode === "ask") {
         const ra = await runAsk(getAppPool(), getGatewayPool(), scope, {
-          threadId, goal: input.title, presetKey: "morning-briefing", llmCall: llmCall(),
+          threadId, goal: input.title, presetKey: "morning-briefing", llmCall: llmCall("ask-synthesize", scope),
         });
         return { kind: "routed" as const, mode: intent.mode, via: intent.via, threadId, status: ra.status, answer: ra.answer };
       }
       if (input.runImmediately && intent.mode === "quest") {
         const r = await runQuest(app, getGatewayPool(), scope, {
-          threadId, goal: input.title, presetKey: input.presetKey, llmCall: llmCall(),
+          threadId, goal: input.title, presetKey: input.presetKey, llmCall: llmCall("quest-plan", scope),
         });
         return { kind: "routed" as const, mode: intent.mode, via: intent.via, threadId, status: r.status, stepsDone: r.stepsDone, stepsTotal: r.stepsTotal };
       }
@@ -893,10 +896,10 @@ const threadsRouter = router({
         client.release();
       }
       if (mode === "ask") {
-        return runAsk(app, getGatewayPool(), scope, { threadId: input.threadId, goal: input.goal, presetKey: input.presetKey, llmCall: llmCall() });
+        return runAsk(app, getGatewayPool(), scope, { threadId: input.threadId, goal: input.goal, presetKey: input.presetKey, llmCall: llmCall("ask-synthesize", scope) });
       }
       return runQuest(app, getGatewayPool(), scope, {
-        threadId: input.threadId, goal: input.goal, presetKey: input.presetKey, mode, llmCall: llmCall(),
+        threadId: input.threadId, goal: input.goal, presetKey: input.presetKey, mode, llmCall: llmCall("quest-plan", scope),
       });
     }),
 });
@@ -2167,7 +2170,19 @@ const bundlesRouter = router({
  * 落地向导契约：写入 LLM_PROVIDER/LLM_BASE_URL/LLM_API_KEY/LLM_MODEL 四 env 即全链真实化。
  */
 let cachedLlmCall: ((prompt: string) => Promise<string>) | null | undefined;
-function llmCall(): ((prompt: string) => Promise<string>) | undefined {
+/**
+ * 统一 LLM 调用面（v3.0 收口）：带 scope 时经 routedLlmCall 走 routeSmart 全链路
+ * （场景表 × 套餐映射 × 降级链 × 真实计量 × model.call 事件留痕）；
+ * 无 scope 或装配失败 → 旧轻量路径兜底；mock → undefined（via=rule 确定性兜底）。
+ */
+function llmCall(scene = "generic", scope?: { tenantId: string; workspaceId: string }): ((prompt: string) => Promise<string>) | undefined {
+  if (scope) {
+    const routed = routedLlmCall({
+      gateway: getGatewayPool(), scope, scene,
+      industryResolver: () => workspaceIndustry(scope),
+    });
+    if (routed) return routed;
+  }
   if (cachedLlmCall !== undefined) return cachedLlmCall ?? undefined;
   try {
     if ((process.env.LLM_PROVIDER ?? "mock") === "mock") {
@@ -2186,10 +2201,28 @@ function llmCall(): ((prompt: string) => Promise<string>) | undefined {
   }
 }
 
+/** 工作区行业（bundle 第⑦槽 model-policy.yml 按行业加载；进程级缓存） */
+let cachedIndustry: string | null | undefined;
+async function workspaceIndustry(scope: { workspaceId: string }): Promise<string | null> {
+  if (cachedIndustry !== undefined) return cachedIndustry;
+  try {
+    const r = await getAppPool().query<{ industry: string | null }>(
+      `SELECT industry FROM workspaces WHERE id=$1`, [scope.workspaceId]);
+    cachedIndustry = r.rows[0]?.industry ?? null;
+  } catch {
+    cachedIndustry = null;
+  }
+  return cachedIndustry;
+}
+
 let cachedClassifier: IntentClassifier | null | undefined;
-function intentClassifier(): IntentClassifier | undefined {
+function intentClassifier(scope?: { tenantId: string; workspaceId: string }): IntentClassifier | undefined {
+  if (scope) {
+    const call = llmCall("intent-classify", scope);
+    if (call) return new LlmIntentClassifier(call);
+  }
   if (cachedClassifier !== undefined) return cachedClassifier ?? undefined;
-  const call = llmCall();
+  const call = llmCall("intent-classify");
   cachedClassifier = call ? new LlmIntentClassifier(call) : null;
   return cachedClassifier ?? undefined;
 }
@@ -2373,21 +2406,20 @@ const captainRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       const app = getAppPool();
-      const call = llmCall();
       switch (input.beat) {
-        case "queue": return runQueueBeat(app, scope, { llmCall: call });
+        case "queue": return runQueueBeat(app, scope, { llmCall: llmCall("ceo-decision", scope) });
         case "deviation": return runDeviationBeat(app, scope);
         case "breaker": return runBreakerBeat(app, scope);
         case "outcome": return runOutcomeReviewBeat(app, scope);
-        case "hr": return runHrReviewBeat(app, scope, { llmCall: call });
-        case "board": return runBoardPackBeat(app, scope, { llmCall: call });
+        case "hr": return runHrReviewBeat(app, scope, { llmCall: llmCall("hr-replacement", scope) });
+        case "board": return runBoardPackBeat(app, scope, { llmCall: llmCall("briefing", scope) });
         case "orgscan": return runOrgScanBeat(app, scope);
         default: {
           const kind = input.beat === "fleet_daily" ? "fleet_daily" : input.beat;
           // fleet_daily：单店模型退化为本店晨报口径（方案 §三：编制不空转；多店聚合在 P22 视图层轮询）
           const wsName = kind === "fleet_daily" ? "集团CEO" : undefined;
           const charter = await loadCharter(app, scope);
-          const r = await runBriefingBeat(app, scope, kind, { llmCall: call });
+          const r = await runBriefingBeat(app, scope, kind, { llmCall: llmCall("briefing", scope) });
           // IM 通道推送（方案双通道；charter.briefing.channel=im|both 时推送，mock 驱动留痕）
           let imPushed = false;
           if (r.eventId && !r.skipped && charter.briefing.channel !== "app") {

@@ -30,7 +30,7 @@ export const ContextSchema = z.looseObject({
 });
 export type EventContext = z.infer<typeof ContextSchema>;
 
-/** Object：对象枚举行业化（由行业包定义，如内容/账号/渠道/订单/评价/门店/员工） */
+/** Object：对象枚举行业化（内置=价格/渠道/订单/顾客/评价/门店/员工；行业对象型由 bundle 扩展） */
 export const ObjectSchema = z.looseObject({
   type: z.string().min(1),
   id: z.string().optional(),
@@ -63,10 +63,11 @@ export const ReceiptSchema = z.object({
 });
 export type Receipt = z.infer<typeof ReceiptSchema>;
 
-/** ModelTrace：模型计量位（M6 逐事件计量，账单=事件投影 L6.3） */
+/** ModelTrace：模型计量位（M6 逐事件计量，账单=事件投影 L6.3）
+ *  tier 枚举兼容两代：旧两档 standard|flagship + v3.0 三档 L1|L2|L3 */
 export const ModelTraceSchema = z.looseObject({
   model_id: z.string().min(1),
-  tier: z.enum(["standard", "flagship"]).optional(),
+  tier: z.enum(["standard", "flagship", "L1", "L2", "L3"]).optional(),
   window: z.enum(["peak", "off-peak"]).optional(),
   credits: z.number().optional(),
 });

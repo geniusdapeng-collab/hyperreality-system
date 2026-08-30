@@ -25,6 +25,8 @@ describe("草稿骨架与校验（P7E5/§2.3，文件级）", () => {
     const bj = JSON.parse(readFileSync(join(root, "retail/bundle.json"), "utf-8"));
     expect(bj.workloom.status).toBe("draft");
     expect(bj.workloom.owner).toBe("MEM-001");
+    // v3.0 第⑦槽：草稿自带 model-policy.yml 骨架（默认继承底座策略）
+    expect(existsSync(join(root, "retail", "model-policy.yml"))).toBe(true);
     expect(listProfileSlugs(root)).toEqual(["retail"]);
     // 草稿可移除；移除后注册表为空
     removeDraft("retail", root);
@@ -81,18 +83,20 @@ describe.runIf(RUN_DB)("行业装配 PG 集成（F2.10 铁律）", async () => {
   };
 
 
-  it("hotel profile：六槽 6/6 已装配 + 起飞前检查单五项全绿（F2.10）", async () => {
+  it("hotel profile：七槽 7/7 已装配 + 起飞前检查单六项全绿（F2.10 + v3.0 第⑦槽）", async () => {
     const p = await computeAssembly(app, scope, "hotel");
     expect(p.status).toBe("active");
-    expect(p.filledCount).toBe(6);
-    expect(p.checks.map((c) => c.ok)).toEqual([true, true, true, true, true]);
+    expect(p.filledCount).toBe(7);
+    expect(p.checks.map((c) => c.ok)).toEqual([true, true, true, true, true, true]);
     expect(p.canActivate).toBe(true);
     // 班组卡：7 preset 全注册且围栏绑定合法（P7E2）
     expect(p.agents.length).toBe(7);
     expect(p.agents.every((a) => a.fenceOk)).toBe(true);
-    // 槽摘要口径：档案 7 字段组 · forbidden 硬约束 2 条；UI 6 页 · 42 条
+    // 槽摘要口径：档案 7 字段组 · forbidden 硬约束 2 条；UI 6 页 · 42 条；第⑦槽路由策略合法
     expect(p.slots[0]!.summary).toContain("字段组");
     expect(p.slots[5]!.summary).toBe("6 页 · 状态用例 42 条同步");
+    expect(p.slots[6]!.id).toBe("model-policy");
+    expect(p.slots[6]!.summary).toContain("model-policy.yml");
   });
 
   it("校验留痕：recheck 写 bundle.check_run 事件（P7E3 留痕可查）", async () => {
@@ -125,8 +129,8 @@ describe.runIf(RUN_DB)("行业装配 PG 集成（F2.10 铁律）", async () => {
     try {
       const p0 = await computeAssembly(app, scope, "copycat", root);
       expect(p0.status).toBe("draft");
-      expect(p0.filledCount).toBe(6); // 五要素填满 → 六槽全装配
-      expect(p0.canActivate).toBe(true); // 检查单五项全绿
+      expect(p0.filledCount).toBe(7); // 五要素填满 + 第⑦槽 model-policy.yml（随 hotel 资产复制） → 七槽全装配
+      expect(p0.canActivate).toBe(true); // 检查单六项全绿
 
       const act = await activateBundle(app, gw, scope, "copycat", "MEM-001", root);
       expect(act.eventId).toMatch(/^E-\d+$/);
@@ -144,7 +148,7 @@ describe.runIf(RUN_DB)("行业装配 PG 集成（F2.10 铁律）", async () => {
     expect(back.rows[0]!.industry).toBe("hotel");
   }, 20000);
 
-  it("草稿 Bundle：0/6 待填充 + 校验五项全红 + 拒绝激活（F2.10 不静默 L9.2）", async () => {
+  it("草稿 Bundle：六槽待填充 + 校验五项全红（第⑦槽骨架自带不阻断）+ 拒绝激活（F2.10 不静默 L9.2）", async () => {
     const root = mkdtempSync(join(tmpdir(), "wl-bundles-"));
     const slug = `draft-${Date.now().toString(36)}`;
     const created = await createBundleDraft(gw, scope, {
@@ -155,9 +159,13 @@ describe.runIf(RUN_DB)("行业装配 PG 集成（F2.10 铁律）", async () => {
 
     const p = await computeAssembly(app, scope, slug, root);
     expect(p.status).toBe("draft");
-    expect(p.filledCount).toBe(0);
+    // v3.0：草稿自带第⑦槽 model-policy.yml 骨架（filled=1）；其余六槽待填充
+    expect(p.filledCount).toBe(1);
     expect(p.canActivate).toBe(false);
-    expect(p.checks.every((c) => !c.ok && c.fix)).toBe(true); // 每项失败都带修复指引（FixList）
+    const failed = p.checks.filter((c) => !c.ok);
+    expect(failed.length).toBe(5); // 五项铁律校验全红
+    expect(failed.every((c) => c.fix)).toBe(true); // 每项失败都带修复指引（FixList）
+    expect(p.checks.find((c) => c.key === "model_policy")?.ok).toBe(true); // 第⑦槽骨架即合法（非阻断）
 
     await expect(activateBundle(app, gw, scope, slug, "MEM-002", root))
       .rejects.toMatchObject({ code: "ASSEMBLY_CHECK_FAILED" });

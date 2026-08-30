@@ -7,3 +7,7 @@
 export * from "./providers.js";
 export * from "./router.js";
 export * from "./sink.js";
+export * from "./policy.js";
+export * from "./pool.js";
+export * from "./credits.js";
+export * from "./feedback.js";

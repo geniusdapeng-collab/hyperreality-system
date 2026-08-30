@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import YAML from "yaml";
 import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
+import { parseModelPolicy } from "../model-router/policy.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** 仓库 bundles/ 根（packages/base/bundles → 上三级）；测试可用 BUNDLES_ROOT 指到临时目录 */
@@ -28,7 +29,7 @@ export function bundlesRoot(): string {
 /** 已注册工作台页面（P7E3 ⑤「UI 用例同步」校验基准；新增页面须同步此表与 cases.json） */
 export const REGISTERED_PAGES = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9"] as const;
 
-export type SlotId = "archive" | "enums" | "tools" | "fences" | "presets" | "ui";
+export type SlotId = "archive" | "enums" | "tools" | "fences" | "presets" | "ui" | "model-policy";
 export interface SlotState {
   id: SlotId;
   label: string;
@@ -39,7 +40,7 @@ export interface SlotState {
   /** 回链管理页（围栏包→P5；班组→P8） */
   go?: "p5" | "p8";
 }
-export type CheckKey = "archive" | "enums" | "tools" | "fences" | "ui";
+export type CheckKey = "archive" | "enums" | "tools" | "fences" | "ui" | "model_policy";
 export interface CheckItem {
   key: CheckKey;
   label: string;
@@ -155,6 +156,8 @@ interface BundleDiskAssets {
   fenceFiles: string[];
   fencePacks: FenceYml[];
   uiCases: UiCasesJson | null;
+  /** 第⑦槽：模型路由策略原文（缺失=null → 底座默认；非法 → 校验标红） */
+  modelPolicyText: string | null;
 }
 
 /**
@@ -188,6 +191,9 @@ function loadBundleDiskAssets(dir: string, slug: string): BundleDiskAssets {
       .map((f) => YAML.parse(readFileSync(join(fencesDir, f), "utf-8")) as FenceYml)
       .filter((f) => f?.version),
     uiCases: readJson(join(dir, "ui/cases.json")),
+    modelPolicyText: existsSync(join(dir, "model-policy.yml"))
+      ? readFileSync(join(dir, "model-policy.yml"), "utf-8")
+      : null,
   };
 }
 
@@ -377,7 +383,25 @@ async function computeAssemblyScoped(
       : { key: "ui", label: "UI 用例同步", ok: true, slot: "ui",
           detail: `${casePages.length} 页 · 状态用例 ${cases.length} 条同步` };
 
-  const checks = [checkArchive, checkEnums, checkTools, checkFences, checkUi];
+  /* ---------- 槽⑦ 模型路由策略（v3.0：非阻断——缺失用底座默认；存在但非法 → 标红拒绝激活） ---------- */
+  let modelPolicyScenes = 0;
+  let checkModelPolicy: CheckItem;
+  if (assets.modelPolicyText === null) {
+    checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: true, slot: "model-policy",
+      detail: "未提供 model-policy.yml，使用底座默认路由策略（L2.6 行业可覆盖）" };
+  } else {
+    const parsed = parseModelPolicy(assets.modelPolicyText);
+    if (parsed.policy) {
+      modelPolicyScenes = Object.keys(parsed.policy.scenes).length;
+      checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: true, slot: "model-policy",
+        detail: `model-policy.yml 合法 · ${modelPolicyScenes} 场景（含底座继承）· 三档套餐映射` };
+    } else {
+      checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: false, slot: "model-policy",
+        detail: `model-policy.yml 非法：${parsed.issues.join("；")}`, fix: "修正场景表（tier 须为 L1/L2/L3）后重跑校验" };
+    }
+  }
+
+  const checks = [checkArchive, checkEnums, checkTools, checkFences, checkUi, checkModelPolicy];
   const failedSlots = new Set(checks.filter((c) => !c.ok).map((c) => c.slot));
 
   const slots: SlotState[] = [
@@ -396,6 +420,11 @@ async function computeAssemblyScoped(
         : "待填充", go: "p8" },
     { id: "ui", label: "⑥ 工作台 UI / 皮肤", filled: !!uiCases, failed: failedSlots.has("ui"),
       summary: uiCases ? `${casePages.length} 页 · 状态用例 ${cases.length} 条同步` : "待填充" },
+    { id: "model-policy", label: "⑦ 模型路由策略", filled: assets.modelPolicyText !== null,
+      failed: failedSlots.has("model-policy"),
+      summary: assets.modelPolicyText !== null
+        ? (checkModelPolicy.ok ? `model-policy.yml · ${modelPolicyScenes} 场景` : checkModelPolicy.detail)
+        : "底座默认（可经 model-policy.yml 覆盖）" },
   ];
 
   return {
@@ -588,6 +617,19 @@ export function scaffoldDraft(input: DraftInput, root = bundlesRoot()): void {
       provides: { presets: [], fences: [], skills: [], schemas: [], ui: [] },
     },
   }, null, 2)}\n`, "utf-8");
+  // 第⑦槽骨架：新行业默认继承底座路由策略，按行业特点增量覆盖场景即可
+  writeFileSync(join(dir, "model-policy.yml"), [
+    `# ${input.displayName} 模型路由策略（bundle 第⑦装配槽，v3.0）`,
+    `version: "v3.0"`,
+    `scenes:`,
+    `  # 示例：`,
+    `  # cs-answer: { tier: L1, escalateOn: [low-confidence, thumbs-down] }`,
+    `plans:`,
+    `  lite:     { defaultShift: -1 }`,
+    `  standard: { defaultShift: 0 }`,
+    `  smart:    { defaultShift: 1 }`,
+    ``,
+  ].join("\n"), "utf-8");
 }
 
 export function removeDraft(slug: string, root = bundlesRoot()): void {

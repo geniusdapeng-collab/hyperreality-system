@@ -69,7 +69,9 @@ export class OpenAiCompatibleProvider implements ModelProvider {
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(5_000),
       });
-      return res.ok;
+      // 404 视为健康：部分 OpenAI 兼容网关/stub 不实现 /models（端点可达即放行；
+      // 真实调用失败仍走降级事件留痕 L6.1，语义不丢）
+      return res.ok || res.status === 404;
     } catch {
       return false;
     }
