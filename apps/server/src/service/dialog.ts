@@ -53,8 +53,15 @@ const RE_ORDER = /订单|预订|订房|入住记录|房费|账单/;
 const RE_MEMBER = /会员|积分|等级|权益|余额/;
 const RE_CATALOG = /房价|房型|多少钱|价格/;
 
+/**
+ * 客房价格查询直连（server 侧目录查询子类，先于规则表判定）：判定锚是**房型名词**——
+ * 「面膜多少钱」类通用询价无房型词仍走 kb_qa（M8 口径 R04/A16/A19/A24 不破坏，D17/D18 不受影响）。
+ */
+const RE_ROOM_RATE = /房价|房型|大床房|双床房|单人房|标准间|套房|海景房|钟点房/;
+
 export function classify(text: string): { intent: Intent; tool?: BizToolName } {
   if (RE_TICKET_STATUS.test(text)) return { intent: "biz_query", tool: "query_ticket" };
+  if (RE_ROOM_RATE.test(text)) return { intent: "biz_query", tool: "query_catalog" };
   const ruled = ruleBasedIntent(text, HOTEL_INTENT_EXT);
   if (ruled === "complaint") return { intent: "complaint" };
   if (ruled === "service_request") return { intent: "service_request" };
