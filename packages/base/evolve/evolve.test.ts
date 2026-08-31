@@ -89,13 +89,22 @@ describe("editKind 归因分流（M1.3 纠错/口味二分）", () => {
 });
 
 describe("Bundle 第⑧槽磁盘装载", () => {
-  it("不存在的目录 → null（未提供第⑧槽，合法）；酒店 Bundle 实物可装载且通过校验", () => {
+  it("不存在的目录 → null（未提供第⑧槽，合法）；仓内任一行业 Bundle 实物可装载且通过校验", async () => {
     expect(loadFeedbackEnumsFromBundle("/nonexistent-bundle-dir")).toBeNull();
+    // 行业无关断言：扫描 bundles/ 根，凡提供 feedback-enums.yml 的 Bundle 都必须可装载且通过校验
+    // （底座测试不绑定具体行业——hotel/ai-video/ecommerce 各仓 Bundle 构成不同）
+    const { readdirSync, existsSync } = await import("node:fs");
     const root = process.env.BUNDLES_ROOT ?? new URL("../../../bundles", import.meta.url).pathname;
-    const defs = loadFeedbackEnumsFromBundle(`${root}/hotel`);
-    expect(defs).not.toBeNull();
-    expect(defs!.length).toBeGreaterThanOrEqual(5);
-    expect(defs!.some((d) => d.code === "price.too_high")).toBe(true);
+    const slugs = readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && existsSync(`${root}/${e.name}/feedback-enums.yml`))
+      .map((e) => e.name);
+    expect(slugs.length).toBeGreaterThanOrEqual(1);
+    for (const slug of slugs) {
+      const defs = loadFeedbackEnumsFromBundle(`${root}/${slug}`);
+      expect(defs).not.toBeNull();
+      expect(defs!.length).toBeGreaterThanOrEqual(2);
+      expect(defs!.some((d) => d.code === "other")).toBe(true); // 各行业表必须含中性兜底项
+    }
   });
 });
 
