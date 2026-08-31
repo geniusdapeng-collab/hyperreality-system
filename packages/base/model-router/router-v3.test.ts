@@ -289,3 +289,50 @@ describe("路由质量周报：场景升级率 >15% 自动建议调表", () => {
     expect(recs.find((r) => r.scene === "briefing")!.recommendation).toBe("keep");
   });
 });
+
+
+describe("轻量复杂度分类（自由输入场景，v3.0 下一迭代）", () => {
+  it("启发式：短问句→simple(L1)；分析归因→complex(L3)；中等保持套餐默认", async () => {
+    const { sink: s1, traces: t1 } = memSink();
+    await routeSmart({ action: "q", scene: "generic", messages: [{ role: "user", content: "现在几点" }] }, mockPool(), s1);
+    expect(t1[0].tier).toBe("L1");
+    const { sink: s2, traces: t2 } = memSink();
+    await routeSmart({ action: "q", scene: "generic", messages: [{ role: "user", content: "帮我分析一下上个季度营收下滑的归因并给出三个整改方案" }] }, mockPool(), s2);
+    expect(t2[0].tier).toBe("L3");
+    const { sink: s3, traces: t3 } = memSink();
+    await routeSmart({ action: "q", scene: "generic", messages: [{ role: "user", content: "把今天的订单情况和昨天的变化汇总成一段文字发给我看一下大概就行" }] }, mockPool(), s3);
+    expect(t3[0].tier).toBe("L2"); // medium 保持场景默认
+  });
+
+  it("启发式 medium → 挂分类器时 L1 小模型复核（可改判 complex→L3）", async () => {
+    const { sink, traces } = memSink();
+    await routeSmart(
+      {
+        action: "q", scene: "generic",
+        messages: [{ role: "user", content: "把今天的订单情况和昨天的变化汇总成一段文字发给我看一下大概就行" }],
+        complexityClassifier: async () => "complex",
+      },
+      mockPool(), sink,
+    );
+    expect(traces[0].tier).toBe("L3");
+  });
+
+  it("分类器打不准（null）→ 落规则结果不阻断", async () => {
+    const { sink, traces } = memSink();
+    await routeSmart(
+      {
+        action: "q", scene: "generic",
+        messages: [{ role: "user", content: "把今天的订单情况和昨天的变化汇总成一段文字发给我看一下大概就行" }],
+        complexityClassifier: async () => null,
+      },
+      mockPool(), sink,
+    );
+    expect(traces[0].tier).toBe("L2");
+  });
+
+  it("非 generic 场景不启用分类（场景表优先）", async () => {
+    const { sink, traces } = memSink();
+    await routeSmart(task(), mockPool(), sink); // cs-answer 场景
+    expect(traces[0].tier).toBe("L1");
+  });
+});

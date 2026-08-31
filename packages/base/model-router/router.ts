@@ -239,6 +239,23 @@ export interface SmartTask extends RouteTask {
   plan?: PlanId;
   /** 强制档位（升级重答用；跳过场景表与套餐映射） */
   forceTier?: Tier3;
+  /**
+   * v3.0 轻量复杂度分类器（自由输入场景）：仅 scene=generic 且无 forceTier 时启用——
+   * 规则启发式打不准时，用 L1 小模型做 3 分类（simple/medium/complex，单次 ~0.2 积分）。
+   * 返回 null 表示打不准（落规则结果）。
+   */
+  complexityClassifier?: (text: string) => Promise<"simple" | "medium" | "complex" | null>;
+}
+
+/** 复杂度启发式（规则层零成本；自由文本 → 档位建议） */
+export function heuristicComplexity(text: string): "simple" | "medium" | "complex" {
+  const t = text.trim();
+  // 复杂信号：长输入 / 分析归因 / 方案对比 / 深度推理关键词
+  if (t.length > 200) return "complex";
+  if (/(分析|归因|对比|方案|策略|预测|推理|复盘|诊断)/.test(t)) return "complex";
+  // 简单信号：短问句 / 事实查询 / 单动作
+  if (t.length <= 30 || /^(查询|查一下|看看|几点|多少|是不是|有没有)/.test(t)) return "simple";
+  return "medium";
 }
 
 export interface SmartModelTrace {
@@ -274,6 +291,19 @@ export async function routeSmart(
   const plan = task.plan ?? "standard";
   const sp = resolveScene(policy, scene);
   let tier = task.forceTier ?? resolveTier(policy, scene, plan);
+
+  // v3.0 轻量复杂度分类（自由输入场景）：generic + 无强制档 → 启发式定档；
+  // 启发式拿不准（medium）且挂了分类器 → L1 小模型 3 分类复核（单次 ~0.2 积分）
+  if (!task.forceTier && scene === "generic") {
+    const text = task.messages.map((m) => m.content).join("\n").slice(0, 2000);
+    let c = heuristicComplexity(text);
+    if (c === "medium" && task.complexityClassifier) {
+      c = (await task.complexityClassifier(text)) ?? c;
+    }
+    if (c === "simple") tier = "L1";
+    else if (c === "complex") tier = "L3";
+    // medium：保持场景表/套餐映射结果（默认 L2）
+  }
 
   // 复杂度信号（确定性规则，零模型成本）：输入超档内天花板 → 升一档
   const inputChars = task.messages.reduce((n, m) => n + m.content.length, 0);

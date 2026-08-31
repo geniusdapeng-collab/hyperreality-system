@@ -14,6 +14,8 @@ export interface BriefFacts {
   pendingByTier: Record<string, number>;
   incidents: number;
   goalDeviation?: string;
+  /** v3.0 路由质量（最近一次 model.router_review；进晨报风险栏） */
+  routerReview?: { overallRate: number; raiseTierScenes: string[]; totalGenerations: number };
 }
 
 export type BriefingKind = "daily" | "weekly" | "monthly" | "fleet_daily";
@@ -54,11 +56,29 @@ export async function gatherBriefFacts(app: pg.Pool, scope: Scope, sinceHours = 
     `SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action' LIKE 'incident.%' AND created_at > now() - interval '7 days'`,
     [scope.workspaceId],
   );
+  // v3.0：最近一次路由质量周报（升级率 + 建议调表场景，进晨报风险栏）
+  const review = await q<{ rate: string; scenes: string | null; gens: string }>(
+    app, scope,
+    `SELECT payload->'decision'->'after'->>'overallRate' AS rate,
+            payload->'decision'->'after'->>'raiseTierScenes' AS scenes,
+            payload->'decision'->'after'->>'totalGenerations' AS gens
+     FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='model.router_review'
+     ORDER BY seq DESC LIMIT 1`,
+    [scope.workspaceId],
+  );
+  const routerReview = review[0]
+    ? {
+        overallRate: Number(review[0].rate ?? 0),
+        raiseTierScenes: review[0].scenes ? (JSON.parse(review[0].scenes) as string[]) : [],
+        totalGenerations: Number(review[0].gens ?? 0),
+      }
+    : undefined;
   return {
     kpi: { 事件库规模: `${total[0]?.n ?? 0} 条（哈希链可验）` },
     actionsTop: events.map((e) => ({ action: e.action, n: Number(e.n) })),
     pendingByTier: Object.fromEntries(tiers.map((t) => [t.tier, Number(t.n)])),
     incidents: Number(incidents[0]?.n ?? 0),
+    routerReview,
   };
 }
 
@@ -79,7 +99,7 @@ export function composeBriefing(kind: BriefingKind, f: BriefFacts, name: string)
     `一、经营概况：${Object.entries(f.kpi).map(([k, v]) => `${k} ${v}`).join("；") || "—"}`,
     `二、系统动态（近窗）：${f.actionsTop.map((a) => `${a.action} ×${a.n}`).join(" · ") || "静默"}`,
     `三、请示与裁决：L2 待我裁决 ${f.pendingByTier.l2_captain ?? 0} 件 · L3 待集团 ${f.pendingByTier.l3_fleet ?? 0} 件 · **L4 请示董事长 ${f.pendingByTier.l4_chairman ?? 0} 件**`,
-    `四、风险：近 7 天断点 ${f.incidents} 起${f.goalDeviation ? `；目标偏差：${f.goalDeviation}` : ""}`,
+    `四、风险：近 7 天断点 ${f.incidents} 起${f.goalDeviation ? `；目标偏差：${f.goalDeviation}` : ""}${f.routerReview ? `；模型路由升级率 ${(f.routerReview.overallRate * 100).toFixed(1)}%（${f.routerReview.totalGenerations} 次生成）${f.routerReview.raiseTierScenes.length > 0 ? `，建议上调默认档：${f.routerReview.raiseTierScenes.join("、")}` : "，各场景健康"}` : ""}`,
     `以上数字均来自事件库实时取数，可下钻溯源。`,
   ];
   return lines.join("\n");

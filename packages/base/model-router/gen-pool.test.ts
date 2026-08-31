@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  MockGenProvider, RENDER_QUOTA_SECONDS, checkRenderBudget, projectRenderUsage, routeGenSubmit,
+  GEN_CHAIN, JimengProvider, KlingProvider, MockGenProvider, RENDER_QUOTA_SECONDS,
+  checkRenderBudget, projectRenderUsage, routeGenSubmit,
 } from "./gen-pool.js";
 import type { EventSink } from "./router.js";
 
@@ -102,5 +103,52 @@ describe("渲染额度台账（套餐秒数配额 × 事件投影）", () => {
     const r = checkRenderBudget({ plan: "lite", usedSeconds: 0, requestSeconds: 10, allowOverage: true });
     expect(r.quotaSeconds).toBe(0);
     expect(r.overageSeconds).toBe(10);
+  });
+});
+
+
+describe("Kling/即梦 Provider（真实备援接入）", () => {
+  it("降级链定义：seedance → kling → jimeng", () => {
+    expect([...GEN_CHAIN]).toEqual(["seedance", "kling", "jimeng"]);
+  });
+
+  it("Kling：无 key 不健康；提交/轮询走公开 API 形态", async () => {
+    const noKey = new KlingProvider({ apiKey: "" });
+    expect(await noKey.healthy()).toBe(false);
+    const k = new KlingProvider({ apiKey: "sk-test", baseUrl: "http://127.0.0.1:1" });
+    expect(await k.healthy()).toBe(true);
+    // 端点不可达 → 抛错（降级链记录并切下一家，语义与 Seedance 一致）
+    await expect(k.submit({ prompt: "x", estimatedUnits: 5 })).rejects.toThrow();
+  });
+
+  it("Jimeng：无 key 不健康；提交不可达抛错", async () => {
+    const noKey = new JimengProvider({ apiKey: "" });
+    expect(await noKey.healthy()).toBe(false);
+    const j = new JimengProvider({ apiKey: "sk-test", baseUrl: "http://127.0.0.1:1" });
+    await expect(j.submit({ prompt: "x", estimatedUnits: 5 })).rejects.toThrow();
+  });
+
+  it("三链全挂 → unavailable 且每次降级留痕", async () => {
+    const { sink, degrades } = memSink();
+    const pool = new Map([
+      ["seedance", new MockGenProvider("seedance", "video", { down: true })],
+      ["kling", new MockGenProvider("kling", "video", { down: true })],
+      ["jimeng", new MockGenProvider("jimeng", "video", { down: true })],
+    ]);
+    const r = await routeGenSubmit({ prompt: "x", estimatedUnits: 10 }, [...GEN_CHAIN], pool, sink);
+    expect(r.kind).toBe("unavailable");
+    expect(degrades.length).toBe(3);
+  });
+
+  it("前两家故障 → 即梦接管", async () => {
+    const { sink } = memSink();
+    const pool = new Map([
+      ["seedance", new MockGenProvider("seedance", "video", { down: true })],
+      ["kling", new MockGenProvider("kling", "video", { down: true })],
+      ["jimeng", new MockGenProvider("jimeng")],
+    ]);
+    const r = await routeGenSubmit({ prompt: "x", estimatedUnits: 10 }, [...GEN_CHAIN], pool, sink);
+    expect(r.kind).toBe("submitted");
+    expect(r.providerId).toBe("jimeng");
   });
 });

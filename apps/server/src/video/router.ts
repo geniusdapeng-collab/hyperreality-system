@@ -27,11 +27,14 @@ import {
 } from "@workloom/base/asset-cms";
 import { judge, type RuntimeRule } from "@workloom/base/fence-engine";
 import {
-  GatewayEventSink, checkRenderBudget, genPoolFromEnv, planTierToPlanId, routeGenSubmit,
+  GEN_CHAIN, GatewayEventSink, checkRenderBudget, genPoolFromEnv, planTierToPlanId, routeGenSubmit,
 } from "@workloom/base/model-router";
 import { PlatformSchema } from "@workloom/base/publish-rpa";
 import { protectedProcedure, router, scopeOf, writeProcedure } from "../trpc/context.js";
 import { accountingRouter } from "./accounting.js";
+import { pollRenderJobs } from "./render-poller.js";
+/** PollReport 类型再导出（web 端 AppRouter 类型可移植性，TS2883） */
+export type { PollReport } from "./render-poller.js";
 import { dealRouter } from "./deal.js";
 import { getRun, startRun, StudioWorkerError } from "./studio-worker.js";
 
@@ -340,6 +343,7 @@ const renderRouter = router({
       // v3.0 多模态生成池：mock/真实同构——真实走 Seedance 异步任务制提交（降级链留痕）
       const mock = !process.env.VOLCENGINE_ARK_API_KEY;
       let taskId: string | null;
+      let genProviderId = "seedance";
       if (mock) {
         taskId = `mock-${newId("seedance")}`;
       } else {
@@ -349,7 +353,7 @@ const renderRouter = router({
             estimatedUnits: input.estimatedSeconds,
             refId: script.id,
           },
-          ["seedance", "kling"],
+          [...GEN_CHAIN],
           genPoolFromEnv(),
           new GatewayEventSink(getGatewayPool(), scope, { id: "render-operator" }),
         );
@@ -357,6 +361,7 @@ const renderRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "渲染供应商全链不可用（gen.degraded 已留痕），请稍后重试" });
         }
         taskId = gen.taskId!;
+        genProviderId = gen.providerId ?? "seedance";
       }
       const jobId = newId("RJ");
       const client = await app.connect();
@@ -390,6 +395,7 @@ const renderRouter = router({
               scriptKey: script.script_key, version: script.version, projectId: script.project_id,
               estimated_seconds: input.estimatedSeconds,
               budget_overage_seconds: budget.overageSeconds,
+              provider: genProviderId,
             },
             basis: [mock
               ? "G8 已过，Seedance 提交（mock：无 VOLCENGINE_ARK_API_KEY，不触真实渲染不烧额度）"
@@ -405,6 +411,13 @@ const renderRouter = router({
         client.release();
       }
       return { jobId, taskId, mock, level: verdict.level, budget: { usedSeconds, overageSeconds: budget.overageSeconds } };
+    }),
+
+  /** 渲染轮询回填（v3.0 异步任务制第二步）：submitted/rendering → done/failed + render.complete/failed 事件 */
+  poll: writeProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(20) }).optional())
+    .mutation(async ({ ctx, input }) => {
+      return pollRenderJobs(getAppPool(), getGatewayPool(), scopeOf(ctx.identity), { limit: input?.limit });
     }),
 });
 

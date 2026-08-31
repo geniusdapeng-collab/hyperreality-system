@@ -110,7 +110,118 @@ export class SeedanceProvider implements GenProvider {
   }
 }
 
-/** 按 env 装配生成池（Seedance 首选；可灵/即梦备援占位，env 未配置则缺位由降级链跳过） */
+/* ================= Kling Provider（可灵公开 API，任务制异步） ================= */
+
+/**
+ * 可灵视频生成（https://app.klingai.com/global/dev/document-api）：
+ *   POST /v1/videos/text2video → task_id；GET /v1/videos/text2video/{id} 轮询。
+ * 鉴权 Bearer JWT（KLING_API_KEY）；失败语义与 Seedance 一致（降级链接管）。
+ */
+export class KlingProvider implements GenProvider {
+  readonly providerId = "kling";
+  readonly kind: GenKind = "video";
+  constructor(
+    private readonly cfg: {
+      baseUrl?: string;   // 默认 https://api.klingai.com
+      apiKey: string;
+      model?: string;     // 默认 kling-v2
+    },
+  ) {}
+  private base(): string {
+    return (this.cfg.baseUrl ?? "https://api.klingai.com").replace(/\/$/, "");
+  }
+  async healthy(): Promise<boolean> { return !!this.cfg.apiKey; }
+  async submit(req: GenRequest): Promise<{ taskId: string }> {
+    const res = await fetch(`${this.base()}/v1/videos/text2video`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${this.cfg.apiKey}` },
+      body: JSON.stringify({
+        model: this.cfg.model ?? "kling-v2",
+        prompt: req.prompt,
+        duration: String(Math.min(10, Math.max(5, Math.round(req.estimatedUnits)))),
+        ...(req.params ?? {}),
+      }),
+    });
+    if (!res.ok) throw new Error(`Kling 提交失败：HTTP ${res.status}`);
+    const data = (await res.json()) as { data?: { task_id?: string } };
+    const taskId = data.data?.task_id;
+    if (!taskId) throw new Error("Kling 未返回 task_id");
+    return { taskId };
+  }
+  async poll(taskId: string): Promise<{ status: GenTaskStatus; uri?: string; error?: string }> {
+    const res = await fetch(`${this.base()}/v1/videos/text2video/${taskId}`, {
+      headers: { authorization: `Bearer ${this.cfg.apiKey}` },
+    });
+    if (!res.ok) return { status: "failed", error: `Kling 查询失败：HTTP ${res.status}` };
+    const data = (await res.json()) as {
+      data?: { task_status?: string; task_result?: { videos?: Array<{ url?: string }> }; task_status_msg?: string };
+    };
+    const st = data.data?.task_status;
+    if (st === "succeed") return { status: "succeeded", uri: data.data?.task_result?.videos?.[0]?.url };
+    if (st === "failed") return { status: "failed", error: data.data?.task_status_msg ?? "生成失败" };
+    return { status: "running" };
+  }
+}
+
+/* ================= Jimeng Provider（即梦 · 火山视觉 CV OpenAPI） ================= */
+
+/**
+ * 即梦 AI（火山引擎视觉智能 cv.volcengineapi.com，任务制）：
+ *   动作 CVSync2AsyncSubmitTask / CVSync2AsyncGetResult（视服务版本而定），
+ *   统一经 JimengProvider 封装；env：JIMENG_API_KEY（+ JIMENG_ENDPOINT 可覆盖）。
+ */
+export class JimengProvider implements GenProvider {
+  readonly providerId = "jimeng";
+  readonly kind: GenKind = "video";
+  constructor(
+    private readonly cfg: {
+      baseUrl?: string;
+      apiKey: string;
+      model?: string;     // 默认 jimeng-video-3.0
+    },
+  ) {}
+  private base(): string {
+    return (this.cfg.baseUrl ?? "https://visual.volcengineapi.com").replace(/\/$/, "");
+  }
+  async healthy(): Promise<boolean> { return !!this.cfg.apiKey; }
+  async submit(req: GenRequest): Promise<{ taskId: string }> {
+    const res = await fetch(`${this.base()}?Action=CVSync2AsyncSubmitTask&Version=2022-08-31`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${this.cfg.apiKey}` },
+      body: JSON.stringify({
+        req_key: this.cfg.model ?? "jimeng-video-3.0",
+        prompt: req.prompt,
+        ...(req.params ?? {}),
+      }),
+    });
+    if (!res.ok) throw new Error(`Jimeng 提交失败：HTTP ${res.status}`);
+    const data = (await res.json()) as { data?: { task_id?: string }; task_id?: string };
+    const taskId = data.data?.task_id ?? data.task_id;
+    if (!taskId) throw new Error("Jimeng 未返回 task_id");
+    return { taskId };
+  }
+  async poll(taskId: string): Promise<{ status: GenTaskStatus; uri?: string; error?: string }> {
+    const res = await fetch(`${this.base()}?Action=CVSync2AsyncGetResult&Version=2022-08-31`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${this.cfg.apiKey}` },
+      body: JSON.stringify({ req_key: this.cfg.model ?? "jimeng-video-3.0", task_id: taskId }),
+    });
+    if (!res.ok) return { status: "failed", error: `Jimeng 查询失败：HTTP ${res.status}` };
+    const data = (await res.json()) as {
+      data?: { status?: string; video_url?: string; resp_data?: string; message?: string };
+    };
+    const st = data.data?.status;
+    if (st === "done" || st === "SUCCESS") {
+      const uri = data.data?.video_url
+        ?? (data.data?.resp_data ? (JSON.parse(data.data.resp_data) as { video_url?: string }).video_url : undefined);
+      return { status: "succeeded", uri };
+    }
+    if (st === "failed" || st === "FAIL") return { status: "failed", error: data.data?.message ?? "生成失败" };
+    return { status: "running" };
+  }
+}
+
+/** 按 env 装配生成池（Seedance 首选；可灵/即梦备援，env 未配置则缺位由降级链跳过） */
 export function genPoolFromEnv(opts: { mockOpts?: Record<string, { failFirst?: number; down?: boolean }> } = {}): Map<string, GenProvider> {
   const pool = new Map<string, GenProvider>();
   const arkKey = process.env.VOLCENGINE_ARK_API_KEY;
@@ -124,12 +235,26 @@ export function genPoolFromEnv(opts: { mockOpts?: Record<string, { failFirst?: n
     // 无 key → mock 提交（与 render.submit 既有 mock 口径一致：明确标注不烧真实额度）
     pool.set("seedance", new MockGenProvider("seedance", "video", opts.mockOpts?.["seedance"]));
   }
-  // 备援占位（Kling/Jimeng 接入后同 seam 挂载；env 未配置不注册，链自然终止于 Seedance）
+  // 备援：可灵/即梦真实 Provider（env 配置即接入降级链）
   if (process.env.KLING_API_KEY) {
-    pool.set("kling", new MockGenProvider("kling", "video", opts.mockOpts?.["kling"])); // TODO: KlingProvider
+    pool.set("kling", new KlingProvider({
+      apiKey: process.env.KLING_API_KEY,
+      baseUrl: process.env.KLING_ENDPOINT,
+      model: process.env.KLING_MODEL,
+    }));
+  }
+  if (process.env.JIMENG_API_KEY) {
+    pool.set("jimeng", new JimengProvider({
+      apiKey: process.env.JIMENG_API_KEY,
+      baseUrl: process.env.JIMENG_ENDPOINT,
+      model: process.env.JIMENG_MODEL,
+    }));
   }
   return pool;
 }
+
+/** 生成降级链（首选→备援顺序；env 未配置的供应商池内缺位，链自动跳过） */
+export const GEN_CHAIN: readonly string[] = ["seedance", "kling", "jimeng"] as const;
 
 /* ================= 渲染额度台账（套餐秒数配额 × 事件投影用量） ================= */
 
