@@ -38,6 +38,15 @@ export function legacyTierToTier3(t: "standard" | "flagship"): Tier3 {
   return t === "flagship" ? "L3" : "L2";
 }
 
+/** 部署档（tenancy PlanTier）→ 商业路由档（v3.0 智享/标准/智能） */
+export function planTierToPlanId(tier: string): PlanId {
+  switch (tier) {
+    case "community": return "lite";
+    case "teams": case "vpc": return "smart";
+    case "pro": default: return "standard";
+  }
+}
+
 /* ================= 场景路由表 ================= */
 
 /** 降级/兜底语义（行业化；金融=透传披露禁止降档） */

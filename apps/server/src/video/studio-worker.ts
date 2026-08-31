@@ -15,6 +15,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAppPool, getGatewayPool } from "@workloom/db";
+import { GatewayEventSink, poolFromEnv } from "@workloom/base/model-router";
+import { modelPolicyFor } from "../service/llm.js";
 import { gatewayAppend, gatewayAppendOnClient } from "@workloom/base/workdata";
 import { newId } from "@workloom/shared";
 import {
@@ -177,6 +179,14 @@ export function startRun(scope: Scope, input: RunInput): string {
       "LLM 引擎未配置（需 LLM_BASE_URL/LLM_API_KEY/LLM_MODEL），拒绝启动预生产（vendor 纪律：禁止静默降级）",
     );
   }
+  // v3.0 收口：注入路由配置——预生产全部 LLM 调用经 routeSmart
+  // （preproduction 场景 × 降级链 × 真实计量 × model.call 事件留痕，fastModel 快速调用强制 L1）
+  llm.attachRouter({
+    providers: poolFromEnv(),
+    sink: new GatewayEventSink(getGatewayPool(), scope, { id: "video-studio" }),
+    policy: modelPolicyFor("ai-video"),
+    scene: "preproduction",
+  });
 
   const entry: RunEntry = {
     runId: newId("RUN"),

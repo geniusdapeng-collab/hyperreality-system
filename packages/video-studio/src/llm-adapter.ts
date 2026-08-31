@@ -8,7 +8,13 @@
  *   reasonStructured(prompt, schema, opts) → { success, data?/content? ... }
  * 本适配器用任意 OpenAI 兼容端点（底座 LLM_* 四环境变量）实现同一接口，
  * 不在 TS 层复制 vendor 的模型名等字面值——模型选择交由调用方/配置注入。
+ *
+ * v3.0 收口：配置 router 后，全部调用经 routeSmart（preproduction 场景，
+ * 真实计量 + model.call 事件留痕 + 降级链），vendor 只读纪律不破。
  */
+import {
+  routeSmart, type EventSink, type ModelPolicy, type ModelProvider, type PlanId,
+} from "@workloom/base/model-router";
 
 export interface LLMReasonOptions {
   model?: string;
@@ -38,6 +44,19 @@ export interface WorkloomLLMEngineConfig {
   fastModel?: string;
   timeoutMs?: number;
   maxTokens?: number;
+  /**
+   * v3.0 收口：注入路由配置后，全部 LLM 调用经 routeSmart
+   * （场景 preproduction；opts.model===fastModel 的快速调用强制 L1 轻量档）——
+   * 场景表 × 降级链 × 真实计量 × model.call 事件留痕，vendor 目录保持只读。
+   */
+  router?: {
+    providers: Map<string, ModelProvider>;
+    sink: EventSink;
+    policy?: ModelPolicy;
+    plan?: PlanId;
+    /** 覆盖默认场景（默认 preproduction） */
+    scene?: string;
+  };
 }
 
 interface ChatCompletionResponse {
@@ -47,7 +66,7 @@ interface ChatCompletionResponse {
 }
 
 export class WorkloomLLMEngine {
-  private readonly cfg: Required<WorkloomLLMEngineConfig>;
+  private readonly cfg: Required<Omit<WorkloomLLMEngineConfig, "router">> & { router?: WorkloomLLMEngineConfig["router"] };
   readonly stats = { totalCalls: 0, totalFailures: 0 };
 
   get model(): string {
@@ -67,6 +86,11 @@ export class WorkloomLLMEngine {
     };
   }
 
+  /** v3.0 收口：装配后注入路由配置（宿主侧 seam；vendor 无感） */
+  attachRouter(router: NonNullable<WorkloomLLMEngineConfig["router"]>): void {
+    this.cfg.router = router;
+  }
+
   /** 从底座四环境变量构建（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL，LLM_PROVIDER 仅作记录） */
   static fromEnv(env: NodeJS.ProcessEnv = process.env): WorkloomLLMEngine | null {
     const baseUrl = env.LLM_BASE_URL;
@@ -77,6 +101,45 @@ export class WorkloomLLMEngine {
   }
 
   private async callChat(prompt: string, opts: LLMReasonOptions): Promise<LLMReasonResult> {
+    // v3.0 收口：router 注入 → 经 routeSmart（场景 preproduction；fastModel 快速调用强制 L1）
+    if (this.cfg.router) {
+      const scene = this.cfg.router.scene ?? "preproduction";
+      const isFast = !!opts.model && opts.model === this.cfg.fastModel && opts.model !== this.cfg.model;
+      try {
+        const r = await routeSmart(
+          {
+            action: scene, scene, plan: this.cfg.router.plan,
+            forceTier: isFast ? "L1" : undefined,
+            messages: [
+              {
+                role: "system",
+                content: opts.systemPrompt
+                  ?? (opts.forceJson
+                    ? "你是一个严格输出 JSON 的助手。除合法 JSON 外不要输出任何额外文字。"
+                    : "你是一个可靠的助手。"),
+              },
+              { role: "user", content: prompt },
+            ],
+          },
+          this.cfg.router.providers,
+          this.cfg.router.sink,
+          { policy: this.cfg.router.policy },
+        );
+        if ((r.kind === "answered" || r.kind === "circuit_broken" || r.kind === "reused") && r.text) {
+          return {
+            success: true,
+            content: r.text,
+            usage: r.modelTrace
+              ? { promptTokens: undefined, completionTokens: undefined }
+              : undefined,
+          };
+        }
+        // 全链不可用/排队 → vendor 熔断纪律接管（retryable 让其按既有策略降级/重试）
+        return { success: false, error: `模型路由不可用（${r.kind}）`, retryable: true };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err), retryable: true };
+      }
+    }
     const body: Record<string, unknown> = {
       model: opts.model ?? this.cfg.model,
       messages: [

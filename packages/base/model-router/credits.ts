@@ -90,6 +90,8 @@ export function projectLedger(events: CreditEvent[], now = new Date()): CreditLe
         : (e.after?.pool === "principal" ? "principal" : "pack");
       ledger = grant(ledger, pool, amount, e.time ? new Date(e.time) : now);
     } else if (e.action === "model.call" && e.model_trace?.credits) {
+      // 平台成本场景（售前体检报告 bill_to=platform）不扣客户积分（5.6 获客补贴）
+      if (e.after?.bill_to === "platform") continue;
       ledger = deduct(ledger, e.model_trace.credits, now).ledger;
     }
   }

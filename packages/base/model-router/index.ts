@@ -10,4 +10,5 @@ export * from "./sink.js";
 export * from "./policy.js";
 export * from "./pool.js";
 export * from "./credits.js";
+export * from "./credits-service.js";
 export * from "./feedback.js";

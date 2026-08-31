@@ -22,4 +22,6 @@ echo "✅ schema 已重建"
 
 pnpm db:migrate
 pnpm db:seed
+# 视频经理官方技能种子（H-14/H-16 客群装配依赖 skill-fast-scan 等官方技能；漏装即装配断链）
+pnpm db:seed:video
 echo "== 重置完成：云栖酒店演示数据集（含「昨夜」夜班数据）已就绪 =="

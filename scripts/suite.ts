@@ -9,6 +9,7 @@
  *      复用种子，业务数据不依赖种子行、不跨用例污染；失败不中断，末尾汇总报告。
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import pg from "pg";
 import { routeIntent, ruleBasedRoute, LlmIntentClassifier, type IntentClassifier } from "@workloom/runtime";
@@ -1988,12 +1989,15 @@ p("前后端契约对账：web 全部 trpc 调用点均有后端挂载", async (
       calls.add(`${m[1]}.${m[2]}`);
     }
   }
-  const routerSrc = readFileSync(join(root, "apps/server/src/trpc/router.ts"), "utf-8");
+  // 契约面 = trpc/ 目录全部路由文件（v3.0 起 credits/modelFeedback 等独立路由文件同样纳入对账）
   const procs = new Set<string>();
+  for (const rf of readdirSync(join(root, "apps/server/src/trpc")).filter((f) => f.endsWith(".ts"))) {
+    const routerSrc = readFileSync(join(root, "apps/server/src/trpc", rf), "utf-8");
   for (const rm of routerSrc.matchAll(/(\w+)Router = router\(\{([\s\S]*?)\n\}\)/g)) {
     for (const pm of (rm[2] as string).matchAll(/^  (\w+):/gm)) {
       procs.add(`${rm[1]}.${pm[1]}`);
     }
+  }
   }
   // 子模块路由（video: videoRouter 挂载于 apps/server/src/video/router.ts）：
   // 解析其子 Router 名，映射为 video.<sub>（如 cmsRouter → video.cms）
