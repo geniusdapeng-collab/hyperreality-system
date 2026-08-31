@@ -12,3 +12,5 @@ export * from "./pool.js";
 export * from "./credits.js";
 export * from "./credits-service.js";
 export * from "./feedback.js";
+export * from "./gen-pool.js";
+export * from "./router-review.js";

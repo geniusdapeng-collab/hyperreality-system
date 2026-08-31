@@ -26,6 +26,9 @@ import {
   type RenderScriptRow,
 } from "@workloom/base/asset-cms";
 import { judge, type RuntimeRule } from "@workloom/base/fence-engine";
+import {
+  GatewayEventSink, checkRenderBudget, genPoolFromEnv, planTierToPlanId, routeGenSubmit,
+} from "@workloom/base/model-router";
 import { PlatformSchema } from "@workloom/base/publish-rpa";
 import { protectedProcedure, router, scopeOf, writeProcedure } from "../trpc/context.js";
 import { accountingRouter } from "./accounting.js";
@@ -276,6 +279,10 @@ const renderRouter = router({
     .input(z.object({
       scriptId: z.string().min(1),
       mode: z.enum(["manual", "batch", "auto"]),
+      /** 预计渲染秒数（额度台账计量基准；默认 30s） */
+      estimatedSeconds: z.number().int().min(1).max(600).default(30),
+      /** 超套餐额度时显式确认按量实扣（v3.0 渲染台账 G8 前置预算闸） */
+      allowOverage: z.boolean().default(false),
     }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
@@ -308,8 +315,49 @@ const renderRouter = router({
         });
       }
 
+      // v3.0 渲染额度台账：套餐秒数配额 G8 前置预算闸（用量=render.submit 事件投影，不重算）
+      const monthStart = new Date();
+      monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+      const usageRows = await scopedQuery<{ total: string | null }>(
+        app, scope,
+        `SELECT COALESCE(SUM((payload->'decision'->'after'->>'estimated_seconds')::numeric),0)::text AS total
+         FROM biz_events
+         WHERE workspace_id=$1 AND payload->'decision'->>'action'='render.submit'
+           AND (payload->'context'->>'time')::timestamptz >= $2`,
+        [scope.workspaceId, monthStart.toISOString()],
+      );
+      const usedSeconds = Number(usageRows[0]?.total ?? 0);
+      const budget = checkRenderBudget({
+        plan: planTierToPlanId(ctx.identity.plan),
+        usedSeconds,
+        requestSeconds: input.estimatedSeconds,
+        allowOverage: input.allowOverage,
+      });
+      if (!budget.allowed) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: budget.reason ?? "渲染额度不足" });
+      }
+
+      // v3.0 多模态生成池：mock/真实同构——真实走 Seedance 异步任务制提交（降级链留痕）
       const mock = !process.env.VOLCENGINE_ARK_API_KEY;
-      const taskId = mock ? `mock-${newId("seedance")}` : null;
+      let taskId: string | null;
+      if (mock) {
+        taskId = `mock-${newId("seedance")}`;
+      } else {
+        const gen = await routeGenSubmit(
+          {
+            prompt: `render_script:${script.script_key} v${script.version}`,
+            estimatedUnits: input.estimatedSeconds,
+            refId: script.id,
+          },
+          ["seedance", "kling"],
+          genPoolFromEnv(),
+          new GatewayEventSink(getGatewayPool(), scope, { id: "render-operator" }),
+        );
+        if (gen.kind !== "submitted") {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "渲染供应商全链不可用（gen.degraded 已留痕），请稍后重试" });
+        }
+        taskId = gen.taskId!;
+      }
       const jobId = newId("RJ");
       const client = await app.connect();
       try {
@@ -340,6 +388,8 @@ const renderRouter = router({
             after: {
               jobId, taskId, mock, mode: input.mode,
               scriptKey: script.script_key, version: script.version, projectId: script.project_id,
+              estimated_seconds: input.estimatedSeconds,
+              budget_overage_seconds: budget.overageSeconds,
             },
             basis: [mock
               ? "G8 已过，Seedance 提交（mock：无 VOLCENGINE_ARK_API_KEY，不触真实渲染不烧额度）"
@@ -354,7 +404,7 @@ const renderRouter = router({
       } finally {
         client.release();
       }
-      return { jobId, taskId, mock, level: verdict.level };
+      return { jobId, taskId, mock, level: verdict.level, budget: { usedSeconds, overageSeconds: budget.overageSeconds } };
     }),
 });
 

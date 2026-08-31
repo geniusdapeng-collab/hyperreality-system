@@ -34,6 +34,7 @@ import { LlmIntentClassifier, type IntentClassifier } from "@workloom/runtime";
 import { providerFromEnv, OpenAiCompatibleProvider } from "@workloom/base/model-router";
 import { routedLlmCall, resetLlmAssembly } from "../service/llm.js";
 import { creditsRouter, modelFeedbackRouter } from "./credits-router.js";
+import { runRouterReviewBeat } from "@workloom/base/model-router";
 import {
   loadCharter, parseCharter, transition, defaultCharter,
   runBriefingBeat, runQueueBeat, runDeviationBeat, runBreakerBeat, buildScorecard,
@@ -2403,7 +2404,7 @@ const captainRouter = router({
 
   /** 手动触发节拍（演示/调度共用入口）：briefing/queue/deviation/breaker */
   runBeat: capabilityWriteProcedure("quest")
-    .input(z.object({ beat: z.enum(["daily", "weekly", "monthly", "fleet_daily", "queue", "deviation", "breaker", "outcome", "hr", "board", "orgscan"]) }))
+    .input(z.object({ beat: z.enum(["daily", "weekly", "monthly", "fleet_daily", "queue", "deviation", "breaker", "outcome", "hr", "board", "orgscan", "routerreview"]) }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       const app = getAppPool();
@@ -2415,6 +2416,7 @@ const captainRouter = router({
         case "hr": return runHrReviewBeat(app, scope, { llmCall: llmCall("hr-replacement", scope) });
         case "board": return runBoardPackBeat(app, scope, { llmCall: llmCall("briefing", scope) });
         case "orgscan": return runOrgScanBeat(app, scope);
+        case "routerreview": return runRouterReviewBeat(app, getGatewayPool(), scope);
         default: {
           const kind = input.beat === "fleet_daily" ? "fleet_daily" : input.beat;
           // fleet_daily：单店模型退化为本店晨报口径（方案 §三：编制不空转；多店聚合在 P22 视图层轮询）

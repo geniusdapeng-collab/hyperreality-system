@@ -67,7 +67,7 @@ export type Receipt = z.infer<typeof ReceiptSchema>;
  *  tier 枚举兼容两代：旧两档 standard|flagship + v3.0 三档 L1|L2|L3 */
 export const ModelTraceSchema = z.looseObject({
   model_id: z.string().min(1),
-  tier: z.enum(["standard", "flagship", "L1", "L2", "L3"]).optional(),
+  tier: z.enum(["standard", "flagship", "L1", "L2", "L3", "gen"]).optional(),
   window: z.enum(["peak", "off-peak"]).optional(),
   credits: z.number().optional(),
 });
