@@ -20,6 +20,7 @@ import {
   type Gesture,
 } from "../../components/hud";
 import { actionLabel, agentOfApproval } from "../../components/hud/gateAgentMap";
+import { RejectDialog } from "../../components/RejectDialog";
 
 interface BizEvent {
   event_id: string;
@@ -62,6 +63,7 @@ export default function P4() {
   const [banner, setBanner] = useState<{ level: "alert" | "warn" | "info"; text: string } | null>(null);
   const [batchArmed, setBatchArmed] = useState(false);
   const [basisOpen, setBasisOpen] = useState(false); // 依据链展开（选中项切换时收起）
+  const [rejectTarget, setRejectTarget] = useState<ApprovalRow | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -111,15 +113,28 @@ export default function P4() {
 
   const gesture = useCallback(async (a: ApprovalRow, g: Gesture) => {
     if (g === "reject") {
-      const reason = window.prompt("驳回原因（枚举+自由文本 ≤200 字，空理由拒绝 L5.2）") ?? "";
-      if (!reason.trim()) { setBanner({ level: "warn", text: "驳回必须填写原因（L5.2），空理由拒绝提交" }); return; }
-      await trpc.approvals.decide.mutate({ approvalId: a.approval_id, gesture: "reject", reasonText: reason.slice(0, 200) });
-    } else {
-      await trpc.approvals.decide.mutate({ approvalId: a.approval_id, gesture: g });
+      // M1.2（D24）：驳回必须选择行业受控枚举（弹窗），自由文本只做补充——结构化原因是校准信号的前提
+      setRejectTarget(a);
+      return;
     }
+    await trpc.approvals.decide.mutate({ approvalId: a.approval_id, gesture: g });
     setBanner({ level: "info", text: "审批已写回事件库 + 记忆校准（F5.5/F1.7）；采纳后执行回执位待外部确认（F1.1/E3.7 不宣称完成）" });
     await load();
   }, [load]);
+
+  /** 驳回弹窗提交（M1.2 受控枚举 + L5.2 留痕） */
+  const submitReject = useCallback(async (r: { reasonEnum: string; reasonText?: string }) => {
+    if (!rejectTarget) return;
+    await trpc.approvals.decide.mutate({
+      approvalId: rejectTarget.approval_id,
+      gesture: "reject",
+      reasonEnum: r.reasonEnum,
+      reasonText: r.reasonText,
+    });
+    setRejectTarget(null);
+    setBanner({ level: "info", text: `已驳回（${r.reasonEnum}）并回流偏好校准（F5.5/F1.7/D24）` });
+    await load();
+  }, [rejectTarget, load]);
 
   const doBatch = useCallback(async () => {
     const r = await trpc.approvals.batchApprove.mutate({ approvalIds: batchable.map((a) => a.approval_id) }) as { approved: string[]; skipped: unknown[] };
@@ -376,6 +391,12 @@ export default function P4() {
           </div>
         )}
       </div>
+      <RejectDialog
+        open={rejectTarget !== null}
+        mode="reject"
+        onCancel={() => setRejectTarget(null)}
+        onSubmit={(r) => void submitReject(r)}
+      />
     </Bridge>
   );
 }

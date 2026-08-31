@@ -14,6 +14,7 @@ import { useParams, useSearchParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { COMMON_STATUS_TEXT, THREAD_MODE_TEXT, actionText, actorText, dictText, payloadText, shortId } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
+import { RejectDialog } from "../../components/RejectDialog";
 import {
   AgentActionMessage,
   BannerAlert,
@@ -73,6 +74,7 @@ export default function P2() {
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
   const [composer, setComposer] = useState("");
   const [banner, setBanner] = useState<{ level: "alert" | "warn" | "info"; text: string } | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -130,15 +132,28 @@ export default function P2() {
   /* ---------- 手势写回（approvals.decide；驳回原因弹窗在 P4 落地完整枚举，此处驳回走默认原因） ---------- */
   const gesture = useCallback(async (approvalId: string, g: "approve" | "edit" | "reject") => {
     if (g === "reject") {
-      const reason = window.prompt("驳回原因（必填 ≤200 字，L5.2）") ?? "";
-      if (!reason.trim()) { setBanner({ level: "warn", text: "驳回必须填写原因（L5.2），本次未提交" }); return; }
-      await trpc.approvals.decide.mutate({ approvalId, gesture: "reject", reasonText: reason.slice(0, 200) });
-    } else {
-      await trpc.approvals.decide.mutate({ approvalId, gesture: g });
+      // M1.2（D24）：驳回必须选择行业受控枚举（弹窗），自由文本只做补充
+      setRejectTarget(approvalId);
+      return;
     }
+    await trpc.approvals.decide.mutate({ approvalId, gesture: g });
     setBanner({ level: "info", text: "审批已写回事件库并回流偏好记忆（F5.5/F1.7）" });
     await load();
   }, [load]);
+
+  /** 驳回弹窗提交（M1.2 受控枚举 + L5.2 留痕） */
+  const submitReject = useCallback(async (r: { reasonEnum: string; reasonText?: string }) => {
+    if (!rejectTarget) return;
+    await trpc.approvals.decide.mutate({
+      approvalId: rejectTarget,
+      gesture: "reject",
+      reasonEnum: r.reasonEnum,
+      reasonText: r.reasonText,
+    });
+    setRejectTarget(null);
+    setBanner({ level: "info", text: `已驳回（${r.reasonEnum}）并回流偏好校准（F5.5/F1.7/D24）` });
+    await load();
+  }, [rejectTarget, load]);
 
   /* ---------- 追问（P2E6：沿用线程上下文；threads.run 续跑，replay 幂等 H-5） ---------- */
   const followUp = useCallback(async () => {
@@ -392,6 +407,12 @@ export default function P2() {
           </div>
         )}
       </div>
+      <RejectDialog
+        open={rejectTarget !== null}
+        mode="reject"
+        onCancel={() => setRejectTarget(null)}
+        onSubmit={(r) => void submitReject(r)}
+      />
     </Bridge>
   );
 }

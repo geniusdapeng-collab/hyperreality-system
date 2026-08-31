@@ -15,6 +15,9 @@ import { dirname, join } from "node:path";
 import { appRouter } from "./trpc/router.js";
 import { createContext } from "./trpc/context.js";
 import { serviceGateway } from "./service/gateway.js";
+import { getOwnerPool } from "@workloom/db";
+import { bundlesRoot } from "@workloom/base/bundles";
+import { registerFeedbackEnumsFromDisk } from "@workloom/base/evolve";
 
 const app = new Hono();
 
@@ -56,3 +59,15 @@ if (existsSync(webcDist)) {
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`WorkLoom IM 底座 server 已启动：http://localhost:${info.port}（tRPC: /trpc/*，C 端网关: /c/*）`);
 });
+
+// D24 自我进化飞轮 M1：启动时为全部已激活行业的工作区装载反馈枚举表（Bundle 第⑧槽）。
+// 失败不阻断启动（枚举表缺失 = 该行业未提供第⑧槽，decide 校验自动放行，向后兼容）。
+registerFeedbackEnumsFromDisk(getOwnerPool(), bundlesRoot())
+  .then((registered) => {
+    if (registered.length > 0) {
+      console.log(`反馈枚举表已装载：${registered.map((r) => `${r.industry}→${r.workspaceId}（${r.count} 条）`).join("、")}`);
+    }
+  })
+  .catch((err) => {
+    console.warn(`反馈枚举表装载失败（不阻断启动，decide 校验按未装配放行）：${err instanceof Error ? err.message : err}`);
+  });

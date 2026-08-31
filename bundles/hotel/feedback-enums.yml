@@ -1,0 +1,45 @@
+# 酒店行业 Bundle · 第⑧装配槽：反馈枚举表（D24 自我进化飞轮 M1）
+# 口径：
+#  - 驳回（reject）必须命中本表受控词表——自由文本无法聚类，校准信号的可信度前提是受控枚举；
+#  - 编辑（edit）手势另以 editKind 二分归因（correction 纠错→缺陷池 / preference 口味→偏好池），
+#    本表 enums 同样可用于 edit 的补充说明；
+#  - 枚举码一旦上线只增不改（历史事件里流转的是 code；改 code = 切断归因链）。
+version: hotel-feedback-enums/v1
+enums:
+  # ---- 收益管理类 ----
+  - code: price.too_high
+    label: 涨幅过大
+    appliesTo: [reject]
+  - code: price.too_low
+    label: 价格低于预期（损害收益）
+    appliesTo: [reject]
+  - code: price.timing
+    label: 调价时机不当
+    appliesTo: [reject]
+  - code: price.channel_risk
+    label: 渠道风险（倒挂/价差顾虑）
+    appliesTo: [reject]
+  # ---- 对客处置类 ----
+  - code: comp.over_policy
+    label: 补偿超档案口径
+    appliesTo: [reject]
+  - code: reply.tone
+    label: 回复语气不符
+    appliesTo: [reject, edit]
+  - code: reply.fact_wrong
+    label: 事实性错误（房态/政策/订单信息）
+    appliesTo: [reject, edit]
+  # ---- 资金与采购类 ----
+  - code: amount.too_high
+    label: 金额过高
+    appliesTo: [reject]
+  - code: vendor.unverified
+    label: 供应商未核验
+    appliesTo: [reject]
+  # ---- 通用 ----
+  - code: data.stale
+    label: 数据陈旧/依据不足
+    appliesTo: [reject]
+  - code: other
+    label: 其他（须附自由文本说明）
+    appliesTo: [reject, edit]

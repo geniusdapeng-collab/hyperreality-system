@@ -54,3 +54,24 @@ export const MEMORY_DEFAULT_CONFIDENCE = 0.5;
 
 /** 向量维度（org_memory / industry_assets embedding） */
 export const EMBEDDING_DIM = 1536;
+
+/* ================= 自我进化飞轮（D24，行业无关机制默认值） ================= */
+
+/** 偏好注入（M3）：主链路注入的组织记忆上限（forbidden 优先，confidence 降序截断） */
+export const MEMORY_INJECT_LIMIT = 5;
+
+/** 记忆提炼器（M2）：同类信号 ≥N 次/30 天才产出/强化记忆（对齐意识系统周阈值口径） */
+export const MINER_PATTERN_THRESHOLD = 3;
+
+/** 记忆生命周期（M2）：N 天未被引用且未被强化的 active 记忆进入衰减扫描 */
+export const MEMORY_DECAY_DAYS = 90;
+/** 每次衰减扫描的置信度乘数 */
+export const MEMORY_DECAY_FACTOR = 0.9;
+/** 置信度地板（衰减不穿越；低于地板不自动回收——回收永远是人类手势） */
+export const MEMORY_MIN_CONFIDENCE = 0.1;
+
+/** 记忆归因上限：单条记忆的 source_events 最多保留 N 条（防无限膨胀，超出保留最近） */
+export const MEMORY_SOURCE_EVENTS_CAP = 20;
+
+/** 进化统计闸（D24 修订 7）：反馈信号样本 <N 条时只观察、不出提案 */
+export const EVOLUTION_MIN_SIGNAL_SAMPLES = 20;

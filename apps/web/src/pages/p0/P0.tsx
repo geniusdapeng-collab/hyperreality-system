@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { RejectDialog } from "../../components/RejectDialog";
 import { actionText, actorText , payloadText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
 import { useAskRailPadding } from "../../lib/useAskRail";
@@ -178,6 +179,7 @@ export default function P0() {
   const [view, setView] = useState<"floor" | "stage">(() =>
     (typeof localStorage !== "undefined" && localStorage.getItem("theater-view") === "stage") ? "stage" : "floor");
   const [askPick, setAskPick] = useState<FloorAgent | null>(null); // 职场请示卡弹层
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null); // M1.2 驳回弹窗目标
   const switchView = (v: "floor" | "stage") => { setView(v); localStorage.setItem("theater-view", v); };
 
   const load = async () => {
@@ -242,8 +244,28 @@ export default function P0() {
   };
 
   const decide = async (approvalId: string, gesture: "approve" | "reject") => {
+    if (gesture === "reject") {
+      // M1.2（D24）：驳回必须选择行业受控枚举（弹窗），原「无原因驳回」已被服务端 L5.2 拒绝
+      setRejectTarget(approvalId);
+      return;
+    }
     await trpc.approvals.decide.mutate({ approvalId, gesture });
-    setMsg(`已${gesture === "approve" ? "批准" : "驳回"}，全链留痕`);
+    setMsg(`已批准，全链留痕`);
+    setAskPick(null);
+    setTimeout(() => setMsg(""), 3000);
+    await load();
+  };
+  /** 驳回弹窗提交（M1.2 受控枚举 + L5.2 留痕） */
+  const submitReject = async (r: { reasonEnum: string; reasonText?: string }) => {
+    if (!rejectTarget) return;
+    await trpc.approvals.decide.mutate({
+      approvalId: rejectTarget,
+      gesture: "reject",
+      reasonEnum: r.reasonEnum,
+      reasonText: r.reasonText,
+    });
+    setRejectTarget(null);
+    setMsg(`已驳回（${r.reasonEnum}），全链留痕`);
     setAskPick(null);
     setTimeout(() => setMsg(""), 3000);
     await load();
@@ -411,6 +433,12 @@ export default function P0() {
           </div>
         </div>
       )}
+      <RejectDialog
+        open={rejectTarget !== null}
+        mode="reject"
+        onCancel={() => setRejectTarget(null)}
+        onSubmit={(r) => void submitReject(r)}
+      />
     </div>
   );
 }

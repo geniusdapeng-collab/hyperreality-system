@@ -2,6 +2,30 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [1.10.0] - 2026-08-31 · 自我进化飞轮 P0（D24）：反馈 → 记忆 → 行为校准
+
+> 立项依据：《WorkLoom 自我进化方案 v0.1》+ 双行业（酒店 / AI 短视频营销）反向验证 v0.2——
+> 「留痕完备、消费稀疏」：五元事件库已忠实记录全部反馈信号，本版本把它们接到能改变系统行为的消费端。
+
+### 新增
+
+- **M3 偏好注入主链路（`packages/base/evolve/preference-inject`）**：ask / agent / quest 三环执行前检索本工作区 active 的 preference / forbidden 组织记忆（forbidden 优先、confidence 降序、上限 `MEMORY_INJECT_LIMIT=5`；workspace 级 + subjectId 细分），以 `<org_preferences>` 数据块注入模型上下文（注入防护与 facts 块同构）；引用必留痕——产出事件同事务写 `memory_usage` + `decision.memory_refs`（F1.4 归因闭环，「哪条记忆影响了哪次产出」可反查）。
+- **M2 记忆提炼器（`packages/base/evolve/memory-miner`）**：夜班节拍（advisory 锁防双写，与回测节拍同构）——① 驳回按 reason_enum 聚类 ≥3 次/30 天 → 强化 `mem-reject-<enum>` 偏好记忆（confidence 随次数封顶 0.9）；② edit 手势按被审动作聚类 ≥3 次 → 产出 `mem-pat-edit-<action>` pattern 记忆（纠错/口味按 editKind 分列）。**每次提炼发 `memory.calibrate` 五元事件——做实 B6 起在 workdata/memory.ts 注释中预留的机制位（G3）**。统计闸（修订 7）：窗口手势样本 <20 条只观察不提炼。
+- **M2 记忆生命周期与人工治理（`packages/base/evolve/memory-lifecycle`）**：衰减扫描（90 天零引用 ×0.9，地板 0.1，不自动回收）· 来源人一键清算（成员离任作废其手势沉淀的偏好，防口味过拟合，修订 2）· 人类编辑（禁明文 PII，F1.8）· 人类禁用（回收区口径 F1.11）。四条路径全部写 `memory.calibrate` 事件。
+- **M1 反馈枚举表（`packages/base/evolve/feedback-enums` + Bundle 第⑧装配槽）**：`bundles/<industry>/feedback-enums.yml`——行业受控驳回原因词表（底座零预置，D17/D18 红线）；已装配工作区的 reject 手势必须命中枚举（未装配放行，向后兼容）；edit 手势强制 `editKind` 二分（correction 纠错→缺陷池 / preference 口味→偏好池，修订 3 归因歧义）。server 启动 bootstrap 全量装载 + `activateBundle` 即时注册 + `bundles/hotel/feedback-enums.yml` 实物 11 条。
+- **M5 进化积分卡（`packages/base/evolve/scorecard`）**：北极星=审批一次通过率（approved/已裁决）、人类修改率、近 8 周通过率趋势（飞轮看斜率）、驳回原因分布、记忆引用量与 `memory.calibrate` 活动量——全部从 approvals/org_memory/memory_usage/biz_events 投影，零新数据源。
+- **tRPC**：`memory.*`（list/sources/update/disable/recallBySource/mineNow/decayNow/feedbackEnums）+ `evolution.scorecard`。
+- **Web**：**P23 组织记忆中心**（/p23，导航「系统」组）——积分卡四卡 + 周趋势 + 驳回分布 + 记忆列表（编辑/禁用/归因反查/来源人清算/手动提炼）；**RejectDialog 驳回弹窗**（P0/P2/P3/P4/P21 五页接线）——枚举来自本工作区第⑧槽词表，未装配回落中性「其他」。
+
+### 修复（顺带）
+
+- **Web 端驳回链路全线失效（P0 级存量 bug）**：P0/P21 驳回不带任何原因、P2/P3/P4 仅带 reasonText 不带 reasonEnum——全部撞服务端 L5.2 EMPTY_REASON 拒绝。本次统一为 RejectDialog 受控枚举提交后修复。
+
+### 门禁验证
+
+- ✅ typecheck 全绿 · vitest 522（base 含 RUN_DB_TESTS=1 全量，新增 evolve 15 例）· suite 445/445 · verify-chain 一致
+- ✅ 浏览器实拍闭环：P4 审批卡 → 驳回弹窗加载酒店 11 条枚举 → 选「回复语气不符」提交 → approvals rejected + `mem-reject-reply.tone` 偏好记忆落库 → P23 积分卡/驳回分布实时呈现
+
 ## [1.9.3] - 2026-08-23 · 融合审计（D26）：大版本耦合面深测与修复
 
 ### 修复（审计实证）

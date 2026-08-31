@@ -22,6 +22,7 @@ import {
 } from "@workloom/shared";
 import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
 import { upsertMemory, upsertMemoryInTx, MockEmbedder, type Embedder } from "../workdata/memory.js";
+import { assertEditKindValid, assertReasonEnumAllowed, type EditKind } from "../evolve/feedback-enums.js";
 
 /* ================= 类型 ================= */
 
@@ -30,7 +31,7 @@ export interface ApprovalRow {
   event_id: string;
   channel: string;
   status: ApprovalStatus;
-  gesture: { type: Gesture; weight: number; reason_enum?: string; reason_text?: string; edited_after?: unknown } | null;
+  gesture: { type: Gesture; weight: number; reason_enum?: string; reason_text?: string; edited_after?: unknown; edit_kind?: string } | null;
   snapshot: { before?: unknown; after?: unknown; expires_at?: string; high_risk?: boolean };
   decided_by: string | null;
   decided_at: string | null;
@@ -59,6 +60,8 @@ export interface GestureInput {
   reasonEnum?: string;
   reasonText?: string;
   editedAfter?: unknown;
+  /** M1.3 归因分流（D24 修订 3）：纠错→缺陷池 / 口味→偏好池；仅 edit 手势有意义 */
+  editKind?: EditKind;
 }
 
 export function validateGesture(g: GestureInput): void {
@@ -81,6 +84,8 @@ export function validateGesture(g: GestureInput): void {
   if (g.type === "edit" && g.editedAfter === undefined) {
     throw new ApprovalError("EDIT_REQUIRES_AFTER", "编辑后采纳必须携带 edited_after 新值（F5.2）");
   }
+  // M1.3（D24）：editKind 白名单校验（纠错/口味二分，非法值拒绝）
+  assertEditKindValid(g.editKind);
 }
 
 /** 审批人角色校验（L5.1/L5.5：服务端强制 403） */
@@ -155,6 +160,11 @@ export async function decide(
   // L5.1/L5.5 角色校验 + L5.2 手势校验（先校验，不碰库）
   assertApproverRole(actor.role);
   validateGesture(gesture);
+  // M1.2（D24 修订 3）：工作区已装配行业反馈枚举表（Bundle 第⑧槽）时，
+  // 驳回原因必须命中受控词表——自由文本无法聚类，校准信号的可信度前提是受控枚举
+  if (gesture.type === "reject" && gesture.reasonEnum) {
+    assertReasonEnumAllowed(scope.workspaceId, gesture.reasonEnum);
+  }
 
   // scoped 已包裹显式事务（BEGIN→set_config→COMMIT/ROLLBACK），本函数内不再自行开关事务；
   // 过期分支需要「标 expired 落库 + 抛 EXPIRED」——先提交事务再抛，避免 catch 回滚掉过期标记
@@ -208,6 +218,7 @@ export async function decide(
           reason_enum: gesture.reasonEnum,
           reason_text: gesture.reasonText,
           edited_after: gesture.editedAfter,
+          edit_kind: gesture.editKind,
         }),
         actor.memberNo,
       ],
@@ -231,6 +242,7 @@ export async function decide(
           weight: GESTURE_WEIGHT[gesture.type],
           reason_enum: gesture.reasonEnum,
           edited_after: gesture.editedAfter,
+          edit_kind: gesture.editKind,
         },
         basis: gesture.reasonText ? [gesture.reasonText] : undefined,
       },

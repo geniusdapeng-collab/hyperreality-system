@@ -5,7 +5,9 @@
  * 数据来源口径（P7-⑤）：槽位状态 = bundle 注册表投影（磁盘 bundles/<slug>/ 实物扫描）；
  * 校验结果 = 装配校验器运行记录（recheck/activate 留痕 biz_events，不静默 L9.2）。
  *
- * 六装配槽（P7E1/§2.2）：① 档案 Schema ② 对象与阶段枚举 ③ 工具集 ④ 围栏包 ⑤ Agent 班组 ⑥ 工作台 UI
+ * 八装配槽（P7E1/§2.2 + v3.0 第⑦槽 + D24 第⑧槽）：① 档案 Schema ② 对象与阶段枚举 ③ 工具集 ④ 围栏包
+ *   ⑤ Agent 班组 ⑥ 工作台 UI ⑦ 模型路由策略 ⑧ 反馈枚举表（feedback-enums.yml，非阻断：
+ *   缺失 = decide 校验放行；存在即注册为工作区受控词表，D24 修订 3）
  * 起飞前检查单（P7E3/F2.10）：档案 forbidden 校验 / 枚举冲突检测 / 工具探针健康 /
  *   围栏绑定完整 / UI 用例同步 —— 任一失败拒绝激活；修复后重跑（数据活算，重查即重跑）。
  */
@@ -18,6 +20,11 @@ import pg from "pg";
 import YAML from "yaml";
 import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
 import { parseModelPolicy } from "../model-router/policy.js";
+import {
+  loadFeedbackEnumsFromBundle,
+  registerFeedbackEnums,
+  unregisterFeedbackEnums,
+} from "../evolve/feedback-enums.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** 仓库 bundles/ 根（packages/base/bundles → 上三级）；测试可用 BUNDLES_ROOT 指到临时目录 */
@@ -551,6 +558,19 @@ export async function activateBundle(
         `行业 Bundle「${slug}」磁盘 bundle.json 翻转失败，DB 激活已补偿回滚：${diskErr instanceof Error ? diskErr.message : diskErr}`,
       );
     }
+  }
+  // D24 第⑧装配槽（反馈枚举表）：激活成功后即时注册到本工作区——
+  // decide 驳回原因自此按受控词表校验（未提供第⑧槽的 Bundle 注销旧表，按未装配放行）。
+  // 磁盘读取失败不阻断激活（激活主流程已收口；枚举缺失仅影响校验严格度，下次启动 bootstrap 兜底）。
+  try {
+    const defs = loadFeedbackEnumsFromBundle(join(root, slug));
+    if (defs && defs.length > 0) {
+      registerFeedbackEnums(scope.workspaceId, defs);
+    } else {
+      unregisterFeedbackEnums(scope.workspaceId);
+    }
+  } catch (enumErr) {
+    console.warn(`第⑧槽反馈枚举表注册失败（不阻断激活）：${enumErr instanceof Error ? enumErr.message : enumErr}`);
   }
   return { eventId: actEventId, profile: { ...profile, status: "active" } };
 }

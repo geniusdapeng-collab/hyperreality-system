@@ -104,6 +104,16 @@ import { listSegments, resolveSegment } from "@workloom/base/bundles";
 import YAML from "yaml";
 import { videoRouter } from "../video/router.js";
 import { serviceRouter } from "../service/router.js";
+import {
+  buildEvolutionScorecard,
+  decayMemories,
+  disableMemory,
+  editMemoryContent,
+  getFeedbackEnums,
+  recallMemoriesByMember,
+  runMemoryMinerBeat,
+} from "@workloom/base/evolve";
+import { getMemorySources, searchMemories } from "@workloom/base/workdata";
 
 /** system router：健康检查（公开） */
 const systemRouter = router({
@@ -973,6 +983,8 @@ const approvalsRouter = router({
         reasonEnum: z.string().optional(),
         reasonText: z.string().max(200).optional(),
         editedAfter: z.unknown().optional(),
+        /** M1.3 归因分流（D24 修订 3）：edit 手势必填二分（纠错/口味） */
+        editKind: z.enum(["correction", "preference"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -983,7 +995,7 @@ const approvalsRouter = router({
           scopeOf(ctx.identity),
           { memberNo: ctx.identity.memberNo, role: ctx.identity.role },
           input.approvalId,
-          { type: input.gesture, reasonEnum: input.reasonEnum, reasonText: input.reasonText, editedAfter: input.editedAfter },
+          { type: input.gesture, reasonEnum: input.reasonEnum, reasonText: input.reasonText, editedAfter: input.editedAfter, editKind: input.editKind },
         );
         // E1 联调接线（PF.5/F2.4）：fence.rule.propose 手势通过 → 激活规则版本
         if (!res.deduped && res.status === "approved") {
@@ -2726,6 +2738,88 @@ const captainRouter = router({
 });
 
 
+
+/** 组织记忆中心（D24 自我进化飞轮 M2：可读可改可禁用，纠偏与信任通道） */
+const memoryRouter = router({
+  /** 列表（作用域/种类/状态过滤 + 语义检索可选） */
+  list: protectedProcedure
+    .input(
+      z.object({
+        scope: z.enum(["workspace", "agent", "run"]).optional(),
+        kind: z.enum(["preference", "pattern", "sop", "forbidden"]).optional(),
+        status: z.enum(["active", "superseded", "recalled"]).optional(),
+        subjectId: z.string().optional(),
+        query: z.string().max(200).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      }).optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      return searchMemories(getAppPool(), scopeOf(ctx.identity), {
+        scope: input?.scope, kind: input?.kind, status: input?.status,
+        subjectId: input?.subjectId, query: input?.query, limit: input?.limit,
+      }, new MockEmbedder());
+    }),
+
+  /** 归因反查（验收断言：任一记忆可反查来源事件与被谁引用） */
+  sources: protectedProcedure
+    .input(z.object({ memoryId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return getMemorySources(getAppPool(), scopeOf(ctx.identity), input.memoryId);
+    }),
+
+  /** 人类编辑内容（M2.1 可读可改；写 memory.calibrate 事件留痕） */
+  update: writeProcedure
+    .input(z.object({ memoryId: z.string(), content: z.string().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      return editMemoryContent(
+        getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
+        { memberNo: ctx.identity.memberNo }, input.memoryId, input.content,
+      );
+    }),
+
+  /** 人类禁用（回收区口径 F1.11；防记忆污染越用越偏） */
+  disable: writeProcedure
+    .input(z.object({ memoryId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return disableMemory(
+        getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
+        { memberNo: ctx.identity.memberNo }, input.memoryId,
+      );
+    }),
+
+  /** 来源人一键清算（D24 修订 2：成员离任/换岗，作废其手势沉淀的偏好记忆） */
+  recallBySource: writeProcedure
+    .input(z.object({ memberId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return recallMemoriesByMember(
+        getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
+        { memberNo: ctx.identity.memberNo }, input.memberId,
+      );
+    }),
+
+  /** 手动触发提炼节拍（演示/联调用；生产由夜班调度触发） */
+  mineNow: writeProcedure.mutation(async ({ ctx }) => {
+    return runMemoryMinerBeat(getAppPool(), getGatewayPool(), scopeOf(ctx.identity));
+  }),
+
+  /** 手动触发衰减扫描（同上） */
+  decayNow: writeProcedure.mutation(async ({ ctx }) => {
+    return decayMemories(getAppPool(), getGatewayPool(), scopeOf(ctx.identity));
+  }),
+
+  /** 本工作区装配的反馈枚举表（Bundle 第⑧槽；审批卡下拉数据源） */
+  feedbackEnums: protectedProcedure.query(async ({ ctx }) => {
+    return getFeedbackEnums(scopeOf(ctx.identity).workspaceId) ?? [];
+  }),
+});
+
+/** 进化积分卡（D24 自我进化飞轮 M5：北极星=审批一次通过率，趋势看斜率） */
+const evolutionRouter = router({
+  scorecard: protectedProcedure.query(async ({ ctx }) => {
+    return buildEvolutionScorecard(getAppPool(), scopeOf(ctx.identity));
+  }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   onboarding: onboardingRouter,
@@ -2746,6 +2840,8 @@ export const appRouter = router({
   service: serviceRouter,
   credits: creditsRouter,
   modelFeedback: modelFeedbackRouter,
+  memory: memoryRouter,
+  evolution: evolutionRouter,
 });
 
 export type AppRouter = typeof appRouter;

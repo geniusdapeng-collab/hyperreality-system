@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { RejectDialog } from "../../components/RejectDialog";
 import { actionText, shortId } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 
@@ -97,6 +98,7 @@ export default function P21() {
     setMsg(`节拍「${BEATS.find(([k]) => k === b)?.[1] ?? b}」完成：${JSON.stringify(r).slice(0, 120)}`);
     await load();
   };
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const transit = async (kind: string) => {
     const r = await trpc.captain.transit.mutate({ kind: kind as "advance" }) as { mode: CeoMode };
     setMsg(`状态迁移 → ${MODE_LABEL[r.mode]}`);
@@ -108,8 +110,26 @@ export default function P21() {
   };
 
   const decide = async (approvalId: string, gesture: "approve" | "reject") => {
+    if (gesture === "reject") {
+      // M1.2（D24）：驳回必须选择行业受控枚举（弹窗），原「无原因驳回」已被服务端 L5.2 拒绝
+      setRejectTarget(approvalId);
+      return;
+    }
     await trpc.approvals.decide.mutate({ approvalId, gesture });
-    setMsg(`请示 ${shortId(approvalId)} 已${gesture === "approve" ? "批准" : "驳回"}（三手势写回，全链留痕）`);
+    setMsg(`请示 ${shortId(approvalId)} 已批准（三手势写回，全链留痕）`);
+    await load();
+  };
+  /** 驳回弹窗提交（M1.2 受控枚举 + L5.2 留痕） */
+  const submitReject = async (r: { reasonEnum: string; reasonText?: string }) => {
+    if (!rejectTarget) return;
+    await trpc.approvals.decide.mutate({
+      approvalId: rejectTarget,
+      gesture: "reject",
+      reasonEnum: r.reasonEnum,
+      reasonText: r.reasonText,
+    });
+    setRejectTarget(null);
+    setMsg(`请示 ${shortId(rejectTarget)} 已驳回（${r.reasonEnum}），全链留痕`);
     await load();
   };
 
@@ -306,6 +326,12 @@ export default function P21() {
           })}
         </div>
       </Panel>
+      <RejectDialog
+        open={rejectTarget !== null}
+        mode="reject"
+        onCancel={() => setRejectTarget(null)}
+        onSubmit={(r) => void submitReject(r)}
+      />
     </Bridge>
   );
 }
