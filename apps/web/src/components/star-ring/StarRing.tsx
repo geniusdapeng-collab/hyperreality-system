@@ -63,8 +63,9 @@ function ClapperIcon({ size = 24 }: { size?: number }) {
   );
 }
 
-/** 布局事件：通知 Bridge 预留右侧空间 */
+/** 布局事件：通知 Bridge 预留右侧空间（同时在 window 落一份当前值，供后挂载的页面初始化读取） */
 function emitRailWidth(w: number) {
+  (window as unknown as { __askRailW: number }).__askRailW = w;
   window.dispatchEvent(new CustomEvent("askrail-width", { detail: { width: w } }));
 }
 
