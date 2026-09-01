@@ -54,7 +54,7 @@ input,select{font-family:inherit}
 .demo-bar .src{width:100%;font-size:10px;color:var(--ink3);margin-top:2px}
 .demo-bar .src b{color:var(--holo);font-weight:400;font-family:"JetBrains Mono",monospace}
 
-/* ===== 舰桥框架（Bridge 镜像：1180px + 圆角 20px + 四角金刻度） ===== */
+/* ===== 工作台框架（Bridge 镜像：1180px + 圆角 20px + 四角金刻度） ===== */
 .bridge{position:relative;width:1180px;margin:12px auto 40px;border-radius:20px;border:1px solid var(--line);
   background:linear-gradient(to bottom,rgba(255,255,255,.95),rgba(255,245,247,.96));box-shadow:0 30px 80px rgba(0,0,0,.55);overflow:hidden}
 .tick{position:absolute;width:18px;height:18px;border:2px solid var(--gold);z-index:10;pointer-events:none}
@@ -161,7 +161,7 @@ tr:hover td{background:rgba(255,228,236,.7)}
       <button class="lnav" data-v="kb" onclick="location.hash='kb'"><div class="t">📚 知识中台</div><div class="m" id="mKb">集合 2 · 待审 1</div></button>
       <button class="lnav" data-v="tickets" onclick="location.hash='tickets'"><div class="t">🎫 工单台</div><div class="m" id="mTk">在列 3</div></button>
       <button class="lnav" data-v="stats" onclick="location.hash='stats'"><div class="t">📊 服务报表</div><div class="m">会话 2 · 问答 4</div></button>
-      <button class="lnav" style="margin-top:8px" onclick="toast('返回主甲板（/）')"><div class="t" style="font-size:11px;color:var(--ink3)">← 返回工作台</div></button>
+      <button class="lnav" style="margin-top:8px" onclick="toast('返回经营主页（/）')"><div class="t" style="font-size:11px;color:var(--ink3)">← 返回工作台</div></button>
     </aside>
 
     <!-- 主区（apps/web/src/pages/p22/P22.tsx 镜像） -->

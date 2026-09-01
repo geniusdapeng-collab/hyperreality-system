@@ -73,7 +73,7 @@ jobs:
           2. 把 WorkLoom 拖入「应用程序」
           3. 首次启动：Control+点按 → 打开（Gatekeeper 标准流程，唯一一次授权）
 
-          之后一切自动完成：运行时装配 → PostgreSQL 初始化 → 迁移与演示数据 → 服务启动 → 浏览器打开主甲板。
+          之后一切自动完成：运行时装配 → PostgreSQL 初始化 → 迁移与演示数据 → 服务启动 → 浏览器打开经营主页。
           全部依赖包内自带（Node 24 / PostgreSQL 17 + pgvector），无需 brew、无需 sudo、无需命令行。
 
           ### 校验

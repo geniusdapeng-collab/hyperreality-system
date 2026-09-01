@@ -529,7 +529,7 @@ export async function runOrgScanBeat(
     const evId = await emitCeoEvent(c, scope, "org.hiring_proposal", {
       params: { role: proposal.role, dry_run: dryRun },
       after: { proposal, health },
-      basis: [proposal.reason, "扩编不设上限，每单必批；新员工上岗走影子+试用（机制与舰长治理同构）"],
+      basis: [proposal.reason, "扩编不设上限，每单必批；新员工上岗走影子+试用（机制与主理人治理同构）"],
     }, { dryRun });
     if (!dryRun) {
       // M7：审批单 ID 由事件 ID 派生（apr-<eventId 小写>），不再用时间戳主键

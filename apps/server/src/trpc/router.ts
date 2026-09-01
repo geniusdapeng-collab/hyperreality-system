@@ -136,7 +136,7 @@ const systemRouter = router({
 });
 
 /* ================= 落地向导（D24：模拟运行态 → 真实经营 切换面） =================
- * 契约：首次安装开箱即为「全模拟运行态」（种子数据 + mock 模型），P0/舰桥横幅常显提示；
+ * 契约：首次安装开箱即为「全模拟运行态」（种子数据 + mock 模型），P0/工作台横幅常显提示；
  * 向导四步（自检 → 真实大模型 → 经营主体 → 启用真实模式）尽量自动化：
  *  - saveLlmConfig 真实试调通过才落盘（.env 四变量 + process.env + 清缓存，全链即时真实化）
  *  - activateRealMode 翻转 profiles.archive.dataMode（simulated→real），横幅熄灭
@@ -1723,7 +1723,7 @@ const rosterRouter = router({
         nightWindow: { open: nightNow, range: "22:00–08:00" }, // M4 夜班窗口（PRD P8 页头口径）
         humans: humans.rows.map((h) => {
           const decided = Number(h.decided30), dispatched = Number(h.dispatched30), rules = Number(h.rules30);
-          // 舰长 XP：裁决 ×3 + 派遣 ×2 + 沉淀 ×5（手册 §3.1 人只有三件事：供给/裁决/沉淀；权重为展示层映射）
+          // 主理人 XP：裁决 ×3 + 派遣 ×2 + 沉淀 ×5（手册 §3.1 人只有三件事：供给/裁决/沉淀；权重为展示层映射）
           const xp = decided * 3 + dispatched * 2 + rules * 5;
           return {
             memberNo: h.member_no, name: h.name, role: h.role,

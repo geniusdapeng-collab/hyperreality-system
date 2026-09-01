@@ -745,7 +745,7 @@ async function main() {
   console.log("✓ AI 服务前台运行态（星芒好物）：用户/售后政策知识库/会话/工单×2/时间线/通知");
 
   await owner.end();
-  console.log("\n视频经理演示种子完成。下一步：pnpm dev 后在舰桥查看（ws-video 工作区）。");
+  console.log("\n视频经理演示种子完成。下一步：pnpm dev 后在工作台查看（ws-video 工作区）。");
 }
 
 main().catch((err) => {

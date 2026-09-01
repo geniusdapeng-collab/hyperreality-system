@@ -182,7 +182,7 @@ export default function DevMatrix() {
       </Section>
 
       <Section name="游戏化组件" spec="§6 · 等级/成就/战队环/装配槽/装备稀有度">
-        <Cell label="LevelBadge（舰长圆金边 / 船员方形+版本角标）+ AchievementBadge">
+        <Cell label="LevelBadge（主理人圆金边 / 船员方形+版本角标）+ AchievementBadge">
           <div className="space-y-3">
             <LevelBadge level={12} rank="黄金" captain name="陈主理" />
             <LevelBadge level={7} rank="白银" name="导演 Agent" version="v2.0" />
