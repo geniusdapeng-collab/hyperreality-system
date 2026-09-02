@@ -2355,6 +2355,30 @@ function defineE2E(): void {
     assert(sc.result?.data && typeof sc.result.data.briefings === "number", "成绩单可读");
   });
 
+  /* Y 域 E2E：技能保鲜环 skillOps 端点 */
+  h2("skills.skillOps.status 分发状态可读（staging/策略/游标三面投影）", async () => {
+    const { data } = await api<{ result?: { data?: { staging?: unknown[]; silentMode?: string } } }>("/trpc/skills.skillOps.status", { token: tokenOwner });
+    assert(Array.isArray(data.result?.data?.staging), "staging 列表可读");
+    assert(data.result?.data?.silentMode === "silent" || data.result?.data?.silentMode === "prompt", "静默策略可读");
+  });
+  h2("skills.skillOps.syncNow 未配置 registry/密钥 → disabled（不降级跳过验签）", async () => {
+    const { data } = await api<{ result?: { data?: { disabled?: boolean } } }>("/trpc/skills.skillOps.syncNow", { method: "POST", token: tokenOwner, body: {} });
+    eq(data.result?.data?.disabled, true, "未配置整体禁用");
+  });
+  h2("skills.skillOps.syncNow readonly 角色 403（E2.6 服务端守卫）", async () => {
+    const { data } = await api<{ error?: { data?: { httpStatus?: number } } }>("/trpc/skills.skillOps.syncNow", { method: "POST", token: tokenReadonly, body: {} });
+    eq(data.error?.data?.httpStatus, 403, "readonly 403");
+  });
+  h2("skills.skillOps.setPolicy 策略切换 + 状态回读一致（留痕）", async () => {
+    const { data } = await api<{ result?: { data?: { mode?: string } } }>("/trpc/skills.skillOps.setPolicy", { method: "POST", token: tokenOwner, body: { mode: "prompt" } });
+    eq(data.result?.data?.mode, "prompt", "策略切 prompt");
+    const { data: st } = await api<{ result?: { data?: { silentMode?: string } } }>("/trpc/skills.skillOps.status", { token: tokenOwner });
+    eq(st.result?.data?.silentMode, "prompt", "状态回读一致");
+    await api("/trpc/skills.skillOps.setPolicy", { method: "POST", token: tokenOwner, body: { mode: "silent" } });
+  });
+
+
+
 /* ---- D24 落地向导 E2E：模拟态横幅事实源 → 真实模型装配 → ask 真实推理 → 真实模式 ---- */
 let llmStub: Server | null = null;
 const STUB_PORT = 8791;
@@ -3328,6 +3352,153 @@ h2("融合·LLM 降级链：死端配置被拒 → mock 兜底应答不断链", 
     await qApp(`DELETE FROM agents WHERE id=$1`, [`agt-${WPROBE}`]);
   });
 }
+
+/* ================= Y 域 · 技能保鲜环 P0（skill-ops 下行分发：五道预检/L0·L1·L2 分级/静默策略/回滚/事件化） ================= */
+{
+  const YC = C("Y");
+  const {
+    syncDistribution, loadStaging, rollbackSkill, distStatus,
+    signPackage, DistMeta,
+  } = await import("@workloom/base/skill-ops");
+  const { setSilentMode, getSilentMode } = await import("@workloom/base/skill-ops");
+  const YKEY = `suite-y-key-${SFX}`;
+  const yInst = { bundles: [] as string[], edition: "community" };
+  type YPkg = Parameters<typeof signPackage>[1] & { signature: string; description: string; fenceBindings: string[]; name: string };
+  const yPkg = (skillId: string, over: Partial<YPkg> = {}): YPkg => {
+    const base = {
+      skillId, name: "Y 域分发技能", version: "1.0.0",
+      description: "suite 分发测试",
+      body: "# Y 域\n\n## 触发（何时用）\n每日 07:00\n\n## 步骤\n1. 取数\n\n## 边界（什么不做）\n不破保底价",
+      fenceBindings: [] as string[], meta: DistMeta.parse({}),
+    };
+    const pkg = { ...base, ...over, meta: over.meta ?? base.meta };
+    return { ...pkg, signature: signPackage(YKEY, pkg) } as YPkg;
+  };
+  const yManifest = (pkgs: YPkg[], targets: Record<string, unknown> = {}) => ({
+    registryVersion: `suite-y-${SFX}`, publishedAt: new Date().toISOString(),
+    entries: pkgs.map((p) => ({ targets, package: p })),
+  });
+  const yFetch = (pkgs: YPkg[], targets: Record<string, unknown> = {}) => async () => yManifest(pkgs, targets);
+  const yCleanup = async (skillId: string) => {
+    await qApp(`DELETE FROM skill_dist_staging WHERE skill_id=$1`, [skillId]);
+    await qApp(`DELETE FROM skill_dist_snapshots WHERE skill_id=$1`, [skillId]);
+    await qApp(`DELETE FROM skill_installs WHERE skill_id=$1 AND workspace_id=$2`, [skillId, scope.workspaceId]);
+    await qApp(`DELETE FROM skills WHERE id=$1`, [skillId]);
+  };
+
+  YC("未配置 registry/签名密钥 → 分发整体禁用（不降级跳过验签）", async () => {
+    const r = await syncDistribution(app, gw, scope, { registryUrl: "", signingKey: "", instance: yInst, by: "MEM-001" });
+    eq(r.disabled, true, "禁用标记");
+  });
+
+  YC("L0 知识型首装：silent 静默热装载 + 快照 + skill.dist.loaded 事件 + 同版本重推幂等跳过", async () => {
+    const skillId = `skill-y-l0-${SFX}`;
+    await yCleanup(skillId);
+    const r = await syncDistribution(app, gw, scope, {
+      registryUrl: "https://registry.suite/m.json", signingKey: YKEY, instance: yInst, by: "MEM-001",
+      fetcher: yFetch([yPkg(skillId)]),
+    });
+    eq(r.loaded.length, 1, "L0 装载数");
+    eq(r.loaded[0]!.tier, "L0", "L0 定级");
+    const s = await qApp(`SELECT version, level FROM skills WHERE id=$1`, [skillId]);
+    eq(s.rows[0]!.version, "1.0.0", "技能库版本");
+    eq(s.rows[0]!.level, "official", "官方分发即 official 级");
+    const snap = await qApp(`SELECT count(*) AS c FROM skill_dist_snapshots WHERE skill_id=$1`, [skillId]);
+    assert(Number(snap.rows[0]!.c) === 1, "装载前快照必落");
+    const ev = await qApp(
+      `SELECT count(*) AS c FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='skill.dist.loaded'
+       AND payload->'decision'->'after'->>'skillId'=$2`, [scope.workspaceId, skillId]);
+    assert(Number(ev.rows[0]!.c) === 1, "skill.dist.loaded 事件留痕");
+    const r2 = await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: YKEY, instance: yInst, by: "MEM-001", fetcher: yFetch([yPkg(skillId)]),
+    });
+    eq(r2.loaded.length, 0, "同版本重推不重复装载");
+    await yCleanup(skillId);
+  });
+
+  YC("L2 执行面永不静默：staging+审批提案 → 未批准装载拒绝 → 批准后装载留痕", async () => {
+    const skillId = `skill-y-l2-${SFX}`;
+    await yCleanup(skillId);
+    const pkg = yPkg(skillId, { meta: DistMeta.parse({ category: "tool-execution", toolWhitelist: ["browser-act"], egressDomains: ["api.browseract.com"] }) });
+    const r = await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: YKEY, instance: yInst, by: "MEM-001", fetcher: yFetch([pkg]),
+    });
+    eq(r.loaded.length, 0, "L2 不静默装载");
+    eq(r.pending[0]!.tier, "L2", "L2 定级");
+    assert(r.pending[0]!.approvalId?.startsWith("apr-e-"), "审批提案已生成");
+    let blocked = false;
+    try { await loadStaging(app, gw, scope, { stagingId: r.pending[0]!.stagingId, by: "MEM-001" }); }
+    catch { blocked = true; }
+    assert(blocked, "审批未过装载必须拒绝");
+    await qApp(`UPDATE approvals SET status='approved' WHERE approval_id=$1`, [r.pending[0]!.approvalId!]);
+    const ok = await loadStaging(app, gw, scope, { stagingId: r.pending[0]!.stagingId, by: "MEM-001" });
+    eq(ok.skillId, skillId, "批准后装载成功");
+    await yCleanup(skillId);
+  });
+
+  YC("预检拦截：PII 命中 → rejected 留档不进运行时（不降级不跳过）", async () => {
+    const skillId = `skill-y-bad-${SFX}`;
+    await yCleanup(skillId);
+    const bad = yPkg(skillId, { body: "客人电话 13812345678 请回拨" });
+    const r = await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: YKEY, instance: yInst, by: "MEM-001", fetcher: yFetch([bad]),
+    });
+    eq(r.rejected.length, 1, "rejected 计数");
+    const s = await qApp(`SELECT count(*) AS c FROM skills WHERE id=$1`, [skillId]);
+    eq(Number(s.rows[0]!.c), 0, "被拒技能不进技能库");
+    await yCleanup(skillId);
+  });
+
+  YC("prompt 策略：L0/L1 只入 staging 待人工装载；策略切换回 silent 后恢复静默", async () => {
+    const skillId = `skill-y-prompt-${SFX}`;
+    await yCleanup(skillId);
+    await setSilentMode(app, gw, scope, { mode: "prompt", by: "MEM-001" });
+    eq(await getSilentMode(app, scope), "prompt", "策略已切 prompt");
+    const r = await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: YKEY, instance: yInst, by: "MEM-001", fetcher: yFetch([yPkg(skillId)]),
+    });
+    eq(r.loaded.length, 0, "prompt 下不静默装载");
+    eq(r.pending.length, 1, "入 staging 待人工");
+    await loadStaging(app, gw, scope, { stagingId: r.pending[0]!.stagingId, by: "MEM-001" });
+    await setSilentMode(app, gw, scope, { mode: "silent", by: "MEM-001" });
+    const st = await distStatus(app, scope);
+    eq(st.silentMode, "silent", "策略切回 silent");
+    await yCleanup(skillId);
+  });
+
+  YC("回滚栈语义：v1→v2 升级后连续回滚 = 恢复 v1 → 再回滚 = 移除（快照消费）", async () => {
+    const skillId = `skill-y-rb-${SFX}`;
+    await yCleanup(skillId);
+    await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: YKEY, instance: yInst, by: "MEM-001", fetcher: yFetch([yPkg(skillId)]),
+    });
+    await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: YKEY, instance: yInst, by: "MEM-001",
+      fetcher: yFetch([yPkg(skillId, { version: "2.0.0", body: "# Y 域 v2\n\n## 触发（何时用）\n每日 08:00\n\n## 步骤\n1. 取数\n2. 复核\n\n## 边界（什么不做）\n不破保底价" })]),
+    });
+    const rb1 = await rollbackSkill(app, gw, scope, { skillId, by: "MEM-001" });
+    eq(rb1.restoredVersion, "1.0.0", "第一次回滚恢复 v1");
+    const rb2 = await rollbackSkill(app, gw, scope, { skillId, by: "MEM-001" });
+    eq(rb2.restoredVersion, null, "第二次回滚移除（首装前无此技能）");
+    const s = await qApp(`SELECT count(*) AS c FROM skills WHERE id=$1`, [skillId]);
+    eq(Number(s.rows[0]!.c), 0, "技能已移除");
+    await yCleanup(skillId);
+  });
+
+  YC("定向投放：bundle 标签不匹配的条目不进入 staging（官方只按标签定向）", async () => {
+    const skillId = `skill-y-target-${SFX}`;
+    await yCleanup(skillId);
+    const r = await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: YKEY, instance: yInst, by: "MEM-001",
+      fetcher: yFetch([yPkg(skillId)], { bundles: ["retail"] }),
+    });
+    eq(r.matched, 0, "定向不匹配计数");
+    eq(r.skipped[0]!.reason, "定向不匹配", "跳过原因");
+    const st = await qApp(`SELECT count(*) AS c FROM skill_dist_staging WHERE skill_id=$1`, [skillId]);
+    eq(Number(st.rows[0]!.c), 0, "不匹配条目不落 staging");
+  });
+}
+
 
 /* ================= 主流程 ================= */
 

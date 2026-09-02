@@ -10,6 +10,7 @@
     "./inspection": "./inspection/index.ts",
     "./audit-core": "./audit-core/index.ts",
     "./skills": "./skills/index.ts",
+    "./skill-ops": "./skill-ops/index.ts",
     "./fence-engine": "./fence-engine/index.ts",
     "./model-router": "./model-router/index.ts",
     "./night-shift": "./night-shift/index.ts",

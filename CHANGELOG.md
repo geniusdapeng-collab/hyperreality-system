@@ -2,6 +2,11 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [base-sync-1.11.0] - 2026-09-02 · 基座同步：技能保鲜环 P0（下行分发通道）
+
+> 自 workloom-im@1.11.0 同步（vendored 基座公共段一致）：packages/base/skill-ops 全量 + 迁移 0018 + skills.skillOps.* 路由 + suite Y 域用例。
+> 门禁：typecheck 全绿 · vitest skill-ops 19/19（含 RUN_DB_TESTS=1 PG 集成）· suite 全绿。
+
 ## [1.10.0] - 2026-08-31 · 自我进化飞轮 P0（D24）：反馈 → 记忆 → 行为校准
 
 > 立项依据：《WorkLoom 自我进化方案 v0.1》+ 双行业（酒店 / AI 短视频营销）反向验证 v0.2——
