@@ -1,7 +1,7 @@
 # hyperreality · 能力导览（人类版）
 
 > 视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）
-> 本文件由 `node scripts/generate-capabilities.mjs` 从代码事实**自动生成**（2026-08-29），
+> 本文件由 `node scripts/generate-capabilities.mjs` 从代码事实**自动生成**（2026-09-02），
 > 请勿手改——能力变更后重跑生成器即可。Agent 版机器清单见 docs/capability-map.md。
 
 ## 🚀 5 分钟体验路径
@@ -32,7 +32,7 @@ pnpm install && pnpm preview:all
 
 | 能力 | 一句话 | 怎么体验 |
 |---|---|---|
-| **bundles/ai-video/** | 25 数字员工 presets · 9 个官方技能 · 1 客群装配（audit_only） · 含 fast-scan 快照快扫（15–30 分钟当场出体检报告） | 见 bundles/ai-video/ 目录 |
+| **bundles/ai-video/** | 25 数字员工 presets · 9 个官方技能 · 2 客群装配（audit_only/managed） · 含 fast-scan 快照快扫（15–30 分钟当场出体检报告） | 见 bundles/ai-video/ 目录 |
 | **bundles/hotel/** | 7 数字员工 presets · 3 个官方技能 | 见 bundles/hotel/ 目录 |
 
 ### 🖐 操作电脑能力（本仓自带 · 可装生产工作站）
@@ -78,7 +78,7 @@ pnpm install && pnpm preview:all
 |---|---|---|
 | **高保真演示页 ×6** | 糖果色，含手机壳容器 | http://localhost:3001 |
 | **官网静态站** | 对外产品故事 | apps/site/index.html |
-| **自带技能 ×6** | cross-platform-review / deal-flow / demo-mirror / industry-entry 等 | skills/official/ |
+| **自带技能 ×7** | component-integration / cross-platform-review / deal-flow / demo-mirror 等 | skills/official/ |
 | **能力导览 PPT** | 路演/汇报直接用 | docs/capability-tour.pptx |
 | **Mock 数据体系** | 种子 + 离线模型 + 演示直登，开箱即用 | mock/README.md |
 
