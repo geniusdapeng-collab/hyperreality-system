@@ -19,7 +19,7 @@
  * 环境：签名密钥取 SKILL_DIST_SIGNING_KEY 或 --key；GitHub 元数据直连失败时自动走 ghfast 镜像，
  *      仍失败则退化为人人可填的 --license/--cloud 手工评估（不阻塞流程）。
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scanSkillForInjection, scanSkillForPublish, parseSkillFrontmatter } from "@workloom/base/skills";
 import { DistMeta, signPackage, classifyTier, type SkillPackage } from "@workloom/base/skill-ops";
@@ -155,13 +155,106 @@ function runChecks(dir: string, skillId?: string): { pkg: Omit<SkillPackage, "si
   return { pkg, tier };
 }
 
+/* ---------- 生态位重叠扫描（⓪业务准入·去重检查） ---------- */
+
+interface ExistingSkill {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  egressDomains: string[];
+  toolWhitelist: string[];
+}
+
+/** 收集现有技能库（registry 分发技能 + official 自带技能）作为对照集 */
+function collectExistingSkills(excludeDir: string): ExistingSkill[] {
+  const out: ExistingSkill[] = [];
+  const norm = (p: string) => p.replace(/\\/g, "/");
+  // registry（带 dist.json 的分发技能）
+  const regDir = join(ROOT, "skills/registry");
+  if (existsSync(regDir)) {
+    for (const name of readdirSync(regDir)) {
+      const d = join(regDir, name);
+      if (norm(d) === norm(excludeDir)) continue;
+      const dj = join(d, "dist.json");
+      if (!existsSync(dj)) continue;
+      try {
+        const meta = DistMeta.parse(JSON.parse(readFileSync(dj, "utf-8")));
+        const body = readFileSync(join(d, "SKILL.md"), "utf-8");
+        const fm = parseSkillFrontmatter(body);
+        out.push({
+          id: name, name: fm.name ?? name, description: fm.description ?? "",
+          category: meta.category, egressDomains: meta.egressDomains, toolWhitelist: meta.toolWhitelist,
+        });
+      } catch { /* 残缺资产不阻塞扫描 */ }
+    }
+  }
+  // official（自带技能，只有 SKILL.md）
+  const offDir = join(ROOT, "skills/official");
+  if (existsSync(offDir)) {
+    for (const suite of readdirSync(offDir)) {
+      const sd = join(offDir, suite);
+      if (!existsSync(sd)) continue;
+      for (const skill of readdirSync(sd)) {
+        const f = join(sd, skill, "SKILL.md");
+        if (!existsSync(f)) continue;
+        try {
+          const fm = parseSkillFrontmatter(readFileSync(f, "utf-8"));
+          out.push({ id: `official/${suite}/${skill}`, name: fm.name ?? skill, description: fm.description ?? "", egressDomains: [], toolWhitelist: [] });
+        } catch { /* skip */ }
+      }
+    }
+  }
+  return out;
+}
+
+/** 关键词提取：英文按词、中文按 2-gram，去停用噪声 */
+function keywordsOf(text: string): Set<string> {
+  const set = new Set<string>();
+  for (const w of text.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []) set.add(w);
+  const zh = text.replace(/[\x00-\xff]/g, "");
+  for (let i = 0; i + 2 <= zh.length; i++) set.add(zh.slice(i, i + 2));
+  return set;
+}
+
+/** 生态位重叠提示：同类别 / 出站域交集 / 工具面交集 / 描述关键词重合率 ≥40% */
+function scanOverlap(dir: string, meta: ReturnType<typeof DistMeta.parse>, description: string, skillName: string): string[] {
+  const warnings: string[] = [];
+  const mine = keywordsOf(`${skillName} ${description}`);
+  for (const ex of collectExistingSkills(dir)) {
+    const reasons: string[] = [];
+    if (meta.category && ex.category === meta.category && meta.category !== "knowledge") {
+      reasons.push(`同为 ${meta.category} 类执行面技能`);
+    }
+    const egressHit = meta.egressDomains.filter((d) => ex.egressDomains.includes(d));
+    if (egressHit.length) reasons.push(`出站域重合 [${egressHit.join(", ")}]`);
+    const toolHit = meta.toolWhitelist.filter((t) => ex.toolWhitelist.includes(t));
+    if (toolHit.length) reasons.push(`工具面重合 [${toolHit.join(", ")}]`);
+    const theirs = keywordsOf(`${ex.name} ${ex.description}`);
+    const inter = [...mine].filter((k) => theirs.has(k)).length;
+    const ratio = mine.size && theirs.size ? inter / Math.min(mine.size, theirs.size) : 0;
+    if (ratio >= 0.4) reasons.push(`描述关键词重合率 ${(ratio * 100).toFixed(0)}%`);
+    if (reasons.length >= 2) {
+      warnings.push(`与现有技能「${ex.name}」(${ex.id}) 疑似生态位重叠：${reasons.join("；")}`);
+    }
+  }
+  return warnings;
+}
+
 function cmdCheck(dir: string, quiet = false) {
   const { pkg, tier } = runChecks(dir, flags["skill-id"]);
+  const overlaps = scanOverlap(dir, pkg.meta, pkg.description, pkg.name);
   if (!quiet) {
     say(`✓ ${pkg.skillId} v${pkg.version}「${pkg.name}」`);
     say(`  类别=${pkg.meta.category} · 来源=${pkg.meta.origin} · 定级=${tier}（首装预判）`);
     say(`  依赖=[${pkg.meta.deps.join(", ")}] · 工具白名单=[${pkg.meta.toolWhitelist.join(", ")}] · 出站域=[${pkg.meta.egressDomains.join(", ")}]`);
     say(`  预检③④⑤ 全过（脱敏/注入/依赖形态与 staging 同函数）`);
+  }
+  if (overlaps.length) {
+    say(`  ⚠ 生态位重叠提示（⓪业务准入审查项，评审人必须书面回答"现有技能为什么不够用"）：`);
+    for (const w of overlaps) say(`    - ${w}`);
+  } else if (!quiet) {
+    say(`  生态位扫描：无重叠（对照 registry + official 全部现有技能）`);
   }
   return { pkg, tier };
 }
