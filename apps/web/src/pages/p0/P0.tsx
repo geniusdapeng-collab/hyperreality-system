@@ -10,6 +10,7 @@ import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { RejectDialog } from "../../components/RejectDialog";
 import { actionText, actorText , payloadText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
+import { SkillDistBanner } from "../../components/SkillDistBanner";
 import { useAskRailPadding } from "../../lib/useAskRail";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
 
@@ -296,6 +297,7 @@ export default function P0() {
 
       {/* 模拟数据横幅（D24：引导落地向导接入真实数据与真实大模型） */}
       <SimBanner />
+      <SkillDistBanner />
 
       {/* 舞台 */}
       <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4">

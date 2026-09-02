@@ -88,6 +88,21 @@ import {
   type InstanceProfile,
 } from "@workloom/base/skill-ops";
 import {
+  getRefluxOptIn,
+  previewReflux,
+  RefluxError,
+  sendReflux,
+  setRefluxOptIn,
+} from "@workloom/base/skill-ops";
+import {
+  buildManifest,
+  consoleHealth,
+  ConsoleError,
+  listInbox,
+  officializeDraft,
+  reviewRefluxDraft,
+} from "@workloom/base/skill-ops";
+import {
   boundOpenidOfMember,
   ChannelError,
   composeApprovalCard,
@@ -1311,14 +1326,14 @@ const skillsRouter = router({
           throw mapSkillOpsError(err);
         }
       }),
-    /** 静默策略（silent=L0/L1 默认静默 / prompt=提示后升级；L2 不可配置永远审批） */
+    /** 分发策略（silent=L0/L1 默认静默 / prompt=提示后升级；autoSync=夜班自动同步总开关；L2 不可配置永远审批） */
     setPolicy: protectedProcedure
-      .input(z.object({ mode: z.enum(["silent", "prompt"]) }))
+      .input(z.object({ mode: z.enum(["silent", "prompt"]).optional(), autoSync: z.boolean().optional() }))
       .mutation(async ({ ctx, input }) => {
         assertSkillManage(ctx.identity.role);
         try {
           return await setSilentMode(getAppPool(), getGatewayPool(), scopeOf(ctx.identity), {
-            mode: input.mode, by: ctx.identity.memberNo,
+            mode: input.mode, autoSync: input.autoSync, by: ctx.identity.memberNo,
           });
         } catch (err) {
           throw mapSkillOpsError(err);
@@ -1350,8 +1365,121 @@ const skillsRouter = router({
           throw mapSkillOpsError(err);
         }
       }),
+    /** 上行回流（D19 四条红线：opt-in / 预览即所发 / 脱敏管道 / 发送留痕） */
+    reflux: router({
+      /** opt-in 状态查询（默认关） */
+      optIn: protectedProcedure.query(async ({ ctx }) => {
+        return { optIn: await getRefluxOptIn(getAppPool(), scopeOf(ctx.identity)) };
+      }),
+      /** opt-in 开关（客户治理主权，变更留痕） */
+      setOptIn: protectedProcedure
+        .input(z.object({ optIn: z.boolean() }))
+        .mutation(async ({ ctx, input }) => {
+          assertSkillManage(ctx.identity.role);
+          try {
+            return await setRefluxOptIn(getAppPool(), getGatewayPool(), scopeOf(ctx.identity), {
+              optIn: input.optIn, by: ctx.identity.memberNo,
+            });
+          } catch (err) {
+            throw mapRefluxError(err);
+          }
+        }),
+      /** 预览（预览即所发：返回脱敏后完整上送包 + 六信号摘要，可编辑后放弃） */
+      preview: protectedProcedure
+        .input(z.object({ skillId: z.string() }))
+        .query(async ({ ctx, input }) => {
+          try {
+            return await previewReflux(getAppPool(), scopeOf(ctx.identity), input.skillId);
+          } catch (err) {
+            throw mapRefluxError(err);
+          }
+        }),
+      /** 发送（opt-in 未开启拒发；未配端点留 outbox；发送行为留痕） */
+      send: protectedProcedure
+        .input(z.object({ skillId: z.string() }))
+        .mutation(async ({ ctx, input }) => {
+          assertSkillManage(ctx.identity.role);
+          try {
+            return await sendReflux(getAppPool(), getGatewayPool(), scopeOf(ctx.identity), {
+              skillId: input.skillId, by: ctx.identity.memberNo,
+            });
+          } catch (err) {
+            throw mapRefluxError(err);
+          }
+        }),
+    }),
+    /** 官方运营台（仅 SKILL_OPS_MODE=official 部署启用；客户端调用一律 403） */
+    console: router({
+      health: protectedProcedure.query(async ({ ctx }) => {
+        assertOfficialMode(ctx.identity.role);
+        return consoleHealth(getAppPool());
+      }),
+      inbox: protectedProcedure.query(async ({ ctx }) => {
+        assertOfficialMode(ctx.identity.role);
+        return listInbox(getAppPool());
+      }),
+      review: protectedProcedure
+        .input(z.object({ draftId: z.string(), gesture: z.enum(["approve", "reject"]), reason: z.string().max(200).optional() }))
+        .mutation(async ({ ctx, input }) => {
+          assertOfficialMode(ctx.identity.role);
+          try {
+            return await reviewRefluxDraft(getAppPool(), getGatewayPool(), scopeOf(ctx.identity), {
+              draftId: input.draftId, by: ctx.identity.memberNo, gesture: input.gesture, reason: input.reason,
+            });
+          } catch (err) {
+            throw mapConsoleError(err);
+          }
+        }),
+      /** 官方化（须双人复核通过且执行人为复核成员之一；可附抽象完善终稿） */
+      officialize: protectedProcedure
+        .input(z.object({
+          draftId: z.string(),
+          final: z.object({ name: z.string().optional(), description: z.string().optional(), body: z.string().optional() }).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          assertOfficialMode(ctx.identity.role);
+          try {
+            return await officializeDraft(getAppPool(), getGatewayPool(), scopeOf(ctx.identity), {
+              draftId: input.draftId, by: ctx.identity.memberNo, final: input.final,
+            });
+          } catch (err) {
+            throw mapConsoleError(err);
+          }
+        }),
+      /** 构建签名 manifest（官方技能库 → 分发包；GET /skill-dist/manifest.json 同逻辑对外服务） */
+      buildManifest: protectedProcedure.mutation(async ({ ctx }) => {
+        assertOfficialMode(ctx.identity.role);
+        const key = process.env.SKILL_DIST_SIGNING_KEY ?? "";
+        if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "未配置 SKILL_DIST_SIGNING_KEY" });
+        return buildManifest(getAppPool(), { signingKey: key });
+      }),
+    }),
   }),
 });
+
+/** 官方运营台模式守卫（SKILL_OPS_MODE=official + 管理角色；客户端实例一律 403） */
+function assertOfficialMode(role: string): void {
+  assertSkillManage(role);
+  if (process.env.SKILL_OPS_MODE !== "official") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "本实例非官方运营台部署（SKILL_OPS_MODE≠official），console 端点禁用" });
+  }
+}
+
+function mapRefluxError(err: unknown): Error {
+  if (err instanceof RefluxError) {
+    const code = err.code === "NOT_FOUND" ? "NOT_FOUND" : "BAD_REQUEST";
+    return new TRPCError({ code, message: err.message });
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
+function mapConsoleError(err: unknown): Error {
+  if (err instanceof ConsoleError) {
+    const code = err.code === "NOT_FOUND" ? "NOT_FOUND" : "BAD_REQUEST";
+    return new TRPCError({ code, message: err.message });
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
 
 /** 本实例定向标签（投放匹配面：workspaces.industry 即已装配行业 Bundle；edition 走 env，默认 community） */
 async function instanceProfileOf(scope: { tenantId: string; workspaceId: string }): Promise<InstanceProfile> {

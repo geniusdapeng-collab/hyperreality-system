@@ -29,15 +29,18 @@ export class SkillOpsError extends Error {
   }
 }
 
-/* ---------- 事件留痕（与 skills/registry.ts 同口径） ---------- */
+/* ---------- 事件留痕（与 skills/registry.ts 同口径；actor 支持系统身份——夜班自动同步归因 night-shift） ---------- */
 
-async function emit(gateway: pg.Pool, scope: Scope, by: string, decision: Record<string, unknown>, links?: string[]): Promise<string> {
+/** 事件归因身份：人工同步=human:memberNo；夜班自动同步=system:night-shift（白名单系统组件） */
+export interface EventActor { id: string; type: "human" | "system" }
+
+async function emit(gateway: pg.Pool, scope: Scope, by: EventActor, decision: Record<string, unknown>, links?: string[]): Promise<string> {
   const r = await gatewayAppend(gateway, {
     tenantId: scope.tenantId, workspaceId: scope.workspaceId,
-    actor: { id: by, type: "human" },
+    actor: { id: by.id, type: by.type },
   }, {
-    who: { type: "human", id: by },
-    context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "inapp" },
+    who: { type: by.type, id: by.id },
+    context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: by.type === "system" ? "夜班" : "inapp" },
     object: { type: "skill", id: (decision.after as { skillId?: string } | undefined)?.skillId },
     decision: decision as never,
     rule_impact: [],
@@ -46,19 +49,22 @@ async function emit(gateway: pg.Pool, scope: Scope, by: string, decision: Record
   return r.eventId;
 }
 
-async function emitInTx(client: pg.PoolClient, scope: Scope, by: string, decision: Record<string, unknown>): Promise<string> {
+async function emitInTx(client: pg.PoolClient, scope: Scope, by: EventActor, decision: Record<string, unknown>): Promise<string> {
   const r = await gatewayAppendOnClient(client, {
     tenantId: scope.tenantId, workspaceId: scope.workspaceId,
-    actor: { id: by, type: "human" },
+    actor: { id: by.id, type: by.type },
   }, {
-    who: { type: "human", id: by },
-    context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "inapp" },
+    who: { type: by.type, id: by.id },
+    context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: by.type === "system" ? "夜班" : "inapp" },
     object: { type: "skill", id: (decision.after as { skillId?: string } | undefined)?.skillId },
     decision: decision as never,
     rule_impact: [],
   });
   return r.eventId;
 }
+
+/** by 字符串（人工成员号）→ EventActor 的兼容转换 */
+const human = (memberNo: string): EventActor => ({ id: memberNo, type: "human" });
 
 /* ---------- 拉取 ---------- */
 
@@ -73,7 +79,7 @@ const defaultFetcher: ManifestFetcher = async (url) => {
 /* ---------- 装载（事务内：快照 → 技能库 upsert → 已装快照跟进 → 事件） ---------- */
 
 async function loadPackageInTx(
-  client: pg.PoolClient, scope: Scope, pkg: SkillPackage, tier: string, by: string, checks: StagingCheck[],
+  client: pg.PoolClient, scope: Scope, pkg: SkillPackage, tier: string, by: EventActor, checks: StagingCheck[],
 ): Promise<{ upgraded: boolean; previousVersion: string | null }> {
   // ① 快照（装载前必落：旧 skills 行 + 旧 install 行）
   const cur = await client.query(
@@ -139,6 +145,8 @@ export async function syncDistribution(
     registryUrl: string; signingKey: string; instance: InstanceProfile; by: string;
     fetcher?: ManifestFetcher;
     depsAvailable?: (dep: string) => boolean;
+    /** 事件归因身份：缺省 = human:by（人工同步）；夜班自动同步传 { id: "night-shift", type: "system" } */
+    actor?: EventActor;
   },
 ): Promise<SyncResult> {
   // 未配置 registry 或签名密钥 = 分发功能整体禁用（不降级为跳过验签）
@@ -146,6 +154,7 @@ export async function syncDistribution(
     return { disabled: true, matched: 0, loaded: [], pending: [], rejected: [], skipped: [] };
   }
   const fetcher = opts.fetcher ?? defaultFetcher;
+  const actor: EventActor = opts.actor ?? human(opts.by);
   const raw = await fetcher(opts.registryUrl);
   const manifest = DistManifest.parse(raw); // schema 不合直接抛错（残缺资产不静默放行，与 official.ts 同纪律）
 
@@ -179,7 +188,7 @@ export async function syncDistribution(
     if (!staging.pass) {
       const reasons = staging.checks.filter((c) => !c.pass).map((c) => c.detail);
       await upsertStaging(app, scope, { stagingId, pkg, tier: staging.tier, checks: staging.checks, status: "rejected" });
-      await emit(gateway, scope, opts.by, {
+      await emit(gateway, scope, actor, {
         action: "skill.dist.rejected",
         after: { skillId: pkg.skillId, name: pkg.name, version: pkg.version, stagingId, reasons },
         basis: ["staging 预检不过不装载、不降级（方案 v0.2 §3.3）；留档供审计"],
@@ -195,7 +204,7 @@ export async function syncDistribution(
         `SELECT approval_id FROM skill_dist_staging WHERE id=$1 AND status='pending'`, [stagingId]);
       let approvalId = existing.rows[0]?.approval_id ?? undefined;
       if (!approvalId) {
-        const evId = await emit(gateway, scope, opts.by, {
+        const evId = await emit(gateway, scope, actor, {
           action: "skill.dist.pending_approval",
           after: { skillId: pkg.skillId, name: pkg.name, version: pkg.version, stagingId, tier: "L2", diff: staging.diff },
           basis: ["L2 执行面/权限面变化永不静默，走审批（升级永不自动铁律）"],
@@ -206,8 +215,10 @@ export async function syncDistribution(
           await client.query("BEGIN");
           await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
           await client.query(
-            `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot)
-             VALUES ($1,$2,$3,$4,'inapp','pending',$5)`,
+            // tier='l4_chairman'：权限面扩张=董事长级人审（围栏放宽同层），
+            // 必须显式指定——缺省 tier='l2_captain' 会被数字CEO队列节拍自动裁决，绕过 L2 永不静默红线
+            `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+             VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l4_chairman')`,
             [approvalId, scope.tenantId, scope.workspaceId, evId,
              JSON.stringify({ kind: "skill_dist_install", stagingId, skillId: pkg.skillId, version: pkg.version })]);
         } catch (err) {
@@ -226,7 +237,7 @@ export async function syncDistribution(
     // L0/L1：silent → 立即热装载；prompt → 入 staging 待人工
     if (silentMode === "prompt") {
       await upsertStaging(app, scope, { stagingId, pkg, tier: staging.tier, checks: staging.checks, status: "pending" });
-      await emit(gateway, scope, opts.by, {
+      await emit(gateway, scope, actor, {
         action: "skill.dist.staged",
         after: { skillId: pkg.skillId, name: pkg.name, version: pkg.version, stagingId, tier: staging.tier },
         basis: ["静默策略=prompt：L0/L1 入 staging 待人工装载（提示后升级）"],
@@ -240,7 +251,7 @@ export async function syncDistribution(
       await client.query("BEGIN");
       await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
       await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-      await loadPackageInTx(client, scope, pkg, staging.tier, opts.by, staging.checks);
+      await loadPackageInTx(client, scope, pkg, staging.tier, actor, staging.checks);
       await client.query(
         `INSERT INTO skill_dist_staging (id, skill_id, workspace_id, tier, package, checks, status, decided_at)
          VALUES ($1,$2,$3,$4,$5,$6,'loaded',now())
@@ -273,7 +284,7 @@ export async function syncDistribution(
     await client.query("COMMIT").catch(() => undefined);
     client.release();
   }
-  await emit(gateway, scope, opts.by, {
+  await emit(gateway, scope, actor, {
     action: "skill.dist.sync",
     after: {
       manifestVersion: manifest.registryVersion,
@@ -344,7 +355,7 @@ export async function loadStaging(
       }
     }
     const pkg = row.package;
-    await loadPackageInTx(client, scope, pkg, row.tier, input.by, row.checks ?? []);
+    await loadPackageInTx(client, scope, pkg, row.tier, human(input.by), row.checks ?? []);
     await client.query(`UPDATE skill_dist_staging SET status='loaded', decided_at=now() WHERE id=$1`, [input.stagingId]);
     await client.query("COMMIT");
     return { skillId: row.skill_id, version: pkg.version, tier: row.tier };
@@ -402,7 +413,7 @@ export async function rollbackSkill(
     }
     // 快照为栈语义：回滚即消费——恢复到该快照状态后，下一次回滚取更早一份
     await client.query(`DELETE FROM skill_dist_snapshots WHERE id=$1`, [snap.id]);
-    await emitInTx(client, scope, input.by, {
+    await emitInTx(client, scope, human(input.by), {
       action: "skill.dist.rollback",
       after: {
         skillId: input.skillId, snapshotId: snap.id,
@@ -421,28 +432,49 @@ export async function rollbackSkill(
   };
 }
 
-/* ---------- 状态查询（技能中心投影） ---------- */
+/* ---------- 状态查询（技能中心 + 通栏通知投影） ---------- */
 
 export async function distStatus(app: pg.Pool, scope: Scope) {
   const client = await app.connect();
   try {
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-    const [staging, policy, state] = await Promise.all([
-      client.query(
-        `SELECT id, skill_id, tier, status, approval_id, created_at, decided_at,
-                package->>'name' AS name, package->>'version' AS version
-         FROM skill_dist_staging ORDER BY created_at DESC LIMIT 50`),
-      client.query(`SELECT silent_mode, updated_by, updated_at FROM skill_dist_policy WHERE workspace_id=$1`, [scope.workspaceId]),
-      client.query(`SELECT last_manifest_version, last_sync_at FROM skill_dist_state WHERE workspace_id=$1`, [scope.workspaceId]),
-    ]);
+    const staging = await client.query(
+      `SELECT id, skill_id, tier, status, approval_id, created_at, decided_at,
+              package->>'name' AS name, package->>'version' AS version
+       FROM skill_dist_staging ORDER BY created_at DESC LIMIT 50`);
+    const policy = await client.query(
+      `SELECT silent_mode, auto_sync, updated_by, updated_at FROM skill_dist_policy WHERE workspace_id=$1`, [scope.workspaceId]);
+    const state = await client.query(
+      `SELECT last_manifest_version, last_sync_at FROM skill_dist_state WHERE workspace_id=$1`, [scope.workspaceId]);
+    // 通栏通知数据源①：近 24h 装载事件（静默/审批装载；auto=系统归因即夜班自动）
+    const loaded = await client.query<{
+      skillId: string; name: string; version: string; tier: string; at: Date; auto: boolean;
+    }>(
+      `SELECT payload->'decision'->'after'->>'skillId' AS "skillId",
+              payload->'decision'->'after'->>'name' AS name,
+              payload->'decision'->'after'->>'version' AS version,
+              payload->'decision'->'after'->>'tier' AS tier,
+              created_at AS at,
+              (payload->'who'->>'type' = 'system') AS auto
+       FROM biz_events
+       WHERE workspace_id=$1
+         AND payload->'decision'->>'action' IN ('skill.dist.loaded','skill.dist.approved_loaded')
+         AND created_at > now() - interval '24 hours'
+       ORDER BY created_at DESC LIMIT 10`, [scope.workspaceId]);
+    // 通栏通知数据源②：待审批/待装载计数（L2 审批提案 + prompt 待装载）
+    const pending = await client.query<{ c: string }>(
+      `SELECT count(*) AS c FROM skill_dist_staging WHERE status='pending'`);
     await client.query("COMMIT");
     return {
       staging: staging.rows,
       silentMode: policy.rows[0]?.silent_mode ?? "silent",
+      autoSync: policy.rows[0]?.auto_sync ?? true,
       policyUpdatedBy: policy.rows[0]?.updated_by ?? null,
       lastManifestVersion: state.rows[0]?.last_manifest_version ?? null,
       lastSyncAt: state.rows[0]?.last_sync_at ?? null,
+      recentLoaded: loaded.rows,
+      pendingCount: Number(pending.rows[0]?.c ?? 0),
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);

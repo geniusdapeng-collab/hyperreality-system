@@ -9,6 +9,9 @@ import { signPackage, verifySignature } from "./signature.js";
 import { matchesTargets, compareVersions } from "./targeting.js";
 import { classifyTier, diffDistMeta, hasPermissionDrift } from "./tier.js";
 import { runStagingChecks } from "./staging.js";
+import { inNightWindow, isSyncDue } from "./autosync.js";
+import { scoreSignals, type SkillSignals } from "./reflux.js";
+import { clusterKeyOf } from "./console.js";
 import { DistManifest, DistMeta, type SkillPackage } from "./types.js";
 
 const KEY = "test-signing-key-32bytes-for-p0!!!";
@@ -135,6 +138,50 @@ describe("manifest schema（残缺资产不静默放行）", () => {
   });
 });
 
+describe("六信号评分与聚类键（回流纯函数）", () => {
+  const sig = (over: Partial<SkillSignals>): SkillSignals => ({
+    adoption: null, completionRate: null, approvalRate: null, praiseRate: null,
+    reworkRate: null, errorRate: null, samples: 0, sparse: true, ...over,
+  });
+  it("全信号满分=1；null 信号剔除后权重归一；反向信号反转；稀疏降权 ×0.5", () => {
+    expect(scoreSignals(sig({
+      adoption: 1, completionRate: 1, approvalRate: 1, praiseRate: 1, reworkRate: 0, errorRate: 0,
+      samples: 100, sparse: false,
+    }))).toBe(1);
+    // 只有 adoption=1（权重 0.25 归一）→ 1；稀疏 ×0.5 → 0.5
+    expect(scoreSignals(sig({ adoption: 1, samples: 5, sparse: true }))).toBe(0.5);
+    // reworkRate=1（全返工）按 1-1=0 计入
+    expect(scoreSignals(sig({ reworkRate: 1, samples: 30, sparse: false }))).toBe(0);
+    // 无可用信号 → 0
+    expect(scoreSignals(sig({}))).toBe(0);
+  });
+  it("聚类键归一化：大小写/空白/标点不敏感", () => {
+    expect(clusterKeyOf("差评安抚 SOP")).toBe(clusterKeyOf("差评安抚sop"));
+    expect(clusterKeyOf("收益-管理_v2")).toBe("收益管理v2");
+  });
+});
+
+describe("夜班窗口与到期判定（自动同步纯函数）", () => {  it("跨午夜窗口 22:00→08:30：23:00/03:00 在窗内，12:00/21:59 在窗外", () => {
+    expect(inNightWindow(new Date("2026-09-02T23:00:00+08:00"))).toBe(true);
+    expect(inNightWindow(new Date("2026-09-02T03:00:00+08:00"))).toBe(true);
+    expect(inNightWindow(new Date("2026-09-02T08:00:00+08:00"))).toBe(true);
+    expect(inNightWindow(new Date("2026-09-02T12:00:00+08:00"))).toBe(false);
+    expect(inNightWindow(new Date("2026-09-02T21:59:00+08:00"))).toBe(false);
+    expect(inNightWindow(new Date("2026-09-02T09:00:00+08:00"))).toBe(false);
+  });
+  it("UTC 时间按上海墙钟判定（不依赖容器 TZ）", () => {
+    // UTC 15:00 = 上海 23:00 → 窗内；UTC 02:00 = 上海 10:00 → 窗外
+    expect(inNightWindow(new Date("2026-09-02T15:00:00Z"))).toBe(true);
+    expect(inNightWindow(new Date("2026-09-02T02:00:00Z"))).toBe(false);
+  });
+  it("到期判定：从未同步=到期；≥20h=到期；<20h=未到期", () => {
+    const now = new Date("2026-09-02T03:00:00+08:00");
+    expect(isSyncDue(null, now)).toBe(true);
+    expect(isSyncDue(new Date(now.getTime() - 21 * 3600_000), now)).toBe(true);
+    expect(isSyncDue(new Date(now.getTime() - 2 * 3600_000), now)).toBe(false);
+  });
+});
+
 /* ---------- PG 集成 ---------- */
 
 const RUN_DB = process.env.RUN_DB_TESTS === "1" && !!process.env.DATABASE_APP_URL;
@@ -244,6 +291,9 @@ describe.runIf(RUN_DB)("skill-ops PG 集成（P0 分发闭环）", async () => {
     expect(r.loaded.length).toBe(0);
     expect(r.pending[0]).toMatchObject({ skillId, tier: "L2" });
     expect(r.pending[0]!.approvalId).toMatch(/^apr-e-/);
+    // tier 必须是 l4_chairman：权限面扩张=董事长级人审；缺省 l2_captain 会被数字CEO队列自动裁决（红线漏洞）
+    const aprTier = await qApp(`SELECT tier FROM approvals WHERE approval_id=$1`, [r.pending[0]!.approvalId!]);
+    expect(aprTier.rows[0]!.tier).toBe("l4_chairman");
     // 未批准 → 装载拒绝
     await expect(loadStaging(app, gw, scope, { stagingId: r.pending[0]!.stagingId, by: "MEM-001" }))
       .rejects.toThrow(/审批/);
@@ -294,8 +344,7 @@ describe.runIf(RUN_DB)("skill-ops PG 集成（P0 分发闭环）", async () => {
     await cleanup(skillId);
   });
 
-  it("回滚：恢复装载前快照（首装回滚=从技能库移除；升级回滚=恢复旧版本）", async () => {
-    const skillId = `skill-dist-rb-${RUN}`;
+  it("回滚：恢复装载前快照（首装回滚=从技能库移除；升级回滚=恢复旧版本）", async () => {    const skillId = `skill-dist-rb-${RUN}`;
     await cleanup(skillId);
     // 首装 v1 → 升级 v2 → 回滚 → 恢复 v1 → 再回滚 → 移除
     const v1 = mkPkg({ skillId, version: "1.0.0" });
@@ -321,6 +370,163 @@ describe.runIf(RUN_DB)("skill-ops PG 集成（P0 分发闭环）", async () => {
        AND payload->'decision'->>'action'='skill.dist.rollback'
        AND payload->'decision'->'after'->>'skillId'=$2`, [scope.workspaceId, skillId]);
     expect(Number(ev.rows[0]!.c)).toBe(2);
+    await cleanup(skillId);
+  });
+
+  it("夜班自动同步：窗口外/未到期/auto_sync 关闭不执行；窗口内到期执行且归因 system:night-shift", async () => {
+    const { autoSyncWorkspace } = await import("./autosync.js");
+    const skillId = `skill-dist-auto-${RUN}`;
+    await cleanup(skillId);
+    const pkg = mkPkg({ skillId });
+    // nightNow 取「明天凌晨 3 点（上海）」：在窗内且晚于共享库中任何真实 created_at 的历史事件
+    const nightNow = new Date(Date.now() + 15 * 3600_000); // 真实当前约正午 → +15h ≈ 次日凌晨 3 点
+    const dayNow = new Date("2026-09-02T12:00:00+08:00");   // 正午窗外（固定值即可）
+
+    // ① 窗口外不执行
+    const r1 = await autoSyncWorkspace(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, fetcher: fetcherOf([pkg]), now: dayNow,
+    });
+    expect(r1).toMatchObject({ ran: false, reason: "out_of_window" });
+
+    // ② 窗口内且到期 → 执行（intervalMs=0 强制到期：共享库可能有历史自动同步事件）
+    const r2 = await autoSyncWorkspace(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, fetcher: fetcherOf([pkg]), now: nightNow, intervalMs: 0,
+    });
+    expect(r2.ran).toBe(true);
+    expect(r2.result?.loaded[0]).toMatchObject({ skillId, tier: "L0" });
+    // 事件归因 = system:night-shift（自动同步可辨识）
+    const ev = await qApp(
+      `SELECT payload->'who'->>'type' AS wtype, payload->'who'->>'id' AS wid FROM biz_events
+       WHERE workspace_id=$1 AND payload->'decision'->>'action'='skill.dist.loaded'
+         AND payload->'decision'->'after'->>'skillId'=$2`, [scope.workspaceId, skillId]);
+    expect(ev.rows[0]).toMatchObject({ wtype: "system", wid: "night-shift" });
+
+    // ③ 刚同步过 → 未到期不执行
+    const r3 = await autoSyncWorkspace(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, fetcher: fetcherOf([pkg]), now: nightNow,
+    });
+    expect(r3).toMatchObject({ ran: false, reason: "not_due" });
+
+    // ④ auto_sync=false → 不执行（客户总开关，治理主权）
+    await setSilentMode(app, gw, scope, { autoSync: false, by: "MEM-001" });
+    const r4 = await autoSyncWorkspace(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, fetcher: fetcherOf([pkg]),
+      now: new Date(nightNow.getTime() + 21 * 3600_000),
+    });
+    expect(r4).toMatchObject({ ran: false, reason: "auto_sync_off" });
+    await setSilentMode(app, gw, scope, { autoSync: true, by: "MEM-001" });
+
+    await cleanup(skillId);
+  });
+
+  /* ---------- P1：上行回流 + 官方消化流水线 ---------- */
+
+  it("回流红线①：opt-in 未开启直接拒发；开启后预览脱敏（PII 打码）且预览即所发", async () => {
+    const { previewReflux, sendReflux, setRefluxOptIn, getRefluxOptIn } = await import("./reflux.js");
+    const skillId = `skill-dist-rfx-${RUN}`;
+    await cleanup(skillId);
+    // 先用干净正文装载（staging③会拦 PII），装载后直接改库注入手机号——模拟客户自建技能含 PII 的场景
+    const pkg = mkPkg({ skillId });
+    await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, by: "MEM-001", fetcher: fetcherOf([pkg]),
+    });
+    await qApp(`UPDATE skills SET body=$2 WHERE id=$1`, [skillId, "# 差评安抚\n\n## 触发（何时用）\n客人来电 13812345678 时\n\n## 步骤\n1. 安抚\n\n## 边界（什么不做）\n不承诺免房"]);
+    // ① opt-in 关闭 → 拒发（先显式复位：共享库策略行可能被历史测试置过 true）
+    await setRefluxOptIn(app, gw, scope, { optIn: false, by: "MEM-001" });
+    expect(await getRefluxOptIn(app, scope)).toBe(false);
+    await expect(sendReflux(app, gw, scope, { skillId, by: "MEM-001" })).rejects.toThrow(/opt-in/);
+    // ② 开启后预览：手机号已打码
+    await setRefluxOptIn(app, gw, scope, { optIn: true, by: "MEM-001" });
+    const { payload, maskHits } = await previewReflux(app, scope, skillId);
+    expect(maskHits).toBeGreaterThan(0);
+    expect(payload.body).not.toContain("13812345678");
+    expect(payload.from).toEqual({ tenantId: scope.tenantId, workspaceId: scope.workspaceId });
+    expect(typeof payload.signals.score).toBe("number");
+    await cleanup(skillId);
+  });
+
+  it("回流发送：outbox 落库 + skill.reflux.sent 留痕；脱敏管道遇凭据词拒发", async () => {
+    const { sendReflux, setRefluxOptIn, buildRefluxPayload } = await import("./reflux.js");
+    const skillId = `skill-dist-rfx2-${RUN}`;
+    await cleanup(skillId);
+    const pkg = mkPkg({ skillId });
+    await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, by: "MEM-001", fetcher: fetcherOf([pkg]),
+    });
+    await setRefluxOptIn(app, gw, scope, { optIn: true, by: "MEM-001" });
+    // 未配端点 → queued 留 outbox
+    const r = await sendReflux(app, gw, scope, { skillId, by: "MEM-001", endpoint: "", signingKey: "" });
+    expect(r.status).toBe("queued");
+    const ob = await qApp(`SELECT status, skill_id FROM skill_reflux_outbox WHERE skill_id=$1`, [skillId]);
+    expect(ob.rows[0]!.skill_id).toBe(skillId);
+    const ev = await qApp(
+      `SELECT count(*) AS c FROM biz_events WHERE workspace_id=$1
+       AND payload->'decision'->>'action'='skill.reflux.sent'
+       AND payload->'decision'->'after'->>'skillId'=$2`, [scope.workspaceId, skillId]);
+    expect(Number(ev.rows[0]!.c)).toBe(1);
+    // 凭据词拒发（脱敏管道不是橡皮擦）：先装干净技能再注入凭据词
+    const badId = `${skillId}-bad`;
+    const bad = mkPkg({ skillId: badId });
+    await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, by: "MEM-001", fetcher: fetcherOf([bad]),
+    });
+    await qApp(`UPDATE skills SET body='配置 api_key=sk-123 后调用' WHERE id=$1`, [badId]);
+    await expect(buildRefluxPayload(app, scope, badId)).rejects.toThrow(/脱敏管道拦截/);
+    await cleanup(skillId);
+    await cleanup(`${skillId}-bad`);
+    await qApp(`DELETE FROM skill_reflux_outbox WHERE skill_id LIKE $1`, [`${skillId}%`]);
+  });
+
+  it("官方消化闭环：接收(验签) → 双人复核 → 官方化(origin=customer-reflux) → buildManifest 签名 → 客户端同步", async () => {
+    const { receiveReflux, listInbox, reviewRefluxDraft, officializeDraft, buildManifest, clusterKeyOf } = await import("./console.js");
+    const { buildRefluxPayload, setRefluxOptIn, signReflux } = await import("./reflux.js");
+    const skillId = `skill-dist-loop-${RUN}`;
+    await cleanup(skillId);
+    // ① 客户端产出回流包
+    const pkg = mkPkg({ skillId, name: "差评安抚话术" });
+    await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, by: "MEM-001", fetcher: fetcherOf([pkg]),
+    });
+    await setRefluxOptIn(app, gw, scope, { optIn: true, by: "MEM-001" });
+    const { payload } = await buildRefluxPayload(app, scope, skillId);
+    // ② 官方接收：错签名拒收；对签名入库
+    await expect(receiveReflux(app, gw, scope, { payload, signature: "0".repeat(64), signingKey: KEY }))
+      .rejects.toThrow(/验签/);
+    const recv = await receiveReflux(app, gw, scope, { payload, signature: signReflux(KEY, payload), signingKey: KEY });
+    expect(recv.deduped).toBe(false);
+    const recv2 = await receiveReflux(app, gw, scope, { payload, signature: signReflux(KEY, payload), signingKey: KEY });
+    expect(recv2.deduped).toBe(true); // 幂等
+    // ③ 入池排序（聚类键正确）
+    const inbox = await listInbox(app);
+    expect(inbox.drafts.find((d) => d.id === recv.draftId)).toBeTruthy();
+    expect(inbox.drafts.find((d) => d.id === recv.draftId)!.cluster_key).toBe(clusterKeyOf("差评安抚话术"));
+    // ④ 双人复核：不足两人官方化被拒；同一成员不能复核两次
+    await expect(officializeDraft(app, gw, scope, { draftId: recv.draftId, by: "MEM-001" }))
+      .rejects.toThrow(/两名不同成员/);
+    await reviewRefluxDraft(app, gw, scope, { draftId: recv.draftId, by: "MEM-001", gesture: "approve" });
+    await expect(reviewRefluxDraft(app, gw, scope, { draftId: recv.draftId, by: "MEM-001", gesture: "approve" }))
+      .rejects.toThrow(/已复核/);
+    await reviewRefluxDraft(app, gw, scope, { draftId: recv.draftId, by: "MEM-002", gesture: "approve" });
+    // ⑤ 官方化（执行人须为复核成员之一）
+    const off = await officializeDraft(app, gw, scope, {
+      draftId: recv.draftId, by: "MEM-001",
+      final: { name: "差评安抚话术（官方版）", description: "客户回流官方化抽象" },
+    });
+    expect(off.skillId).toBe(skillId);
+    const sk = await qApp(`SELECT level, desensitized, dist_meta->>'origin' AS origin, name FROM skills WHERE id=$1`, [skillId]);
+    expect(sk.rows[0]).toMatchObject({ level: "official", desensitized: true, origin: "customer-reflux", name: "差评安抚话术（官方版）" });
+    // ⑥ buildManifest：含官方化技能且签名可验（同库场景下客户端同步按「已不落后」幂等跳过——闭环链路各段均验证）
+    const manifest = await buildManifest(app, { signingKey: KEY });
+    const entry = manifest.entries.find((e) => e.package.skillId === skillId);
+    expect(entry).toBeTruthy();
+    expect(verifySignature(KEY, entry!.package)).toBe(true);
+    const syncR = await syncDistribution(app, gw, scope, {
+      registryUrl: "u", signingKey: KEY, instance, by: "MEM-001", fetcher: async () => manifest,
+    });
+    expect(syncR.skipped.find((s) => s.skillId === skillId)?.reason).toContain("已不落后");
+    // 清理
+    await qApp(`DELETE FROM skill_reflux_inbox WHERE id=$1`, [recv.draftId]);
+    await qApp(`DELETE FROM skill_reflux_outbox WHERE skill_id=$1`, [skillId]);
     await cleanup(skillId);
   });
 });

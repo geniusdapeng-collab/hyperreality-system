@@ -2,6 +2,11 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [base-sync-1.12.0] - 2026-09-02 · 基座同步：技能保鲜环 P1（自动同步 + 上行回流 + 官方运营台）
+
+> 自 workloom-im@1.12.0 同步（vendored 基座公共段一致）：skill-ops P1 完全体（autosync/reflux/console）+ 迁移 0019/0020 + SkillDistBanner 通栏 + skillOps.reflux/console 路由 + 官方端点 + suite Y 域 P1 用例与 R-26 加固 + L2 审批 tier 红线修复（l4_chairman）。
+> 门禁：typecheck 全绿 · vitest skill-ops 28/28 · suite 全绿（干净库口径）。
+
 ## [base-sync-1.11.0] - 2026-09-02 · 基座同步：技能保鲜环 P0（下行分发通道）
 
 > 自 workloom-im@1.11.0 同步（vendored 基座公共段一致）：packages/base/skill-ops 全量 + 迁移 0018 + skills.skillOps.* 路由 + suite Y 域用例。
