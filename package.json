@@ -46,7 +46,8 @@
     "computer:mcp": "tsx packages/base/computer-use/mcp.ts",
     "computer:smoke": "tsx packages/base/computer-use/smoke.ts",
     "setup": "bash scripts/bootstrap.sh",
-    "setup:full": "bash scripts/bootstrap.sh --with-computer"
+    "setup:full": "bash scripts/bootstrap.sh --with-computer",
+    "skill:forge": "tsx scripts/skill-forge.mts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

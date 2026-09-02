@@ -378,8 +378,15 @@ describe.runIf(RUN_DB)("skill-ops PG 集成（P0 分发闭环）", async () => {
     const skillId = `skill-dist-auto-${RUN}`;
     await cleanup(skillId);
     const pkg = mkPkg({ skillId });
-    // nightNow 取「明天凌晨 3 点（上海）」：在窗内且晚于共享库中任何真实 created_at 的历史事件
-    const nightNow = new Date(Date.now() + 15 * 3600_000); // 真实当前约正午 → +15h ≈ 次日凌晨 3 点
+    // 下一个上海凌晨 3 点（恒在夜班窗内且恒晚于真实事件时刻——不随运行时刻漂移）
+    const nightNow = (() => {
+      const now = new Date();
+      const sh = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+      const cand = new Date(sh);
+      cand.setHours(3, 0, 0, 0);
+      if (sh.getTime() >= cand.getTime()) cand.setDate(cand.getDate() + 1);
+      return new Date(cand.getTime() - (sh.getTime() - now.getTime()));
+    })();
     const dayNow = new Date("2026-09-02T12:00:00+08:00");   // 正午窗外（固定值即可）
 
     // ① 窗口外不执行

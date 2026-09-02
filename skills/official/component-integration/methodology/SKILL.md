@@ -44,6 +44,18 @@ description: 把 GitHub 开源组件评估、适配、登记、上架为技能�
 - `credentials` 字段永不出现——API Key 由客户侧本机配置；
 - 官方签名（HMAC-SHA256）后进分发 registry。
 
+**配套工具链（每个项目自带，`pnpm skill:forge`）**：
+
+| 命令 | 作用 |
+|---|---|
+| `pnpm skill:forge evaluate <github-url> [--license X] [--cloud none\|optional\|required]` | 五维评估 + dist.json 草稿（网络受限时手工补全不阻塞） |
+| `pnpm skill:forge check <dir>` | 资产校验 + staging 同款预检③④⑤（不签名，CI 可挂） |
+| `pnpm skill:forge package <dir>` | 官方签名 → `dist.package.json` |
+| `pnpm skill:forge register <dir> --name <名> --repo <url>` | 登记 oss-components.json |
+| `pnpm skill:forge publish <dir>` | 签名并加入本地 registry manifest（客户端拉取即生效） |
+
+签名密钥取 `SKILL_DIST_SIGNING_KEY` 或 `--key`。流程铁律不变：check 不过不打包，未签名不分发。
+
 ### ⑤ 灰度与上架
 
 - 白名单实例先行 → 观察健康指标（装载成功率/误熔断率/审批驳回率）→ 全量；
