@@ -2,7 +2,7 @@
   "meta": {
     "name": "WorkLoom 开源组件清单（oss-watch）",
     "version": 1,
-    "updated": "2026-08-26",
+    "updated": "2026-09-02",
     "rule": "凡进入运行时的开源组件必须登记于此；四仓底座公共段保持一致；AGPL 仅独立进程形态"
   },
   "components": [
@@ -356,6 +356,16 @@
       "gate": "smoke",
       "scope": "浏览器桥接对照组",
       "notes": "MIT；publish-rpa 真机发布的权限模型参照，暂不入运行时"
+    },
+    {
+      "name": "browseract",
+      "repo": "https://github.com/browser-act/skills",
+      "channel": "github",
+      "current": "选型入库（技能市场执行面技能 · 可选）",
+      "cadence": "weekly",
+      "gate": "standard",
+      "scope": "skills/registry/browser-act（执行面技能，L2 审批安装）",
+      "notes": "MIT；freemium 云依赖（stealth>5/代理/打码付费）——适配纪律：proxyMode=custom-only、API Key 客户本机、出站 api.browseract.com 全声明过三段瀑布；集成评估与适配见 skills/official/component-integration"
     }
   ]
 }

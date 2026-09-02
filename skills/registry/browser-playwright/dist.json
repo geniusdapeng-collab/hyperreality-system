@@ -1,0 +1,15 @@
+{
+  "category": "tool-execution",
+  "origin": "oss-curated",
+  "deps": ["playwright@1.40.0"],
+  "toolWhitelist": ["playwright", "pnpm computer"],
+  "egressDomains": [],
+  "fenceParams": {
+    "dailyActionCap": 200,
+    "formSubmit": "approval-required",
+    "sessionRecording": true,
+    "humanLoginOnly": true
+  },
+  "license": "Apache-2.0",
+  "sourceRepo": "https://github.com/microsoft/playwright"
+}

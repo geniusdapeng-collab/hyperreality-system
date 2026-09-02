@@ -1,0 +1,16 @@
+{
+  "category": "tool-execution",
+  "origin": "oss-curated",
+  "deps": ["browser-act"],
+  "toolWhitelist": ["browser-act"],
+  "egressDomains": ["api.browseract.com"],
+  "fenceParams": {
+    "accountDailyCap": 3,
+    "proxyMode": "custom-only",
+    "captchaSolve": "approval-required",
+    "maxStealthBrowsers": 5,
+    "humanLoginOnly": true
+  },
+  "license": "MIT",
+  "sourceRepo": "https://github.com/browser-act/skills"
+}
