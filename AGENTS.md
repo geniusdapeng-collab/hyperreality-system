@@ -1,6 +1,6 @@
 # AGENTS.md — 给 AI Coding Agent 的入场指引
 
-> 你正在 HyperReality（AI 视频创作工作台）仓库中工作。本文件是你进入仓库后**最先要读**的文件。
+> 你正在 WorkLoom IM仓库中工作。本文件是你进入仓库后**最先要读**的文件。
 
 ## 0. 最重要的一件事：你有"手"（本仓自带，生产可用）
 
@@ -54,6 +54,20 @@ pnpm preview:all     # 一键拉起三端 + Mock 数据固化（无需真实后�
 
 **未完成 preview:all 视为环境初始化未完成。** 验收清单：`PREVIEW_CHECKLIST.md`；Mock 口径：`mock/README.md`。
 
+### 1.1 要"完整客户端"体验（不走浏览器）？用桌面模式
+
+用户/客户明确要求**桌面客户端窗口**（无浏览器地址栏/标签页）时：
+
+```bash
+pnpm app            # 一条命令：环境检查 → server → web 生产包 → Electron 原生窗口
+pnpm app --dev      # 开发姿态（vite HMR）
+pnpm app --smoke    # 冒烟验证（CI/无头环境；有显示时真实拉窗验证渲染）
+```
+
+- 首次 pnpm install 后 Electron 二进制若未下载（pnpm 跳过 postinstall），`pnpm app` 会**自动补下载**（npmmirror 镜像），无需人工干预；
+- 未初始化环境（缺 .env）会明确指引先 `pnpm setup`；关窗即收拢全部服务，不留残留进程；
+- **不要只起 `pnpm -C apps/web dev` 就交付**——web 端有环境守门员（BackendGate）会渲染引导页，但正确交付是 `pnpm app` 或 `pnpm preview:all`。
+
 ## 2. 一键能力巡游（强烈建议进仓第一件事）
 
 ```bash
@@ -84,6 +98,7 @@ pnpm install                     # npm 源受限时用 registry.npmmirror.com
 pnpm db:migrate && pnpm db:seed  # 迁移 + 演示种子
 pnpm dev                         # server :8787（tRPC /trpc/*）+ web :5173
 ```
+
 验证服务就绪：`curl -s -o /dev/null -w "%{http_code}" http://localhost:5173` 返回 `200`。
 （8787 无 `/healthz`，以进程监听为准；跑测试前**先停掉残留的 8787/5173 服务**，否则 E2E 打错库、后台节拍污染断言。）
 
@@ -101,9 +116,9 @@ pnpm dev                         # server :8787（tRPC /trpc/*）+ web :5173
 |---|---|
 | `apps/server` | tRPC 服务端（:8787） |
 | `apps/web` / `apps/webc` | B 端 PC 工作台 / C 端 H5（:5173） |
-| `packages/base` | 底座包：workdata（事件/RLS）、fence-engine（围栏 DSL）、publish-rpa（全平台 RPA 发布）、computer-use（生产级电脑/浏览器自动操作，见 docs/computer-use-production.md）等 |
-| `bundles/` | 行业 Bundle：`ai-video/`（短视频创作域）、`hotel/` |
-| `skills/official/` | 自带技能：industry-entry / product-feedback / demo-mirror / cross-platform-review / deal-flow / ripping-reverse |
+| `packages/base` | 底座包：workdata（事件/RLS）、fence-engine（围栏 DSL）、captain（数字CEO）、computer-use（生产级电脑/浏览器自动操作，见 docs/computer-use-production.md）等 |
+| `bundles/` | 行业 Bundle：`hotel/`（酒店垂直包） |
+| `skills/official/` | 自带技能：release-gate / industry-entry / product-feedback |
 | `scripts/` | `suite*.ts` 测试套件、`seed*.ts` 种子、`release-gate.ts` 发布门禁、`agent-tour.sh` 能力巡游、`preview-all.sh` 三端预览 |
 | `docs/` | 设计规范、方案、测试目录、**capability-map.md**、**agent-computer-guide.md** |
 
