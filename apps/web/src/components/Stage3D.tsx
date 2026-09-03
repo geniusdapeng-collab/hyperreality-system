@@ -10,6 +10,7 @@
  *  - DPR 自适应（R3F 内置）——客户端固定比例画布 zoomFactor 下天然清晰。
  */
 import { useMemo, useRef, useState } from "react";
+import { Avatar3D, roleSkinOf } from "./Avatar3D";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
@@ -134,7 +135,8 @@ function CeoFigure({ active }: { active: boolean }) {
         <meshBasicMaterial color="#ffd98a" transparent opacity={0.7} />
       </mesh>
       <group ref={group}>
-        <DigitalHuman color="#ffd98a" scale={1.25} emissive={active ? 1.5 : 1.0} />
+        {/* CEO：Knight 金甲披风（真人风角色，Idle 骨骼动画） */}
+        <Avatar3D skin={{ model: "Knight", cape: true, tint: active ? "#ffd98a" : "#9a8a6a", workAction: "Idle" }} state="working" scale={1.35} />
       </group>
       <pointLight color="#ffcf7a" intensity={active ? 9 : 5} distance={9} decay={2} position={[0, 1.6, 0.4]} />
     </group>
@@ -176,7 +178,7 @@ function Member({
     const isFront = index < front;
     const rowIdx = isFront ? index : index - front;
     const rowCount = isFront ? front : Math.max(total - front, 1);
-    const radius = isFront ? 2.1 : 2.9;
+    const radius = isFront ? 2.4 : 3.3;
     const spread = Math.PI * 0.85; // 扇形张角
     const ang = -spread / 2 + (rowCount === 1 ? spread / 2 : (rowIdx / (rowCount - 1)) * spread);
     return {
@@ -206,7 +208,12 @@ function Member({
       </mesh>
       <PulseRing color={color} phase={slot.phase} />
       <group ref={group}>
-        <DigitalHuman color={color} emissive={hovered ? 2.4 : 1.5} />
+        {/* 数字人团队成员（真人风角色：岗位角色选型+评级调色） */}
+        <Avatar3D
+          skin={{ ...roleSkinOf(agent.name, agent.id), tint: color }}
+          state="working"
+          scale={hovered ? 0.92 : 0.82}
+        />
       </group>
       {/* 点击热区（放大透明球，小目标也好点） */}
       <mesh

@@ -14,7 +14,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
-import { DigitalHuman } from "./Stage3D";
+import { Avatar3D, roleSkinOf } from "./Avatar3D";
 import type { FloorAgent, FloorScene, FloorPayload } from "../pages/p0/Floor";
 
 /* ---------------- 与 Floor.tsx 同语义的工具 ---------------- */
@@ -32,7 +32,7 @@ function targetOf(a: FloorAgent, scene: FloorScene): { x: number; y: number } {
         ? { x: st.x + jx, y: st.y + jy * 0.5 }
         : { x: scene.lounge.x + (hash(a.id) % 10) / 14 - 0.35, y: scene.lounge.y + (hash(a.id) % 6) / 12 - 0.25 };
     case "disabled": return { x: scene.entrance.x, y: scene.entrance.y };
-    default: return st ? { x: st.x + jx, y: st.y + jy * 0.5 } : { x: scene.lounge.x + jx * 2, y: scene.lounge.y + jy * 2 };
+    default: return st ? { x: st.x + jx, y: st.y + 0.45 + jy * 0.5 } : { x: scene.lounge.x + jx * 2, y: scene.lounge.y + jy * 2 };
   }
 }
 
@@ -65,6 +65,7 @@ function Worker({
   // 初始位置直接落在目标点（避免首帧从原点滑入）
   const init = useMemo(() => toWorld(target.x, target.y), []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const movingRef = useRef(false);
   useFrame(({ clock }, delta) => {
     const g = group.current;
     if (!g) return;
@@ -72,19 +73,15 @@ function Worker({
     const w = toWorld(target.x, target.y);
     // 走位插值（与 Canvas 版同语义的平滑趋近）
     const k = 1 - Math.pow(0.002, delta); // 帧率无关的平滑系数
-    g.position.x += (w.x - g.position.x) * k;
-    g.position.z += (w.z - g.position.z) * k;
+    const dx = w.x - g.position.x, dz = w.z - g.position.z;
+    movingRef.current = (dx * dx + dz * dz) > 0.04; // 位移超阈值=步行动画
+    if (movingRef.current) g.rotation.y = Math.atan2(dx, dz); // 面朝行进方向
+    g.position.x += dx * k;
+    g.position.z += dz * k;
 
-    // 状态动画
-    if (agent.state === "celebrating") {
-      g.position.y = Math.abs(Math.sin(t * 4)) * 0.22;
-    } else if (agent.state === "blocked") {
-      g.position.y = 0;
-      g.rotation.y = Math.sin(t * 2.4) * 0.5; // 踱步摇摆
-    } else {
-      g.position.y = Math.sin(t * 1.8 + hash(agent.id)) * 0.02; // 呼吸浮动
-      g.rotation.y = 0;
-    }
+    // 状态动画由 Avatar3D 骨骼动画承担；非走位时朝向缓慢回正
+    if (!movingRef.current && agent.state !== "blocked") g.rotation.y *= 0.95;
+    void t;
     if (pillar.current) {
       (pillar.current.material as THREE.MeshBasicMaterial).opacity = 0.22 + Math.sin(t * 3) * 0.1;
       pillar.current.rotation.y = t * 0.8;
@@ -95,6 +92,7 @@ function Worker({
   });
 
   const dimmed = agent.state === "disabled";
+  const skin = roleSkinOf(agent.name, agent.presetKey);
   return (
     <group ref={group} position={[init.x, 0, init.z]}>
       {/* 状态底座光环 */}
@@ -102,8 +100,9 @@ function Worker({
         <ringGeometry args={[0.2, 0.27, 32]} />
         <meshBasicMaterial color={color} transparent opacity={dimmed ? 0.15 : 0.55} side={THREE.DoubleSide} />
       </mesh>
-      <group scale={dimmed ? 0.85 : 0.95}>
-        <DigitalHuman color={color} emissive={dimmed ? 0.4 : agent.state === "asking" ? 2.4 : 1.5} />
+      {/* 真人风数字员工（KayKit 骨骼动画：走位=步行/请示=举手/庆祝=欢呼/休息=坐下） */}
+      <group scale={dimmed ? 0.5 : 0.58}>
+        <Avatar3D skin={skin} state={agent.state} moving={movingRef.current} />
       </group>
       {/* 请示金色光柱（asking 专属——游戏化任务标记） */}
       {agent.state === "asking" && (
@@ -216,7 +215,7 @@ function OfficeScene({ scene, tile, ceoName }: { scene: FloorScene; tile: number
               <meshBasicMaterial color="#ffd98a" transparent opacity={0.8} />
             </mesh>
             <group position={[0, 0.28, 0]}>
-              <DigitalHuman color="#ffd98a" scale={1.15} emissive={2} />
+              <Avatar3D skin={{ model: "Knight", cape: true, tint: "#ffd98a", workAction: "Idle" }} state="working" scale={0.66} />
             </group>
             <pointLight color="#ffcf7a" intensity={10} distance={6} decay={2} position={[0, 1.4, 0]} />
             {/* CEO 名牌 */}

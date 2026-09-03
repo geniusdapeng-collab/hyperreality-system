@@ -2,7 +2,7 @@
   "meta": {
     "name": "WorkLoom 开源组件清单（oss-watch）",
     "version": 1,
-    "updated": "2026-09-02",
+    "updated": "2026-09-03",
     "rule": "凡进入运行时的开源组件必须登记于此；四仓底座公共段保持一致；AGPL 仅独立进程形态"
   },
   "components": [
@@ -376,6 +376,16 @@
       "gate": "standard",
       "scope": "skills/registry/scrapling-collector",
       "notes": "BSD-3-Clause；纯本地零出站；经 skill:forge 集成"
+    },
+    {
+      "name": "kaykit-adventurers",
+      "repo": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+      "channel": "github",
+      "current": "运行时素材（真人风数字员工角色/动画/道具）",
+      "cadence": "monthly",
+      "gate": "smoke",
+      "scope": "apps/web/public/models/kaykit（5 角色 GLB + 道具，CC0 可商用免署名）",
+      "notes": "CC0 许可证；76 组骨骼动画；贴图内嵌单文件；装备节点显隐做外观差异化"
     }
   ]
 }
