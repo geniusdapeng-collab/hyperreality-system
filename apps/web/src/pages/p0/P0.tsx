@@ -13,6 +13,7 @@ import { SimBanner } from "../../components/SimBanner";
 import { SkillDistBanner } from "../../components/SkillDistBanner";
 import { useAskRailPadding } from "../../lib/useAskRail";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
+import { Stage3D } from "../../components/Stage3D";
 
 /* ================= 类型 ================= */
 interface Satellite { id: string; presetKey: string; name: string; grade: string }
@@ -180,6 +181,13 @@ export default function P0() {
   const [view, setView] = useState<"floor" | "stage">(() =>
     (typeof localStorage !== "undefined" && localStorage.getItem("theater-view") === "stage") ? "stage" : "floor");
   const [askPick, setAskPick] = useState<FloorAgent | null>(null); // 职场请示卡弹层
+  // WebGL 可用性探测：不可用（远程桌面/老驱动/虚拟机）时 3D 舞台自动降级为 SVG 卫星视图
+  const webglOk = useMemo(() => {
+    try {
+      const c = document.createElement("canvas");
+      return !!(c.getContext("webgl2") ?? c.getContext("webgl"));
+    } catch { return false; }
+  }, []);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null); // M1.2 驳回弹窗目标
   const switchView = (v: "floor" | "stage") => { setView(v); localStorage.setItem("theater-view", v); };
 
@@ -297,6 +305,7 @@ export default function P0() {
 
       {/* 模拟数据横幅（D24：引导落地向导接入真实数据与真实大模型） */}
       <SimBanner />
+      {/* 技能更新通栏（技能保鲜环：夜班自动更新提示 / L2 待审批引导） */}
       <SkillDistBanner />
 
       {/* 舞台 */}
@@ -320,9 +329,19 @@ export default function P0() {
             />
           </div>
         ) : (
-          <div className={`relative transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-90 opacity-0" : "opacity-100"}`}>
-            <Hologram tone={tone} active={!showCeremony || ceremony >= 3} />
-            {data && <Satellites agents={data.satellites} onPick={setPick} />}
+          <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-90 opacity-0" : "opacity-100"}`}>
+            {data && (webglOk ? (
+              <Stage3D
+                agents={data.satellites}
+                active={!showCeremony || ceremony >= 3}
+                onPick={(a) => setPick(a as Satellite)}
+              />
+            ) : (
+              <>
+                <Hologram tone={tone} active={!showCeremony || ceremony >= 3} />
+                <Satellites agents={data.satellites} onPick={setPick} />
+              </>
+            ))}
           </div>
         )}
 

@@ -22,6 +22,11 @@ const SERVER_URL = process.env.WORKLOOM_SERVER_URL ?? "http://localhost:8787";
 const MANAGE_SERVER = process.env.WORKLOOM_MANAGE_SERVER !== "0";
 const TITLE = process.env.WORKLOOM_APP_TITLE ?? "WorkLoom 织元";
 
+// 软件渲染环境（虚拟机/远程桌面/老显卡）放行 SwiftShader WebGL——
+// 3D 舞台（Stage3D）在这类环境用软件渲染可用；有 GPU 的机器此开关无效果。
+// 真正 WebGL 不可用时前端仍有 SVG 降级兜底（P0 webglOk 探测）。
+app.commandLine.appendSwitch("enable-unsafe-swiftshader");
+
 /** 设计稿逻辑分辨率——所有页面按此比例设计，窗口只做等比缩放 */
 const BASE_W = 1440;
 const BASE_H = 900;
