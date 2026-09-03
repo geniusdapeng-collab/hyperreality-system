@@ -77,11 +77,13 @@ export function FloorView({
     const cv = ref.current!;
     const ctx = cv.getContext("2d")!;
     let raf = 0;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
 
     const frame = () => {
       const scene = floorRef.current.scene;
       const W = cv.offsetWidth, H = cv.offsetHeight;
+      // DPR 每帧重读：Electron 固定比例画布 zoomFactor 会改变 devicePixelRatio，
+      // 取常量会导致 zoom>1 时 Canvas 按旧位图放大模糊（客户端适配纪律）
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
       if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
