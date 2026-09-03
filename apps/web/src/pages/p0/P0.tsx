@@ -14,6 +14,7 @@ import { SkillDistBanner } from "../../components/SkillDistBanner";
 import { useAskRailPadding } from "../../lib/useAskRail";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
 import { Stage3D } from "../../components/Stage3D";
+import { Floor3D } from "../../components/Floor3D";
 
 /* ================= 类型 ================= */
 interface Satellite { id: string; presetKey: string; name: string; grade: string }
@@ -320,13 +321,23 @@ export default function P0() {
               <span className="flex-1" />
               <span className="text-ink2">点员工看绩效 · 点举手者原地审批</span>
             </div>
-            <FloorView
-              floor={data.floor}
-              ceoName={data.ceoName}
-              onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
-              onPickApproval={(a) => setAskPick(a)}
-              onDecide={(id, g) => void decide(id, g)}
-            />
+            {webglOk ? (
+              <Floor3D
+                floor={data.floor}
+                ceoName={data.ceoName}
+                onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
+                onPickApproval={(a) => setAskPick(a)}
+                onDecide={(id, g) => void decide(id, g)}
+              />
+            ) : (
+              <FloorView
+                floor={data.floor}
+                ceoName={data.ceoName}
+                onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
+                onPickApproval={(a) => setAskPick(a)}
+                onDecide={(id, g) => void decide(id, g)}
+              />
+            )}
           </div>
         ) : (
           <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-90 opacity-0" : "opacity-100"}`}>

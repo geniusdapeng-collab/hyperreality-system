@@ -1,16 +1,17 @@
 /**
- * Stage3D · 太空驾驶舱 3D 卫星视图（React Three Fiber）
+ * Stage3D · 职业经理人团队 3D 汇报视图（React Three Fiber）
  *
- * 替代原 SVG 平面卫星图——产品定位"太空驾驶舱"的渲染层兑现：
- *  - 深空场景：2000 星点粒子 + 星云色雾；
- *  - 光核：发光球体 + UnrealBloom 辉光（CEO 全息位）；
- *  - 卫星：团队成员按评级配色发光球，3 条倾斜轨道 3D 公转 + 脉动 + 轨道环线；
- *  - 交互：拖动旋转视角（受限 OrbitControls）、点击卫星选中（onPick）、hover 放大名牌；
+ * 场景语义（不是天文卫星图）：中央是 CEO 数字人，周围是他的数字人团队——
+ * 一整支职业经理人团队以全息形态列队，向董事长（客户视角）汇报。
+ *  - 全息指挥舱：深色科技舱室 + 发光同心环平台 + 放射网格（非星空）；
+ *  - CEO：金色全息数字人（指挥台位，胸口光核）；
+ *  - 团队：全息数字人（人形 capsule），按绩效评级配色的底座光环 + 悬浮名牌；
+ *  - 交互：拖动旋转视角、点击成员选中（onPick）、hover 放大；
  *  - DPR 自适应（R3F 内置）——客户端固定比例画布 zoomFactor 下天然清晰。
  */
 import { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Html, Stars } from "@react-three/drei";
+import { OrbitControls, Html } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 
@@ -24,118 +25,164 @@ const GRADE_COLOR: Record<string, string> = {
 };
 const colorOf = (g: string) => GRADE_COLOR[g] ?? "#8ad8ff";
 
-/* ---------------- 光核（CEO 全息位） ---------------- */
-function Core({ active }: { active: boolean }) {
-  const mesh = useRef<THREE.Mesh>(null);
-  const halo = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    const pulse = 1 + Math.sin(t * 1.6) * 0.04;
-    mesh.current?.scale.setScalar(active ? pulse : 0.9);
-    if (halo.current) {
-      (halo.current.material as THREE.MeshBasicMaterial).opacity = 0.12 + Math.sin(t * 1.6) * 0.05;
-      halo.current.rotation.z = t * 0.1;
-    }
-  });
+/* ---------------- 数字人（全息人形，团队统一形象；Floor3D 复用） ---------------- */
+export function DigitalHuman({
+  color, scale = 1, emissive = 1.6, children,
+}: {
+  color: string; scale?: number; emissive?: number; children?: React.ReactNode;
+}) {
   return (
-    <group>
-      <mesh ref={mesh}>
-        <sphereGeometry args={[0.55, 48, 48]} />
-        <meshStandardMaterial
-          color="#ffd98a" emissive="#ffb545" emissiveIntensity={active ? 2.6 : 1.2}
-          roughness={0.25} metalness={0.6}
-        />
+    <group scale={scale}>
+      {/* 身体（全息胶囊） */}
+      <mesh position={[0, 0.62, 0]}>
+        <capsuleGeometry args={[0.16, 0.5, 6, 16]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive * 0.55} transparent opacity={0.82} roughness={0.35} />
       </mesh>
-      {/* 双层光环 */}
-      <mesh ref={halo} rotation={[Math.PI / 2.4, 0, 0]}>
-        <torusGeometry args={[0.95, 0.012, 12, 96]} />
-        <meshBasicMaterial color="#ffd98a" transparent opacity={0.15} />
+      {/* 头 */}
+      <mesh position={[0, 1.14, 0]}>
+        <sphereGeometry args={[0.13, 24, 24]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive * 0.8} transparent opacity={0.9} roughness={0.25} />
       </mesh>
-      <mesh rotation={[Math.PI / 1.8, 0.4, 0]}>
-        <torusGeometry args={[1.15, 0.008, 12, 96]} />
-        <meshBasicMaterial color="#8ad8ff" transparent opacity={0.1} />
+      {/* 胸口光核 */}
+      <mesh position={[0, 0.78, 0.13]}>
+        <sphereGeometry args={[0.045, 12, 12]} />
+        <meshBasicMaterial color="#ffffff" />
       </mesh>
-      <pointLight color="#ffcf7a" intensity={active ? 26 : 10} distance={12} decay={2} />
+      {children}
     </group>
   );
 }
 
-/* ---------------- 单颗卫星（团队成员） ---------------- */
-function Satellite({
+/* ---------------- CEO（金色，指挥台位） ---------------- */
+function CeoFigure({ active }: { active: boolean }) {
+  const group = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (group.current) group.current.position.y = 0.32 + Math.sin(t * 1.4) * 0.02;
+  });
+  return (
+    <group position={[0, 0, 0.55]}>
+      {/* 指挥台 */}
+      <mesh position={[0, 0.1, 0]}>
+        <cylinderGeometry args={[0.5, 0.58, 0.2, 48]} />
+        <meshStandardMaterial color="#1a2540" metalness={0.7} roughness={0.3} />
+      </mesh>
+      <mesh position={[0, 0.21, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.42, 0.5, 48]} />
+        <meshBasicMaterial color="#ffd98a" transparent opacity={0.7} />
+      </mesh>
+      <group ref={group}>
+        <DigitalHuman color="#ffd98a" scale={1.25} emissive={active ? 2.2 : 1.1} />
+      </group>
+      <pointLight color="#ffcf7a" intensity={active ? 18 : 8} distance={9} decay={2} position={[0, 1.6, 0.4]} />
+    </group>
+  );
+}
+
+/* ---------------- 团队成员（弧形列队，面向董事长） ---------------- */
+function Member({
   agent, index, total, onPick,
 }: {
   agent: StageAgent; index: number; total: number; onPick: (a: StageAgent) => void;
 }) {
   const group = useRef<THREE.Group>(null);
+  const ring = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
   const color = colorOf(agent.grade);
-  // 三条倾斜轨道：半径与倾角按序分配；奇偶反向公转（与原 SVG 节奏一致）
-  const orbit = useMemo(() => ({
-    radius: 2.2 + (index % 3) * 0.55,
-    tilt: (index % 3) * 0.32 - 0.32,
-    speed: 0.1 * (index % 2 ? 1 : -0.7),
-    phase: (index / Math.max(total, 1)) * Math.PI * 2,
-    pulse: 2.4 + (index % 4) * 0.5,
-  }), [index, total]);
+  // 弧形列队：以 CEO 为圆心的扇形两排（前排 60%、后排 40%），全员面向董事长（+Z）
+  const slot = useMemo(() => {
+    const front = Math.ceil(total * 0.6);
+    const isFront = index < front;
+    const rowIdx = isFront ? index : index - front;
+    const rowCount = isFront ? front : Math.max(total - front, 1);
+    const radius = isFront ? 2.1 : 2.9;
+    const spread = Math.PI * 0.85; // 扇形张角
+    const ang = -spread / 2 + (rowCount === 1 ? spread / 2 : (rowIdx / (rowCount - 1)) * spread);
+    return {
+      x: Math.sin(ang) * radius,
+      z: -Math.cos(ang) * radius * 0.62 - 0.35, // 后排略远，整体在 CEO 后弧
+      phase: index * 0.7,
+    };
+  }, [index, total]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    const ang = orbit.phase + t * orbit.speed;
-    const x = Math.cos(ang) * orbit.radius;
-    const z = Math.sin(ang) * orbit.radius;
-    const y = Math.sin(ang) * orbit.radius * Math.sin(orbit.tilt) * 0.4;
-    group.current?.position.set(x, y, z);
-    const s = (hovered ? 1.7 : 1) * (1 + Math.sin(t * orbit.pulse) * 0.12);
-    group.current?.scale.setScalar(s);
+    if (group.current) {
+      group.current.position.y = Math.sin(t * 1.8 + slot.phase) * 0.025;
+      group.current.scale.setScalar(hovered ? 1.18 : 1);
+    }
+    if (ring.current) {
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = hovered ? 0.95 : 0.55 + Math.sin(t * 2 + slot.phase) * 0.12;
+    }
   });
 
   return (
-    <group ref={group}>
+    <group position={[slot.x, 0, slot.z]}>
+      {/* 底座评级光环 */}
+      <mesh ref={ring} position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.26, 0.34, 40]} />
+        <meshBasicMaterial color={color} transparent opacity={0.6} side={THREE.DoubleSide} />
+      </mesh>
+      <group ref={group}>
+        <DigitalHuman color={color} emissive={hovered ? 2.4 : 1.5} />
+      </group>
+      {/* 点击热区（放大透明球，小目标也好点） */}
       <mesh
+        position={[0, 0.7, 0]} visible={false}
         onClick={(e) => { e.stopPropagation(); onPick(agent); }}
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = "pointer"; }}
         onPointerOut={() => { setHovered(false); document.body.style.cursor = "default"; }}
       >
-        <sphereGeometry args={[0.09, 24, 24]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={hovered ? 3.2 : 1.8} roughness={0.3} />
+        <sphereGeometry args={[0.42, 8, 8]} />
       </mesh>
-      {/* 发光晕圈 */}
-      <mesh>
-        <sphereGeometry args={[0.16, 16, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={hovered ? 0.22 : 0.1} depthWrite={false} />
-      </mesh>
-      {(hovered) && (
-        <Html center distanceFactor={8} style={{ pointerEvents: "none" }}>
-          <div style={{
-            whiteSpace: "nowrap", fontSize: 11, color: "#1B2A4E", fontWeight: 600,
-            background: "rgba(255,255,255,.92)", border: "1px solid #CBD5E1",
-            borderRadius: 6, padding: "2px 8px", transform: "translateY(-22px)",
-          }}>
-            {agent.name.replace("agt-", "")} · {agent.grade}
-          </div>
-        </Html>
-      )}
+      {/* 名牌（常驻小字，hover 高亮） */}
+      <Html center distanceFactor={9} position={[0, 1.55, 0]} style={{ pointerEvents: "none" }}>
+        <div style={{
+          whiteSpace: "nowrap", fontSize: hovered ? 12 : 10, fontWeight: hovered ? 700 : 500,
+          color: hovered ? "#0F172A" : "#334155",
+          background: hovered ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.72)",
+          border: `1px solid ${color}`, borderRadius: 6, padding: "1px 7px",
+          transition: "all .15s",
+        }}>
+          {agent.name.replace("agt-", "")}{hovered ? ` · ${agent.grade}` : ""}
+        </div>
+      </Html>
     </group>
   );
 }
 
-/* ---------------- 轨道环线 ---------------- */
-function OrbitRing({ radius, tilt }: { radius: number; tilt: number }) {
-  const points = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i <= 128; i++) {
-      const a = (i / 128) * Math.PI * 2;
-      pts.push(new THREE.Vector3(
-        Math.cos(a) * radius,
-        Math.sin(a) * radius * Math.sin(tilt) * 0.4,
-        Math.sin(a) * radius,
-      ));
-    }
-    return pts;
-  }, [radius, tilt]);
-  const geom = useMemo(() => new THREE.BufferGeometry().setFromPoints(points), [points]);
+/* ---------------- 指挥舱平台（科技地面：同心环 + 放射网格） ---------------- */
+function Platform() {
+  const grid = useMemo(() => {
+    const g = new THREE.Group();
+    return g;
+  }, []);
+  void grid;
   return (
-    <primitive object={new THREE.Line(geom, new THREE.LineBasicMaterial({ color: "#8ad8ff", transparent: true, opacity: 0.14 }))} />
+    <group>
+      {/* 主平台圆盘 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+        <circleGeometry args={[4.4, 72]} />
+        <meshStandardMaterial color="#0d1526" metalness={0.6} roughness={0.45} />
+      </mesh>
+      {/* 同心发光环 */}
+      {[1.2, 2.1, 2.9, 3.7, 4.3].map((r, i) => (
+        <mesh key={r} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005 + i * 0.001, 0]}>
+          <ringGeometry args={[r - 0.014, r, 96]} />
+          <meshBasicMaterial color={i % 2 ? "#8ad8ff" : "#ffd98a"} transparent opacity={i % 2 ? 0.16 : 0.12} />
+        </mesh>
+      ))}
+      {/* 放射网格线 */}
+      {Array.from({ length: 12 }, (_, i) => {
+        const a = (i / 12) * Math.PI * 2;
+        return (
+          <mesh key={i} rotation={[-Math.PI / 2, 0, a]} position={[0, 0.004, 0]}>
+            <planeGeometry args={[8.6, 0.008]} />
+            <meshBasicMaterial color="#8ad8ff" transparent opacity={0.07} side={THREE.DoubleSide} />
+          </mesh>
+        );
+      })}
+    </group>
   );
 }
 
@@ -147,28 +194,30 @@ export function Stage3D({
   active?: boolean;
   onPick: (a: StageAgent) => void;
 }) {
-  const orbits = [2.2, 2.75, 3.3];
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 420, borderRadius: 12, overflow: "hidden", background: "radial-gradient(ellipse at 50% 40%, #16203d 0%, #0a0f1e 55%, #05070f 100%)" }}>
-      <Canvas
-        camera={{ position: [0, 2.6, 5.4], fov: 46 }}
-        dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true }}
-      >
-        <ambientLight intensity={0.35} />
-        <Stars radius={40} depth={30} count={2200} factor={2.2} saturation={0.4} fade speed={0.6} />
-        <Core active={active} />
-        {orbits.map((r, i) => <OrbitRing key={r} radius={r} tilt={i * 0.32 - 0.32} />)}
+    <div style={{ width: "100%", height: "100%", minHeight: 440, borderRadius: 12, overflow: "hidden", background: "radial-gradient(ellipse at 50% 30%, #101a30 0%, #0a101f 55%, #060a14 100%)" }}>
+      <Canvas camera={{ position: [0, 2.4, 5.6], fov: 44 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+        {/* 舱室光环境：顶部冷色环境光 + 两侧青色补光（无星空，纯指挥舱） */}
+        <ambientLight intensity={0.5} color="#bcd2ff" />
+        <directionalLight position={[4, 6, 5]} intensity={0.7} color="#9fc4ff" />
+        <pointLight position={[-4, 2.5, 2]} intensity={6} color="#5aa2ff" distance={10} decay={2} />
+        <fog attach="fog" args={["#0a101f", 8, 16]} />
+
+        <Platform />
+        <CeoFigure active={active} />
         {agents.map((a, i) => (
-          <Satellite key={a.id} agent={a} index={i} total={agents.length} onPick={onPick} />
+          <Member key={a.id} agent={a} index={i} total={agents.length} onPick={onPick} />
         ))}
+
         <EffectComposer>
-          <Bloom intensity={0.85} luminanceThreshold={0.35} luminanceSmoothing={0.25} mipmapBlur />
+          <Bloom intensity={0.7} luminanceThreshold={0.32} luminanceSmoothing={0.3} mipmapBlur />
         </EffectComposer>
         <OrbitControls
           enablePan={false} enableZoom={false}
-          minPolarAngle={Math.PI / 3.2} maxPolarAngle={Math.PI / 1.9}
-          autoRotate autoRotateSpeed={0.35}
+          minPolarAngle={Math.PI / 3.4} maxPolarAngle={Math.PI / 2.1}
+          minAzimuthAngle={-Math.PI / 3} maxAzimuthAngle={Math.PI / 3}
+          autoRotate autoRotateSpeed={0.25}
+          target={[0, 0.7, 0]}
           makeDefault
         />
       </Canvas>
