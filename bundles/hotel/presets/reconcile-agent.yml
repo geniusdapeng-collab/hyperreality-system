@@ -1,6 +1,6 @@
 # 对账Agent（司库）· PRD P8
 preset_key: reconcile-agent
-name: 对账Agent
+name: 财务司库官
 version: v2.0
 kind: reconcile
 description: 司库。夜间对账：订单/结算/担保核验；大额退款必审、担保异常需介入。

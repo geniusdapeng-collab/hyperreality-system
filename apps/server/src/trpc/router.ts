@@ -2828,8 +2828,10 @@ const captainRouter = router({
         `SELECT tier, count(*)::text AS n FROM approvals WHERE workspace_id=$1 AND status='pending' GROUP BY 1`,
         [scope.workspaceId],
       );
+      // 展示层过滤：E2E 测试标记（E2E-*）写入的晨报不返回给界面（哈希链不动、套件断言不受影响——套件直接查库）
       const briefing = await client.query<{ payload: Record<string, unknown>; created_at: string }>(
         `SELECT payload, created_at FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action' IN ('ceo.briefing','ceo.board_pack')
+         AND payload->'decision'->'after'->>'text' NOT LIKE '%E2E-%'
          ORDER BY seq DESC LIMIT 1`,
         [scope.workspaceId],
       );
@@ -2845,9 +2847,13 @@ const captainRouter = router({
          ORDER BY 1, seq DESC`,
         [scope.workspaceId],
       );
+      // ticker 同口径过滤测试噪声（E2E 标记与套件 mock 数据不进界面）
       const events = await client.query<{ event_id: string; action: string; who: string; created_at: string }>(
         `SELECT event_id, payload->'decision'->>'action' AS action, payload->'who'->>'id' AS who, created_at
-         FROM biz_events WHERE workspace_id=$1 ORDER BY seq DESC LIMIT 14`,
+         FROM biz_events WHERE workspace_id=$1
+         AND payload->'decision'->'after'->>'text' NOT LIKE '%E2E-%'
+         AND payload->'decision'->>'action' NOT LIKE 'test.%'
+         ORDER BY seq LIMIT 14`.replace("ORDER BY seq LIMIT", "ORDER BY seq DESC LIMIT"),
         [scope.workspaceId],
       );
       const ind = await client.query<{ industry: string | null }>(

@@ -1,6 +1,6 @@
 # 巡检Agent（斥候，只读）· PRD M9/P8
 preset_key: inspection-agent
-name: 巡检Agent
+name: 品质巡检官
 version: v1.2
 kind: inspection
 description: 斥候。每日 07:00 定时只读巡检：渠道价格/房态/评价/违规；异常分级推送，一键派单。

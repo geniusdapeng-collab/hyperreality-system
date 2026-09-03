@@ -137,6 +137,8 @@ export const ACTION_TEXT: Record<string, string> = {
   "kb.crawl": "抓取官网建库",
   // CEO
   "ceo.briefing": "CEO 晨报",
+  "ceo.board_pack": "董事会简报",
+  "im.outbound": "外发消息",
   "captain.decision": "CEO 决策",
   "captain.grant": "签署授权宪章",
   "captain.transit": "宪章状态流转",
@@ -259,24 +261,27 @@ export function latencyText(ms: number | null | undefined): string {
 /** preset_key / actor id → 中文名。成员编号（MEM-xxx）与事件编号（E-xxx）属代号，原样保留 */
 export const ACTOR_TEXT: Record<string, string> = {
   // 酒店域
-  "reconcile-agent": "对账 Agent",
-  "competitor-agent": "竞对 Agent",
-  "channel-watcher": "渠道哨兵 Agent",
+  "reconcile-agent": "财务司库官",
+  "competitor-agent": "市场侦察官",
+  "channel-watcher": "渠道哨兵官",
   "ai-receptionist": "AI 接待员",
-  "content-agent": "内容 Agent",
-  "voice-front-agent": "语音前台 Agent",
-  "guest-success": "住客满意 Agent",
-  "owner-cockpit": "业主驾驶舱 Agent",
-  "groupbuy-agent": "团购 Agent",
-  "pricing-agent": "调价 Agent",
-  "desktop-agent": "桌面 Agent",
-  "review-agent": "评价 Agent",
-  "coupon-operator": "券运营 Agent",
-  "lead-concierge": "线索管家 Agent",
-  "company-ceo": "公司 CEO",
+  "content-agent": "内容主笔官",
+  "voice-front-agent": "语音前台官",
+  "guest-success": "住客满意官",
+  "owner-cockpit": "业主驾驶舱",
+  "groupbuy-agent": "团购运营官",
+  "pricing-agent": "收益定价官",
+  "desktop-agent": "数字执行官",
+  "review-agent": "口碑公关官",
+  "coupon-operator": "优惠券运营官",
+  "lead-concierge": "线索管家官",
+  "company-ceo": "公司CEO",
   captain: "编排官",
+  "im-channels": "IM 渠道",
   system: "系统",
   "night-shift": "夜班中心",
+  "morning-briefing": "夜班晨报",
+  "inspection-agent": "品质巡检官",
   // 视频域常见
   director: "总导演",
   producer: "制片人",
@@ -298,7 +303,8 @@ export function actorText(id: string): string {
   if (/^(MEM|E|T|VID|R|G)-/.test(id)) return id; // 编号类保留
   if (id.endsWith("-agent")) {
     const root = id.slice(0, -6);
-    return `${ACTOR_TEXT[root] ?? root.replace(/[-_]/g, " ")} Agent`;
+    // 未收录岗位：词根转空格+"数字员工"（界面不出现英文 Agent 后缀）
+    return ACTOR_TEXT[root] ? `${ACTOR_TEXT[root]}` : `${root.replace(/[-_]/g, " ")} · 数字员工`;
   }
   return id.replace(/[-_]/g, " ");
 }

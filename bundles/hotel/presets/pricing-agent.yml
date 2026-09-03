@@ -1,6 +1,6 @@
 # 调价Agent（收益管理师）· PRD P8 / 游戏规则手册 §3.2
 preset_key: pricing-agent
-name: 调价Agent
+name: 收益定价官
 version: v2.3
 kind: pricing
 description: 收益管理师。基于竞对/房态/历史曲线给出调价建议并执行；涨幅 ≤8% 自动，越线挂起。

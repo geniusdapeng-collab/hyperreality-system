@@ -165,13 +165,16 @@ function PulseRing({ color, phase }: { color: string; phase: number }) {
 
 /* ---------------- 团队成员（弧形列队，面向董事长） ---------------- */
 function Member({
-  agent, index, total, onPick,
+  agent, index, total, onPick, ceremony = false,
 }: {
   agent: StageAgent; index: number; total: number; onPick: (a: StageAgent) => void;
+  /** 晨间仪式：成员按序上前一步报到（逐个播报序列） */
+  ceremony?: boolean;
 }) {
   const group = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const [spotlight, setSpotlight] = useState(false);
   const color = colorOf(agent.grade);
   // 弧形列队：以 CEO 为圆心的扇形两排（前排 60%、后排 40%），全员面向董事长（+Z）
   const slot = useMemo(() => {
@@ -179,8 +182,8 @@ function Member({
     const isFront = index < front;
     const rowIdx = isFront ? index : index - front;
     const rowCount = isFront ? front : Math.max(total - front, 1);
-    const radius = isFront ? 2.4 : 3.3;
-    const spread = Math.PI * 0.85; // 扇形张角
+    const radius = isFront ? 2.8 : 3.9;
+    const spread = Math.PI * 0.78; // 扇形张角
     const ang = -spread / 2 + (rowCount === 1 ? spread / 2 : (rowIdx / (rowCount - 1)) * spread);
     return {
       x: Math.sin(ang) * radius,
@@ -189,12 +192,21 @@ function Member({
     };
   }, [index, total]);
 
+  const bornAt = useRef<number | null>(null);
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
+    if (bornAt.current === null) bornAt.current = t;
+    const elapsed = t - bornAt.current;
+    // 仪式上前窗口：第 i 位在 i*1.6s 上前，1.5s 后退回（逐个播报）
+    const spotStart = index * 1.6, spotEnd = spotStart + 1.5;
+    const inSpot = ceremony && elapsed >= spotStart && elapsed < spotEnd;
     if (group.current) {
+      const targetZ = inSpot ? slot.z + 1.35 : slot.z;
+      group.current.position.z += (targetZ - group.current.position.z) * 0.14;
       group.current.position.y = Math.sin(t * 1.8 + slot.phase) * 0.025;
-      group.current.scale.setScalar(hovered ? 1.18 : 1);
+      group.current.scale.setScalar(inSpot ? 1.15 : hovered ? 1.18 : 1);
     }
+    setSpotlight(inSpot);
     if (ring.current) {
       (ring.current.material as THREE.MeshBasicMaterial).opacity = hovered ? 0.95 : 0.55 + Math.sin(t * 2 + slot.phase) * 0.12;
     }
@@ -229,12 +241,12 @@ function Member({
       <Html center distanceFactor={9} position={[0, index % 2 === 0 ? 1.52 : 1.72, 0]} style={{ pointerEvents: "none" }}>
         <div style={{
           whiteSpace: "nowrap", fontSize: hovered ? 12 : 10, fontWeight: hovered ? 700 : 500,
-          color: hovered ? "#0F172A" : "#334155",
-          background: hovered ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.72)",
+          color: spotlight ? "#7a5a10" : hovered ? "#0F172A" : "#334155",
+          background: spotlight ? "rgba(255,240,200,.97)" : hovered ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.72)",
           border: `1px solid ${color}`, borderRadius: 6, padding: "1px 7px",
           transition: "all .15s",
         }}>
-          {agent.name.replace("agt-", "")}{hovered ? ` · ${agent.grade}` : ""}
+          {spotlight ? `${agent.name.replace("agt-", "")} · 向您报到！` : agent.name.replace("agt-", "") + (hovered ? ` · ${agent.grade}` : "")}
         </div>
       </Html>
     </group>
@@ -278,11 +290,13 @@ function Platform() {
 
 /* ---------------- 主组件 ---------------- */
 export function Stage3D({
-  agents, active = true, onPick,
+  agents, active = true, onPick, ceremony = false,
 }: {
   agents: StageAgent[];
   active?: boolean;
   onPick: (a: StageAgent) => void;
+  /** 晨间仪式：团队逐个上前一步向董事长报到 */
+  ceremony?: boolean;
 }) {
   const night = useNightTime();
   return (
@@ -290,7 +304,7 @@ export function Stage3D({
       ? "radial-gradient(ellipse at 50% 30%, #070b16 0%, #04060d 55%, #020409 100%)"
       : "radial-gradient(ellipse at 50% 30%, #101a30 0%, #0a101f 55%, #060a14 100%)",
       transition: "background 2s" }}>
-      <Canvas camera={{ position: [0, 2.4, 5.6], fov: 44 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+      <Canvas camera={{ position: [0, 2.9, 6.8], fov: 44 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
         {/* 舱室光环境：顶部冷色环境光 + 两侧青色补光（无星空，纯指挥舱）；夜班整体压暗 */}
         <ambientLight intensity={night ? 0.22 : 0.5} color={night ? "#8ea8d8" : "#bcd2ff"} />
         <directionalLight position={[4, 6, 5]} intensity={night ? 0.3 : 0.7} color={night ? "#7a98c8" : "#9fc4ff"} />
@@ -300,7 +314,7 @@ export function Stage3D({
         <Platform />
         <CeoFigure active={active} />
         {agents.map((a, i) => (
-          <Member key={a.id} agent={a} index={i} total={agents.length} onPick={onPick} />
+          <Member key={a.id} agent={a} index={i} total={agents.length} onPick={onPick} ceremony={ceremony} />
         ))}
 
         <EffectComposer>

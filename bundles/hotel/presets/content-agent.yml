@@ -1,6 +1,6 @@
 # 内容Agent（文书）· PRD P8
 preset_key: content-agent
-name: 内容Agent
+name: 内容主笔官
 version: v1.5
 kind: content
 description: 文书。首图/详情页/活动文案等内容生产与发布；新渠道首发必审。

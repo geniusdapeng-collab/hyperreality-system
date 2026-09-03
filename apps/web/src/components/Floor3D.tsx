@@ -11,7 +11,7 @@
  */
 import { useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, Html } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { Avatar3D, roleSkinOf } from "./Avatar3D";
@@ -26,7 +26,15 @@ function targetOf(a: FloorAgent, scene: FloorScene): { x: number; y: number } {
   const st = scene.stations.find((s) => s.id === a.stationId);
   const jx = ((hash(a.id) % 5) - 2) * 0.16, jy = ((hash(a.id) % 3) - 1) * 0.18;
   switch (a.state) {
-    case "asking": return { x: scene.ceoDesk.x + 0.1 + jx, y: scene.ceoDesk.y + 1.1 + jy };
+    case "asking": {
+      // 请示者在指挥台前扇形排队（按 id hash 分 6 点位——空间感，不再堆叠）
+      const slot = hash(a.id) % 6;
+      const ang = -0.95 + slot * 0.38;
+      return {
+        x: scene.ceoDesk.x + Math.sin(ang) * 2.3,
+        y: scene.ceoDesk.y + 1.0 + (1 - Math.cos(ang)) * 1.6,
+      };
+    }
     case "blocked": return st ? { x: st.x + jx, y: st.y + 0.7 + jy } : { x: scene.grid.w / 2, y: scene.grid.h / 2 };
     case "idle":
       return st
@@ -49,10 +57,12 @@ const STATE_COLOR: Record<string, string> = {
 
 /* ---------------- 单个数字员工 ---------------- */
 function Worker({
-  agent, scene, tile, onPick,
+  agent, scene, tile, onPick, onDropTask,
 }: {
   agent: FloorAgent; scene: FloorScene; tile: number;
   onPick: (a: FloorAgent) => void;
+  /** 拖拽任务卡落到该员工身上（派活闭环·拖拽形态） */
+  onDropTask?: (a: FloorAgent, task: string) => void;
 }) {
   const group = useRef<THREE.Group>(null);
   const pillar = useRef<THREE.Mesh>(null);
@@ -123,6 +133,22 @@ function Worker({
       >
         <sphereGeometry args={[0.4, 8, 8]} />
       </mesh>
+      {/* 拖拽接收锚点（透明热区：任务卡拖到该员工身上即派活） */}
+      {onDropTask && (
+        <Html center position={[0, 0.8, 0]} zIndexRange={[10, 0]}>
+          <div
+            data-agent-drop={agent.id}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const task = e.dataTransfer.getData("text/workloom-task");
+              if (task) onDropTask(agent, task);
+            }}
+            style={{ width: 72, height: 96, transform: "translateY(-48px)", borderRadius: 12 }}
+            title={`拖任务给 ${agent.name}`}
+          />
+        </Html>
+      )}
     </group>
   );
 }
@@ -259,13 +285,15 @@ function CeoLabel({ name }: { name: string }) {
 
 /* ---------------- 主组件（props 与 FloorView 全兼容） ---------------- */
 export function Floor3D({
-  floor, ceoName, onPickAgent, onPickApproval,
+  floor, ceoName, onPickAgent, onPickApproval, onDropTask,
 }: {
   floor: FloorPayload;
   ceoName: string;
   onPickAgent: (a: FloorAgent) => void;
   onDecide: (approvalId: string, gesture: "approve" | "reject") => void;
   onPickApproval: (a: FloorAgent) => void;
+  /** 拖拽任务卡到员工身上派活 */
+  onDropTask?: (a: FloorAgent, task: string) => void;
 }) {
   const tile = 0.86;
   const scene = floor.scene;
@@ -295,7 +323,7 @@ export function Floor3D({
 
         <OfficeScene scene={scene} tile={tile} ceoName={ceoName} night={night} />
         {floor.agents.map((a) => (
-          <Worker key={a.id} agent={a} scene={scene} tile={tile} onPick={onPick} />
+          <Worker key={a.id} agent={a} scene={scene} tile={tile} onPick={onPick} onDropTask={onDropTask} />
         ))}
 
         <EffectComposer>

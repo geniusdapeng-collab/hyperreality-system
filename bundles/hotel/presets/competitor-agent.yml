@@ -1,6 +1,6 @@
 # 竞对Agent（侦察兵，只读）· PRD P8
 preset_key: competitor-agent
-name: 竞对Agent
+name: 市场侦察官
 version: v1.1
 kind: competitor
 description: 侦察兵。竞对价格/活动采集，频次自律（≥3s 间隔、遵守 robots，L3.3）。

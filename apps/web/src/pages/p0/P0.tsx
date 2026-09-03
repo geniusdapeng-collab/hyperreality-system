@@ -266,6 +266,19 @@ export default function P0() {
     setTimeout(() => setMsg(""), 3000);
     await load();
   };
+  /** 拖拽任务卡到员工身上（派活闭环·拖拽形态：落点即下达，与指挥卡同通道） */
+  const dropTaskOn = async (a: FloorAgent, task: string) => {
+    try {
+      const r = await trpc.threads.dispatch.mutate({ title: task, presetKey: a.presetKey, runImmediately: true }) as Record<string, unknown>;
+      if (r.kind === "clarify") setMsg(`🤔 ${String(r.question ?? "指令需要更具体")}`);
+      else setMsg(`已把「${task.slice(0, 18)}」派给 ${a.name.replace("agt-", "")}`);
+    } catch (err) {
+      setMsg(`派活失败：${err instanceof Error ? err.message.slice(0, 40) : "未知"}`);
+    }
+    setTimeout(() => setMsg(""), 3500);
+    await load();
+  };
+
   /** 驳回弹窗提交（M1.2 受控枚举 + L5.2 留痕） */
   const submitReject = async (r: { reasonEnum: string; reasonText?: string }) => {
     if (!rejectTarget) return;
@@ -320,7 +333,25 @@ export default function P0() {
               <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-600" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
               <span>·</span><span>{data.floor.agents.filter((a) => a.state === "idle").length} 待命</span>
               <span className="flex-1" />
-              <span className="text-ink2">点员工看绩效 · 点举手者原地审批</span>
+              <span className="text-ink2">点员工派活 · 点举手者原地审批 · 拖任务卡到员工身上</span>
+            </div>
+            {/* 可拖任务卡（拖拽派活：拖到 3D 员工身上即下达） */}
+            <div className="mb-1 flex items-center gap-1.5 px-1">
+              <span className="text-[10px] text-ink3">任务卡 →</span>
+              {["盘点今日订单", "抓竞对价格", "回复新差评", "写今日主推内容"].map((task) => (
+                <div
+                  key={task}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/workloom-task", task);
+                    e.dataTransfer.effectAllowed = "copy";
+                  }}
+                  className="cursor-grab rounded-full border border-gline bg-card px-2.5 py-0.5 text-[11px] text-gold shadow-sm transition-transform hover:scale-105 active:cursor-grabbing"
+                  title="拖到职场里的员工身上"
+                >
+                  {task}
+                </div>
+              ))}
             </div>
             {webglOk ? (
               <Floor3D
@@ -329,6 +360,7 @@ export default function P0() {
                 onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
                 onPickApproval={(a) => setAskPick(a)}
                 onDecide={(id, g) => void decide(id, g)}
+                onDropTask={(a, task) => void dropTaskOn(a, task)}
               />
             ) : (
               <FloorView
@@ -347,6 +379,7 @@ export default function P0() {
                 agents={data.satellites}
                 active={!showCeremony || ceremony >= 3}
                 onPick={(a) => setPick(a as Satellite)}
+                ceremony={showCeremony && ceremony >= 2}
               />
             ) : (
               <>

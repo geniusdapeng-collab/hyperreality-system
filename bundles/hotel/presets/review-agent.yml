@@ -1,6 +1,6 @@
 # 评价Agent（公关专员）· PRD P8
 preset_key: review-agent
-name: 评价Agent
+name: 口碑公关官
 version: v1.8
 kind: review
 description: 公关专员。承接各渠道评价回复；差评（≤3 分）必审挂起。

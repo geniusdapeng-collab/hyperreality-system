@@ -1,6 +1,6 @@
 # 桌面Agent（机甲师）· PRD P8
 preset_key: desktop-agent
-name: 桌面Agent
+name: 数字执行官
 version: v0.9
 kind: desktop
 description: 机甲师。无 API 系统的桌面 GUI 操控兜底；高危动作逐次授权（L3.5）。
