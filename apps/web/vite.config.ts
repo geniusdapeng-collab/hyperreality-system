@@ -12,10 +12,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: Number(process.env.WEB_PORT ?? 5173),
-    proxy: { "/trpc": trpcProxy },
+    // /health 同代理：前端「环境守门员」（BackendGate）经此探测后端就绪态，
+    // 覆盖第三方工具只起 web 不起 server 的首启场景
+    proxy: { "/trpc": trpcProxy, "/health": trpcProxy },
   },
   preview: {
     port: Number(process.env.WEB_PORT ?? 5173),
-    proxy: { "/trpc": trpcProxy },
+    proxy: { "/trpc": trpcProxy, "/health": trpcProxy },
   },
 });
