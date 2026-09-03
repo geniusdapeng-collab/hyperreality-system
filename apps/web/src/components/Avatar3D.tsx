@@ -101,12 +101,13 @@ export function Avatar3D({
         if (skin.helmetOff && name.includes("helmet")) obj.visible = false;
         // 默认隐藏手持武器（职场不是战场）
         if (name.includes("sword") || name.includes("shield")) obj.visible = false;
-        // 调色
+        // 调色：原贴图色向 tint 轻混 35%（保留角色贴图质感，只罩色调；
+        // 全量覆盖会把角色变成色块、强光下糊成一团——大片感走查根因修复）
         if (skin.tint) {
           const m = mesh.material as THREE.MeshStandardMaterial;
           if (m && m.color) {
             mesh.material = m.clone();
-            (mesh.material as THREE.MeshStandardMaterial).color = new THREE.Color(skin.tint).lerp(new THREE.Color("#ffffff"), 0.45);
+            (mesh.material as THREE.MeshStandardMaterial).color = m.color.clone().lerp(new THREE.Color(skin.tint), 0.35);
           }
         }
       }

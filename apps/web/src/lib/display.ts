@@ -264,7 +264,7 @@ export const ACTOR_TEXT: Record<string, string> = {
   "reconcile-agent": "财务司库官",
   "competitor-agent": "市场侦察官",
   "channel-watcher": "渠道哨兵官",
-  "ai-receptionist": "AI 接待员",
+  "ai-receptionist": "智能接待官",
   "content-agent": "内容主笔官",
   "voice-front-agent": "语音前台官",
   "guest-success": "住客满意官",
