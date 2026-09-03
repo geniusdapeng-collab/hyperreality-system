@@ -1,9 +1,9 @@
 /**
  * pnpm app · 桌面客户端一键启动编排器
  *
- * 面向"让 AI 编程工具（Qoder 等）/ 新客户一键跑出完整客户端"的场景：
- * 一条命令完成 环境检查 → server:8787 → web 预览 → Electron 原生窗口。
- * 关掉窗口即自动收掉全部子进程，不留残留。
+ * 面向"客户端即产品"的形态：一条命令完成 环境检查 → web 构建/预览 →
+ * Electron 原生窗口（固定比例缩放 + 系统托盘 + 单实例）。
+ * server 生命周期由 Electron 主进程内嵌管理（关窗最小化到托盘，夜班持续运行）。
  *
  * 用法：
  *   pnpm app            # 生产姿态（构建 dist + vite preview，首启体验最佳）
@@ -106,14 +106,7 @@ async function main() {
     }
   }
 
-  // ④ 起 server
-  say(`启动 server（:${SERVER_PORT}）…`);
-  run("pnpm", ["-C", "apps/server", "start"], "server", { SERVER_PORT: String(SERVER_PORT) });
-  if (!(await waitHealth(`http://localhost:${SERVER_PORT}/health`))) {
-    warn(`server ${SERVER_PORT} 健康检查超时——数据库是否已启动？（pnpm setup 会自动拉起 Docker PG）`);
-    stopAll(1); return;
-  }
-  say("server 就绪 ✓");
+  // ④ server 不由编排器启动——Electron 主进程内嵌管理其生命周期（产品级客户端口径）
 
   // ⑤ 起 web（生产=构建+preview；开发=vite dev）
   if (!DEV) {
@@ -132,21 +125,27 @@ async function main() {
   say("web 就绪 ✓");
 
   if (SMOKE) {
-    // 冒烟：再起 Electron 验证主进程可加载（有显示环境），无显示环境跳过窗口仅验证服务栈
+    // 冒烟：拉起 Electron（主进程内嵌起 server）→ 验证 server 健康 + 窗口渲染
     const hasDisplay = !!process.env.DISPLAY || process.platform === "darwin" || process.platform === "win32";
-    if (hasDisplay) {
-      say("冒烟：拉起 Electron 窗口验证渲染…");
-      const needNoSandbox = process.platform === "linux" && typeof process.getuid === "function" && process.getuid() === 0;
-      const e = spawn(electronBin, [...(needNoSandbox ? ["--no-sandbox"] : []), join(ROOT, "apps/desktop/electron/main.cjs")], {
-        cwd: ROOT,
-        env: { ...process.env, WORKLOOM_WEB_URL: `http://localhost:${WEB_PORT}` },
-        stdio: "ignore",
-      });
-      children.push(e);
-      await new Promise((r) => setTimeout(r, 6000)); // 给窗口渲染时间
-      e.kill("SIGTERM");
-    }
-    say(`${C.grn}冒烟通过：server + web 服务栈全就绪${hasDisplay ? "，Electron 窗口验证完成" : "（无显示环境，跳过窗口验证）"}${C.rst}`);
+    say("冒烟：拉起 Electron（主进程内嵌管理 server）…");
+    const needNoSandbox = process.platform === "linux" && typeof process.getuid === "function" && process.getuid() === 0;
+    const e = spawn(electronBin, [...(needNoSandbox ? ["--no-sandbox"] : []), join(ROOT, "apps/desktop/electron/main.cjs")], {
+      cwd: ROOT,
+      env: {
+        ...process.env,
+        WORKLOOM_WEB_URL: `http://localhost:${WEB_PORT}`,
+        WORKLOOM_SERVER_URL: `http://localhost:${SERVER_PORT}`,
+        SERVER_PORT: String(SERVER_PORT),
+      },
+      stdio: "ignore",
+    });
+    children.push(e);
+    const serverOk = await waitHealth(`http://localhost:${SERVER_PORT}/health`, 60);
+    if (!serverOk) { warn("冒烟失败：主进程内嵌 server 未就绪"); stopAll(1); return; }
+    say("内嵌 server 就绪 ✓");
+    if (hasDisplay) await new Promise((r) => setTimeout(r, 6000)); // 给窗口渲染时间
+    e.kill("SIGTERM");
+    say(`${C.grn}冒烟通过：内嵌 server + web + Electron 窗口全链路就绪${C.rst}`);
     stopAll(0); return;
   }
 
@@ -157,12 +156,17 @@ async function main() {
   const electronArgs = [...(needNoSandbox ? ["--no-sandbox"] : []), join(ROOT, "apps/desktop/electron/main.cjs")];
   const e = spawn(electronBin, electronArgs, {
     cwd: ROOT,
-    env: { ...process.env, WORKLOOM_WEB_URL: `http://localhost:${WEB_PORT}` },
+    env: {
+      ...process.env,
+      WORKLOOM_WEB_URL: `http://localhost:${WEB_PORT}`,
+      WORKLOOM_SERVER_URL: `http://localhost:${SERVER_PORT}`,
+      SERVER_PORT: String(SERVER_PORT),
+    },
     stdio: "inherit",
   });
   children.push(e);
-  e.on("exit", () => { say("窗口已关闭，正在收拢服务…"); stopAll(0); });
-  say(`${C.grn}客户端已启动。关闭窗口即退出全部服务。${C.rst}`);
+  e.on("exit", () => { say("客户端已退出，正在收拢服务…"); stopAll(0); });
+  say(`${C.grn}客户端已启动：关窗 = 最小化到托盘（夜班持续运行）；托盘菜单「退出」= 彻底退出。${C.rst}`);
 }
 
 void main();

@@ -1,0 +1,43 @@
+# WorkLoom 桌面客户端 · electron-builder 分发配置
+# 用法：pnpm app:dist（先 pnpm -C apps/web build；产物在 release/）
+# 说明：本配置面向"客户机/开发机克隆仓库后自助打包"。客户端运行时依赖本仓
+#       server（pnpm -C apps/server start）与 PG（pnpm setup 初始化）——
+#       完全自包含（内置 Node+PG）的分发形态沿用 apps/desktop/WorkLoom.app 路线。
+appId: com.workloom.im
+productName: WorkLoom 织元
+copyright: Copyright © 2026 WorkLoom
+directories:
+  output: release
+  buildResources: apps/desktop/electron/assets
+files:
+  - apps/desktop/electron/**/*
+  - package.json
+extraMetadata:
+  main: apps/desktop/electron/main.cjs
+asar: true
+
+# Windows：NSIS 安装包（客户机上一键安装、桌面快捷方式、开机自启可选）
+win:
+  target: nsis
+  icon: apps/desktop/electron/assets/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: WorkLoom 织元
+
+# macOS：DMG（Apple Silicon + Intel 双架构）
+mac:
+  target: dmg
+  category: public.app-category.business
+  icon: apps/desktop/electron/assets/icon.png
+
+# Linux：AppImage（免安装单文件）+ deb
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+  icon: apps/desktop/electron/assets

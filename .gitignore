@@ -30,3 +30,4 @@ docs/demo/.manifest.json
 # Python（computer-use toolkit 运行缓存）
 __pycache__/
 *.pyc
+release/

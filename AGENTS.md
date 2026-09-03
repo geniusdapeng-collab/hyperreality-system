@@ -54,19 +54,26 @@ pnpm preview:all     # 一键拉起三端 + Mock 数据固化（无需真实后�
 
 **未完成 preview:all 视为环境初始化未完成。** 验收清单：`PREVIEW_CHECKLIST.md`；Mock 口径：`mock/README.md`。
 
-### 1.1 要"完整客户端"体验（不走浏览器）？用桌面模式
+### 1.1 产品形态：客户端即产品（不走浏览器）
 
-用户/客户明确要求**桌面客户端窗口**（无浏览器地址栏/标签页）时：
+**WorkLoom 的正式产品形态是桌面客户端**（对标 WorkBuddy/微信桌面端），浏览器仅作开发调试辅助。
+客户端内所有模块尺寸比例**永久固定**——1440×900 设计稿逻辑画布，窗口任意拉伸只做等比缩放，
+绝不重排变形（实测：窗口拉成 1900×500 条形，内容等比缩小、布局零变形）。
 
 ```bash
-pnpm app            # 一条命令：环境检查 → server → web 生产包 → Electron 原生窗口
+pnpm app            # 完整客户端：内嵌 server + 固定比例窗口 + 系统托盘 + 单实例锁
 pnpm app --dev      # 开发姿态（vite HMR）
-pnpm app --smoke    # 冒烟验证（CI/无头环境；有显示时真实拉窗验证渲染）
+pnpm app --smoke    # 冒烟验证（CI/无头环境）
+pnpm app:pack       # 打出本机可执行包（release/ 免安装目录）
+pnpm app:dist       # 打出正式安装包（win NSIS / mac DMG / linux AppImage+deb）
 ```
 
-- 首次 pnpm install 后 Electron 二进制若未下载（pnpm 跳过 postinstall），`pnpm app` 会**自动补下载**（npmmirror 镜像），无需人工干预；
-- 未初始化环境（缺 .env）会明确指引先 `pnpm setup`；关窗即收拢全部服务，不留残留进程；
-- **不要只起 `pnpm -C apps/web dev` 就交付**——web 端有环境守门员（BackendGate）会渲染引导页，但正确交付是 `pnpm app` 或 `pnpm preview:all`。
+- **关窗 = 最小化到系统托盘**（夜班/自动任务持续运行），托盘菜单「退出」才是真退出；
+- server 生命周期由客户端主进程内嵌管理，用户无感知；首次 pnpm install 后 Electron
+  二进制若未下载，`pnpm app` 自动补下载（npmmirror 镜像），无需人工干预；
+- 未初始化环境（缺 .env）会明确指引先 `pnpm setup`；
+- **不要只起 `pnpm -C apps/web dev` 就交付**——正确交付是 `pnpm app`（客户端）
+  或 `pnpm preview:all`（浏览器三端预览，仅供开发验收）。
 
 ## 2. 一键能力巡游（强烈建议进仓第一件事）
 

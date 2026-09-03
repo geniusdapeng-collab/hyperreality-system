@@ -49,7 +49,9 @@
     "setup:full": "bash scripts/bootstrap.sh --with-computer",
     "skill:forge": "tsx scripts/skill-forge.mts",
     "app": "tsx scripts/desktop-app.mts",
-    "app:dev": "tsx scripts/desktop-app.mts --dev"
+    "app:dev": "tsx scripts/desktop-app.mts --dev",
+    "app:pack": "electron-builder --dir",
+    "app:dist": "electron-builder"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -63,7 +65,8 @@
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
     "yaml": "2.9.0",
-    "electron": "^44.1.1"
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3"
   },
   "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）"
 }
