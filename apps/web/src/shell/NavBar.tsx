@@ -26,7 +26,8 @@ export function NavBar({ entries = NAV_ENTRIES }: { entries?: NavEntry[] }) {
           {gi > 0 && <span className="mx-1.5 h-3 w-px bg-line" aria-hidden />}
           <span className="mr-0.5 select-none text-[9px] tracking-[.12em] text-ink3/70">{g}</span>
           {list.map((e) => {
-            const active = pathname === e.path || (e.path !== "/" && pathname.startsWith(e.path));
+            // 精确命中或子路由（path + "/" 边界）——防 /p11 被 /p1 前缀误伤
+            const active = pathname === e.path || (e.path !== "/" && pathname.startsWith(e.path + "/"));
             return (
               <a
                 key={e.path}
