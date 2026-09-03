@@ -108,6 +108,20 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // 去浏览器化（客户端即产品：无任何浏览器特征交互）
+  win.webContents.on("context-menu", (e) => e.preventDefault()); // 禁右键菜单
+  win.webContents.on("before-input-event", (e, input) => {
+    if (input.type !== "keyDown") return;
+    const key = (input.key ?? "").toLowerCase();
+    // 禁缩族快捷键（Ctrl±/Ctrl+0）——固定比例由 zoomFactor 统一管辖，不许用户级缩放破坏
+    if ((input.control || input.meta) && ["=", "-", "0", "+"].includes(key)) e.preventDefault();
+    // 禁 F12 / Ctrl+Shift+I 开发者工具——产品没有"检查元素"
+    if (key === "f12" || ((input.control || input.meta) && input.shift && ["i", "j", "c"].includes(key))) e.preventDefault();
+    // 禁 Ctrl+R / F5 刷新——客户端没有"刷新页面"概念
+    if (key === "f5" || ((input.control || input.meta) && key === "r")) e.preventDefault();
+  });
+  win.webContents.on("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }); // 禁 Ctrl+滚轮缩放（Chromium 部分版本经此通道）
+
   win.on("resize", applyFixedZoom);
   win.webContents.on("did-finish-load", applyFixedZoom);
   win.once("ready-to-show", () => { applyFixedZoom(); win.show(); });
@@ -137,8 +151,6 @@ function createTray() {
   tray.setToolTip(`${TITLE} · 运行中`);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "显示主窗口", click: () => { if (win) { win.show(); win.focus(); } else createWindow(); } },
-    { type: "separator" },
-    { label: `打开浏览器调试页`, click: () => void shell.openExternal(WEB_URL) },
     { type: "separator" },
     { label: "退出 WorkLoom（停止全部服务）", click: () => { quitting = true; app.quit(); } },
   ]));

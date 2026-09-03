@@ -15,7 +15,7 @@ import { SkillDistBanner } from "../components/SkillDistBanner";
 import { useAskRailPadding } from "../lib/useAskRail";
 import { COMMON_STATUS_TEXT, dictText } from "../lib/display";
 import { PlanSwitcher } from "./PlanSwitcher";
-import { NavMenu } from "./NavMenu";
+import { NavBar } from "./NavBar";
 
 /** 星野背景（氛围层；永不遮挡信息、不影响 G10 首屏口径——§7 动效纪律） */
 function StarField() {
@@ -117,12 +117,13 @@ export function Bridge({
             <span className="flex-1" />
             <PlanSwitcher onPlan={setPlan} />
             <LiveTicker />
-            <NavMenu />
             <a href="/p22" className="rounded border border-line px-2 py-0.5 text-[11px] text-ink2 no-underline hover:border-gline">🛎 服务前台</a>
             <a href="/p21" className="rounded border border-gline px-2 py-0.5 text-[11px] text-gold no-underline hover:bg-card">董事长视图</a>
             {!community && <NightStatusPill onClick={() => { window.location.href = "/p9"; }} />}
             {!community && <EmergencyBrake />}
           </header>
+          {/* 常驻导航条（桌面客户端范式：看得见、点得到，不收二级入口） */}
+          <NavBar />
 
           {/* 模拟数据横幅（D24：模拟态/mock 模型常显，引导落地向导接入真实数据） */}
           <SimBanner />
