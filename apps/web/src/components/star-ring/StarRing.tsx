@@ -13,6 +13,7 @@
  *  - 布局协作：经 window 自定义事件 askrail-width 通知 Bridge 预留右侧空间（320px / 56px）
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AgentAvatar } from "../AgentAvatar";
 import { useLocation, useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { AgentActionMessage, HumanBubble } from "../hud/messages";
@@ -232,7 +233,10 @@ export function StarRing() {
           <ClapperIcon size={18} />
         </span>
         <div className="min-w-0">
-          <div className="text-caption font-black tracking-wider text-gold">Ask · AI 助手</div>
+          <div className="flex items-center gap-1.5">
+            <AgentAvatar kind="Knight" size={22} title="数字CEO" />
+            <span className="text-caption font-black tracking-wider text-gold">Ask · AI 助手</span>
+          </div>
           <div className="font-mono text-[10px] text-ink3">{pathname} · 全局常驻</div>
         </div>
         {pendingCount > 0 && (

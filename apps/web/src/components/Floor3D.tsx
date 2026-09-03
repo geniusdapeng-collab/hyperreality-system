@@ -15,6 +15,7 @@ import { OrbitControls } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { Avatar3D, roleSkinOf } from "./Avatar3D";
+import { useNightTime } from "../lib/useNightTime";
 import type { FloorAgent, FloorScene, FloorPayload } from "../pages/p0/Floor";
 
 /* ---------------- 与 Floor.tsx 同语义的工具 ---------------- */
@@ -167,7 +168,8 @@ function Confetti({ seed }: { seed: number }) {
 }
 
 /* ---------------- 3D 场景（地板/工位/指挥台/休息角） ---------------- */
-function OfficeScene({ scene, tile, ceoName }: { scene: FloorScene; tile: number; ceoName: string }) {
+function OfficeScene({ scene, tile, ceoName, night }: { scene: FloorScene; tile: number; ceoName: string; night?: boolean }) {
+  const nightScreen = night ? 1.8 : 0.9;
   const toWorld = (lx: number, ly: number) => ({
     x: (lx - scene.grid.w / 2) * tile,
     z: (ly - scene.grid.h / 2) * tile,
@@ -196,7 +198,7 @@ function OfficeScene({ scene, tile, ceoName }: { scene: FloorScene; tile: number
             </mesh>
             <mesh position={[0, 0.52, -0.1]} rotation={[-0.35, 0, 0]}>
               <boxGeometry args={[0.4, 0.26, 0.02]} />
-              <meshStandardMaterial color="#0a1220" emissive="#4d96ff" emissiveIntensity={0.9} roughness={0.2} />
+              <meshStandardMaterial color="#0a1220" emissive="#4d96ff" emissiveIntensity={nightScreen} roughness={0.2} />
             </mesh>
           </group>
         );
@@ -272,20 +274,26 @@ export function Floor3D({
     if (a.state === "asking" && a.approvalId) onPickApproval(a);
     else onPickAgent(a);
   };
+  const night = useNightTime(); // 夜班节律：随真实时间切换（22:00→08:30 上海墙钟）
   const camY = Math.max(scene.grid.w, scene.grid.h) * tile * 0.95;
   return (
-    <div style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: "radial-gradient(ellipse at 50% 25%, #101a30 0%, #0a101f 60%, #060a14 100%)" }}>
+    <div style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: night
+      ? "radial-gradient(ellipse at 50% 25%, #070b16 0%, #04060d 60%, #020409 100%)"
+      : "radial-gradient(ellipse at 50% 25%, #101a30 0%, #0a101f 60%, #060a14 100%)",
+      transition: "background 2s" }}>
       <Canvas
         camera={{ position: [camY * 0.85, camY, camY * 0.85], fov: 40 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
       >
-        <ambientLight intensity={0.55} color="#c4d6ff" />
-        <directionalLight position={[5, 8, 4]} intensity={0.8} color="#a8c8ff" />
-        <pointLight position={[-5, 3, -2]} intensity={5} color="#5aa2ff" distance={12} decay={2} />
-        <fog attach="fog" args={["#0a101f", 9, 20]} />
+        {/* 夜班调光：环境光压暗、工位屏幕增亮（台灯感）、CEO 台金光更醒目 */}
+        <ambientLight intensity={night ? 0.22 : 0.55} color={night ? "#8ea8d8" : "#c4d6ff"} />
+        <directionalLight position={[5, 8, 4]} intensity={night ? 0.3 : 0.8} color={night ? "#7a98c8" : "#a8c8ff"} />
+        <pointLight position={[-5, 3, -2]} intensity={night ? 3 : 5} color="#5aa2ff" distance={12} decay={2} />
+        {night && <pointLight position={[0, 2.2, 0]} intensity={7} color="#ffb545" distance={8} decay={2} />}
+        <fog attach="fog" args={[night ? "#04060d" : "#0a101f", 9, 20]} />
 
-        <OfficeScene scene={scene} tile={tile} ceoName={ceoName} />
+        <OfficeScene scene={scene} tile={tile} ceoName={ceoName} night={night} />
         {floor.agents.map((a) => (
           <Worker key={a.id} agent={a} scene={scene} tile={tile} onPick={onPick} />
         ))}

@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { AgentAvatarOf } from "../../components/AgentAvatar";
 import { Bridge } from "../../shell/Bridge";
 import {
   BannerAlert,
@@ -134,10 +135,11 @@ function AgentCard({ a, onOpen }: { a: AgentRow; onOpen: (id: string) => void })
     >
       <div className="flex items-start gap-2.5">
         <div className="relative shrink-0">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-md border-2 font-bold ${
-            invalid ? "border-alert/60 bg-alert/10 text-alert" : "border-line bg-bg700 text-ink2"
+          {/* 数字人统一形象（与 3D 职场同源角色——认得出"世界里的他"） */}
+          <div className={`flex h-10 w-10 items-center justify-center rounded-md border-2 ${
+            invalid ? "border-alert/60 bg-alert/10" : "border-line bg-bg700"
           }`}>
-            {a.name.slice(0, 1)}
+            <AgentAvatarOf name={a.name} presetKey={a.presetKey} size={30} ring={false} />
           </div>
           <span className="absolute -right-1.5 -bottom-1 rounded border border-line bg-bg900 px-1 font-mono text-[9.5px] text-ink3">
             {a.version}

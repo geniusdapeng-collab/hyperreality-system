@@ -9,6 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { AgentAvatarOf } from "../../components/AgentAvatar";
 import { APPROVAL_STATUS_TEXT, actionText, dictText, shortId , payloadText } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import {
@@ -175,8 +176,9 @@ export default function P4() {
                     tier === "双人" ? "border-need/50 text-need" : tier === "必审" ? "border-warn/50 text-warn" : "border-line text-ink3"
                   }`}>{tier}</span>
                 </div>
-                <div className="mt-1 text-body text-ink2">
-                  {a.event ? `${agentOfApproval(a).name} · ${actionText(a.event.decision.action)}` : shortId(a.event_id)}
+                <div className="mt-1 flex items-center gap-1.5 text-body text-ink2">
+                  {a.event && <AgentAvatarOf name={agentOfApproval(a).name} size={18} ring={false} />}
+                  <span>{a.event ? `${agentOfApproval(a).name} · ${actionText(a.event.decision.action)}` : shortId(a.event_id)}</span>
                 </div>
                 {isConflict(a) && <div className="mt-0.5 text-micro text-alert">⚠ 快照冲突（E5.3）</div>}
               </button>

@@ -11,6 +11,7 @@
  */
 import { useMemo, useRef, useState } from "react";
 import { Avatar3D, roleSkinOf } from "./Avatar3D";
+import { useNightTime } from "../lib/useNightTime";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
@@ -283,14 +284,18 @@ export function Stage3D({
   active?: boolean;
   onPick: (a: StageAgent) => void;
 }) {
+  const night = useNightTime();
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 440, borderRadius: 12, overflow: "hidden", background: "radial-gradient(ellipse at 50% 30%, #101a30 0%, #0a101f 55%, #060a14 100%)" }}>
+    <div style={{ width: "100%", height: "100%", minHeight: 440, borderRadius: 12, overflow: "hidden", background: night
+      ? "radial-gradient(ellipse at 50% 30%, #070b16 0%, #04060d 55%, #020409 100%)"
+      : "radial-gradient(ellipse at 50% 30%, #101a30 0%, #0a101f 55%, #060a14 100%)",
+      transition: "background 2s" }}>
       <Canvas camera={{ position: [0, 2.4, 5.6], fov: 44 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
-        {/* 舱室光环境：顶部冷色环境光 + 两侧青色补光（无星空，纯指挥舱） */}
-        <ambientLight intensity={0.5} color="#bcd2ff" />
-        <directionalLight position={[4, 6, 5]} intensity={0.7} color="#9fc4ff" />
+        {/* 舱室光环境：顶部冷色环境光 + 两侧青色补光（无星空，纯指挥舱）；夜班整体压暗 */}
+        <ambientLight intensity={night ? 0.22 : 0.5} color={night ? "#8ea8d8" : "#bcd2ff"} />
+        <directionalLight position={[4, 6, 5]} intensity={night ? 0.3 : 0.7} color={night ? "#7a98c8" : "#9fc4ff"} />
         <pointLight position={[-4, 2.5, 2]} intensity={6} color="#5aa2ff" distance={10} decay={2} />
-        <fog attach="fog" args={["#0a101f", 8, 16]} />
+        <fog attach="fog" args={[night ? "#04060d" : "#0a101f", 8, 16]} />
 
         <Platform />
         <CeoFigure active={active} />
