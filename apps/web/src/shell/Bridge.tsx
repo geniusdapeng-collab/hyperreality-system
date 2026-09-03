@@ -15,7 +15,6 @@ import { SkillDistBanner } from "../components/SkillDistBanner";
 import { useAskRailPadding } from "../lib/useAskRail";
 import { COMMON_STATUS_TEXT, dictText } from "../lib/display";
 import { PlanSwitcher } from "./PlanSwitcher";
-import { NavBar } from "./NavBar";
 
 /** 星野背景（氛围层；永不遮挡信息、不影响 G10 首屏口径——§7 动效纪律） */
 function StarField() {
@@ -92,25 +91,6 @@ export function Bridge({
 
           {/* 顶栏（原型 V4.0 .abar chrome 条） */}
           <header className="flex items-center gap-3.5 border-b border-line bg-bg950/90 px-4.5 py-2.5 backdrop-blur-md">
-            <div className="flex items-center gap-2.5 text-[15px] font-black tracking-wider">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden
-                className="shadow-[0_0_14px_rgba(255,160,60,.6)]"
-              >
-                {/* 场记板 + 播放键（金色系） */}
-                <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#c9922e" />
-                <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#e9b558" />
-                <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#7a5410" strokeWidth="1.1" />
-                <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#1b1206" />
-              </svg>
-              <span className="bg-gradient-to-r from-gold to-gold2 bg-clip-text text-transparent">
-                视频经理
-              </span>
-            </div>
             <span className="text-xs text-ink3">
               WorkLoom · <b className="font-semibold text-ink2">视频创作工作室</b>
             </span>
@@ -122,8 +102,6 @@ export function Bridge({
             {!community && <NightStatusPill onClick={() => { window.location.href = "/p9"; }} />}
             {!community && <EmergencyBrake />}
           </header>
-          {/* 常驻导航条（桌面客户端范式：看得见、点得到，不收二级入口） */}
-          <NavBar />
 
           {/* 模拟数据横幅（D24：模拟态/mock 模型常显，引导落地向导接入真实数据） */}
           <SimBanner />

@@ -25,28 +25,90 @@ const GRADE_COLOR: Record<string, string> = {
 };
 const colorOf = (g: string) => GRADE_COLOR[g] ?? "#8ad8ff";
 
-/* ---------------- 数字人（全息人形，团队统一形象；Floor3D 复用） ---------------- */
+/* ---------------- 数字人（全息人形 · 战备呼吸版；Floor3D 复用） ----------------
+ * 设计：修长比例 + 发光面罩 + 全息扫描环 + 双层底座光环；
+ * 呼吸感：身体起伏 / 发光呼吸 / 头部扫视（战备警觉）/ 胸口光核脉动。 */
 export function DigitalHuman({
   color, scale = 1, emissive = 1.6, children,
 }: {
   color: string; scale?: number; emissive?: number; children?: React.ReactNode;
 }) {
+  const body = useRef<THREE.Group>(null);
+  const head = useRef<THREE.Group>(null);
+  const scan = useRef<THREE.Mesh>(null);
+  const coreLight = useRef<THREE.Mesh>(null);
+  const mat = useRef<THREE.MeshStandardMaterial>(null);
+  const phase = useMemo(() => Math.random() * Math.PI * 2, []);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime() + phase;
+    // 呼吸：发光强度缓慢起伏（战备状态的"活着"感）
+    if (mat.current) mat.current.emissiveIntensity = emissive * (0.62 + Math.sin(t * 1.7) * 0.14);
+    // 身体：呼吸微起伏 + 微微前倾（警觉姿态）
+    if (body.current) {
+      body.current.position.y = Math.sin(t * 1.7) * 0.018;
+      body.current.rotation.x = 0.04 + Math.sin(t * 0.9) * 0.012;
+    }
+    // 头部：缓慢扫视（观察四周=战备）
+    if (head.current) head.current.rotation.y = Math.sin(t * 0.55) * 0.5;
+    // 全息扫描环：自下而上循环
+    if (scan.current) {
+      scan.current.position.y = 0.15 + ((t * 0.45) % 1.15);
+      (scan.current.material as THREE.MeshBasicMaterial).opacity = 0.34 * (1 - ((t * 0.45) % 1.15) / 1.15);
+    }
+    // 胸口光核脉动
+    if (coreLight.current) coreLight.current.scale.setScalar(1 + Math.sin(t * 2.6) * 0.25);
+  });
+
   return (
     <group scale={scale}>
-      {/* 身体（全息胶囊） */}
-      <mesh position={[0, 0.62, 0]}>
-        <capsuleGeometry args={[0.16, 0.5, 6, 16]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive * 0.55} transparent opacity={0.82} roughness={0.35} />
-      </mesh>
-      {/* 头 */}
-      <mesh position={[0, 1.14, 0]}>
-        <sphereGeometry args={[0.13, 24, 24]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive * 0.8} transparent opacity={0.9} roughness={0.25} />
-      </mesh>
-      {/* 胸口光核 */}
-      <mesh position={[0, 0.78, 0.13]}>
-        <sphereGeometry args={[0.045, 12, 12]} />
-        <meshBasicMaterial color="#ffffff" />
+      <group ref={body}>
+        {/* 下半身（圆锥台，下摆微扩） */}
+        <mesh position={[0, 0.34, 0]}>
+          <cylinderGeometry args={[0.14, 0.2, 0.62, 20]} />
+          <meshStandardMaterial ref={mat} color={color} emissive={color} emissiveIntensity={emissive * 0.62} transparent opacity={0.78} roughness={0.3} metalness={0.25} />
+        </mesh>
+        {/* 胸肩（上宽下窄，肩部线条） */}
+        <mesh position={[0, 0.82, 0]}>
+          <cylinderGeometry args={[0.19, 0.14, 0.36, 20]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive * 0.7} transparent opacity={0.86} roughness={0.28} metalness={0.3} />
+        </mesh>
+        {/* 肩甲 */}
+        {[-0.21, 0.21].map((x) => (
+          <mesh key={x} position={[x, 0.95, 0]}>
+            <sphereGeometry args={[0.065, 14, 14]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive * 0.8} transparent opacity={0.9} roughness={0.25} />
+          </mesh>
+        ))}
+        {/* 纵向发光纹线（左右两条，全息能量感） */}
+        {[-0.09, 0.09].map((x) => (
+          <mesh key={x} position={[x, 0.55, 0.145]}>
+            <boxGeometry args={[0.012, 0.62, 0.012]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.5} />
+          </mesh>
+        ))}
+        {/* 胸口光核（脉动） */}
+        <mesh ref={coreLight} position={[0, 0.82, 0.16]}>
+          <sphereGeometry args={[0.042, 14, 14]} />
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+      </group>
+      {/* 头（球体 + 发光面罩 visor） */}
+      <group ref={head} position={[0, 1.18, 0]}>
+        <mesh>
+          <sphereGeometry args={[0.125, 26, 26]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive * 0.85} transparent opacity={0.92} roughness={0.2} metalness={0.35} />
+        </mesh>
+        {/* 面罩（前额发光带，科技感） */}
+        <mesh position={[0, 0.02, 0.085]} rotation={[0.12, 0, 0]}>
+          <boxGeometry args={[0.15, 0.035, 0.06]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.95} />
+        </mesh>
+      </group>
+      {/* 全息扫描环（自下而上） */}
+      <mesh ref={scan} rotation={[-Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.24, 0.006, 8, 40]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.3} />
       </mesh>
       {children}
     </group>
@@ -72,10 +134,29 @@ function CeoFigure({ active }: { active: boolean }) {
         <meshBasicMaterial color="#ffd98a" transparent opacity={0.7} />
       </mesh>
       <group ref={group}>
-        <DigitalHuman color="#ffd98a" scale={1.25} emissive={active ? 2.2 : 1.1} />
+        <DigitalHuman color="#ffd98a" scale={1.25} emissive={active ? 1.5 : 1.0} />
       </group>
-      <pointLight color="#ffcf7a" intensity={active ? 18 : 8} distance={9} decay={2} position={[0, 1.6, 0.4]} />
+      <pointLight color="#ffcf7a" intensity={active ? 9 : 5} distance={9} decay={2} position={[0, 1.6, 0.4]} />
     </group>
+  );
+}
+
+/* ---------------- 底座脉冲环（全息投影的扩散波） ---------------- */
+function PulseRing({ color, phase }: { color: string; phase: number }) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    const t = ((clock.getElapsedTime() + phase) * 0.6) % 1.6;
+    if (ref.current) {
+      const s = 1 + t * 0.85;
+      ref.current.scale.setScalar(s);
+      (ref.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.4 * (1 - t / 1.6));
+    }
+  });
+  return (
+    <mesh ref={ref} position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.3, 0.34, 40]} />
+      <meshBasicMaterial color={color} transparent opacity={0.3} side={THREE.DoubleSide} />
+    </mesh>
   );
 }
 
@@ -118,11 +199,12 @@ function Member({
 
   return (
     <group position={[slot.x, 0, slot.z]}>
-      {/* 底座评级光环 */}
+      {/* 底座评级光环（双层：内环恒定 + 外环脉冲扩散） */}
       <mesh ref={ring} position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.26, 0.34, 40]} />
         <meshBasicMaterial color={color} transparent opacity={0.6} side={THREE.DoubleSide} />
       </mesh>
+      <PulseRing color={color} phase={slot.phase} />
       <group ref={group}>
         <DigitalHuman color={color} emissive={hovered ? 2.4 : 1.5} />
       </group>
@@ -136,7 +218,7 @@ function Member({
         <sphereGeometry args={[0.42, 8, 8]} />
       </mesh>
       {/* 名牌（常驻小字，hover 高亮） */}
-      <Html center distanceFactor={9} position={[0, 1.55, 0]} style={{ pointerEvents: "none" }}>
+      <Html center distanceFactor={9} position={[0, index % 2 === 0 ? 1.52 : 1.72, 0]} style={{ pointerEvents: "none" }}>
         <div style={{
           whiteSpace: "nowrap", fontSize: hovered ? 12 : 10, fontWeight: hovered ? 700 : 500,
           color: hovered ? "#0F172A" : "#334155",
@@ -210,7 +292,7 @@ export function Stage3D({
         ))}
 
         <EffectComposer>
-          <Bloom intensity={0.7} luminanceThreshold={0.32} luminanceSmoothing={0.3} mipmapBlur />
+          <Bloom intensity={0.5} luminanceThreshold={0.42} luminanceSmoothing={0.3} mipmapBlur />
         </EffectComposer>
         <OrbitControls
           enablePan={false} enableZoom={false}

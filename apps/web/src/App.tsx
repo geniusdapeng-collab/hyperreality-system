@@ -16,15 +16,22 @@ import P23 from "./pages/p23/P23";
 import DevMatrix from "./pages/dev/DevMatrix";
 import Onboarding from "./pages/onboarding/Onboarding";
 import { Bridge } from "./shell/Bridge";
+import { SideNav } from "./shell/SideNav";
+import { useLocation } from "react-router";
 import { StarRing } from "./components/star-ring/StarRing";
 
 /** 阶段三路由：页面自包 Bridge（注入真实左右栏）；/dev 矩阵保持壳内平铺 */
-export default function App() {
+function Shell() {
+  const { pathname } = useLocation();
+  // 非产品路由（开发矩阵/落地向导）不带常驻导航；其余全部页面左侧导航常驻
+  const bare = pathname === "/dev" || pathname.startsWith("/onboarding");
   return (
-    <>
+    <div className="flex min-h-screen">
+      {!bare && <SideNav />}
+      <div className="min-w-0 flex-1">
 
-    <StarRing />
-    <Routes>
+        <StarRing />
+        <Routes>
       <Route path="/" element={<P0 />} />
       <Route path="/p1" element={<P1 />} />
       <Route path="/p2/:threadId" element={<P2 />} />
@@ -44,7 +51,12 @@ export default function App() {
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/dev" element={<Bridge><DevMatrix /></Bridge>} />
       <Route path="*" element={<P0 />} />
-    </Routes>
-  </>
+        </Routes>
+      </div>
+    </div>
   );
+}
+
+export default function App() {
+  return <Shell />;
 }
