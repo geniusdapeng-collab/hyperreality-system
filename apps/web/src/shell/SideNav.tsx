@@ -64,7 +64,7 @@ export function SideNav({ entries = NAV_ENTRIES }: { entries?: NavEntry[] }) {
           <div className="bg-gradient-to-r from-gold to-gold2 bg-clip-text text-[14px] font-black tracking-wider text-transparent">
             WorkLoom
           </div>
-          <div className="text-[10px] text-ink3">企业 Agent IM</div>
+          <div className="text-[10px] text-ink3">企业数字员工 IM</div>
         </div>
       </div>
 

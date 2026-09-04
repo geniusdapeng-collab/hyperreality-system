@@ -24,7 +24,7 @@ export function LevelBadge({
         <div
           className={`flex h-10 w-10 items-center justify-center border-2 font-orb text-caption font-black ${
             captain
-              ? "rounded-full border-gold bg-gold/10 text-goldhi shadow-[0_0_12px_rgba(255,36,66,.4)]"
+              ? "rounded-full border-gold bg-gold/10 text-goldhi shadow-[0_0_12px_rgba(214,220,228,.4)]"
               : "rounded-md border-line bg-bg700 text-ink2"
           }`}
         >
@@ -84,7 +84,7 @@ export function SquadRing({
             title={`${m.name} ${m.version}${active ? " · 巡航中" : " · 待命"}`}
             className={`absolute flex h-7 w-7 items-center justify-center rounded-md border text-micro font-bold transition-all ${
               active
-                ? "border-gold/70 bg-gold/12 text-goldhi shadow-[0_0_10px_rgba(255,36,66,.5)]"
+                ? "border-gold/70 bg-gold/12 text-goldhi shadow-[0_0_10px_rgba(214,220,228,.5)]"
                 : "border-line bg-bg700/60 text-ink3"
             }`}
             style={{ left: x, top: y, transitionDelay: `${i * 120}ms` }}
@@ -119,7 +119,7 @@ export function EquipSlot({
         failed
           ? "border-alert/70 bg-alert/8 text-alert"
           : filled
-            ? "border-gold/70 bg-gold/10 text-goldhi shadow-[0_0_14px_rgba(255,36,66,.45)]"
+            ? "border-gold/70 bg-gold/10 text-goldhi shadow-[0_0_14px_rgba(214,220,228,.45)]"
             : "border-line bg-bg800/50 text-ink3"
       }`}
       style={{ clipPath: "polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)" }}

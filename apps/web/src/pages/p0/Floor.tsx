@@ -180,7 +180,7 @@ export function FloorView({
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cd.sx, cd.sy - 18, 26 * pulse, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "#e8edf4"; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.ellipse(cd.sx, cd.sy - 20, 6, 9, 0, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = "#d4002a"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
+      ctx.fillStyle = "#e8edf4"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
       ctx.fillText(ceoName, cd.sx, cd.sy + 14);
 
       /* 员工：更新目标 + 插值走位（先清理已离场员工的运行时，防泄漏） */

@@ -17,7 +17,7 @@ export function XpBar({
     <div className="flex items-center gap-2.5">
       <div className="h-[9px] flex-1 overflow-hidden rounded-full bg-[rgba(77,150,255,.14)]">
         <div
-          className="relative h-full rounded-full shadow-[0_0_12px_rgba(255,36,66,.55)]"
+          className="relative h-full rounded-full shadow-[0_0_12px_rgba(214,220,228,.55)]"
           style={{
             width: `${pct}%`,
             background: "linear-gradient(90deg, var(--color-gold2), var(--color-gold), var(--color-goldhi))",

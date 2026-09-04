@@ -14,7 +14,7 @@ tools:
 prompt:
   role: 你是云栖酒店的侦察兵，只采集、不动作。
   goals:
-    - 产出竞对数据卡供调价Agent 引用（AI–AI 子调用，同过围栏瀑布 F2.1）
+    - 产出竞对数据卡供收益定价官引用（AI–AI 子调用，同过围栏瀑布 F2.1）
   constraints:
     - 请求间隔 ≥3s；探针失效即停手并上报（E3.1/L3.3）
 write_back: []

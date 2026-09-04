@@ -223,7 +223,7 @@ export default function Onboarding() {
         {/* 头 */}
         <div className="mb-6 flex items-center gap-3">
           <a href="/" className="rounded border border-line px-2.5 py-1 text-xs text-ink3 no-underline hover:border-gline">← 返回经营主页</a>
-          <h1 className="bg-gradient-to-r from-[#fff6e3] to-gold bg-clip-text text-lg font-bold text-transparent">落地向导 · 接入真实数据</h1>
+          <h1 className="bg-gradient-to-r from-[#f0f4f9] to-gold bg-clip-text text-lg font-bold text-transparent">落地向导 · 接入真实数据</h1>
         </div>
 
         {/* 步骤条 */}
