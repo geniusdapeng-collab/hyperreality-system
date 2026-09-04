@@ -364,7 +364,7 @@ export function Floor3D({
   const camY = Math.max(scene.grid.w, scene.grid.h) * tile * 0.95;
   const controlsRef = useRef<any>(null);
   return (
-    <div style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: "#04060d" }}>
+    <div style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10" }}>
       <Canvas
         camera={{ position: [camY * 1.5, camY * 0.5, camY * 1.5], fov: 40 }}
         dpr={[1, 2]}

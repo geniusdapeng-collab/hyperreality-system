@@ -234,7 +234,7 @@ export function Stage3D({
   const night = useNightTime();
   const controlsRef = useRef<any>(null);
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 440, borderRadius: 12, overflow: "hidden", background: "#04060d" }}>
+    <div style={{ width: "100%", height: "100%", minHeight: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10" }}>
       <Canvas camera={{ position: [8.6, 0.9, 11.2], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: false }}>
         <SkyDome night={night} />
         <Skyline radius={17} night={night} />

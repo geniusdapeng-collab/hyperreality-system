@@ -215,7 +215,7 @@ export default function P7() {
                   <div className="flex items-center gap-2 text-body font-bold text-ink2">
                     <span className="font-mono">hyperreality-{p.slug}</span>
                     {p.status === "active" && <span className="rounded border border-go/50 px-1 py-px text-micro text-go">当前</span>}
-                    {p.status === "draft" && <span className="rounded border border-[#CD8B5A]/50 px-1 py-px text-micro text-[#CD8B5A]">草稿 · 不进分发</span>}
+                    {p.status === "draft" && <span className="rounded border border-[#a8b2be]/50 px-1 py-px text-micro text-[#a8b2be]">草稿 · 不进分发</span>}
                     {!p.canActivate && <span className="rounded border border-alert/50 px-1 py-px text-micro text-alert">校验未过</span>}
                   </div>
                   <div className="mt-0.5 text-micro text-ink3">{p.displayName} · v{p.version} · 装配 {p.filledCount}/6</div>

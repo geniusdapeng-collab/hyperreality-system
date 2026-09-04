@@ -143,7 +143,7 @@ export function FloorView({
           ctx.fillStyle = "#3a5a6a"; roundRect(ctx, sx - 14, sy - 8, 28, 12, 4); ctx.fill();
         } else if (pr.kind === "coffee") {
           ctx.fillStyle = "#8a8a9a"; roundRect(ctx, sx - 5, sy - 12, 10, 14, 2); ctx.fill();
-          ctx.fillStyle = "#c8a24a"; ctx.fillRect(sx - 3, sy - 10, 6, 3);
+          ctx.fillStyle = "#a8b2be"; ctx.fillRect(sx - 3, sy - 10, 6, 3);
         } else if (pr.kind === "whiteboard") {
           ctx.fillStyle = "#e8e8f022"; roundRect(ctx, sx - 16, sy - 22, 32, 20, 2); ctx.fill();
           ctx.strokeStyle = "#8ad8ff66"; ctx.strokeRect(sx - 16, sy - 22, 32, 20);
@@ -154,7 +154,7 @@ export function FloorView({
           ctx.beginPath(); ctx.arc(sx, sy - 8, 4, 0, Math.PI * 2); ctx.fillStyle = "#101018"; ctx.fill();
           ctx.strokeStyle = "#8a8a9a"; ctx.beginPath(); ctx.moveTo(sx, sy - 2); ctx.lineTo(sx - 6, sy + 8); ctx.moveTo(sx, sy - 2); ctx.lineTo(sx + 6, sy + 8); ctx.stroke();
         } else if (pr.kind === "light") {
-          ctx.fillStyle = "#ffd98a33"; ctx.beginPath(); ctx.moveTo(sx, sy - 26); ctx.lineTo(sx - 10, sy); ctx.lineTo(sx + 10, sy); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "#e8edf433"; ctx.beginPath(); ctx.moveTo(sx, sy - 26); ctx.lineTo(sx - 10, sy); ctx.lineTo(sx + 10, sy); ctx.closePath(); ctx.fill();
           ctx.fillStyle = "#3a3a4a"; ctx.fillRect(sx - 2, sy - 30, 4, 30);
         } else if (pr.kind === "greenscreen") {
           ctx.fillStyle = "#1a6a3a"; roundRect(ctx, sx - 20, sy - 26, 40, 26, 2); ctx.fill();
@@ -173,12 +173,12 @@ export function FloorView({
       const cd = iso(scene.ceoDesk.x, scene.ceoDesk.y);
       ctx.beginPath();
       ctx.ellipse(cd.sx, cd.sy, tileW * 0.55, tileH * 0.55, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "#3a2f1a"; ctx.fill(); ctx.strokeStyle = "#c8a24a"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#252a30"; ctx.fill(); ctx.strokeStyle = "#a8b2be"; ctx.lineWidth = 1.5; ctx.stroke();
       const pulse = 0.7 + 0.3 * Math.sin(now * 2);
       const glow = ctx.createRadialGradient(cd.sx, cd.sy - 18, 2, cd.sx, cd.sy - 18, 26 * pulse);
       glow.addColorStop(0, "rgba(255,217,138,.85)"); glow.addColorStop(1, "rgba(255,217,138,0)");
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cd.sx, cd.sy - 18, 26 * pulse, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "#ffd98a"; ctx.lineWidth = 1.4;
+      ctx.strokeStyle = "#e8edf4"; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.ellipse(cd.sx, cd.sy - 20, 6, 9, 0, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = "#d4002a"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
       ctx.fillText(ceoName, cd.sx, cd.sy + 14);

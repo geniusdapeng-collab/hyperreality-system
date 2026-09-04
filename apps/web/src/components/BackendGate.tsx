@@ -37,15 +37,15 @@ function CopyCmd({ cmd, children }: { cmd: string; children?: ReactNode }) {
       style={{
         display: "inline-flex", alignItems: "center", gap: 8,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-        fontSize: 14, fontWeight: 600, color: "#1B2A4E",
-        background: copied ? "#D1FAE5" : "#F1F5F9",
-        border: "1px solid #CBD5E1", borderRadius: 8,
+        fontSize: 14, fontWeight: 600, color: "#d6dce4",
+        background: copied ? "rgb(70 177 144 / 0.18)" : "#1c2025",
+        border: "1px solid rgb(214 220 228 / 0.22)", borderRadius: 8,
         padding: "8px 14px", cursor: "pointer",
       }}
       title="点击复制命令"
     >
       {children ?? cmd}
-      <span style={{ fontSize: 12, color: copied ? "#047857" : "#94A3B8" }}>
+      <span style={{ fontSize: 12, color: copied ? "#46b190" : "#68707a" }}>
         {copied ? "✓ 已复制" : "⧉"}
       </span>
     </button>
@@ -55,20 +55,20 @@ function CopyCmd({ cmd, children }: { cmd: string; children?: ReactNode }) {
 function OptionCard(props: { badge: string; title: string; desc: string; cmd: string; accent?: boolean }) {
   return (
     <div style={{
-      border: props.accent ? "2px solid #4C6FFF" : "1px solid #E2E8F0",
-      borderRadius: 12, padding: "16px 18px", background: "#fff",
+      border: props.accent ? "1.5px solid rgb(214 220 228 / 0.55)" : "1px solid rgb(214 220 228 / 0.14)",
+      borderRadius: 12, padding: "16px 18px", background: "#15181c",
       display: "flex", flexDirection: "column", gap: 8, textAlign: "left",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{
           fontSize: 11, fontWeight: 700, letterSpacing: 1,
-          color: props.accent ? "#fff" : "#64748B",
-          background: props.accent ? "#4C6FFF" : "#E2E8F0",
+          color: props.accent ? "#12151a" : "#9aa2ac",
+          background: props.accent ? "#d6dce4" : "#252a30",
           borderRadius: 999, padding: "2px 10px",
         }}>{props.badge}</span>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#0F172A" }}>{props.title}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#e8ebef" }}>{props.title}</span>
       </div>
-      <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>{props.desc}</div>
+      <div style={{ fontSize: 13, color: "#9aa2ac", lineHeight: 1.6 }}>{props.desc}</div>
       <div><CopyCmd cmd={props.cmd} /></div>
     </div>
   );
@@ -78,17 +78,17 @@ function GuidePage() {
   return (
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "linear-gradient(180deg, #F8FAFC 0%, #EEF2FF 100%)",
+      background: "linear-gradient(180deg, #0e1013 0%, #12161c 100%)",
       fontFamily: "-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
       padding: 24,
     }}>
       <div style={{ maxWidth: 640, width: "100%" }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🛰️</div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: "0 0 8px" }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>◈</div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#e8ebef", margin: "0 0 8px" }}>
             WorkLoom 环境未就绪
           </h1>
-          <p style={{ fontSize: 14, color: "#64748B", margin: 0, lineHeight: 1.7 }}>
+          <p style={{ fontSize: 14, color: "#9aa2ac", margin: 0, lineHeight: 1.7 }}>
             前端页面已启动，但连不上后端服务（<code>localhost:8787</code>）。<br />
             这通常是因为只启动了前端——系统需要后端与数据库一起运行。<br />
             请按下面任一方式启动（在<b>项目根目录</b>的终端中执行）：
@@ -118,7 +118,7 @@ function GuidePage() {
         </div>
 
         <p style={{
-          textAlign: "center", fontSize: 12, color: "#94A3B8", marginTop: 24, lineHeight: 1.8,
+          textAlign: "center", fontSize: 12, color: "#68707a", marginTop: 24, lineHeight: 1.8,
         }}>
           本页面每 3 秒自动重试连接，后端就绪后会自动进入系统，无需手动刷新。<br />
           若使用 AI 编程工具打开本项目，请让它先执行 <code>pnpm preview:all</code> 再给你浏览器地址。
@@ -148,7 +148,7 @@ export function BackendGate({ children }: { children: ReactNode }) {
     return (
       <div style={{
         minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-        background: "#F8FAFC", color: "#64748B", fontSize: 14,
+        background: "#0e1013", color: "#9aa2ac", fontSize: 14,
         fontFamily: "-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
       }}>
         正在连接 WorkLoom 服务…

@@ -72,7 +72,7 @@ function Starfield({ density = 110 }: { density?: number }) {
 /* ================= 数字CEO全息 CEO ================= */
 function Hologram({ tone, active }: { tone: "gold" | "holo" | "amber" | "red" | "grey"; active: boolean }) {
   const colors = {
-    gold: ["#ffd98a", "#c8a24a"], holo: ["#8ad8ff", "#3a9ec8"],
+    gold: ["#e8edf4", "#a8b2be"], holo: ["#b3c6de", "#7f97b8"],
     amber: ["#ffbe6a", "#c8842a"], red: ["#ff8a8a", "#c84a4a"], grey: ["#9a9aa8", "#5a5a68"],
   }[tone];
   return (
@@ -485,7 +485,7 @@ export default function P0() {
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-bg950 transition-opacity duration-700"
           style={{ opacity: ceremony >= 4 ? 0 : 1, pointerEvents: ceremony >= 4 ? "none" : "auto" }}>
           <div className="text-center">
-            <div className={`mx-auto mb-4 h-3 w-3 rounded-full bg-gold transition-all duration-700 ${ceremony >= 2 ? "scale-[3] shadow-[0_0_60px_#ffd98a]" : "scale-100"}`} />
+            <div className={`mx-auto mb-4 h-3 w-3 rounded-full bg-gold transition-all duration-700 ${ceremony >= 2 ? "scale-[3] shadow-[0_0_60px_#e8edf4]" : "scale-100"}`} />
             <div className={`text-sm tracking-[.3em] text-gold transition-opacity duration-700 ${ceremony >= 3 ? "opacity-100" : "opacity-0"}`}>
               团队全员就位
             </div>

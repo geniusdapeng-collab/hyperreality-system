@@ -15,34 +15,34 @@
 @theme {
   /* ===== §2.1 色板 · 糖果色系（小红书式年轻时尚） ===== */
   /* 糖果四阶（背景三分层：页面奶莓 → 卡片云白 → 浮层蜜桃雾 → 悬停樱花粉） */
-  --color-bg950: #fff5f7;
-  --color-bg900: #ffffff;
-  --color-bg800: #fff0f4;
-  --color-bg700: #ffe4ec;
+  --color-bg950: #0e1013;
+  --color-bg900: #15181c;
+  --color-bg800: #1c2025;
+  --color-bg700: #252a30;
   /* 糖果晕染对（背景晕染与空态插画，不做功能色） */
-  --color-nebula: #ffe0ec;
-  --color-nebula2: #e8e0ff;
+  --color-nebula: #1a1f26;
+  --color-nebula2: #12161c;
   /* 珊瑚主色（行动/奖励专属）+ 深珊瑚强调 + 主色上文字（§2.2 对比度） */
-  --color-gold: #ff2442;
-  --color-gold2: #ff7a9e;
-  --color-goldhi: #d4002a;
-  --color-ongold: #ffffff;
+  --color-gold: #d6dce4;
+  --color-gold2: #f0f4f9;
+  --color-goldhi: #a8b2be;
+  --color-ongold: #12151a;
   /* 蓝莓信息色（信息/证据专属）+ 天空蓝（链接/次级信息） */
-  --color-holo: #4d96ff;
-  --color-holo2: #6ec6ff;
+  --color-holo: #8fa9c9;
+  --color-holo2: #b3c6de;
   /* 语义四色（全局唯一）：薄荷绿=auto/已完成 蜜桃橙=review/待审 草莓红=block/需介入/失败 葡萄紫=需介入 */
-  --color-go: #22c88a;
-  --color-warn: #ffaa33;
-  --color-alert: #ff4d6d;
-  --color-need: #b678ff;
+  --color-go: #46b190;
+  --color-warn: #d9a045;
+  --color-alert: #e05a6b;
+  --color-need: #a88bd4;
   /* 可可文字三级（§2.1/§3） */
-  --color-ink: #33262b;
-  --color-ink2: #8a757d;
-  --color-ink3: #b9a9b0;
+  --color-ink: #e8ebef;
+  --color-ink2: #9aa2ac;
+  --color-ink3: #68707a;
   /* 卡片与描线 */
-  --color-card: rgb(255 255 255 / 0.88);
-  --color-line: rgb(255 36 66 / 0.14);
-  --color-gline: rgb(255 36 66 / 0.32);
+  --color-card: rgb(21 24 28 / 0.82);
+  --color-line: rgb(214 220 228 / 0.12);
+  --color-gline: rgb(214 220 228 / 0.30);
 
 
   /* ===== §3 字体三级 ===== */
@@ -110,7 +110,7 @@
     @apply bg-bg950 text-ink font-sans antialiased;
   }
   ::selection {
-    background: rgb(255 36 66 / 0.22);
+    background: rgb(214 220 228 / 0.24);
   }
   /* 编号/代码不换行（§3 mono 规则） */
   code, .font-mono {
