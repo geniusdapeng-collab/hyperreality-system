@@ -199,7 +199,7 @@ export function NamePlate({
   position?: [number, number, number]; distanceFactor?: number;
 }) {
   return (
-    <Html center distanceFactor={distanceFactor} position={position} style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
+    <Html center distanceFactor={distanceFactor > 0 ? distanceFactor : undefined} position={position} style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
       <div style={{
         display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
         transform: spotlight ? "scale(1.18)" : "scale(1)", transition: "transform .25s",

@@ -139,7 +139,7 @@ function Worker({
           color={color}
           spotlight={asking}
           position={[0, 1.22 + (hash(agent.id) % 4) * 0.24, 0]}
-          distanceFactor={11}
+          distanceFactor={0}
         />
       )}
       {/* 拖拽接收锚点 */}
@@ -299,7 +299,7 @@ function OfficeScene({ scene, tile, ceoName, night }: { scene: FloorScene; tile:
             </group>
             <SpotBeam color="#ffd98a" height={4.6} topR={0.24} bottomR={1.0} opacity={night ? 0.07 : 0.1} />
             <pointLight color="#ffcf7a" intensity={night ? 7 : 5} distance={7} decay={2} position={[0, 1.5, 0]} />
-            <NamePlate persona={personaOf("company-ceo")} role={ceoName} color="#ffd98a" position={[0, 1.62, 0]} distanceFactor={10} />
+            <NamePlate persona={personaOf("company-ceo")} role={ceoName} color="#ffd98a" position={[0, 1.62, 0]} distanceFactor={0} />
           </group>
         );
       })()}
