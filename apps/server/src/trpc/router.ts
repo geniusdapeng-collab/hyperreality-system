@@ -3079,3 +3079,4 @@ export const appRouter = router({
 export type AppRouter = typeof appRouter;
 /** 上下文类型经 router 入口再导出（前端 AppRouter 类型可移植性，TS2742） */
 export type { TrpcContext } from "./context.js";
+export type { ExamSummary } from "../service/eval.js";

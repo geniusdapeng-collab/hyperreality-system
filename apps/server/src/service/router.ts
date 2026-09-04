@@ -19,6 +19,12 @@ import { pushMessage } from "./channels.js";
 import { appendEventOn, serviceTx, svcQuery } from "./events.js";
 import { llmCall } from "./llm.js";
 import { ensureServiceSchema } from "./store.js";
+import {
+  getSettings as evalGetSettings, latestReport as evalLatestReport,
+  listAnswers as evalListAnswers, listExams as evalListExams,
+  listQuestions as evalListQuestions, runExam as evalRunExam,
+  seedQuestionsIfEmpty as evalSeedQuestions, setPromotionGate as evalSetPromotionGate,
+} from "./eval.js";
 
 const kbRouter = router({
   listCollections: protectedProcedure.query(async ({ ctx }) => {
@@ -313,8 +319,75 @@ const statsRouter = router({
   }),
 });
 
+/**
+ * 考试院（方案 V2.0）：成绩单/考试记录/题库/开考/设置
+ * 全部查询 protectedProcedure；开考与授权走 writeProcedure（留痕）。
+ */
+const evalRouter = router({
+  /** 最新成绩单（看板首页） */
+  latestReport: protectedProcedure.query(async ({ ctx }) => {
+    const ws = scopeOf(ctx.identity).workspaceId;
+    return { report: await evalLatestReport(ws) };
+  }),
+  /** 考试场次列表 */
+  listExams: protectedProcedure.query(async ({ ctx }) => {
+    const ws = scopeOf(ctx.identity).workspaceId;
+    return { exams: await evalListExams(ws) };
+  }),
+  /** 某场答题卡（含判卷明细） */
+  listAnswers: protectedProcedure
+    .input(z.object({ examId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const ws = scopeOf(ctx.identity).workspaceId;
+      return { answers: await evalListAnswers(ws, input.examId) };
+    }),
+  /** 题库（含结构×维度双标签） */
+  listQuestions: protectedProcedure.query(async ({ ctx }) => {
+    const ws = scopeOf(ctx.identity).workspaceId;
+    return { questions: await evalListQuestions(ws) };
+  }),
+  /** 开考（手动/变更触发；P0 同步执行） */
+  runExam: writeProcedure
+    .input(z.object({
+      examType: z.enum(["on-change", "weekly", "onboarding"]).default("weekly"),
+      subjectScope: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const ws = scopeOf(ctx.identity).workspaceId;
+      const r = await evalRunExam(ws, { examType: input.examType, subjectScope: input.subjectScope });
+      return { exam: r.exam, wrongCount: r.answers.filter((a) => !a.passed).length };
+    }),
+  /** 播种示例题库（空库时） */
+  seedQuestions: writeProcedure.mutation(async ({ ctx }) => {
+    const ws = scopeOf(ctx.identity).workspaceId;
+    return { seeded: await evalSeedQuestions(ws) };
+  }),
+  /** 设置查询 */
+  settings: protectedProcedure.query(async ({ ctx }) => {
+    const ws = scopeOf(ctx.identity).workspaceId;
+    return { settings: await evalGetSettings(ws) };
+  }),
+  /** 卡晋升授权开关（默认关；开启即留痕——授权动作写事件库） */
+  setPromotionGate: writeProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      const settings = await serviceTx(scope.workspaceId, async (client, sc) => {
+        const s = await evalSetPromotionGate(scope.workspaceId, input.enabled);
+        await appendEventOn(client, sc, { id: ctx.identity.memberNo, type: "human" }, {
+          objectType: "eval_settings", objectId: scope.workspaceId,
+          action: input.enabled ? "eval.promotion_gate.enable" : "eval.promotion_gate.disable",
+          after: { promotion_gate: input.enabled },
+        });
+        return s;
+      });
+      return { settings };
+    }),
+});
+
 export const serviceRouter = router({
   kb: kbRouter,
   tickets: ticketsRouter,
   stats: statsRouter,
+  eval: evalRouter,
 });
