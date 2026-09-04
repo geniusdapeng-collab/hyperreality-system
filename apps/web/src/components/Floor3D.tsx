@@ -330,6 +330,19 @@ function OfficeScene({ scene, tile, ceoName, night }: { scene: FloorScene; tile:
   );
 }
 
+/* ---------------- 平移范围钳制（enablePan 开放后防止场景被拖出视野） ---------------- */
+function PanClamp({ controlsRef, bounds }: { controlsRef: React.RefObject<any>; bounds: { x: number; z: number } }) {
+  useFrame(() => {
+    const c = controlsRef.current;
+    if (!c) return;
+    const t = c.target as THREE.Vector3;
+    t.x = THREE.MathUtils.clamp(t.x, -bounds.x, bounds.x);
+    t.z = THREE.MathUtils.clamp(t.z, -bounds.z, bounds.z);
+    t.y = THREE.MathUtils.clamp(t.y, 0, 1.2);
+  });
+  return null;
+}
+
 /* ---------------- 主组件（props 与 FloorView 全兼容） ---------------- */
 export function Floor3D({
   floor, ceoName, onPickAgent, onPickApproval, onDropTask,
@@ -375,11 +388,17 @@ export function Floor3D({
         <CinePost bloom={night ? 0.42 : 0.5} grain={0.028} vignette={0.72} />
         <OrbitControls
           ref={controlsRef}
-          enablePan={false} enableZoom={false}
+          enablePan enableZoom enableRotate
+          panSpeed={0.8} zoomSpeed={0.9}
+          screenSpacePanning={false}
+          minDistance={camY * 0.35} maxDistance={camY * 1.8}
           minPolarAngle={Math.PI / 4.2} maxPolarAngle={Math.PI / 2.4}
           target={[0, 0.3, 0]}
+          onStart={() => { if (controlsRef.current) controlsRef.current.autoRotate = false; }}
           makeDefault
         />
+        {/* 平移目标点钳制在地板范围内（人再多也不会把场景拖丢） */}
+        <PanClamp controlsRef={controlsRef} bounds={{ x: scene.grid.w * tile * 0.55, z: scene.grid.h * tile * 0.55 }} />
         <CineRig
           from={[camY * 1.5, camY * 0.5, camY * 1.5]} to={[camY * 0.76, camY * 0.88, camY * 0.76]}
           target={[0, 0.3, 0]} duration={3.2} autoRotateSpeed={0.12} controlsRef={controlsRef}

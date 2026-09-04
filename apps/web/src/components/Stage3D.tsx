@@ -261,10 +261,13 @@ export function Stage3D({
         <CinePost bloom={night ? 0.42 : 0.5} grain={0.028} vignette={0.75} />
         <OrbitControls
           ref={controlsRef}
-          enablePan={false} enableZoom={false}
+          enablePan={false} enableZoom enableRotate
+          zoomSpeed={0.9}
+          minDistance={3.6} maxDistance={14}
           minPolarAngle={Math.PI / 3.4} maxPolarAngle={Math.PI / 2.1}
           minAzimuthAngle={-Math.PI / 3} maxAzimuthAngle={Math.PI / 3}
           target={[0, 0.8, 0.2]}
+          onStart={() => { if (controlsRef.current) controlsRef.current.autoRotate = false; }}
           makeDefault
         />
         <CineRig
