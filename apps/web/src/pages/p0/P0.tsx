@@ -16,6 +16,13 @@ import { useAskRailPadding } from "../../lib/useAskRail";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
 import { Stage3D } from "../../components/Stage3D";
 import { Floor3D } from "../../components/Floor3D";
+import { SubtitleBar } from "../../voice/SubtitleBar";
+import { VoiceEngine } from "../../voice/VoiceEngine";
+import { AudioEngine } from "../../audio/AudioEngine";
+import { useAmbience } from "../../audio/ambience";
+import { AudioSettings } from "../../components/AudioSettings";
+import { useTheaterDiff } from "../../lib/theaterDiff";
+import { personaOf } from "../../lib/naming";
 
 /* ================= 类型 ================= */
 interface Satellite { id: string; presetKey: string; name: string; grade: string }
@@ -192,6 +199,36 @@ export default function P0() {
   }, []);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null); // M1.2 驳回弹窗目标
   const switchView = (v: "floor" | "stage") => { setView(v); localStorage.setItem("theater-view", v); };
+  // —— M1 视听觉醒：事件源 / 环境声 / 手势启动 ——
+  const directorEvent = useTheaterDiff(data);
+  useAmbience();
+  useEffect(() => { AudioEngine.bindGesture(); }, []);
+  // 调试探针（运行时自测用；生产无副作用）
+  useEffect(() => { (window as unknown as { __wlVoice?: typeof VoiceEngine }).__wlVoice = VoiceEngine; }, []);
+  // 熔断事件 → 语音强制打断（运镜与警报声由 CineDirector 处理）
+  useEffect(() => {
+    if (directorEvent?.kind === "fuse") {
+      VoiceEngine.speak({ role: "company-ceo", persona: "顾云峥", text: directorEvent.text, priority: "fuse" });
+    }
+  }, [directorEvent]);
+  // 晨间仪式语音播报：团队依次报到 + CEO 晨报（每日一次，与视觉序列同节拍）
+  const ceremonyVoiced = useRef(false);
+  useEffect(() => {
+    if (ceremony >= 5 || ceremony < 2 || ceremonyVoiced.current || !data) return;
+    ceremonyVoiced.current = true;
+    AudioEngine.play("fanfare");
+    data.satellites.forEach((a, i) => {
+      window.setTimeout(() => {
+        VoiceEngine.speak({ role: a.presetKey, persona: personaOf(a.presetKey), text: `${personaOf(a.presetKey)}，向您报到`, priority: "ceremony" });
+      }, i * 1600);
+    });
+    const briefAt = data.satellites.length * 1600 + 1200;
+    window.setTimeout(() => {
+      const text = data.latestBriefing?.text ?? "昨夜班组运行正常，今日请指示。";
+      VoiceEngine.speak({ role: "company-ceo", persona: "顾云峥", text, priority: "ceremony" });
+    }, briefAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ceremony, data]);
 
   const load = async () => {
     await ensureDemoLogin();
@@ -255,6 +292,7 @@ export default function P0() {
   };
 
   const decide = async (approvalId: string, gesture: "approve" | "reject") => {
+    AudioEngine.play(gesture === "approve" ? "approve" : "reject");
     if (gesture === "reject") {
       // M1.2（D24）：驳回必须选择行业受控枚举（弹窗），原「无原因驳回」已被服务端 L5.2 拒绝
       setRejectTarget(approvalId);
@@ -268,6 +306,7 @@ export default function P0() {
   };
   /** 拖拽任务卡到员工身上（派活闭环·拖拽形态：落点即下达，与指挥卡同通道） */
   const dropTaskOn = async (a: FloorAgent, task: string) => {
+    AudioEngine.play("assign");
     try {
       const r = await trpc.threads.dispatch.mutate({ title: task, presetKey: a.presetKey, runImmediately: true }) as Record<string, unknown>;
       if (r.kind === "clarify") setMsg(`🤔 ${String(r.question ?? "指令需要更具体")}`);
@@ -314,6 +353,7 @@ export default function P0() {
         <span className={`rounded border px-2 py-0.5 text-[11px] ${tone === "amber" ? "border-amber-500/60 text-amber-600" : tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
           {MODE_TEXT[data?.mode ?? ""] ?? "…"}
         </span>
+        <AudioSettings />
         <a href="/p1" className="rounded border border-line px-2 py-0.5 text-[11px] text-ink2 no-underline hover:border-gline">工作台</a>
         <a href="/p21" className="rounded border border-gline px-2 py-0.5 text-[11px] text-gold no-underline">董事长视图</a>
       </header>
@@ -355,6 +395,7 @@ export default function P0() {
             </div>
             {webglOk ? (
               <Floor3D
+                directorEvent={directorEvent}
                 floor={data.floor}
                 ceoName={data.ceoName}
                 onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
@@ -495,6 +536,8 @@ export default function P0() {
           </div>
         </div>
       )}
+      {/* 新闻台字幕条（语音字幕等价物 + 降级兜底） */}
+      <SubtitleBar />
       <RejectDialog
         open={rejectTarget !== null}
         mode="reject"

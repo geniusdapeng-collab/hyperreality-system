@@ -10,11 +10,16 @@
  *  - 视觉（cinematic 工具包）：镜面反射地板 / 体积光柱 / 开场推轨运镜 /
  *    穹顶天幕 + 城市光带 / 电影字幕名牌（人名·官衔）/ 辉光 + 暗角 + 胶片颗粒。
  */
-import { useMemo, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
-import { Avatar3D, roleSkinOf } from "./Avatar3D";
+import { Avatar3D, roleSkinOf, type AvatarHandle } from "./Avatar3D";
+import { GazeSystem, GazeRegistry } from "./GazeSystem";
+import { HoverBubble } from "./HoverBubble";
+import { CineDirector, FuseVignette } from "./CineDirector";
+import type { DirectorEvent } from "../lib/theaterDiff";
+import { AudioEngine } from "../audio/AudioEngine";
 import { useNightTime } from "../lib/useNightTime";
 import { personaOf } from "../lib/naming";
 import { CineFloor, SpotBeam, CineRig, CinePost, SkyDome, Skyline, NamePlate, DustMotes } from "./cinematic";
@@ -76,6 +81,9 @@ function Worker({
 }) {
   const group = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
+  const avatarRef = useRef<AvatarHandle>(null);
+  const [bubble, setBubble] = useState(false);
+  const hoverTimer = useRef<number | null>(null);
   const target = useMemo(() => targetOf(agent, scene), [agent, scene]);
   const color = STATE_COLOR[agent.state] ?? "#8ad8ff";
   const toWorld = (lx: number, ly: number) => ({
@@ -102,6 +110,27 @@ function Worker({
     }
   });
 
+  // 视线感知注册：getPos 供注视检测/运镜取点，onGaze 抬头点头+气泡
+  useEffect(() => {
+    const unregister = GazeRegistry.register({
+      id: agent.id,
+      getPos: () => {
+        const v = new THREE.Vector3();
+        if (group.current) group.current.getWorldPosition(v);
+        v.y += 0.85;
+        return v;
+      },
+      onGaze: () => {
+        const cam = (window as unknown as { __wlCamera?: THREE.Camera }).__wlCamera;
+        if (cam) avatarRef.current?.gazeNod(cam.position.clone());
+        setBubble(true);
+        window.setTimeout(() => setBubble(false), 4000);
+        AudioEngine.play("pop");
+      },
+    });
+    return unregister;
+  }, [agent.id]);
+
   const dimmed = agent.state === "disabled";
   const skin = roleSkinOf(agent.name, agent.presetKey);
   const asking = agent.state === "asking";
@@ -112,10 +141,12 @@ function Worker({
         <ringGeometry args={[0.2, 0.27, 32]} />
         <meshBasicMaterial color={color} transparent opacity={dimmed ? 0.15 : 0.55} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
-      {/* 真人风数字员工（KayKit 骨骼动画） */}
+      {/* 真人风数字员工（KayKit 骨骼动画；ref 供注视点头） */}
       <group scale={dimmed ? 0.52 : 0.64}>
-        <Avatar3D skin={skin} state={agent.state} moving={movingRef.current} />
+        <Avatar3D ref={avatarRef} skin={skin} state={agent.state} moving={movingRef.current} />
       </group>
+      {/* 一句话状态气泡（hover 0.5s / 注视触发） */}
+      <HoverBubble text={agent.statusLine} visible={bubble} position={[0, 1.0, 0]} />
       {/* 请示金色体积光柱 */}
       {asking && (
         <SpotBeam color="#ffd98a" height={4.2} topR={0.12} bottomR={0.62} opacity={night ? 0.1 : 0.14} phase={hash(agent.id) % 3} />
@@ -126,8 +157,16 @@ function Worker({
       <mesh
         position={[0, 0.7, 0]} visible={false}
         onClick={(e) => { e.stopPropagation(); onPick(agent); }}
-        onPointerOver={() => { document.body.style.cursor = "pointer"; }}
-        onPointerOut={() => { document.body.style.cursor = "default"; }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+          hoverTimer.current = window.setTimeout(() => setBubble(true), 500);
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = "default";
+          if (hoverTimer.current) { window.clearTimeout(hoverTimer.current); hoverTimer.current = null; }
+          window.setTimeout(() => setBubble(false), 1600);
+        }}
       >
         <sphereGeometry args={[0.4, 8, 8]} />
       </mesh>
@@ -330,6 +369,16 @@ function OfficeScene({ scene, tile, ceoName, night }: { scene: FloorScene; tile:
   );
 }
 
+/* ---------------- 相机探针（gazeNod 的世界点来源；避免循环依赖） ---------------- */
+function CameraProbe() {
+  const { camera } = useThree();
+  useEffect(() => {
+    (window as unknown as { __wlCamera?: THREE.Camera }).__wlCamera = camera;
+    return () => { delete (window as unknown as { __wlCamera?: THREE.Camera }).__wlCamera; };
+  }, [camera]);
+  return null;
+}
+
 /* ---------------- 平移范围钳制（enablePan 开放后防止场景被拖出视野） ---------------- */
 function PanClamp({ controlsRef, bounds }: { controlsRef: React.RefObject<any>; bounds: { x: number; z: number } }) {
   useFrame(() => {
@@ -345,7 +394,7 @@ function PanClamp({ controlsRef, bounds }: { controlsRef: React.RefObject<any>; 
 
 /* ---------------- 主组件（props 与 FloorView 全兼容） ---------------- */
 export function Floor3D({
-  floor, ceoName, onPickAgent, onPickApproval, onDropTask,
+  floor, ceoName, onPickAgent, onPickApproval, onDropTask, directorEvent = null,
 }: {
   floor: FloorPayload;
   ceoName: string;
@@ -353,6 +402,8 @@ export function Floor3D({
   onDecide: (approvalId: string, gesture: "approve" | "reject") => void;
   onPickApproval: (a: FloorAgent) => void;
   onDropTask?: (a: FloorAgent, task: string) => void;
+  /** 导演运镜事件（theaterDiff 输入；null=无新事件） */
+  directorEvent?: DirectorEvent | null;
 }) {
   const tile = 0.86;
   const scene = floor.scene;
@@ -364,7 +415,8 @@ export function Floor3D({
   const camY = Math.max(scene.grid.w, scene.grid.h) * tile * 0.95;
   const controlsRef = useRef<any>(null);
   return (
-    <div style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10" }}>
+    <div style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10", position: "relative" }}>
+      <FuseVignette event={directorEvent} />
       <Canvas
         camera={{ position: [camY * 1.5, camY * 0.5, camY * 1.5], fov: 40 }}
         dpr={[1, 2]}
@@ -385,6 +437,9 @@ export function Floor3D({
         ))}
         <DustMotes count={46} area={[9, 2.8, 7]} color={night ? "#8aa8d8" : "#bcd6ff"} size={1.2} position={[0, 1.5, 0]} speed={0.18} />
 
+        <GazeSystem />
+        <CineDirector event={directorEvent} controlsRef={controlsRef} />
+        <CameraProbe />
         <CinePost bloom={night ? 0.42 : 0.5} grain={0.028} vignette={0.72} />
         <OrbitControls
           ref={controlsRef}

@@ -11,7 +11,7 @@
  *
  * 素材登记：oss-components.json → kaykit-adventurers（CC0，https://kaylousberg.itch.io/kaykit-adventurers）
  */
-import { useEffect, useMemo, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
@@ -72,17 +72,21 @@ export function stateAnimOf(state: string, moving: boolean, workAction = "Idle")
   }
 }
 
+/* ---------------- 视线感知命令句柄（GazeSystem 专用） ---------------- */
+export interface AvatarHandle {
+  /** 抬头转向世界点 + 点头一次（头部骨骼缓动，自动衰减归位） */
+  gazeNod: (worldPoint: THREE.Vector3) => void;
+}
+
 /* ---------------- 主组件 ---------------- */
-export function Avatar3D({
-  skin, state = "working", moving = false, scale = 1, onClick, onHover,
-}: {
+export const Avatar3D = forwardRef<AvatarHandle, {
   skin: RoleSkin;
   state?: string;
   moving?: boolean;
   scale?: number;
   onClick?: () => void;
   onHover?: (hovered: boolean) => void;
-}) {
+}>(function Avatar3D({ skin, state = "working", moving = false, scale = 1, onClick, onHover }, ref) {
   const { scene, animations } = useGLTF(MODEL_FILES[skin.model]);
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const mixer = useMemo(() => new THREE.AnimationMixer(clone), [clone]);
@@ -136,7 +140,45 @@ export function Avatar3D({
     current.current = want;
   }, [state, moving, skin.workAction, animations, mixer]);
 
-  useFrame((_, delta) => mixer.update(delta));
+  /* —— 视线感知：头部骨骼 + gazeNod 句柄 —— */
+  const headBone = useMemo<THREE.Object3D | null>(() => {
+    let bone: THREE.Object3D | null = null;
+    clone.traverse((o) => { if (!bone && /head/i.test(o.name)) bone = o as THREE.Object3D; });
+    return bone;
+  }, [clone]);
+  const gaze = useRef<{ point: THREE.Vector3; until: number; nodAt: number } | null>(null);
+  useImperativeHandle(ref, () => ({
+    gazeNod: (worldPoint: THREE.Vector3) => {
+      gaze.current = { point: worldPoint.clone(), until: performance.now() + 2600, nodAt: performance.now() + 250 };
+    },
+  }), []);
+
+  useFrame((_, delta) => {
+    mixer.update(delta);
+    // 注视：头部缓动转向镜头点 + 一次点头，2.6s 后衰减归位
+    const g = gaze.current;
+    if (!g || !headBone || !group.current) return;
+    const now = performance.now();
+    const remain = (g.until - now) / 2600;
+    if (remain <= 0) {
+      headBone.rotation.y *= 0.85;
+      headBone.rotation.x *= 0.85;
+      gaze.current = null;
+      return;
+    }
+    const weight = Math.min(1, remain * 2) * 0.65; // 进场快、出场缓
+    const local = group.current.worldToLocal(g.point.clone());
+    const headWorld = new THREE.Vector3();
+    headBone.getWorldPosition(headWorld);
+    group.current.worldToLocal(headWorld);
+    const dy = Math.atan2(local.x - headWorld.x, local.z - headWorld.z);
+    const targetY = THREE.MathUtils.clamp(dy, -0.9, 0.9) * weight;
+    headBone.rotation.y += (targetY - headBone.rotation.y) * Math.min(1, delta * 8);
+    // 点头：0.25s 后 X 轴一次正弦俯仰
+    const nodT = now - g.nodAt;
+    const nodX = nodT > 0 && nodT < 700 ? Math.sin((nodT / 700) * Math.PI) * 0.22 * weight : 0;
+    headBone.rotation.x += (nodX - headBone.rotation.x) * Math.min(1, delta * 10);
+  });
 
   return (
     <group ref={group} scale={scale}>
@@ -148,7 +190,8 @@ export function Avatar3D({
       />
     </group>
   );
-}
+});
+Avatar3D.displayName = "Avatar3D";
 
 /* 预加载全部角色（首屏不卡） */
 export function preloadAvatars() {
