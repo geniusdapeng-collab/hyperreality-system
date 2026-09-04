@@ -43,6 +43,8 @@ function run(cmd: string, args: string[], name: string, env: NodeJS.ProcessEnv =
     cwd: ROOT,
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
+    // Windows 兼容：pnpm 等命令是 .cmd 脚本，无 shell 无法执行（ENOENT）
+    shell: process.platform === "win32",
   });
   p.stdout?.on("data", (d: Buffer) => process.stdout.write(`${C.cyn}[${name}]${C.rst} ${d}`));
   p.stderr?.on("data", (d: Buffer) => process.stderr.write(`${C.yel}[${name}]${C.rst} ${d}`));
@@ -62,6 +64,11 @@ async function waitHealth(url: string, tries = 40, gapMs = 500): Promise<boolean
 }
 
 function portBusy(port: number): boolean {
+  if (process.platform === "win32") {
+    // Windows：netstat -ano（无 ss）
+    const r = spawnSync("netstat", ["-ano"], { encoding: "utf-8", shell: true });
+    return r.stdout?.includes(`:${port} `) ?? false;
+  }
   const r = spawnSync("ss", ["-tln"], { encoding: "utf-8" });
   return r.stdout?.includes(`:${port} `) ?? false;
 }
@@ -111,7 +118,7 @@ async function main() {
   // ⑤ 起 web（生产=构建+preview；开发=vite dev）
   if (!DEV) {
     say("构建 web 生产包（首次约 1-2 分钟）…");
-    const build = spawnSync("pnpm", ["-C", "apps/web", "build"], { cwd: ROOT, stdio: "inherit", env: process.env });
+    const build = spawnSync("pnpm", ["-C", "apps/web", "build"], { cwd: ROOT, stdio: "inherit", env: process.env, shell: process.platform === "win32" });
     if (build.status !== 0) { warn("web 构建失败"); stopAll(1); return; }
     say(`启动 web 预览（:${WEB_PORT}）…`);
     run("pnpm", ["-C", "apps/web", "preview"], "web", { WEB_PORT: String(WEB_PORT), SERVER_PORT: String(SERVER_PORT) });

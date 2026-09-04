@@ -54,6 +54,8 @@ function startServer() {
     cwd: repoRoot,
     env: { ...process.env },
     stdio: ["ignore", "pipe", "pipe"],
+    // Windows 兼容：pnpm 是 .cmd 脚本，无 shell 无法执行（ENOENT）
+    shell: process.platform === "win32",
   });
   serverProc.stdout.on("data", (d) => process.stdout.write(`[server] ${d}`));
   serverProc.stderr.on("data", (d) => process.stderr.write(`[server] ${d}`));

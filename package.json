@@ -51,7 +51,8 @@
     "app": "tsx scripts/desktop-app.mts",
     "app:dev": "tsx scripts/desktop-app.mts --dev",
     "app:pack": "electron-builder --dir",
-    "app:dist": "electron-builder"
+    "app:dist": "electron-builder",
+    "setup:lite": "tsx scripts/setup-lite.mts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
