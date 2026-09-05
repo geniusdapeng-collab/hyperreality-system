@@ -386,3 +386,11 @@ npm 最新 rc.7（latest）/ rc.8（next），与锁定 rc.8 一致——**无�
   员工卫星群绩效色可点 / 语音气泡打字机 / L4 请示聚光灯三手势 / 实况字幕 / 聊天框三模式真实路由 / 开门仪式每日首访 / 移动端适配）。
 - 路由："/" → 剧场，原 P1 迁 /p1（工作台镜头化：剧场管感觉、工作台管操作）。
 - 实测：桌面+移动双端零报错；ask 应答/三手势批准/开门仪式全链通过；套件 422→423。
+
+
+## dsh 0.1.2-rc.1 升级登记（2026-09-05，随发布即升纪律；基座同步）
+
+- **变更面**：新增嵌入式 profile（sdk/sdk-minimal/acp）；agent-presets 改 configTrees 挂载；patchReload 热重载；sharp 图像附件链；全家桶统一 bump。
+- **动作**：vendor/dsh 换基线 0.1.2-rc.1（integrity 与 registry 逐字符一致 ✅）；dsh-gate pin 0.1.2-rc.1 + 清 lock 重装；README 中英 + oss 台账同步。
+- **坑位**：Node ≥22.15 zstd 硬要求（gate/生产须 Node 24）。
+- **验证**：基座 E6 dsh-gate 全绿（Node v24.9.0：全链验链 38 条 + kill -9 重放零重复）。

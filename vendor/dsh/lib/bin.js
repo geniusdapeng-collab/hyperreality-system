@@ -115,13 +115,10 @@ function parseDshArgs(argv, version) {
 //#endregion
 //#region lib/types/bin.js
 /**
-* dsh — command-line entry. Dynamic imports per mode keep unrelated modes out
-* of each dispatch path; the adapter prints and exits for
-* `--help`/`--version`/a parse error, so only a valid mode reaches the switch.
+* Command-line entry for dsh.
 * @module @deepseek-ai/dsh/bin
 */
 /* v8 ignore file -- built-bin acceptance exercises this self-executing dispatch. */
-/** This app's version, read from its checked-in package.json. */
 function readVersion() {
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"));
 	return typeof manifest.version === "string" ? manifest.version : "0.0.0";
@@ -129,7 +126,7 @@ function readVersion() {
 const invocation = parseDshArgs(process.argv.slice(2), readVersion());
 switch (invocation.mode) {
 	case "profile": {
-		const { runProfile } = await import("./profile-boot-BnJoK_kl.js");
+		const { runProfile } = await import("./profile-boot-x7_BzdeW.js");
 		await runProfile({
 			environment: loadLayeredEnv("dsh"),
 			profile: invocation.profile,
@@ -139,12 +136,12 @@ switch (invocation.mode) {
 		break;
 	}
 	case "plugin": {
-		const { runPlugin } = await import("./plugin-9h8shc4d.js");
+		const { runPlugin } = await import("./plugin-F7ZVfRyo.js");
 		process.exit(runPlugin(invocation.profile, invocation.args));
 		break;
 	}
 	case "dump-config": {
-		const { runDumpConfig } = await import("./dump-config-D-jtgwY3.js");
+		const { runDumpConfig } = await import("./dump-config-BNQ_bV66.js");
 		runDumpConfig(invocation.profile, invocation.defaultOnly, invocation.patches);
 		break;
 	}

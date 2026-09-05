@@ -1,4 +1,4 @@
-import { t as INSTALL_ANCHOR } from "./profile-boot-DG5t9aNs.js";
+import { t as INSTALL_ANCHOR } from "./profile-boot-BTzzdrGY.js";
 import { existsSync } from "node:fs";
 import { DEFAULT_PROFILE_BUNDLES, PROFILE_TEMPLATES, initProfile, readProfileManifest, resolveBundleDir, resolveProfileDir, writeProfileManifest } from "@deepseek-ai/dsh-app-boot";
 import { join, resolve } from "node:path";
@@ -101,7 +101,8 @@ function anchorPathSpec(argument, cwd) {
 function runPlugin(profile, args) {
 	const dir = resolveProfileDir(profile);
 	if (!existsSync(join(dir, "package.json"))) {
-		initProfile(dir, PROFILE_TEMPLATES[profile] ?? DEFAULT_PROFILE_BUNDLES);
+		const template = PROFILE_TEMPLATES[profile];
+		initProfile(dir, template?.bundles ?? DEFAULT_PROFILE_BUNDLES, template?.patchReload);
 		process.stderr.write(`${NAME}: initialized profile ${profile} at ${dir}\n`);
 	}
 	const before = readProfileManifest(NAME, dir);

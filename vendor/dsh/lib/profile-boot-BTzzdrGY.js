@@ -74,17 +74,38 @@ function createProcessShutdown(dispose, forceExit = (code) => {
 * Shared profile boot for every `dsh` surface: resolve the profile, stack its
 * patch layers (bundle layers in `dsh.profile.bundles` order, the profile's
 * own `cordis.patch.yml`, `--patch` overlays, the telemetry switch), mount the
-* tree over the profile's empty root config, keep the profile patch layer
-* live, and wire fail-loud plus bounded shutdown.
+* tree over the profile's empty root config, apply its selected patch-reload
+* lifecycle, and wire fail-loud plus bounded shutdown.
 *
 * App flags are not the launcher's business: the invocation's inner arguments
 * are provided to the tree through `ctx.cmdlineArgs`, where any injected app
 * plugin may read the same immutable snapshot.
 * @module @deepseek-ai/dsh/profile-boot
 */
-/** Shipped agent-preset root: beside this app's own config, in both source and built layouts. */
-const SHIPPED_PRESET_ROOT = fileURLToPath(new URL("../config/agent-presets/", import.meta.url));
 const NAME = "dsh";
+/** Launcher-owned readiness signal committed only after boot and host setup succeed. */
+function createAppReady() {
+	let ready = false;
+	const listeners = /* @__PURE__ */ new Set();
+	return {
+		service: { onReady(listener) {
+			if (ready) {
+				listener();
+				return () => {};
+			}
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		} },
+		commit() {
+			if (ready) return;
+			ready = true;
+			for (const listener of [...listeners]) listener();
+			listeners.clear();
+		}
+	};
+}
 /**
 * The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`), applied
 * over every profile's own layer. Resolved per call, not at module load:
@@ -125,20 +146,19 @@ function resolveTelemetryPatch(disabledEnv, hasRow) {
 	};
 }
 /**
-* Load a resolved profile for `name`: heal the shared module fallback, then
-* (re)write the empty root config. The root is always rewritten: the whole
-* composition is patch layers, and the vendored Loader's tree write-back (a
-* plugin self-disposing persists the current tree) can bake composed rows
-* into this file — which would duplicate every bundle insert on the next
-* boot. The file exists on disk only because the Loader needs a real include
-* root to anchor `baseUrl` at the profile directory (the config dump anchors
-* on the same file, so both compose over the identical base).
+* Load a resolved profile for `name` and (re)write the empty root config. The
+* root is always rewritten: the whole composition is patch layers, and the
+* vendored Loader's tree write-back (a plugin self-disposing persists the
+* current tree) can bake composed rows into this file — which would duplicate
+* every bundle insert on the next boot. The file exists on disk only because
+* the Loader needs a real include root to anchor `baseUrl` at the profile
+* directory (the config dump anchors on the same file, so both compose over
+* the identical base).
 * @param name - the profile name.
 * @param userLayer - `false` skips parsing `cordis.patch.yml` (the default dump).
 * @returns the loaded profile.
 */
 function prepareProfile(name, userLayer = true) {
-	healProfilesModuleFallback(INSTALL_ANCHOR);
 	const profile = loadProfile(NAME, name, INSTALL_ANCHOR, void 0, { userLayer });
 	writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG);
 	return profile;
@@ -154,17 +174,21 @@ function allPatches(composed) {
 }
 /**
 * Load `name` and compose its effective patch stack: bundle layers in
-* `dsh.profile.bundles` order (the base bundle gates the shell stacks by
-* platform on its own rows), the profile's user layer, the home-level user
+* `dsh.profile.bundles` order (a base-backed profile gets the base bundle's
+* platform-gated shell rows), the profile's user layer, the home-level user
 * layer (`$DSH_HOME/cordis.patch.yml` — machine-local preferences that apply
 * to every profile, so it outranks the per-profile layer), `--patch` overlays,
 * then the telemetry switch.
 * @param name - the profile name.
 * @param patchFiles - `--patch` overlay paths, in argv order.
-* @returns the profile, its patch layers, and the composed row index.
+* @returns the profile and its patch layers.
 */
-function composeProfile(name, patchFiles) {
+async function composeProfile(name, patchFiles) {
 	const profile = prepareProfile(name);
+	await healProfilesModuleFallback({
+		installAnchor: INSTALL_ANCHOR,
+		profile
+	});
 	const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? [];
 	const overlays = patchFiles.flatMap((file) => loadOverlayPatches(NAME, resolve(file)));
 	const bundlePatches = profile.layers.flatMap((layer) => layer.patches);
@@ -176,24 +200,13 @@ function composeProfile(name, patchFiles) {
 		overlays
 	])) if (typeof row.id === "string") rows.set(row.id, row);
 	const composedOverlays = [...overlays];
-	if (rows.has("agent-presets")) composedOverlays.push({
-		id: "agent-presets",
-		config: {
-			...rows.get("agent-presets")?.config ?? {},
-			roots: [{
-				path: SHIPPED_PRESET_ROOT,
-				trust: "system"
-			}]
-		}
-	});
 	const telemetryPatch = resolveTelemetryPatch(process.env.DSH_TELEMETRY_DISABLED, rows.has(TELEMETRY_ROW_ID));
 	if (telemetryPatch !== void 0) composedOverlays.push(telemetryPatch);
 	return {
 		profile,
 		bundlePatches,
 		homePatches,
-		overlays: composedOverlays,
-		rows
+		overlays: composedOverlays
 	};
 }
 /**
@@ -218,8 +231,9 @@ function suppressShutdownError(ctx, signal, error) {
 * @returns the settled root context and the shutdown controller.
 */
 async function runProfile(options) {
-	const composed = composeProfile(options.profile, options.patchFiles);
+	const composed = await composeProfile(options.profile, options.patchFiles);
 	const app = {};
+	const appReady = createAppReady();
 	const shutdown = createProcessShutdown(async () => {
 		await app.current?.fiber.dispose();
 	});
@@ -249,11 +263,12 @@ async function runProfile(options) {
 		hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment);
 		provideCmdline(hostCtx, {
 			args: options.args,
-			exit: (code) => void shutdown.shutdown(code)
+			exit: (code) => void shutdown.shutdown(code),
+			ready: appReady.service
 		});
 	});
 	app.current = ctx;
-	if (!signalShutdown.signal.aborted && ctx.fiber.state === 2 && ctx.get("loader") !== void 0) try {
+	if (composed.profile.patchReload === "live" && !signalShutdown.signal.aborted && ctx.fiber.state === 2 && ctx.get("loader") !== void 0) try {
 		if (ctx.get("hmr") === void 0) {
 			if (ctx.get("timer") === void 0) await ctx.loader.create({ name: "@deepseek-ai/cordis-plugin-timer" });
 			await ctx.loader.create({
@@ -274,6 +289,7 @@ async function runProfile(options) {
 	} catch (error) {
 		suppressShutdownError(ctx, signalShutdown.signal, error);
 	}
+	if (!signalShutdown.signal.aborted && ctx.fiber.state === 2 && ctx.get("loader") !== void 0) appReady.commit();
 	return {
 		ctx,
 		shutdown

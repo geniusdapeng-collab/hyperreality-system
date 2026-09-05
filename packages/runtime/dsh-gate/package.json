@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "E6 · dsh headless 回归门禁（D13①）：锁版 dsh 运行时 + 脚本化用例 + H-5 kill -9 重放验收",
+  "description": "E6 \u00b7 dsh headless \u56de\u5f52\u95e8\u7981\uff08D13\u2460\uff09\uff1a\u9501\u7248 dsh \u8fd0\u884c\u65f6 + \u811a\u672c\u5316\u7528\u4f8b + H-5 kill -9 \u91cd\u653e\u9a8c\u6536",
   "dependencies": {
-    "@deepseek-ai/dsh": "0.1.1-rc.2"
+    "@deepseek-ai/dsh": "0.1.2-rc.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

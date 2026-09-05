@@ -1,4 +1,4 @@
-import { i as prepareProfile, n as PROFILE_ROOT_FILENAME, r as homePatchPath } from "./profile-boot-DG5t9aNs.js";
+import { i as prepareProfile, n as PROFILE_ROOT_FILENAME, r as homePatchPath } from "./profile-boot-BTzzdrGY.js";
 import { existsSync } from "node:fs";
 import { loadOptionalPatches, loadOverlayPatches, renderConfigDump } from "@deepseek-ai/dsh-app-boot";
 import { join, resolve } from "node:path";
