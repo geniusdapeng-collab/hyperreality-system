@@ -601,7 +601,7 @@ const secretaryRouter = router({
       persona_custom: z.object({ name: z.string().max(20).optional(), tone: z.string().max(200).optional() }).optional(),
       voice_key: z.enum(["sweet", "bright", "soft", "calm"]).optional(),
       voice_on: z.boolean().optional(),
-      widget_size: z.enum(["large", "small"]).optional(),
+      widget_size: z.enum(["large", "small", "fullscreen"]).optional(),
       quiet_start: z.string().regex(/^\d{2}:\d{2}$/).optional(),
       quiet_end: z.string().regex(/^\d{2}:\d{2}$/).optional(),
       channels: z.object({

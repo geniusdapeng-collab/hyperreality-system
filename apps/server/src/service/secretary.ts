@@ -46,7 +46,7 @@ export const VOICE_KEYS: Record<string, { pitch: number; rate: number; female?: 
 export interface Settings {
   member_no: string; display_name: string; persona_key: string;
   persona_custom: { name?: string; tone?: string }; voice_key: string; voice_on: boolean;
-  widget_size: "large" | "small"; quiet_start: string; quiet_end: string;
+  widget_size: "large" | "small" | "fullscreen"; quiet_start: string; quiet_end: string;
   channels: { im?: { provider: string; target: string }; outbox_urls?: string[] };
   [key: string]: unknown;
 }

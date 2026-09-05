@@ -13,7 +13,7 @@ import { VoiceEngine } from "../../voice/VoiceEngine";
 interface Settings {
   member_no: string; display_name: string; persona_key: string;
   persona_custom: { name?: string; tone?: string }; voice_key: string; voice_on: boolean;
-  widget_size: "large" | "small"; quiet_start: string; quiet_end: string;
+  widget_size: "small" | "large" | "fullscreen"; quiet_start: string; quiet_end: string;
   channels: { im?: { provider: string; target: string }; outbox_urls?: string[] };
 }
 interface InboxItem {
@@ -165,8 +165,10 @@ export function LoomMate() {
     setItems((prev) => prev.filter((x) => x.id !== it.id));
   };
 
+  const MODE_NEXT: Record<string, "small" | "large" | "fullscreen"> = { small: "large", large: "fullscreen", fullscreen: "small" };
+  const MODE_LABEL: Record<string, string> = { small: "变大", large: "全屏", fullscreen: "变小" };
   const toggleSize = async () => {
-    const next = size === "large" ? "small" : "large";
+    const next = MODE_NEXT[size] ?? "large";
     setSettings((s) => s ? { ...s, widget_size: next } : s);
     await svc().secretary.saveSettings.mutate({ widget_size: next }).catch(() => undefined);
   };
@@ -203,8 +205,70 @@ export function LoomMate() {
     }
   };
 
-  const dim = size === "large" ? 200 : 96;
+  const dim = size === "large" ? 480 : 96;
   const unread = items.length;
+
+  // —— 全屏屏保模式：她守着整个场，有事直接喊你 ——
+  if (size === "fullscreen") {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg950/98"
+        onKeyDown={(e) => { if (e.key === "Escape") void toggleSize(); }} tabIndex={0}
+        ref={(el) => el?.focus()}>
+        {/* 环境微光背景 */}
+        <div className="pointer-events-none absolute inset-0 opacity-30"
+          style={{ background: "radial-gradient(ellipse at 50% 62%, rgba(232,160,191,.25), transparent 60%)" }} />
+        <button onClick={() => void toggleSize()}
+          className="absolute right-5 top-5 rounded-full border border-line bg-bg900/80 px-3 py-1.5 text-[11px] text-ink2 hover:text-ink">
+          退出屏保（Esc）
+        </button>
+        <button onClick={() => void openPanel("chat")} className="relative cursor-pointer transition-transform hover:scale-[1.02]">
+          <MateAvatar size={Math.min(520, Math.round((typeof window !== "undefined" ? window.innerHeight : 900) * 0.55))} excited={unread > 0} />
+          {unread > 0 && (
+            <span className="absolute right-4 top-4 flex h-10 min-w-10 items-center justify-center rounded-full bg-alert px-2 text-[16px] font-bold text-white shadow-xl">
+              {unread}
+            </span>
+          )}
+        </button>
+        <div className="mt-3 text-[18px] font-semibold text-ink">{personaName} · 正在照看团队</div>
+        <div className="mt-1 text-[12px] text-ink3">点她聊聊 · 有事她会直接喊你</div>
+        {/* 红色/高级别事件：屏保中央强提醒 */}
+        {items.filter((it) => it.level === "red" || it.level === "high").slice(0, 1).map((it) => (
+          <div key={it.id} className={`mt-5 w-[440px] rounded-2xl border p-4 shadow-2xl ${LEVEL_STYLE[it.level]}`}>
+            <div className="text-[14px] font-semibold text-ink">{it.level === "red" ? "🚨 " : "🔔 "}{it.title}</div>
+            <div className="mt-1 text-[12.5px] leading-relaxed text-ink2">{it.body}</div>
+            <div className="mt-2.5 flex gap-2">
+              <button onClick={() => void act(it)}
+                className="rounded-lg bg-gradient-to-br from-gold to-gold2 px-4 py-1.5 text-[12px] font-semibold text-ongold">
+                {it.actions[0]?.label ?? "看看"}
+              </button>
+              <button onClick={() => void later(it)} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-ink2">稍后</button>
+            </div>
+          </div>
+        ))}
+        {/* 底部团队运行串话条 */}
+        <div className="absolute bottom-0 left-0 right-0 border-t border-line bg-bg900/80 px-6 py-2.5 backdrop-blur">
+          <div className="flex items-center gap-6 overflow-hidden whitespace-nowrap text-[11.5px] text-ink2">
+            <span className="shrink-0 text-gold">● 团队实况</span>
+            {items.length === 0 && <span className="animate-pulse">各部门运行正常，一切井然有序……（有事我喊你）</span>}
+            {items.slice(0, 6).map((it) => (
+              <span key={it.id} className="shrink-0">{it.title} · {it.body.slice(0, 30)}</span>
+            ))}
+          </div>
+        </div>
+        {/* 面板（聊/设置/记忆）在全屏态同样可用 */}
+        {open !== "none" && (
+          <div className="absolute bottom-16 right-5 top-16 w-[340px]">
+            <MatePanel
+              open={open} setOpen={setOpen} openPanel={openPanel}
+              chat={chat} busy={busy} input={input} setInput={setInput} send={send}
+              personaName={personaName} settings={settings} setSettings={setSettings}
+              memory={memory} setMemory={setMemory}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2" style={{ fontFamily: "inherit" }}>
@@ -225,9 +289,53 @@ export function LoomMate() {
         </div>
       ))}
 
-      {/* 展开面板 */}
       {open !== "none" && (
-        <div className="flex h-[420px] w-[320px] flex-col rounded-2xl border border-gline bg-bg900/95 shadow-2xl backdrop-blur">
+        <MatePanel
+          open={open} setOpen={setOpen} openPanel={openPanel}
+          chat={chat} busy={busy} input={input} setInput={setInput} send={send}
+          personaName={personaName} settings={settings} setSettings={setSettings}
+          memory={memory} setMemory={setMemory}
+        />
+      )}
+
+      {/* 本体：形象 + 名字 + 尺寸切换 */}
+      <div className="flex flex-col items-center">
+        <button onClick={() => void openPanel("chat")} className="relative block cursor-pointer transition-transform hover:scale-105" title={`${personaName}（点击聊聊）`}>
+          <MateAvatar size={dim} excited={unread > 0} />
+          {unread > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-[11px] font-bold text-white shadow-lg">
+              {unread}
+            </span>
+          )}
+        </button>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className={`rounded-full bg-bg900/90 px-2.5 py-0.5 text-ink shadow ${size === "large" ? "text-[12px]" : "text-[10px]"}`}>
+            {personaName}
+          </span>
+          <button onClick={() => void toggleSize()} title="切换大小"
+            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 hover:text-ink shadow">
+            {MODE_LABEL[size] ?? "变大"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- 展开面板（聊/设置/记忆——角落态与全屏态复用） ---------------- */
+function MatePanel({ open, setOpen, openPanel, chat, busy, input, setInput, send, personaName, settings, setSettings, memory, setMemory }: {
+  open: "chat" | "settings" | "memory";
+  setOpen: (v: "none" | "chat" | "settings" | "memory") => void;
+  openPanel: (p: "chat" | "settings" | "memory") => Promise<void>;
+  chat: ChatMsg[]; busy: boolean; input: string; setInput: (v: string) => void;
+  send: (text: string) => Promise<void>;
+  personaName: string; settings: Settings | null;
+  setSettings: React.Dispatch<React.SetStateAction<Settings | null>>;
+  memory: Record<string, MemRow[]> | null;
+  setMemory: React.Dispatch<React.SetStateAction<Record<string, MemRow[]> | null>>;
+}) {
+  return (
+<div className="flex h-[420px] w-[320px] flex-col rounded-2xl border border-gline bg-bg900/95 shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between border-b border-line px-3 py-2">
             <div className="flex gap-1">
               {([["chat", "聊聊"], ["settings", "设置"], ["memory", "记忆"]] as const).map(([k, label]) => (
@@ -305,29 +413,6 @@ export function LoomMate() {
             </div>
           )}
         </div>
-      )}
-
-      {/* 本体：形象 + 名字 + 尺寸切换 */}
-      <div className="flex flex-col items-center">
-        <button onClick={() => void openPanel("chat")} className="relative block cursor-pointer transition-transform hover:scale-105" title={`${personaName}（点击聊聊）`}>
-          <MateAvatar size={dim} excited={unread > 0} />
-          {unread > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-[11px] font-bold text-white shadow-lg">
-              {unread}
-            </span>
-          )}
-        </button>
-        <div className="mt-0.5 flex items-center gap-1.5">
-          <span className={`rounded-full bg-bg900/90 px-2.5 py-0.5 text-ink shadow ${size === "large" ? "text-[12px]" : "text-[10px]"}`}>
-            {personaName}
-          </span>
-          <button onClick={() => void toggleSize()} title="切换大小"
-            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 hover:text-ink shadow">
-            {size === "large" ? "变小" : "变大"}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -371,6 +456,17 @@ function SettingsPanel({ settings, personaName, onSave }: {
           {([["sweet", "甜"], ["bright", "亮"], ["soft", "柔"], ["calm", "稳"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => set("voice_key", k)}
               className={`rounded-lg border px-2 py-1 text-[11px] ${s.voice_key === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <span className="text-ink2">形态</span>
+        <div className="mt-1 grid grid-cols-3 gap-1">
+          {([["small", "小角落"], ["large", "大形象"], ["fullscreen", "屏保"]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => set("widget_size", k)}
+              className={`rounded-lg border px-2 py-1 text-[11px] ${s.widget_size === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
               {label}
             </button>
           ))}
