@@ -139,8 +139,17 @@ async function main(): Promise<void> {
           const gap = seq - prevSeq - 1n;
           if (gap > 0n) {
             if (gap > BigInt(SEQ_GAP_ANOMALY_THRESHOLD)) {
-              issues.push({ kind: "SEQ_GAP_ANOMALY", event_id: row.event_id,
-                detail: `seq ${prevSeq} → ${seq} 连续空洞 ${gap} 条（>${SEQ_GAP_ANOMALY_THRESHOLD}，疑似恶意删段）` });
+              // 跨工作区共享序列消耗甄别（D31：填充率 ≥50% 即他区正常消耗+ON CONFLICT 烧号，不足半数才疑似删段）
+              const elsewhere = await client.query<{ n: string }>(
+                `SELECT count(*) AS n FROM biz_events WHERE seq > $1 AND seq < $2`,
+                [prevSeq.toString(), seq.toString()],
+              );
+              if (Number(elsewhere.rows[0]?.n ?? 0) >= Number(gap) * 0.5) {
+                toleratedGaps += Number(gap);
+              } else {
+                issues.push({ kind: "SEQ_GAP_ANOMALY", event_id: row.event_id,
+                  detail: `seq ${prevSeq} → ${seq} 连续空洞 ${gap} 条（>${SEQ_GAP_ANOMALY_THRESHOLD}，疑似恶意删段）` });
+              }
             } else {
               toleratedGaps += Number(gap);
             }

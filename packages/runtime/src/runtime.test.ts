@@ -60,7 +60,7 @@ describe("计划模板（演示剧本）", async () => {
   const fakePreset = { fenceBindings: [], tools: [], essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "pricing-agent", version: "v2.3", prompt: null };
   it("调价目标 → 3 步（采集/读取/调价）", () => {
     const steps = planQuest("周五调价 5%", fakePreset);
-    expect(steps.map((s) => s.action)).toEqual(["competitor.fetch", "pms.price.read", "price.adjust"]);
+    expect(steps.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
   });
 });
 
@@ -70,8 +70,8 @@ describe("LLM 任务规划（B9 planQuestSmart）", async () => {
 
   it("合法规划被采用，且价格类步骤自动数据水合（before/after/context 防 E2.1 误熔断）", async () => {
     const llm = async () => JSON.stringify([
-      { action: "pms.price.read", objectType: "room_price", tool: "pms.price.read", params: {}, label: "读价" },
-      { action: "price.adjust", objectType: "room_price", tool: "pms.price.write", params: { price: 468 }, label: "调价" },
+      { action: "biz.price.read", objectType: "room_price", tool: "biz.price.read", params: {}, label: "读价" },
+      { action: "price.adjust", objectType: "room_price", tool: "biz.price.write", params: { price: 468 }, label: "调价" },
     ]);
     const steps = await planQuestSmart("调价", fakePreset as never, llm);
     expect(steps).toHaveLength(2);
@@ -81,10 +81,10 @@ describe("LLM 任务规划（B9 planQuestSmart）", async () => {
 
   it("垃圾 JSON / 越白名单工具 / 步数越界 → 一律回退确定性模板（D4）", async () => {
     const garbage = await planQuestSmart("周五调价 5%", fakePreset as never, async () => "not json");
-    expect(garbage.map((s) => s.action)).toEqual(["competitor.fetch", "pms.price.read", "price.adjust"]);
+    expect(garbage.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
     const evil = await planQuestSmart("周五调价 5%", fakePreset as never, async () =>
       JSON.stringify([{ action: "x", objectType: "room", tool: "shell.exec", params: {}, label: "越权" }]));
-    expect(evil.map((s) => s.action)).toEqual(["competitor.fetch", "pms.price.read", "price.adjust"]);
+    expect(evil.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
     const tooMany = await planQuestSmart("周五调价 5%", fakePreset as never, async () =>
       JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ action: "a" + i, objectType: "room", tool: "order.list", params: {}, label: "s" }))));
     expect(tooMany).toHaveLength(3);
@@ -92,7 +92,7 @@ describe("LLM 任务规划（B9 planQuestSmart）", async () => {
 
   it("未配置 llmCall → 直接走模板（mock 默认口径）", async () => {
     const steps = await planQuestSmart("周五调价 5%", fakePreset as never, undefined);
-    expect(steps.map((s) => s.action)).toEqual(["competitor.fetch", "pms.price.read", "price.adjust"]);
+    expect(steps.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
   });
 });
 
@@ -158,7 +158,7 @@ d("PG 集成 Quest 循环（种子库）", async () => {
   });
 
   it("差评 Quest：R6 越围栏挂起 → pending_review + 审批行", async () => {
-    const tid = await newThread("回复携程差评");
+    const tid = await newThread("回复差评");
     const r = await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent" });
     expect(r.status).toBe("pending_review");
     expect(r.pendingApprovalId).toBeDefined();

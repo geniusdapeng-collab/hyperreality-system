@@ -7,9 +7,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Hono } from "hono";
 
-process.env.DATABASE_URL ??= "postgres://postgres:workloom@localhost:5432/workloom_im";
-process.env.DATABASE_APP_URL ??= "postgres://workloom_app:workloom_dev_app@localhost:5432/workloom_im";
-process.env.DATABASE_GATEWAY_URL ??= "postgres://workloom_gateway:workloom_dev_gateway@localhost:5432/workloom_im";
+process.env.DATABASE_URL ??= "postgres://postgres:workloom@localhost:5432/workloom";
+process.env.DATABASE_APP_URL ??= "postgres://workloom_app:workloom_dev_app@localhost:5432/workloom";
+process.env.DATABASE_GATEWAY_URL ??= "postgres://workloom_gateway:workloom_dev_gateway@localhost:5432/workloom";
 process.env.SERVICE_C_DEMO_AUTH = "true";
 
 let app: Hono;

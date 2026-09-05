@@ -28,7 +28,7 @@ export interface EstimatedImpact {
   unit: string;
   period: ImpactPeriod;
   confidence: ImpactConfidence;
-  /** 计算口径（必填）：怎么算出来的，如 "(max-min)/max=18% × 近30天该SKU该渠道销量" */
+  /** 计算口径（必填）：怎么算出来的，如 "(max-min)/max=18% × 近30天该对象该渠道销量" */
   basis: string;
 }
 

@@ -165,11 +165,11 @@ describe("createTicket 幂等 + 全生命周期留痕", () => {
     const now = () => new Date("2026-08-23T10:00:00+08:00");
     const { db, events, emit } = setup(now);
     const { ticket } = await createTicket(db, CTX,
-      { kind: "repair", title: "空调坏了", idempotencyKey: "msg-002" }, ACTOR, emit);
-    // 默认部门路由：repair → 工程部
+      { kind: "repair", title: "设备坏了", idempotencyKey: "msg-002" }, ACTOR, emit);
+    // 默认部门路由：repair → 维修组
     const assigned = await assignTicket(db, CTX, ticket.id, ACTOR, {}, emit);
     expect(assigned.dept).toBe(DEFAULT_DEPT_ROUTES.repair);
-    expect(assigned.dept).toBe("工程部");
+    expect(assigned.dept).toBe("维修组");
     await advanceTicket(db, CTX, ticket.id, ACTOR, { note: "师傅已到场" }, emit);
     const done = await completeTicket(db, CTX, ticket.id, ACTOR, { fix: "更换电容", photos: ["p1"] }, emit);
     expect(done.result).toMatchObject({ fix: "更换电容" });
@@ -202,10 +202,10 @@ describe("createTicket 幂等 + 全生命周期留痕", () => {
     const now = () => new Date();
     const { db, emit } = setup(now);
     const { ticket } = await createTicket(db, CTX,
-      { kind: "delivery", title: "送毛巾", idempotencyKey: "msg-004" }, ACTOR, emit);
+      { kind: "delivery", title: "送物资", idempotencyKey: "msg-004" }, ACTOR, emit);
     const assigned = await assignTicket(db, CTX, ticket.id, ACTOR,
-      { routes: { delivery: "礼宾部", repair: "工程部", complaint: "值班经理", other: "前台" } }, emit);
-    expect(assigned.dept).toBe("礼宾部");
+      { routes: { delivery: "礼宾组", repair: "维修组", complaint: "客服主管", other: "客服组" } }, emit);
+    expect(assigned.dept).toBe("礼宾组");
   });
 
   it("listTickets 按状态过滤", async () => {
@@ -218,7 +218,7 @@ describe("createTicket 幂等 + 全生命周期留痕", () => {
     const assigned = await listTickets(db, CTX.workspaceId, { status: "assigned" });
     expect(created.length).toBe(1);
     expect(assigned.length).toBe(1);
-    expect(assigned[0]!.dept).toBe("值班经理");
+    expect(assigned[0]!.dept).toBe("客服主管");
   });
 });
 

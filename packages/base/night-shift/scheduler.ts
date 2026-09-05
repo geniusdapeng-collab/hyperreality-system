@@ -98,7 +98,7 @@ export async function ensureReady(
     // 同工作区同日期唯一一班（复合 PK 幂等）；旧格式 id 存量行命中 PK 冲突即跳过
     await client.query(
       `INSERT INTO night_runs (id, workspace_id, run_date, status) VALUES ($1,$2,$3,'ready')
-       ON CONFLICT DO NOTHING`, // D31：复合主键+uq(id) 双约束并发竞态全兜
+       ON CONFLICT DO NOTHING`, // D31：复合主键(ws,date)+uq(id) 双约束并存，裸 ON CONFLICT 全兜（并发 ensureReady 竞态）
       [id, scope.workspaceId, runDate],
     );
     // 回读真实 id：兼容旧格式 id（nr-<runDate>）存量行，调用方一律按返回 id 操作

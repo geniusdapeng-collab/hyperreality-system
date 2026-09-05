@@ -16,8 +16,8 @@ import type pg from "pg";
 import { gatewayAppend } from "../workdata/gateway.js";
 import {
   aggregateBySource,
-  DEFAULT_CHECKS,
   DEFAULT_PROBES,
+  DEFAULT_CHECKS,
   runChecks,
   type CheckDef,
   type Finding,
@@ -164,7 +164,7 @@ export async function listOpenAnomalyKeys(app: pg.Pool, scope: Scope, day: Date)
 }
 
 /**
- * 跑一轮巡检（默认检项=底座四检，F9.1；时刻=每日 07:00 可配，由触发器引擎 F4.7 调度——
+ * 跑一轮巡检（默认检项=内置四检，F9.1；时刻=每日 07:00 可配，由触发器引擎 F4.7 调度——
  * 首版演示手动/触发器调用 runInspectionScan，定时挂接见 B9 tickTriggers）
  */
 export async function runInspectionScan(

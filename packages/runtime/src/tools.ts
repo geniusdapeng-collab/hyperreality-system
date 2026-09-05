@@ -2,7 +2,7 @@
  * runtime · 工具执行面（F3.9 五级分层：首版走 L3 确定性剧本——生产主路径）
  * 每个工具产出 { result, receipt }；receipt 是「回执位」（L3.6/E3.7）：
  * 关键数字必须来自工具回执，无回执标「未核实」不得宣称完成。
- * 首版工具为确定性演示剧本（真实 PMS/OTA 适配器进 L1/L2 层，触发条件见总纲 §7）。
+ * 首版工具为确定性演示剧本（真实业务系统/渠道适配器进 L1/L2 层，触发条件见总纲 §7）。
  */
 
 export interface ToolReceipt {
@@ -37,18 +37,18 @@ function maybeUnverified(result: Record<string, unknown>): ToolResult {
   return ok(result);
 }
 
-/** 确定性剧本工具表（演示口径；数字与种子剧本一致） */
+/** 确定性剧本工具表（内置演示口径；数字与种子剧本一致） */
 export const DEMO_TOOLS: Record<string, ToolFn> = {
-  "pms.price.read": async (p) => maybeUnverified({ room_type: p.room_type ?? "RT-DLX-KING", current: 458, occ_7d: 0.78 }),
-  "pms.price.write": async (p) => maybeUnverified({ room_type: p.room_type, price: p.price, applied: true }),
-  "ota.price.write": async (p) => maybeUnverified({ channel: p.channel ?? "美团", price: p.price, applied: true }),
-  "competitor.fetch": async () => maybeUnverified({ card: "竞对A（演示数据卡）", price: 472, ts: new Date().toISOString() }),
-  "review.list": async () => maybeUnverified({ fresh: [{ id: "RV-66413", rating: 2, channel: "携程", text: "空调异响影响睡眠" }] }),
+  "biz.price.read": async (p) => maybeUnverified({ object_id: p.object_id ?? "OBJ-DLX-01", current: 458, sold_7d: 126 }),
+  "biz.price.write": async (p) => maybeUnverified({ object_id: p.object_id, price: p.price, applied: true }),
+  "channel.price.write": async (p) => maybeUnverified({ channel: p.channel ?? "美团", price: p.price, applied: true }),
+  "competitor.fetch": async () => maybeUnverified({ card: "竞品门店", price: 472, ts: new Date().toISOString() }),
+  "review.list": async () => maybeUnverified({ fresh: [{ id: "RV-66413", rating: 2, channel: "评价平台", text: "设备异响影响使用" }] }),
   "review.reply": async (p) => maybeUnverified({ review_id: p.review_id, published: true }),
   "order.list": async () => maybeUnverified({ count: 37, total: 18234.5 }),
   "order.reconcile": async () => maybeUnverified({ diff: 0, rounds: 3 }),
   "refund.apply": async (p) => maybeUnverified({ order_id: p.order_id, amount: p.amount, refunded: true }),
-  "content.draft": async (p) => maybeUnverified({ title: p.title ?? "秋日上新套餐", draft_id: `CT-${Date.now().toString(36)}` }),
+  "content.draft": async (p) => maybeUnverified({ title: p.title ?? "秋日特惠套餐", draft_id: `CT-${Date.now().toString(36)}` }),
   "content.publish": async (p) => maybeUnverified({ title: p.title, published: true }),
   // 内容域（ai-video / geo-growth 双域经营演示口径；与种子剧本一致）
   "intel.collect": async () => maybeUnverified({ topics: [{ q: "激光切割机怎么选", heat: 1842, confidence: "confirmed", suggest: "双用" }, { q: "CE certified laser cutter China", heat: 967, confidence: "reported", suggest: "GEO 图文" }] }),

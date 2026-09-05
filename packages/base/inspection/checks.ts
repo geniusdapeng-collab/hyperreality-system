@@ -1,6 +1,6 @@
 /**
  * inspection · 巡检项定义与确定性探针（F9.1）
- *  - 巡检项由行业包定义（如渠道价格 / 状态同步 / 评价 / 违规，PRD M9.2 原文口径）
+ *  - 巡检项由行业包定义：内置默认=多渠道价格 / 状态同步 / 评价 / 违规（PRD M9.2 原文口径）
  *  - 探针为纯函数：输入只读快照（loadSnapshot 取自 profiles.archive / 事件流），输出 Finding 列表
  *  - 探针可注入（演示/测试用）；默认探针不编造数据——快照缺项时该检项记「无数据」而非假异常
  */
@@ -8,7 +8,7 @@
 /** 异常分级（F9.2）：高/中/低三级 → 推送策略 P0/P1/P2 */
 export type Severity = "high" | "medium" | "low";
 
-export type CheckKind = "channel_price" | "room_state" | "review" | "violation";
+export type CheckKind = "channel_price" | "state_sync" | "review" | "violation";
 
 export interface CheckDef {
   id: string;
@@ -16,10 +16,10 @@ export interface CheckDef {
   name: string;
 }
 
-/** 底座默认巡检项清单（F9.1；US9.5：新行业只配置检项清单即获得完整巡检能力——经 checks 参数覆盖） */
+/** 默认巡检项清单（F9.1；US9.5：新行业只配置检项清单即获得完整巡检能力） */
 export const DEFAULT_CHECKS: CheckDef[] = [
-  { id: "chk-channel-price", kind: "channel_price", name: "5–8 渠道价格一致性" },
-  { id: "chk-room-state", kind: "room_state", name: "房态同步" },
+  { id: "chk-channel-price", kind: "channel_price", name: "多渠道价格一致性" },
+  { id: "chk-state-sync", kind: "state_sync", name: "状态同步" },
   { id: "chk-review", kind: "review", name: "新评价扫描" },
   { id: "chk-violation", kind: "violation", name: "违规巡检" },
 ];
@@ -41,8 +41,8 @@ export interface Finding {
 export interface InspectionSnapshot {
   /** 渠道价格采样：archive.inspection.channels = [{ channel, price, parity }] */
   channels?: Array<{ channel: string; price?: number; parity?: boolean; status?: string }>;
-  /** 房态采样：archive.inspection.roomStates = [{ roomType, synced }] */
-  roomStates?: Array<{ roomType: string; synced: boolean }>;
+  /** 状态同步采样：archive.inspection.stateUnits = [{ unit, synced }]（unit 含义由行业包定义） */
+  stateUnits?: Array<{ unit: string; synced: boolean }>;
   /** 新评价采样：archive.inspection.reviews = [{ id, channel, score }]（≤3 分为差评） */
   reviews?: Array<{ id: string; channel: string; score: number }>;
   /** 违规采样：archive.inspection.violations = [{ id, kind, detail }] */
@@ -77,14 +77,14 @@ const channelPriceProbe: Probe = (check, s) => {
   });
 };
 
-const roomStateProbe: Probe = (check, s) => {
-  if (!s.roomStates || s.roomStates.length === 0) {
-    return [{ checkId: check.id, status: "nodata", summary: "无房态快照", objectType: "room_type", source: "room_state" }];
+const stateSyncProbe: Probe = (check, s) => {
+  if (!s.stateUnits || s.stateUnits.length === 0) {
+    return [{ checkId: check.id, status: "nodata", summary: "无状态同步快照", objectType: "unit", source: "state_sync" }];
   }
-  return s.roomStates.map((r): Finding =>
+  return s.stateUnits.map((r): Finding =>
     r.synced
-      ? { checkId: check.id, status: "ok", summary: `房型「${r.roomType}」房态已同步`, objectType: "room_type", objectId: r.roomType, source: "room_state" }
-      : { checkId: check.id, status: "anomaly", severity: "medium", summary: `房型「${r.roomType}」房态未同步`, objectType: "room_type", objectId: r.roomType, source: "room_state" },
+      ? { checkId: check.id, status: "ok", summary: `单元「${r.unit}」状态已同步`, objectType: "unit", objectId: r.unit, source: "state_sync" }
+      : { checkId: check.id, status: "anomaly", severity: "medium", summary: `单元「${r.unit}」状态未同步`, objectType: "unit", objectId: r.unit, source: "state_sync" },
   );
 };
 
@@ -117,7 +117,7 @@ const violationProbe: Probe = (check, s) => {
 
 export const DEFAULT_PROBES: Record<CheckKind, Probe> = {
   channel_price: channelPriceProbe,
-  room_state: roomStateProbe,
+  state_sync: stateSyncProbe,
   review: reviewProbe,
   violation: violationProbe,
 };

@@ -1,6 +1,6 @@
 /**
  * 全局枚举 —— 与 PRD V2.5 编号一一对应；行业差异枚举（对象/阶段）不在这里，
- * 由 bundles/hotel/schemas 提供（总纲 D2 / PRD §2.2 槽②）。
+ * 由各行业 bundles/<行业>/schemas 提供（总纲 D2 / PRD §2.2 槽②）。
  */
 
 /** 会话三态（F3.3） */
@@ -83,7 +83,7 @@ export type MemoryKind = (typeof MEMORY_KINDS)[number];
 export const TRIGGER_KINDS = ["cron", "event"] as const;
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
 
-/** 首版 7 个 Agent 职业（游戏规则手册 §3.2；行业包可扩展） */
+/** 内置 7 个 Agent 职业（游戏规则手册 §3.2；行业包可扩展） */
 export const AGENT_KINDS = [
   "pricing",
   "review",

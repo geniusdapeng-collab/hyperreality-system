@@ -67,9 +67,9 @@ function makeDeps(over: Partial<DialogDeps> = {}): { deps: DialogDeps; db: FakeD
 const INPUT = { workspaceId: "ws-test", tenantId: "tenant-demo", cUserId: "cu-1", channel: "wechat-mini" };
 
 const hit = (score: number): KbSearchHit => ({
-  content: "标准退房时间为中午 12:00，可延迟至 14:00。",
-  heading: "前台政策 / 退房时间",
-  documentTitle: "前台政策",
+  content: "标准营业时间为每日 9:00 至 21:00。",
+  heading: "服务政策 / 营业时间",
+  documentTitle: "服务政策",
   documentId: "doc-1",
   score,
 });
@@ -78,10 +78,10 @@ const hit = (score: number): KbSearchHit => ({
 
 describe("routeIntent 规则先行 + LLM 兜底", () => {
   it("关键词命中各意图（投诉>服务>业务>问答优先级）", async () => {
-    expect((await routeIntent("我要投诉房间太吵")).intent).toBe("complaint");
+    expect((await routeIntent("我要投诉现场太吵")).intent).toBe("complaint");
     expect((await routeIntent("帮我送两瓶水")).intent).toBe("service_request");
     expect((await routeIntent("查一下我的订单")).intent).toBe("biz_query");
-    expect((await routeIntent("早餐几点开始")).intent).toBe("kb_qa");
+    expect((await routeIntent("营业几点开始")).intent).toBe("kb_qa");
     // 投诉优先于服务请求（「送」+「投诉」同时出现落投诉）
     expect((await routeIntent("送错东西了我要投诉")).intent).toBe("complaint");
   });
@@ -99,10 +99,10 @@ describe("routeIntent 规则先行 + LLM 兜底", () => {
       ["我要投诉隔壁太吵", "complaint"],           // 投诉最高优先
       ["查一下我的订单", "biz_query"],              // 业务查询先于服务请求
       ["我的会员积分还有多少", "biz_query"],        // 会员/积分 → 业务查询
-      ["送站巴士几点发车", "kb_qa"],               // 含服务词「送」但疑问句 → kb_qa 不建单
-      ["早餐几点开始？收费吗", "kb_qa"],           // 疑问句（几点/吗）→ kb_qa
+      ["配送车辆几点发车", "kb_qa"],               // 含服务词「送」但疑问句 → kb_qa 不建单
+      ["营业几点开始？收费吗", "kb_qa"],           // 疑问句（几点/吗）→ kb_qa
       ["Wi-Fi 密码是多少呢", "kb_qa"],             // 疑问词「呢」→ kb_qa
-      ["空调坏了，帮我修一下", "service_request"],  // 坏了/修一下 直连建单（不被疑问拦截）
+      ["设备坏了，帮我修一下", "service_request"],  // 坏了/修一下 直连建单（不被疑问拦截）
       ["帮我送两瓶水", "service_request"],          // 指令型服务词 → 建单
     ];
     for (const [text, intent] of cases) {
@@ -126,10 +126,10 @@ describe("置信度三档分流", () => {
   it("高置信（≥0.72）直答且 citations 非空", async () => {
     const search: SearchFn = async () => [hit(0.85)];
     const { deps, db, events } = makeDeps({ search });
-    const r = await handleMessage(deps, { ...INPUT, text: "退房时间是几点" });
+    const r = await handleMessage(deps, { ...INPUT, text: "营业时间是几点" });
     expect(r.intent).toBe("kb_qa");
     expect(r.tier).toBe("high");
-    expect(r.answer).toContain("12:00");
+    expect(r.answer).toContain("9:00");
     expect(r.answer).not.toContain("可能不完全准确");
     expect(r.citations.length).toBeGreaterThan(0);
     expect(r.citations[0]!.documentId).toBe("doc-1");
@@ -144,7 +144,7 @@ describe("置信度三档分流", () => {
   it("中置信（0.5–0.72）附「可能不完全准确」提示且仍带引用", async () => {
     const search: SearchFn = async () => [hit(0.6)];
     const { deps } = makeDeps({ search });
-    const r = await handleMessage(deps, { ...INPUT, text: "退房时间是几点" });
+    const r = await handleMessage(deps, { ...INPUT, text: "营业时间是几点" });
     expect(r.tier).toBe("medium");
     expect(r.answer).toContain("可能不完全准确");
     expect(r.citations.length).toBeGreaterThan(0);
@@ -153,7 +153,7 @@ describe("置信度三档分流", () => {
   it("低置信（<0.5）诚实拒答 + ticketDraft 自动建单草稿；无据不答", async () => {
     const search: SearchFn = async () => [hit(0.3)];
     const { deps } = makeDeps({ search });
-    const r = await handleMessage(deps, { ...INPUT, text: "附近泳池几点开放" });
+    const r = await handleMessage(deps, { ...INPUT, text: "附近网点几点营业" });
     expect(r.tier).toBe("low");
     expect(r.answer).toContain("无法准确回答");
     expect(r.citations).toEqual([]);
@@ -163,7 +163,7 @@ describe("置信度三档分流", () => {
   it("检索零命中同样拒答 + 建单草稿", async () => {
     const search: SearchFn = async () => [];
     const { deps } = makeDeps({ search });
-    const r = await handleMessage(deps, { ...INPUT, text: "泳池开放吗" });
+    const r = await handleMessage(deps, { ...INPUT, text: "网点营业吗" });
     expect(r.answer).toContain("无法准确回答");
     expect(r.ticketDraft).toBeDefined();
   });
@@ -174,7 +174,7 @@ describe("置信度三档分流", () => {
 describe("complaint / service_request / biz_query 分支", () => {
   it("complaint → complaint 建单草稿（priority high）", async () => {
     const { deps } = makeDeps();
-    const r = await handleMessage(deps, { ...INPUT, text: "我要投诉，房间太吵了" });
+    const r = await handleMessage(deps, { ...INPUT, text: "我要投诉，现场太吵了" });
     expect(r.intent).toBe("complaint");
     expect(r.ticketDraft).toMatchObject({ kind: "complaint", priority: "high" });
     expect(r.answer).toContain("抱歉");
@@ -182,7 +182,7 @@ describe("complaint / service_request / biz_query 分支", () => {
 
   it("service_request → 按内容映射 delivery/repair 工单类型", async () => {
     expect(ticketKindForServiceRequest("帮我送两瓶水")).toBe("delivery");
-    expect(ticketKindForServiceRequest("空调坏了来修一下")).toBe("repair");
+    expect(ticketKindForServiceRequest("设备坏了来修一下")).toBe("repair");
     expect(ticketKindForServiceRequest("开发票")).toBe("other");
     const { deps } = makeDeps();
     const r = await handleMessage(deps, { ...INPUT, text: "帮我送两瓶水" });
@@ -191,7 +191,7 @@ describe("complaint / service_request / biz_query 分支", () => {
 
   it("biz_query → 返回工具调用描述（dialog 不碰业务数据）", async () => {
     expect(bizToolFor("我的订单", "cu-1").tool).toBe("biz.query_orders");
-    expect(bizToolFor("房费账单", "cu-1").tool).toBe("biz.query_bill");
+    expect(bizToolFor("费用账单", "cu-1").tool).toBe("biz.query_bill");
     expect(bizToolFor("积分余额", "cu-1").tool).toBe("biz.query_member");
     const { deps } = makeDeps();
     const r = await handleMessage(deps, { ...INPUT, text: "查一下我的订单" });

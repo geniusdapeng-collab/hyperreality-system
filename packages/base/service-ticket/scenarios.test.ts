@@ -1,7 +1,7 @@
 /**
  * service-ticket · 大规模功能场景套件（C：工单生命周期）
- * 覆盖：创建（四类 + 幂等重放 + 非法类型拒绝）、部门路由表（delivery→客房部/repair→工程部/
- * complaint→值班经理/other→前台 + 自定义覆盖）、状态机全部合法/非法跃迁矩阵（created→assigned
+ * 覆盖：创建（四类 + 幂等重放 + 非法类型拒绝）、部门路由表（delivery→配送组/repair→维修组/
+ * complaint→客服主管/other→客服组 + 自定义覆盖）、状态机全部合法/非法跃迁矩阵（created→assigned
  * →processing→done→closed 及全部非法对）、SLA（到期扫描/逐级升级/同日幂等去重/urgent 告警）、
  * 完成回填、时间线完整性、五元事件留痕。DB 走内存 FakeDb。
  */
@@ -233,7 +233,9 @@ describe("C2 创建 · 类型/幂等/SLA", () => {
 /* ================= C3. 部门路由表 ================= */
 
 describe("C3 分派 · 部门路由表", () => {
-  const routes: Array<[TicketKind, string]> = TICKET_KINDS.map((k) => [k, DEFAULT_DEPT_ROUTES[k]]);
+  const routes: Array<[TicketKind, string]> = [
+    ["delivery", "配送组"], ["repair", "维修组"], ["complaint", "客服主管"], ["other", "客服组"],
+  ];
   for (const [kind, dept] of routes) {
     it(`${kind} → ${dept}`, async () => {
       const db = wireTicketDb(new FakeDb());
@@ -257,8 +259,8 @@ describe("C3 分派 · 部门路由表", () => {
   it("显式指定 dept/assignee 优先于路由表", async () => {
     const db = wireTicketDb(new FakeDb());
     const t = await makeTicket(db, "delivery", "route-exp");
-    const a = await assignTicket(db, CTX, t.id, HUMAN, { dept: "礼宾部", assignee: "MEM-002" });
-    expect(a.dept).toBe("礼宾部");
+    const a = await assignTicket(db, CTX, t.id, HUMAN, { dept: "礼宾组", assignee: "MEM-002" });
+    expect(a.dept).toBe("礼宾组");
     expect(a.assignee).toBe("MEM-002");
   });
 

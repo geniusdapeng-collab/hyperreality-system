@@ -1,5 +1,5 @@
 /**
- * service-ticket · 工单预置常量（类型 + 部门路由表，行业中性）
+ * service-ticket · 工单预置常量（类型 + 部门路由表）
  * 路由表可注入覆盖（assignTicket 参数）；缺省走本表。
  */
 
@@ -7,18 +7,18 @@ export const TICKET_KINDS = ["delivery", "repair", "complaint", "other"] as cons
 export type TicketKind = (typeof TICKET_KINDS)[number];
 
 export const TICKET_KIND_LABELS: Record<TicketKind, string> = {
-  delivery: "送物",
+  delivery: "配送",
   repair: "维修",
   complaint: "投诉",
   other: "其他",
 };
 
-/** 默认部门路由表（行业中性口径）：delivery→配送组 / repair→工程部 / complaint→值班经理 / other→服务台 */
+/** 默认部门路由表（通用口径）：delivery→配送组 / repair→维修组 / complaint→客服主管 / other→客服组 */
 export const DEFAULT_DEPT_ROUTES: Record<TicketKind, string> = {
   delivery: "配送组",
-  repair: "工程部",
-  complaint: "值班经理",
-  other: "服务台",
+  repair: "维修组",
+  complaint: "客服主管",
+  other: "客服组",
 };
 
 export const TICKET_PRIORITIES = ["normal", "high", "urgent"] as const;

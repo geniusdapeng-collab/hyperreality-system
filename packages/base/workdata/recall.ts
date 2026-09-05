@@ -15,7 +15,7 @@ import type { BusinessEvent } from "@workloom/shared";
 /* ================= 结构化过滤器（白名单 schema） ================= */
 
 export interface EventFilter {
-  /** 对象类型（行业包枚举：content/order/review/...） */
+  /** 对象类型（内置默认枚举口径；行业对象型由 bundle 扩展） */
   objectType?: string;
   objectId?: string;
   /** 决策动作（price.adjust 等） */
@@ -138,9 +138,9 @@ export class MockNlTranslator implements NlTranslator {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async translate(query: string, _scope?: { tenantId: string; workspaceId: string }): Promise<EventFilter> {
     const f: EventFilter = {};
-    // 对象类型直译（行业包枚举口径）
+    // 对象类型直译（内置默认枚举口径）
     if (/差评|评价/.test(query)) f.objectType = "review";
-    else if (/报价|调价|价格/.test(query)) f.objectType = "room_price";
+    else if (/房价|售价|调价|价格/.test(query)) f.objectType = "room_price";
     else if (/订单|退款|对账/.test(query)) f.objectType = "order";
     else if (/内容|首图|文案/.test(query)) f.objectType = "content";
     else if (/渠道/.test(query)) f.objectType = "channel";

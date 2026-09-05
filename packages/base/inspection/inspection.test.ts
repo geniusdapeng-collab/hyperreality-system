@@ -24,15 +24,15 @@ const snapshot: InspectionSnapshot = {
     { channel: `美团-${RUN}`, price: 480, parity: false, status: "online" },
     { channel: `飞猪-${RUN}`, status: "offline" },
   ],
-  roomStates: [
-    { roomType: `大床房-${RUN}`, synced: true },
-    { roomType: `双床房-${RUN}`, synced: false },
+  stateUnits: [
+    { unit: `标准单元-${RUN}`, synced: true },
+    { unit: `豪华单元-${RUN}`, synced: false },
   ],
   reviews: [{ id: `rv-${RUN}`, channel: "携程", score: 2 }],
   violations: [],
 };
 
-describe("巡检探针（F9.1 酒店四检，确定性）", () => {
+describe("巡检探针（F9.1 内置四检，确定性）", () => {
   it("渠道价格：offline 高优 / parity=false 中优 / 正常项", () => {
     const findings = runChecks(DEFAULT_CHECKS, snapshot);
     const price = findings.filter((f) => f.checkId === "chk-channel-price");
@@ -109,9 +109,9 @@ describe.runIf(RUN_DB)("巡检 PG 集成（M9 铁律）", async () => {
   it("L9.1 只读前置通过 + F9.2 异常分级事件 + G3 高优推送 + F9.4 状态条", async () => {
     const report = await runInspectionScan(app, gw, scope, { snapshot });
     expect(report.ok).toBe(true);
-    expect(report.anomalies.filter((a) => !a.deduped)).toHaveLength(4); // 飞猪/美团/双床房/差评
+    expect(report.anomalies.filter((a) => !a.deduped)).toHaveLength(4); // 飞猪/美团/豪华单元/差评
     expect(report.notifyEventIds.length).toBeGreaterThanOrEqual(2); // channel_price 源 + review 源各一条摘要
-    expect(report.okCount).toBe(3); // 携程/大床房/违规
+    expect(report.okCount).toBe(3); // 携程/标准单元/违规
 
     const bar = await inspectionStatusBar(app, scope);
     expect(bar.lastRunAt).not.toBeNull();
@@ -133,7 +133,7 @@ describe.runIf(RUN_DB)("巡检 PG 集成（M9 铁律）", async () => {
     const report = await runInspectionScan(app, gw, scope, {
       snapshot,
       retries: 1,
-      probes: { channel_price: boom, room_state: boom, review: boom, violation: boom },
+      probes: { channel_price: boom, state_sync: boom, review: boom, violation: boom },
     });
     expect(report.ok).toBe(false);
     expect(report.attempts).toBe(2);

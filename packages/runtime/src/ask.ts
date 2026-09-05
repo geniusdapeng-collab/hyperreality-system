@@ -7,7 +7,7 @@
  * 出口：ask.answer 五元事件（basis=取数来源、model_trace 留痕）+ 线程 completed。
  *
  * 行业化挂钩（落地向导契约）：行业包调用 registerAskFactProvider() 注册领域事实采集器，
- * 即可让 ask 问询具备行业取数面（如行业包注册的渠道收入/夜班决策包）；未注册时使用底座通用事实面。
+ * 即可让 ask 问询具备行业取数面（如行业包的渠道收入/夜班决策包）；未注册时使用底座通用事实面。
  */
 import type pg from "pg";
 import { gatewayAppendOnClient } from "@workloom/base/workdata";

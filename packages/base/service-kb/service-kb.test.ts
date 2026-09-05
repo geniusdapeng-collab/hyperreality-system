@@ -114,7 +114,7 @@ function wireKbDb(db: FakeDb): FakeDb {
 const WS = "ws-test";
 
 async function seedCollection(db: FakeDb): Promise<string> {
-  const c = await createCollection(db, { workspaceId: WS, name: "前台知识" });
+  const c = await createCollection(db, { workspaceId: WS, name: "客服知识" });
   return c.id;
 }
 
@@ -123,17 +123,17 @@ async function seedCollection(db: FakeDb): Promise<string> {
 describe("Markdown 语义切块", () => {
   it("按标题层级切分并保留标题路径", () => {
     const md = [
-      "# 前台政策", "", "## 退房时间", "", "标准退房时间为中午 12:00，可延迟到 14:00。", "",
-      "## 早餐", "", "早餐供应 7:00-10:00，地点在一楼全日制餐厅。", "",
-      "# 设施", "", "## 健身房", "", "健身房 24 小时开放，凭房卡进入。",
+      "# 服务政策", "", "## 退换时间", "", "标准退换时限为签收后 7 天，特殊可延至 15 天。", "",
+      "## 会员", "", "会员积分消费 1 元计 1 分，自动到账。", "",
+      "# 设施", "", "## 门店", "", "门店 9:00-21:00 营业，凭会员码进入。",
     ].join("\n");
     const chunks = chunkMarkdown(md);
     const headings = chunks.map((c) => c.heading);
-    expect(headings).toContain("前台政策 / 退房时间");
-    expect(headings).toContain("前台政策 / 早餐");
-    expect(headings).toContain("设施 / 健身房");
-    const checkout = chunks.find((c) => c.heading.includes("退房时间"))!;
-    expect(checkout.content).toContain("12:00");
+    expect(headings).toContain("服务政策 / 退换时间");
+    expect(headings).toContain("服务政策 / 会员");
+    expect(headings).toContain("设施 / 门店");
+    const checkout = chunks.find((c) => c.heading.includes("退换时间"))!;
+    expect(checkout.content).toContain("7 天");
     // chunkIndex 连续
     expect(chunks.map((c) => c.chunkIndex)).toEqual(chunks.map((_, i) => i));
   });
@@ -160,14 +160,14 @@ describe("upsertDocument 版本链 + hash 幂等", () => {
   it("同标题新版本 version+1 并存；同 hash 幂等返回不建版", async () => {
     const db = wireKbDb(new FakeDb());
     const collId = await seedCollection(db);
-    const base = { workspaceId: WS, collectionId: collId, title: "退房政策", sourceKind: "manual" as const };
+    const base = { workspaceId: WS, collectionId: collId, title: "退换政策", sourceKind: "manual" as const };
 
-    const v1 = await upsertDocument(db, { ...base, contentMd: "## 退房\n\n12:00 退房。" });
+    const v1 = await upsertDocument(db, { ...base, contentMd: "## 退换\n\n7 天退换。" });
     expect(v1.document.version).toBe(1);
     expect(v1.firstVersion).toBe(true);
     expect(v1.chunks.length).toBeGreaterThan(0);
 
-    const v2 = await upsertDocument(db, { ...base, contentMd: "## 退房\n\n14:00 退房（新政策）。" });
+    const v2 = await upsertDocument(db, { ...base, contentMd: "## 退换\n\n15 天退换（新政策）。" });
     expect(v2.document.version).toBe(2);
     expect(v2.firstVersion).toBe(false);
 
@@ -177,7 +177,7 @@ describe("upsertDocument 版本链 + hash 幂等", () => {
     expect(v2.document.status).toBe("active");
 
     // 同内容再 upsert → 幂等
-    const dup = await upsertDocument(db, { ...base, contentMd: "## 退房\n\n14:00 退房（新政策）。" });
+    const dup = await upsertDocument(db, { ...base, contentMd: "## 退换\n\n15 天退换（新政策）。" });
     expect(dup.deduped).toBe(true);
     expect(dup.document.id).toBe(v2.document.id);
 
@@ -202,23 +202,23 @@ describe("upsertDocument 版本链 + hash 幂等", () => {
 
 /* ================= 抓取结构化与 diffScan ================= */
 
-const PAGE_V1 = "<html><body><h1>云栖酒店</h1><p>早餐 7:00-10:00 一楼餐厅。</p><p>退房时间中午 12:00。</p></body></html>";
+const PAGE_V1 = "<html><body><h1>示例门店</h1><p>营业 9:00-21:00。</p><p>退换时限 7 天。</p></body></html>";
 const PAGE_V2 = PAGE_V2_HTML();
 function PAGE_V2_HTML(): string {
-  return "<html><body><h1>云栖酒店</h1><p>早餐 6:30-10:30 一楼餐厅。</p><p>退房时间中午 12:00。</p><p>新增：健身房 24 小时开放。</p></body></html>";
+  return "<html><body><h1>示例门店</h1><p>营业 8:30-21:30。</p><p>退换时限 7 天。</p><p>新增：会员日双倍积分。</p></body></html>";
 }
 
 describe("crawlAndStructure / diffScan", () => {
   it("htmlToText 清洗标签", () => {
-    const text = htmlToText("<p>早餐 <b>7:00</b></p><script>var x=1;</script>");
-    expect(text).toContain("早餐 7:00");
+    const text = htmlToText("<p>营业 <b>9:00</b></p><script>var x=1;</script>");
+    expect(text).toContain("营业 9:00");
     expect(text).not.toContain("script");
   });
 
   it("无 LLM 走可读文本兜底并标注 degraded:true，文档 pending_review", async () => {
     const db = wireKbDb(new FakeDb());
     const collId = await seedCollection(db);
-    const src = await registerSiteSource(db, { workspaceId: WS, url: "https://hotel.example.com/faq" });
+    const src = await registerSiteSource(db, { workspaceId: WS, url: "https://www.example.com/faq" });
     const r = await crawlAndStructure(db, { workspaceId: WS, sourceId: src.id, collectionId: collId },
       undefined, async () => PAGE_V1);
     expect(r.degraded).toBe(true);
@@ -230,23 +230,23 @@ describe("crawlAndStructure / diffScan", () => {
   it("有 LLM 结构化抽取为条目化知识", async () => {
     const db = wireKbDb(new FakeDb());
     const collId = await seedCollection(db);
-    const src = await registerSiteSource(db, { workspaceId: WS, url: "https://hotel.example.com/faq" });
+    const src = await registerSiteSource(db, { workspaceId: WS, url: "https://www.example.com/faq" });
     const llm: StructuringLlm = {
       async extractKnowledge() {
-        return [{ title: "早餐时间", content: "7:00-10:00 一楼餐厅" }, { title: "退房时间", content: "中午 12:00" }];
+        return [{ title: "营业时间", content: "9:00-21:00" }, { title: "退换时间", content: "签收后 7 天" }];
       },
     };
     const r = await crawlAndStructure(db, { workspaceId: WS, sourceId: src.id, collectionId: collId },
       llm, async () => PAGE_V1);
     expect(r.degraded).toBe(false);
     expect(r.items).toBe(2);
-    expect(r.document.content_md).toContain("## 早餐时间");
+    expect(r.document.content_md).toContain("## 营业时间");
   });
 
   it("diffScan：指纹未变不建版；变化生成 pending_review 新版本 + diff 摘要", async () => {
     const db = wireKbDb(new FakeDb());
     const collId = await seedCollection(db);
-    const src = await registerSiteSource(db, { workspaceId: WS, url: "https://hotel.example.com/faq" });
+    const src = await registerSiteSource(db, { workspaceId: WS, url: "https://www.example.com/faq" });
     let page = PAGE_V1;
     const fetcher = async () => page;
     await crawlAndStructure(db, { workspaceId: WS, sourceId: src.id, collectionId: collId }, undefined, fetcher);
@@ -270,23 +270,23 @@ describe("searchKB 混合检索（无 embedder 走关键词兜底）", () => {
     const db = wireKbDb(new FakeDb());
     const collId = await seedCollection(db);
     await upsertDocument(db, {
-      workspaceId: WS, collectionId: collId, title: "前台政策", sourceKind: "manual",
-      contentMd: "## 退房时间\n\n标准退房时间为中午 12:00，延迟退房可到 14:00。\n\n## 早餐\n\n早餐供应 7:00-10:00。",
+      workspaceId: WS, collectionId: collId, title: "服务政策", sourceKind: "manual",
+      contentMd: "## 退换时间\n\n标准退换时限为签收后 7 天，特殊可到 15 天。\n\n## 会员\n\n会员积分 1 元 1 分。",
     });
-    const r = await searchKB(db, "退房时间几点", { workspaceId: WS, limit: 5 });
+    const r = await searchKB(db, "退换时限多久", { workspaceId: WS, limit: 5 });
     expect(r.degraded).toBe(true);
     expect(r.hits.length).toBeGreaterThan(0);
-    expect(r.hits[0]!.heading).toContain("退房时间");
-    expect(r.hits[0]!.documentTitle).toBe("前台政策");
+    expect(r.hits[0]!.heading).toContain("退换时间");
+    expect(r.hits[0]!.documentTitle).toBe("服务政策");
     expect(r.hits[0]!.score).toBeGreaterThanOrEqual(r.hits[r.hits.length - 1]!.score);
     expect(r.hits[0]!.score).toBeLessThanOrEqual(1);
   });
 
   it("scoreChunkFallback：标题命中加权 > 仅内容命中 > 不命中", () => {
-    const q = "退房时间";
-    const inHeading = scoreChunkFallback(q, { heading: "前台政策 / 退房时间", content: "详见正文说明。" });
-    const inContent = scoreChunkFallback(q, { heading: "前台政策", content: "本店退房时间为中午十二点。" });
-    const miss = scoreChunkFallback(q, { heading: "健身房", content: "24 小时开放。" });
+    const q = "退换时间";
+    const inHeading = scoreChunkFallback(q, { heading: "服务政策 / 退换时间", content: "详见正文说明。" });
+    const inContent = scoreChunkFallback(q, { heading: "服务政策", content: "本店退换时限为签收后七天。" });
+    const miss = scoreChunkFallback(q, { heading: "门店", content: "9 点营业。" });
     expect(inHeading).toBeGreaterThan(inContent);
     expect(inContent).toBeGreaterThan(0);
     expect(miss).toBe(0);

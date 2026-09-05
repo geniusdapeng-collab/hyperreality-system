@@ -37,7 +37,7 @@ export function ruleBasedRoute(text: string): IntentResult {
   if (VAGUE_PATTERNS.some((p) => p.test(t)) || t.length < 4) {
     return {
       kind: "clarify",
-      clarifyQuestion: "想让我做什么？比如：「把周五雅致大床房调价 5%」「回复携程那条 2 分差评」「今晚夜班跑一遍对账」——说一句具体的，我立即开工。",
+      clarifyQuestion: "想让我做什么？比如：「把周五主打款调价 5%」「回复那条 2 分差评」「今晚夜班跑一遍对账」——说一句具体的，我立即开工。",
       rationale: "指令过于含糊，缺少对象与动作",
       via: "rule",
     };
@@ -45,7 +45,7 @@ export function ruleBasedRoute(text: string): IntentResult {
   // Ask：查询/问答类（不产生执行任务，F3.3）
   // #37 修复：疑问词在句中/句尾（「房价是多少」「今天天气怎么样？」）此前漏判落 quest——
   // 含疑问词且无动作动词即问答；动作词优先（「怎么调价？」仍是任务请求）
-  const ACTION_WORDS = /调价|回复|退款|对账|派遣|巡检|生成|采集|关房|开房|跑一|执行|取消|修改|调整|发布|创建|删除|安装|卸载|暂停|恢复|开启|派单|拉一|起草|撰写/;
+  const ACTION_WORDS = /调价|回复|退款|对账|派遣|巡检|生成|采集|下架|上架|跑一|执行|取消|修改|调整|发布|创建|删除|安装|卸载|暂停|恢复|开启|派单|拉一|起草|撰写/;
   if (/^(问|请问|查|统计|多少|哪家|什么是|为什么)/.test(t) || /吗[？?]$/.test(t)) {
     return { kind: "routed", mode: "ask", rationale: "查询/问答句式，不产生执行任务", via: "rule" };
   }

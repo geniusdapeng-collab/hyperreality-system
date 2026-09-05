@@ -4,6 +4,7 @@
     "noEmit": true
   },
   "include": [
+    "audit-core",
     "workdata",
     "fence-engine",
     "model-router",
@@ -15,7 +16,6 @@
     "service-ticket",
     "service-channels",
     "testing",
-    "computer-use",
-    "audit-core"
+    "computer-use"
   ]
 }

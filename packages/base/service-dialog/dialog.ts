@@ -111,14 +111,14 @@ export interface HandleMessageResult {
 
 /** service_request → 工单类型映射（通用口径） */
 export function ticketKindForServiceRequest(text: string): TicketDraftKind {
-  if (/修|坏|漏水|空调|热水|灯|马桶|电视/.test(text)) return "repair";
-  if (/送|拿|打扫|换|加一|多要|再来/.test(text)) return "delivery";
+  if (/修|坏|漏水|设备|热水|灯|水管|器材/.test(text)) return "repair";
+  if (/送|拿|清洁|换|加一|多要|再来/.test(text)) return "delivery";
   return "other";
 }
 
 /** biz_query → 工具调用描述（工具契约，由 server 层执行） */
 export function bizToolFor(text: string, cUserId: string): ToolCallRequest {
-  if (/账单|押金|发票/.test(text)) return { tool: "biz.query_bill", params: { cUserId } };
+  if (/账单|费用|发票/.test(text)) return { tool: "biz.query_bill", params: { cUserId } };
   if (/积分|会员|余额/.test(text)) return { tool: "biz.query_member", params: { cUserId } };
   return { tool: "biz.query_orders", params: { cUserId } };
 }
@@ -138,7 +138,7 @@ function composeAnswer(tier: ConfidenceTier, top: KbSearchHit): string {
   const cite = `（来源：${top.documentTitle}${top.heading ? ` · ${top.heading}` : ""}）`;
   if (tier === "high") return `${top.content}${cite}`;
   // medium：附「可能不完全准确」提示
-  return `${top.content}${cite}\n以上回答可能不完全准确，仅供参考；如需确认可联系前台。`;
+  return `${top.content}${cite}\n以上回答可能不完全准确，仅供参考；如需确认可联系客服。`;
 }
 
 /* ================= 主入口 ================= */
@@ -221,11 +221,11 @@ export async function handleMessage(
     confidence = routed.source === "rule" ? 1 : 0.6;
     ticketDraft = {
       kind: "complaint",
-      title: `客人投诉：${input.text.slice(0, 30)}`,
+      title: `顾客投诉：${input.text.slice(0, 30)}`,
       payload: { text: input.text, channel: input.channel },
       priority: "high",
     };
-    answer = "非常抱歉给您带来不便。您的反馈已记录，值班经理会尽快与您联系处理。";
+    answer = "非常抱歉给您带来不便。您的反馈已记录，客服主管会尽快与您联系处理。";
   } else if (intent === "service_request") {
     confidence = routed.source === "rule" ? 1 : 0.6;
     const kind = ticketKindForServiceRequest(input.text);
@@ -248,7 +248,7 @@ export async function handleMessage(
     } else {
       mock = true;
       degraded = true;
-      answer = `[mock] 您好，我是智能客服。您说的「${input.text.slice(0, 20)}」我已收到，可继续咨询。`;
+      answer = `[mock] 您好，我是智能客服。您说的「${input.text.slice(0, 20)}」我已收到，可继续描述您的问题。`;
       confidence = 0.3;
     }
   }
