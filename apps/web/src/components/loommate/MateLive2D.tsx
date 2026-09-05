@@ -200,7 +200,21 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
 
       /* ---------- 时钟：capture=虚拟步进；常态=rAF ---------- */
       if (capture) {
+        // 路线 B：虚拟时钟——口型/动作/物理全部按 dt 推进，与墙钟解耦
+        let virtualT = 0;
+        let speakUntil = -1;
+        (window as unknown as { __loommateSay?: (sec: number) => void }).__loommateSay = (sec: number) => {
+          speakUntil = virtualT + sec;
+        };
         window.__loommateStep = (dt: number) => {
+          virtualT += dt;
+          if (virtualT < speakUntil) {
+            // 说话节律：双频叠加近似自然开合（非机械正弦）
+            const v = Math.abs(Math.sin(virtualT * 8.3)) * 0.45 + Math.abs(Math.sin(virtualT * 13.7)) * 0.2 + 0.1;
+            setMouth(Math.min(1, v));
+          } else {
+            setMouth(0);
+          }
           model.update(dt * 1000);
           app.render();
         };
