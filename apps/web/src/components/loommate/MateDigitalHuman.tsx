@@ -92,10 +92,12 @@ export interface DigitalHumanHandle {
   speakWithAudio: (url: string) => void;
 }
 
-export function MateDigitalHuman({ size, mood = "neutral", gesture = null, onReady }: {
+export function MateDigitalHuman({ size, mood = "neutral", gesture = null, avatarUrl = "/avatars/business.glb", onReady }: {
   size: number;
   mood?: MateMood;
   gesture?: MateGesture;
+  /** 头像 GLB（行业版/客户可换：Mixamo 骨架 + ARKit blendshapes 即兼容） */
+  avatarUrl?: string;
   onReady?: (h: DigitalHumanHandle) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -127,7 +129,7 @@ export function MateDigitalHuman({ size, mood = "neutral", gesture = null, onRea
     (window as unknown as { __loommateDH?: TalkingHead }).__loommateDH = head;
 
     head.showAvatar(
-      { url: "/avatars/vroid.glb", body: "F", lipsyncLang: "en", avatarMood: moodRef.current },
+      { url: avatarUrl, body: "F", lipsyncLang: "en", avatarMood: moodRef.current },
       undefined,
       (err: unknown) => { console.warn("[织伴数字人] 头像加载失败:", err); },
     ).then(() => {
