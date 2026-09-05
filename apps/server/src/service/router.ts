@@ -33,6 +33,14 @@ import {
   listQuestions as evalListQuestions, runExam as evalRunExam,
   seedQuestionsIfEmpty as evalSeedQuestions, setPromotionGate as evalSetPromotionGate,
 } from "./eval.js";
+import {
+  listTools as devListTools, refreshTools as devRefreshTools,
+  listRepos as devListRepos, registerRepo as devRegisterRepo, setRepoStatus as devSetRepoStatus,
+  createTask as devCreateTask, confirmTask as devConfirmTask, dispatchTask as devDispatchTask,
+  rejectTask as devRejectTask, cancelTask as devCancelTask, approveRelease as devApproveRelease,
+  listTasks as devListTasks, taskDetail as devTaskDetail, sessionEvents as devSessionEvents,
+  listReleases as devListReleases,
+} from "./devtools.js";
 
 const kbRouter = router({
   listCollections: protectedProcedure.query(async ({ ctx }) => {
@@ -459,6 +467,99 @@ const bundleRouter = router({
   }),
 });
 
+/**
+ * 开发场域（DevFabric）：设备台账 / 仓库白名单 / 任务单 / 派发 / 审计 / 发布 / 版本
+ * 全部写操作五元事件留痕；派发与取消即时生效，审计与返修后台接续。
+ */
+const devtoolsRouter = router({
+  /** 设备台账（含未安装适配器的指引——真运行态纪律） */
+  tools: protectedProcedure.query(async ({ ctx }) => {
+    return devListTools(scopeOf(ctx.identity).workspaceId);
+  }),
+  /** 重新探测本机机床（PATH 扫描+版本握手） */
+  refreshTools: writeProcedure.mutation(async ({ ctx }) => {
+    return devRefreshTools(scopeOf(ctx.identity).workspaceId, { id: ctx.identity.memberNo, type: "human" });
+  }),
+  /** 仓库白名单 */
+  repos: protectedProcedure.query(async ({ ctx }) => {
+    return devListRepos(scopeOf(ctx.identity).workspaceId);
+  }),
+  registerRepo: writeProcedure
+    .input(z.object({
+      name: z.string().min(1).max(100), path: z.string().min(1).max(500),
+      baselineBranch: z.string().max(100).optional(), allowedDirs: z.array(z.string()).max(20).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return devRegisterRepo(scopeOf(ctx.identity).workspaceId, input, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  setRepoStatus: writeProcedure
+    .input(z.object({ repoId: z.string(), status: z.enum(["active", "disabled"]) }))
+    .mutation(async ({ ctx, input }) => {
+      return devSetRepoStatus(scopeOf(ctx.identity).workspaceId, input.repoId, input.status, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  /** 任务单（S2） */
+  tasks: protectedProcedure.query(async ({ ctx }) => {
+    return devListTasks(scopeOf(ctx.identity).workspaceId);
+  }),
+  createTask: writeProcedure
+    .input(z.object({
+      prdRef: z.string().max(300).optional(), repoId: z.string(),
+      title: z.string().min(1).max(200), prdSummary: z.string().min(1).max(8000),
+      acceptance: z.array(z.string().min(1).max(500)).min(1).max(20),
+      constraints: z.array(z.string().max(300)).max(20).optional(),
+      changeKind: z.enum(["feat", "fix", "breaking", "chore"]).optional(),
+      assignedTool: z.enum(["codex", "claude-code", "aider"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return devCreateTask(scopeOf(ctx.identity).workspaceId, input, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  /** S2 拆解确认（确认才进 S3） */
+  confirmTask: writeProcedure
+    .input(z.object({ taskId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return devConfirmTask(scopeOf(ctx.identity).workspaceId, input.taskId, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  /** S3 派发（异步：立即返回 sessionId，会话后台跑） */
+  dispatchTask: writeProcedure
+    .input(z.object({ taskId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return devDispatchTask(scopeOf(ctx.identity).workspaceId, input.taskId, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  /** S5 打回（一句话意见回灌重排） */
+  rejectTask: writeProcedure
+    .input(z.object({ taskId: z.string(), note: z.string().min(1).max(1000) }))
+    .mutation(async ({ ctx, input }) => {
+      return devRejectTask(scopeOf(ctx.identity).workspaceId, input.taskId, input.note, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  cancelTask: writeProcedure
+    .input(z.object({ taskId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return devCancelTask(scopeOf(ctx.identity).workspaceId, input.taskId, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  /** S5 批准 → S6 版本台账（合并/tag/changelog/release 一气落库） */
+  approveRelease: writeProcedure
+    .input(z.object({ taskId: z.string(), version: z.string().max(40).optional(), changelog: z.string().max(4000).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      return devApproveRelease(scopeOf(ctx.identity).workspaceId, input.taskId, input, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  /** 任务详情（会话/变更集/围栏留痕） */
+  taskDetail: protectedProcedure
+    .input(z.object({ taskId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return devTaskDetail(scopeOf(ctx.identity).workspaceId, input.taskId);
+    }),
+  /** 会话事件流（增量轮询） */
+  sessionEvents: protectedProcedure
+    .input(z.object({ sessionId: z.string(), afterSeq: z.number().int().min(0).default(0) }))
+    .query(async ({ ctx, input }) => {
+      return devSessionEvents(scopeOf(ctx.identity).workspaceId, input.sessionId, input.afterSeq);
+    }),
+  /** 版本台账（时间线） */
+  releases: protectedProcedure.query(async ({ ctx }) => {
+    return devListReleases(scopeOf(ctx.identity).workspaceId);
+  }),
+});
+
 export const serviceRouter = router({
   kb: kbRouter,
   tickets: ticketsRouter,
@@ -466,4 +567,5 @@ export const serviceRouter = router({
   eval: evalRouter,
   aipm: aipmRouter,
   bundle: bundleRouter,
+  devtools: devtoolsRouter,
 });

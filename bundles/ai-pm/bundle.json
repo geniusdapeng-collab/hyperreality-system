@@ -4,7 +4,7 @@
   "workloom": {
     "industry": "ai-pm",
     "displayName": "WorkLoom · AI 产品经理版（示例 Bundle）",
-    "description": "AI 产品经理行业示例包：8 个数字员工 preset + 基线围栏 + 8 个技能 + 楼层场景 + 运行态种子数据 + 行业考题（方案 V4 §7-§12）",
+    "description": "AI 产品经理行业示例包：9 个数字员工 preset（含开发总指挥）+ 基线围栏 + 12 个技能（含开发闭环四技能）+ 楼层场景 + 运行态种子数据 + 行业考题（方案 V4 §7-§12 + 开发场域）",
     "example": true,
     "provides": {
       "presets": [
@@ -15,9 +15,12 @@
         "presets/user-listener.yml",
         "presets/doc-writer.yml",
         "presets/industry-radar.yml",
-        "presets/release-guardian.yml"
+        "presets/release-guardian.yml",
+        "presets/dev-orchestrator.yml"
       ],
-      "fences": ["fences/ai-pm-baseline.yml"],
+      "fences": [
+        "fences/ai-pm-baseline.yml"
+      ],
       "skills": [
         "skills/prd-forge/SKILL.md",
         "skills/competitor-scan/SKILL.md",
@@ -26,13 +29,23 @@
         "skills/metric-digest/SKILL.md",
         "skills/release-notes/SKILL.md",
         "skills/github-pulse/SKILL.md",
-        "skills/meeting-digest/SKILL.md"
+        "skills/meeting-digest/SKILL.md",
+        "skills/dev-dispatch/SKILL.md",
+        "skills/session-watch/SKILL.md",
+        "skills/changeset-harvest/SKILL.md",
+        "skills/release-cut/SKILL.md"
       ],
-      "schemas": ["schemas/objects.json", "schemas/stages.json", "schemas/archive.schema.json"],
+      "schemas": [
+        "schemas/objects.json",
+        "schemas/stages.json",
+        "schemas/archive.schema.json"
+      ],
       "floorScene": "floor-scene.json",
       "modelPolicy": "model-policy.yml",
       "feedbackEnums": "feedback-enums.yml",
-      "serviceFront": ["service-front/faq.json"],
+      "serviceFront": [
+        "service-front/faq.json"
+      ],
       "evalQuestions": "eval/questions.json",
       "seeds": [
         "seeds/requirements.json",

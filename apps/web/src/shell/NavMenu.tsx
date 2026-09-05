@@ -14,6 +14,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { path: "/p1", label: "工作台 · 总览", group: "经营" },
   { path: "/p3", label: "掌上日报", group: "经营" },
   { path: "/p22", label: "服务前台", group: "经营" },
+  { path: "/p25", label: "开发场域", group: "经营" },
   { path: "/p4", label: "审批中心", group: "治理" },
   { path: "/p21", label: "董事长视图", group: "治理" },
   { path: "/p9", label: "夜班中心", group: "治理" },

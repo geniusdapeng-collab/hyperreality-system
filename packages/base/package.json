@@ -32,7 +32,8 @@
       "default": "./captain/index.ts"
     },
     "./evolve": "./evolve/index.ts",
-    "./eval-core": "./eval-core/index.ts"
+    "./eval-core": "./eval-core/index.ts",
+    "./dev-bridge": "./dev-bridge/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

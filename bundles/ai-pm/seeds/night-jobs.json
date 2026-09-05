@@ -1,34 +1,39 @@
 {
- "jobs": [
-  {
-   "time": "22:00",
-   "task": "行业雷达扫描（RSS 聚合+去重+摘要）",
-   "owner": "industry-radar"
-  },
-  {
-   "time": "23:30",
-   "task": "竞品更新监控（5 个竞品站定时抓取）",
-   "owner": "competitor-scout"
-  },
-  {
-   "time": "02:00",
-   "task": "指标日报计算与异动检测",
-   "owner": "data-insight"
-  },
-  {
-   "time": "05:00",
-   "task": "反馈聚类与情绪分析",
-   "owner": "user-listener"
-  },
-  {
-   "time": "07:30",
-   "task": "晨报素材汇总",
-   "owner": "pm-staff-officer"
-  },
-  {
-   "time": "08:20",
-   "task": "晨迎问候语生成（懂客户+懂时节）",
-   "owner": "pm-staff-officer"
-  }
- ]
+  "jobs": [
+    {
+      "time": "22:00",
+      "task": "行业雷达扫描（RSS 聚合+去重+摘要）",
+      "owner": "industry-radar"
+    },
+    {
+      "time": "23:30",
+      "task": "竞品更新监控（5 个竞品站定时抓取）",
+      "owner": "competitor-scout"
+    },
+    {
+      "time": "02:00",
+      "task": "指标日报计算与异动检测",
+      "owner": "data-insight"
+    },
+    {
+      "time": "03:30",
+      "task": "开发返修窗口（打回任务自动再派 + 夜间构建结果汇总）",
+      "owner": "dev-orchestrator"
+    },
+    {
+      "time": "05:00",
+      "task": "反馈聚类与情绪分析",
+      "owner": "user-listener"
+    },
+    {
+      "time": "07:30",
+      "task": "晨报素材汇总",
+      "owner": "pm-staff-officer"
+    },
+    {
+      "time": "08:20",
+      "task": "晨迎问候语生成（懂客户+懂时节）",
+      "owner": "pm-staff-officer"
+    }
+  ]
 }
