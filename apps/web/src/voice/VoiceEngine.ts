@@ -117,6 +117,16 @@ class VoiceEngineImpl {
     void this.pump();
   }
 
+  /* ---- 口型同步钩子（数字人驱动）：boundary/start/end 三事件 ---- */
+  private lipListeners = new Set<(ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string }) => void>();
+  onLipSync(cb: (ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string }) => void): () => void {
+    this.lipListeners.add(cb);
+    return () => this.lipListeners.delete(cb);
+  }
+  private emitLip(ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string }): void {
+    for (const cb of this.lipListeners) { try { cb(ev); } catch { /* 静默 */ } }
+  }
+
   stopAll(): void {
     this.queue = [];
     this.speaking = false;
@@ -139,10 +149,15 @@ class VoiceEngineImpl {
       const v = this.pickVoice(preset.female);
       if (v) utt.voice = v;
       await new Promise<void>((resolve) => {
-        utt.onend = () => resolve();
-        utt.onerror = () => resolve();
+        utt.onstart = () => this.emitLip({ type: "start", role: next.role });
+        utt.onboundary = (e: SpeechSynthesisEvent) => {
+          this.emitLip({ type: "boundary", charIndex: e.charIndex ?? 0, role: next.role });
+        };
+        utt.onend = () => { this.emitLip({ type: "end", role: next.role }); resolve(); };
+        utt.onerror = () => { this.emitLip({ type: "end", role: next.role }); resolve(); };
         // 超时兜底（部分平台 onend 不触发）
-        window.setTimeout(resolve, Math.max(4000, next.text.length * 350));
+        window.setTimeout(() => { this.emitLip({ type: "end", role: next.role }); resolve(); },
+          Math.max(4000, next.text.length * 350));
         tts.speak(utt);
       });
     } catch { /* 静默 */ }

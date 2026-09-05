@@ -4,10 +4,11 @@
  *      大/小两种尺寸手动切换（默认大尺寸）· 气泡提醒 · 对话面板 · 记忆透明面板
  * 铁律：不替人决策 / 不打扰（勿扰+聚合）/ 不装在线
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { VoiceEngine } from "../../voice/VoiceEngine";
+import { MateDigitalHuman, type MateMood, type MateGesture } from "./MateDigitalHuman";
 
 /* ---------------- 类型 ---------------- */
 interface Settings {
@@ -116,6 +117,19 @@ export function LoomMate() {
   const [memory, setMemory] = useState<Record<string, MemRow[]> | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
   const size = settings?.widget_size ?? "large";
+  const webglOk = useMemo(() => {
+    try {
+      const c = document.createElement("canvas");
+      return !!(c.getContext("webgl2") ?? c.getContext("webgl"));
+    } catch { return false; }
+  }, []);
+  // 情绪映射（数字人表情）：红线→fear 高等判→neutral+招呼 完成→happy 常态→甜妹 love
+  const topItem = items[0];
+  const mood: MateMood = topItem?.level === "red" ? "fear"
+    : topItem?.kind === "done" ? "happy"
+    : topItem ? "neutral"
+    : "love";
+  const mateGesture: MateGesture = items.length > 0 ? "handup" : null;
   const personaName = settings?.persona_key === "custom"
     ? (settings?.persona_custom?.name ?? "小织")
     : (PERSONA_NAME[settings?.persona_key ?? "tianmei"] ?? "小织");
@@ -211,7 +225,7 @@ export function LoomMate() {
   // —— 全屏屏保模式：她守着整个场，有事直接喊你 ——
   if (size === "fullscreen") {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg950/98"
+      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-bg950/98"
         onKeyDown={(e) => { if (e.key === "Escape") void toggleSize(); }} tabIndex={0}
         ref={(el) => el?.focus()}>
         {/* 环境微光背景 */}
@@ -222,7 +236,9 @@ export function LoomMate() {
           退出屏保（Esc）
         </button>
         <button onClick={() => void openPanel("chat")} className="relative cursor-pointer transition-transform hover:scale-[1.02]">
-          <MateAvatar size={Math.min(520, Math.round((typeof window !== "undefined" ? window.innerHeight : 900) * 0.55))} excited={unread > 0} />
+          {webglOk
+            ? <MateDigitalHuman size={Math.min(520, Math.round((typeof window !== "undefined" ? window.innerHeight : 900) * 0.55))} mood={mood} gesture={mateGesture} />
+            : <MateAvatar size={Math.min(520, Math.round((typeof window !== "undefined" ? window.innerHeight : 900) * 0.55))} excited={unread > 0} />}
           {unread > 0 && (
             <span className="absolute right-4 top-4 flex h-10 min-w-10 items-center justify-center rounded-full bg-alert px-2 text-[16px] font-bold text-white shadow-xl">
               {unread}
@@ -271,7 +287,7 @@ export function LoomMate() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2" style={{ fontFamily: "inherit" }}>
+    <div className="fixed bottom-4 right-4 z-[70] flex flex-col items-end gap-2" style={{ fontFamily: "inherit" }}>
       {/* 气泡提醒（最多叠 3 条） */}
       {open === "none" && items.slice(0, 3).map((it) => (
         <div key={it.id} className={`w-[300px] rounded-2xl border p-3 shadow-xl backdrop-blur ${LEVEL_STYLE[it.level]}`}>
@@ -301,7 +317,9 @@ export function LoomMate() {
       {/* 本体：形象 + 名字 + 尺寸切换 */}
       <div className="flex flex-col items-center">
         <button onClick={() => void openPanel("chat")} className="relative block cursor-pointer transition-transform hover:scale-105" title={`${personaName}（点击聊聊）`}>
-          <MateAvatar size={dim} excited={unread > 0} />
+          {webglOk
+            ? <MateDigitalHuman size={dim} mood={mood} gesture={mateGesture} />
+            : <MateAvatar size={dim} excited={unread > 0} />}
           {unread > 0 && (
             <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-[11px] font-bold text-white shadow-lg">
               {unread}
