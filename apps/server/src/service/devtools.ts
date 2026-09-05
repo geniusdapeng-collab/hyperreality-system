@@ -23,8 +23,12 @@ import {
   assertGitRepo, baselineCommit, statusFingerprint, worktreeAdd, worktreeDiscard,
   collectDiff, commitWorktreeChanges, mergeIntoBaseline, createTag, listTags,
   detectGateScripts, suggestVersion,
+  DeclarativeAdapter, loadDeclarativeAdapters, customToolDirs,
   type CodingToolAdapter, type DevEvent, type RunningSession, type Changeset,
+  type DeclarativeToolSpec,
 } from "@workloom/base/dev-bridge";
+import { mkdirSync, writeFileSync } from "node:fs";
+import YAML from "yaml";
 
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
 const MAX_REPAIR_ROUNDS = 2;
@@ -53,14 +57,23 @@ const TOOL_CRED_PROVIDER: Record<string, string[]> = {
 const PROVIDER_ENV: Record<string, string> = {
   openai: "OPENAI_API_KEY", anthropic: "ANTHROPIC_API_KEY",
 };
+/** 环境变量名 ← credentials provider 候选：内置工具走静态表；声明式工具走 spec.env（标准协议一部分） */
+function envSpecFor(adapter: CodingToolAdapter | undefined, toolKey: string): Record<string, string[]> {
+  if (adapter instanceof DeclarativeAdapter) return adapter.envMap;
+  const providers = TOOL_CRED_PROVIDER[toolKey] ?? [];
+  const out: Record<string, string[]> = {};
+  for (const p of providers) if (PROVIDER_ENV[p]) out[PROVIDER_ENV[p]] = [...(out[PROVIDER_ENV[p]] ?? []), p];
+  return out;
+}
 async function buildToolEnv(workspaceId: string, toolKey: string): Promise<Record<string, string>> {
   const env: Record<string, string> = {};
-  for (const provider of TOOL_CRED_PROVIDER[toolKey] ?? []) {
-    const rows = await svcQuery<{ secret_enc: string }>(workspaceId,
-      `SELECT secret_enc FROM credentials WHERE provider=$1 AND health != 'revoked' LIMIT 1`, [provider]);
-    const secret = rows[0]?.secret_enc ?? process.env[`AIPM_${provider.toUpperCase()}_TOKEN`];
-    if (secret && PROVIDER_ENV[provider] && !process.env[PROVIDER_ENV[provider]]) {
-      env[PROVIDER_ENV[provider]] = secret;
+  const spec = envSpecFor(adapterOf(toolKey), toolKey);
+  for (const [envKey, providers] of Object.entries(spec)) {
+    for (const provider of providers) {
+      const rows = await svcQuery<{ secret_enc: string }>(workspaceId,
+        `SELECT secret_enc FROM credentials WHERE provider=$1 AND health != 'revoked' LIMIT 1`, [provider]);
+      const secret = rows[0]?.secret_enc ?? process.env[`AIPM_${provider.toUpperCase()}_TOKEN`];
+      if (secret && !process.env[envKey]) { env[envKey] = secret; break; }
     }
   }
   return env;
@@ -79,11 +92,31 @@ function redact<T>(payload: T): T {
 export async function listTools(workspaceId: string) {
   const installs = await svcQuery(workspaceId,
     `SELECT * FROM dev_tool_installs ORDER BY detected_at DESC`);
+  const { errors } = loadDeclarativeAdapters();
   const known = adapters.map((a) => ({
     toolKey: a.toolKey, displayName: a.displayName, capabilities: a.capabilities(),
+    installHint: a instanceof DeclarativeAdapter ? a.installHint ?? null : null,
+    custom: a instanceof DeclarativeAdapter && !["qoder", "kimi-code", "zai"].includes(a.toolKey),
     install: installs.find((i) => (i as { tool_key?: string }).tool_key === a.toolKey) ?? null,
   }));
-  return { tools: known };
+  return { tools: known, customToolErrors: errors, customToolDir: customToolDirs()[0] };
+}
+
+/** 客户自行接入新机床：YAML 落盘 ~/.workloom/devtools/（标准协议：非交互+可解析输出+指定目录工作） */
+export async function saveCustomTool(workspaceId: string, spec: DeclarativeToolSpec, actor: Actor) {
+  new DeclarativeAdapter(spec);   // 构造即校验（契约不合规直接抛错）
+  const dir = customToolDirs()[0]!;
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${spec.tool_key}.yml`);
+  writeFileSync(file, YAML.stringify(spec), "utf8");
+  adapters = defaultAdapters();   // 热加载：即刻纳入注册表
+  await serviceTx(workspaceId, async (client, sc) => {
+    await appendEventOn(client, sc, actor, {
+      objectType: "dev_tools", objectId: spec.tool_key, action: "dev.tools.custom_add",
+      after: { toolKey: spec.tool_key, bin: spec.bin, protocol: spec.output.protocol, file },
+    });
+  });
+  return { ok: true, file, tools: (await refreshTools(workspaceId, actor)).tools };
 }
 
 /** 重新探测本机设备（PATH 扫描 + 版本握手；消失的标 lost） */

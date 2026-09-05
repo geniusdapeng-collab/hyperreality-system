@@ -284,3 +284,107 @@ describe("worktree 隔离 / 快照 / 合并 / 标签", () => {
     expect(st.trim()).toBe("");
   }, 30_000);
 });
+
+/* ---------------- 声明式适配器引擎（客户自行接入标准协议） ---------------- */
+import { DeclarativeAdapter, loadDeclarativeAdapters, parseJsonResult, type DeclarativeToolSpec } from "./declarative.js";
+import { builtinSpecAdapters, builtinAdapters, defaultAdapters } from "./adapters/index.js";
+import { writeFileSync as wf, mkdtempSync as md } from "node:fs";
+import { tmpdir as td } from "node:os";
+import { join as jn } from "node:path";
+
+describe("声明式适配器引擎", () => {
+  const spec: DeclarativeToolSpec = {
+    tool_key: "my-tool", display_name: "我的机床", bin: "mycli",
+    args: ["run", "--task", "{{prompt}}", "--cwd", "."],
+    output: { protocol: "text", text_map: { file_edited: "^Wrote\\s+(.+)$" } },
+  };
+  it("契约校验：缺 {{prompt}} 模板位拒收", () => {
+    expect(() => new DeclarativeAdapter({ ...spec, args: ["run"] })).toThrow(/\{\{prompt\}\}/);
+    expect(() => new DeclarativeAdapter({ ...spec, tool_key: "Bad_Key" })).toThrow(/tool_key/);
+    expect(() => new DeclarativeAdapter(spec)).not.toThrow();
+  });
+  it("argv 模板替换 + resume_id 缺省剔除空参", () => {
+    const a = new DeclarativeAdapter({
+      ...spec,
+      args: ["run", "{{prompt}}", "--resume", "{{resume_id}}"],
+    });
+    const task: DevTaskSpec = { taskId: "t", prompt: "干活", worktreePath: "/w", timeoutMs: 1000, maxFenceDenials: 3 };
+    expect(a.buildArgs(task)).toEqual(["run", "干活"]);   // "--resume" 后空值连同剔除
+    expect(a.buildArgs({ ...task, resumeId: "s-1" })).toEqual(["run", "干活", "--resume", "s-1"]);
+  });
+  it("text 协议正则映射", () => {
+    const a = new DeclarativeAdapter(spec);
+    expect(a.parseLine("Wrote src/a.ts")).toMatchObject({ type: "file_edited", path: "src/a.ts" });
+    expect(a.parseLine("正在思考…")).toMatchObject({ type: "progress" });
+  });
+  it("json-result 协议：结果对象=done，过程行=progress", () => {
+    expect(parseJsonResult('{"result":"全部完成"}')).toMatchObject({ type: "done", summary: "全部完成" });
+    expect(parseJsonResult('{"result":"炸了","error":true}')).toMatchObject({ type: "error" });
+    expect(parseJsonResult("编译中...")).toMatchObject({ type: "progress" });
+  });
+  it("自定义目录热加载：YAML 落盘即接入；坏文件跳过不拖垮", () => {
+    const dir = md(jn(td(), "devtools-"));
+    wf(jn(dir, "my-tool.yml"), JSON.stringify(spec));
+    wf(jn(dir, "broken.yml"), "tool_key: [not-valid");
+    process.env.WORKLOOM_DEV_TOOL_DIRS = dir;
+    const { adapters, errors } = loadDeclarativeAdapters();
+    expect(adapters.map((a) => a.toolKey)).toContain("my-tool");
+    expect(errors.length).toBe(1);
+    expect(errors[0]!.file).toContain("broken.yml");
+    delete process.env.WORKLOOM_DEV_TOOL_DIRS;
+  });
+});
+
+describe("内置新机床（Kimi/Qoder/ZAI 声明式规格）", () => {
+  const task: DevTaskSpec = { taskId: "t1", prompt: "实现 X", worktreePath: "/repo/.workloom/t1", timeoutMs: 1000, maxFenceDenials: 3 };
+  it("注册表：Codex 优先，Qoder/Kimi 随后，自定义末尾", () => {
+    const keys = builtinAdapters().map((a) => a.toolKey);
+    expect(keys[0]).toBe("codex");
+    expect(keys).toContain("qoder");
+    expect(keys).toContain("kimi-code");
+    expect(keys).toContain("zai");
+    expect(keys).toContain("claude-code");
+    expect(keys).toContain("aider");
+  });
+  it("qoder：-p + stream-json + accept_edits（不用 yolo/bypass）", () => {
+    const qoder = builtinSpecAdapters().find((a) => a.toolKey === "qoder")!;
+    const args = qoder.buildArgs(task);
+    expect(args).toContain("-p");
+    expect(args).toContain("stream-json");
+    expect(args).toContain("accept_edits");
+    expect(args.join(" ")).not.toContain("yolo");
+    const resumed = qoder.buildArgs({ ...task, resumeId: "s-9" });
+    expect(resumed).toContain("--session-id");
+    expect(resumed).toContain("s-9");
+  });
+  it("kimi：-p + stream-json；续跑 --session", () => {
+    const kimi = builtinSpecAdapters().find((a) => a.toolKey === "kimi-code")!;
+    expect(kimi.buildArgs(task)).toContain("stream-json");
+    const resumed = kimi.buildArgs({ ...task, resumeId: "k-1" });
+    expect(resumed).toContain("--session");
+    expect(resumed).toContain("k-1");
+  });
+  it("kimi stream-json 变体解析：OpenAI 风格 tool_calls", () => {
+    const kimi = builtinSpecAdapters().find((a) => a.toolKey === "kimi-code")!;
+    expect(kimi.parseLine('{"role":"assistant","tool_calls":[{"function":{"name":"bash","arguments":"{\\"command\\":\\"npm test\\"}"}}]}'))
+      .toMatchObject({ type: "command_run", cmd: "npm test" });
+    expect(kimi.parseLine('{"type":"assistant","message":{"content":[{"type":"text","text":"你好"}]}}'))
+      .toMatchObject({ type: "progress", text: "你好" });
+  });
+  it("zai：json-result 协议 + -V 版本握手", () => {
+    const zai = builtinSpecAdapters().find((a) => a.toolKey === "zai")!;
+    expect(zai.buildArgs(task)).toEqual(["-p", "实现 X"]);
+    expect(zai.parseLine('{"result":"改完了"}')).toMatchObject({ type: "done", summary: "改完了" });
+  });
+  it("同名自定义不覆盖内置（纪律）", () => {
+    const dir = md(jn(td(), "devtools-"));
+    wf(jn(dir, "codex.yml"), JSON.stringify({
+      tool_key: "codex", display_name: "假冒 Codex", bin: "fake", args: ["{{prompt}}"],
+      output: { protocol: "text" },
+    } satisfies DeclarativeToolSpec));
+    process.env.WORKLOOM_DEV_TOOL_DIRS = dir;
+    const codex = defaultAdapters().find((a) => a.toolKey === "codex")!;
+    expect(codex.displayName).toContain("Codex CLI");   // 仍是内置，未被假冒覆盖
+    delete process.env.WORKLOOM_DEV_TOOL_DIRS;
+  });
+});

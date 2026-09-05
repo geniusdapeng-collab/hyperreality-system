@@ -10,4 +10,5 @@ export * from "./worktree.js";
 export * from "./session.js";
 export * from "./semver.js";
 export * from "./prompt.js";
+export * from "./declarative.js";
 export * from "./adapters/index.js";

@@ -25,10 +25,10 @@ import { useAmbience } from "../../audio/ambience";
 import { AudioSettings } from "../../components/AudioSettings";
 import { ValueCounters } from "../../components/ValueCounters";
 import { useTheaterDiff } from "../../lib/theaterDiff";
-import { personaOf } from "../../lib/naming";
+import { hydrateAliases, reportTitleOf, selectReporters } from "../../lib/naming";
 
 /* ================= 类型 ================= */
-interface Satellite { id: string; presetKey: string; name: string; grade: string }
+interface Satellite { id: string; presetKey: string; name: string; alias?: string | null; grade: string }
 interface TickerItem { event_id: string; action: string; who: string; created_at: string }
 interface Theater {
   mode: string; ceoName: string;
@@ -227,22 +227,32 @@ export default function P0() {
       VoiceEngine.speak({ role: "company-ceo", persona: "顾云峥", text: directorEvent.text, priority: "fuse" });
     }
   }, [directorEvent]);
-  // 晨间仪式语音播报：团队依次报到 + CEO 晨报（每日一次，与视觉序列同节拍）
+  // 晨间仪式语音播报（F-REPORT1）：CEO 先晨报 → 有事汇报/关键岗位依次报到
+  // 遴选纪律：七八十名员工不全上——有事的（评级异常）+ 部门经理级必报，上限 8 名；
+  // 命名纪律：设了别名报「岗位名·别名」，未设只报岗位名，绝不报系统默认人名。
   const ceremonyVoiced = useRef(false);
   useEffect(() => {
     if (ceremony >= 5 || ceremony < 2 || ceremonyVoiced.current || !data) return;
     ceremonyVoiced.current = true;
     AudioEngine.play("fanfare");
-    data.satellites.forEach((a, i) => {
-      window.setTimeout(() => {
-        VoiceEngine.speak({ role: a.presetKey, persona: personaOf(a.presetKey), text: `${personaOf(a.presetKey)}，向您报到`, priority: "ceremony" });
-      }, i * 1600);
-    });
-    const briefAt = data.satellites.length * 1600 + 1200;
+    // ① CEO 先汇报（晨报主体）
     window.setTimeout(() => {
       const text = data.latestBriefing?.text ?? "昨夜班组运行正常，今日请指示。";
-      VoiceEngine.speak({ role: "company-ceo", persona: "顾云峥", text, priority: "ceremony" });
-    }, briefAt);
+      VoiceEngine.speak({ role: "company-ceo", persona: "数字总经理", text, priority: "ceremony" });
+    }, 400);
+    // ② 遴选汇报人依次报到
+    const reporters = selectReporters(data.satellites);
+    reporters.forEach((a, i) => {
+      window.setTimeout(() => {
+        const title = reportTitleOf(a.name, a.presetKey);
+        const abnormal = (a.grade ?? "正常") !== "正常";
+        VoiceEngine.speak({
+          role: a.presetKey, persona: title,
+          text: abnormal ? `${title}，有情况向您汇报` : `${title}，向您报到`,
+          priority: "ceremony",
+        });
+      }, 2400 + i * 1600);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ceremony, data]);
 
@@ -253,6 +263,7 @@ export default function P0() {
       trpc.captain.chairmanQueue.query() as Promise<ChairmanItem[]>,
     ]);
     setData(t); setQueue(q);
+    hydrateAliases(t.satellites.map((a) => ({ presetKey: a.presetKey, alias: a.alias })));
   };
   useEffect(() => {
     void load();

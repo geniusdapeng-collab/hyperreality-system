@@ -156,3 +156,32 @@ export function displayNameOf(opts: {
   if (alias) return alias;
   return roleTitleOf(opts.roleName, opts.presetKey);
 }
+
+/* ================= F-REPORT1 晨报汇报规则 ================= */
+
+/**
+ * 汇报全衔（晨报语音/字幕口径）：
+ *  - 用户设了别名 → 「岗位名·别名」完整报出（如「需求分析官·小析」）；
+ *  - 未设别名 → 只报岗位名/角色名（如「需求分析官」）；
+ *  - 绝不报系统默认人名（personaOf 生成名仅作界面旧兼容，不进汇报）。
+ */
+export function reportTitleOf(roleName: string | null | undefined, presetKey?: string | null): string {
+  const role = roleTitleOf(roleName, presetKey);
+  const alias = aliasOf(presetKey);
+  return alias ? `${role}·${alias}` : role;
+}
+
+/** 关键岗位（部门经理级——每日必同步信息）：按岗位名词表判定 */
+const KEY_POSITION_RE = /经理|总监|总管|参谋|指挥|守护|护航|船长|总经理|掌柜|管家官?$/;
+
+/**
+ * 晨报汇报人遴选：CEO 先汇报（调用方保证），随后不必全员——
+ *  ① 有事要汇报的（最新评级异常 grade!=='正常'）；
+ *  ② 关键岗位（部门经理级，每日必同步）；
+ * 合并去重、异常优先，上限 max 名保持晨节拍（七八十名员工不全上）。
+ */
+export function selectReporters<T extends { name?: string | null; grade?: string }>(agents: T[], max = 8): T[] {
+  const abnormal = agents.filter((a) => (a.grade ?? "正常") !== "正常");
+  const keyPositions = agents.filter((a) => (a.grade ?? "正常") === "正常" && KEY_POSITION_RE.test((a.name ?? "").trim()));
+  return [...abnormal, ...keyPositions].slice(0, max);
+}

@@ -11,7 +11,7 @@ import { VoiceEngine } from "../../voice/VoiceEngine";
 /* ---------------- 类型（与服务端对齐） ---------------- */
 interface ToolCaps { headless: boolean; streamEvents: string; sessionResume: boolean; sandboxFlag: boolean }
 interface ToolInstall { tool_key: string; bin_path: string; version: string; credential_health: string; status: string; detected_at: string }
-interface ToolEntry { toolKey: string; displayName: string; capabilities: ToolCaps; install: ToolInstall | null }
+interface ToolEntry { toolKey: string; displayName: string; capabilities: ToolCaps; install: ToolInstall | null; installHint?: string | null; custom?: boolean }
 interface RepoRow { id: string; name: string; path: string; baseline_branch: string; status: string; created_at: string }
 interface TaskRow {
   id: string; repo_id: string; repo_name: string; title: string; status: string;
@@ -44,14 +44,16 @@ const TOOL_GUIDE: Record<string, string> = {
   "claude-code": "npm i -g @anthropic-ai/claude-code（装后 claude 登录）",
   aider: "pip install aider-chat（配 OPENAI/ANTHROPIC key）",
 };
+const guideOf = (t: ToolEntry) => t.installHint ?? TOOL_GUIDE[t.toolKey] ?? "安装后点「刷新设备探测」";
 
 type Tab = "tasks" | "tools" | "repos" | "releases";
 
 /* tRPC 弱类型通道（与 P24 同一模式） */
 const svc = () => trpc.service as unknown as {
   devtools: {
-    tools: { query: () => Promise<{ tools: ToolEntry[] }> };
+    tools: { query: () => Promise<{ tools: ToolEntry[]; customToolErrors?: Array<{ file: string; reason: string }>; customToolDir?: string }> };
     refreshTools: { mutate: () => Promise<{ tools: ToolEntry[] }> };
+    addCustomTool: { mutate: (i: Record<string, unknown>) => Promise<{ ok: boolean; file: string }> };
     repos: { query: () => Promise<{ repos: RepoRow[] }> };
     registerRepo: { mutate: (i: { name: string; path: string; baselineBranch?: string }) => Promise<{ repo: RepoRow }> };
     setRepoStatus: { mutate: (i: { repoId: string; status: "active" | "disabled" }) => Promise<unknown> };
@@ -97,10 +99,11 @@ function DevMachines({ tools, tasks }: { tools: ToolEntry[]; tasks: TaskRow[] })
               {t.capabilities.streamEvents === "jsonl" && <Badge>结构化事件流</Badge>}
               {t.capabilities.sessionResume && <Badge>可续跑返修</Badge>}
               {t.capabilities.sandboxFlag && <Badge>自带沙箱</Badge>}
+              {t.custom && <Badge>自定义接入</Badge>}
             </div>
             {!online && (
               <div className="mt-2 rounded-lg bg-bg900 px-2 py-1.5 text-[11px] leading-relaxed text-ink2">
-                安装指引：<code className="text-steel">{TOOL_GUIDE[t.toolKey] ?? "安装后刷新探测"}</code>
+                安装指引：<code className="text-steel">{guideOf(t)}</code>
               </div>
             )}
           </div>
@@ -198,12 +201,89 @@ export default function P25() {
         ))}
       </div>
 
-      {tab === "tools" && <DevMachines tools={tools} tasks={tasks} />}
+      {tab === "tools" && (
+        <>
+          <DevMachines tools={tools} tasks={tasks} />
+          <CustomToolCard act={act} busy={busy} />
+        </>
+      )}
       {tab === "repos" && <ReposTab repos={repos} act={act} busy={busy} />}
       {tab === "tasks" && <TasksTab tasks={tasks} repos={repos} tools={tools} act={act} busy={busy} reload={load} />}
       {tab === "releases" && <ReleasesTab releases={releases} />}
     </div>
   );
+}
+
+/* ---------------- 自定义机床接入（声明式标准协议） ---------------- */
+const CUSTOM_YAML_EXAMPLE = `tool_key: my-code-cli
+display_name: 我的编程工具
+bin: mycli
+args: ["-p", "{{prompt}}", "--output-format", "stream-json"]
+output:
+  protocol: claude-stream-json   # claude-stream-json / codex-jsonl / json-result / text
+install_hint: npm i -g my-code-cli`;
+
+function CustomToolCard({ act, busy }: { act: (f: () => Promise<unknown>, m: string) => Promise<void>; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [yaml, setYaml] = useState(CUSTOM_YAML_EXAMPLE);
+  const submit = () => {
+    void act(async () => {
+      // 前端轻解析（YAML 子集：逐行 key: value + args 行内数组 + protocol 行）
+      const spec = parseSimpleToolYaml(yaml);
+      await svc().devtools.addCustomTool.mutate(spec as unknown as Record<string, unknown>);
+    }, "自定义机床已接入——刷新探测即可选派");
+  };
+  return (
+    <div className="rounded-xl border border-line bg-bg850 p-4">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between text-left">
+        <div>
+          <div className="text-[13px] font-semibold">＋ 接入新机床（客户自定义 · 标准协议）</div>
+          <div className="mt-0.5 text-[11px] text-ink2">
+            新工具出现时不等厂商适配——只要它电脑上装着、满足三条协议（非交互执行 / 输出可解析 / 指定目录工作），贴一份 YAML 即可受管调用
+          </div>
+        </div>
+        <span className="text-xs text-ink2">{open ? "收起" : "展开"}</span>
+      </button>
+      {open && (
+        <div className="mt-3">
+          <textarea value={yaml} onChange={(e) => setYaml(e.target.value)} rows={9}
+            className="w-full rounded-lg border border-line bg-bg950 px-3 py-2 font-mono text-[11px] leading-relaxed outline-none focus:border-steel" />
+          <div className="mt-2 flex items-center gap-2">
+            <button disabled={busy} onClick={submit}
+              className="rounded-lg bg-gradient-to-br from-gold to-gold2 px-4 py-2 text-xs font-semibold text-ongold disabled:opacity-50">
+              校验并接入
+            </button>
+            <span className="text-[10px] text-ink3">契约不合规会被拒收并说明原因；也可直接放文件到 ~/.workloom/devtools/*.yml 后刷新探测</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** YAML 子集轻解析（与服务端契约同构；复杂写法请直接放文件） */
+function parseSimpleToolYaml(text: string): Record<string, unknown> {
+  const spec: Record<string, unknown> = { capabilities: { headless: true } };
+  let inOutput = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+    if (/^output:/.test(line)) { inOutput = true; spec.output = {}; continue; }
+    const m = /^([a-z_]+):\s*(.*)$/.exec(line.trim());
+    if (!m || m[1] === undefined || m[2] === undefined) continue;
+    const k = m[1];
+    const v = m[2];
+    if (inOutput && (k === "protocol")) { (spec.output as Record<string, unknown>).protocol = v; inOutput = false; continue; }
+    if (k === "args") {
+      try { spec.args = JSON.parse(v.replace(/'/g, '"')); } catch { throw new Error("args 须为 JSON 数组写法"); }
+      continue;
+    }
+    (spec as Record<string, unknown>)[k === "display_name" ? "display_name" : k] = v;
+  }
+  if (!spec.tool_key || !spec.bin || !spec.args || !spec.output) {
+    throw new Error("契约不全：tool_key / bin / args / output.protocol 均必填");
+  }
+  return spec;
 }
 
 /* ---------------- 仓库白名单 ---------------- */

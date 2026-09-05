@@ -39,7 +39,7 @@ import {
   createTask as devCreateTask, confirmTask as devConfirmTask, dispatchTask as devDispatchTask,
   rejectTask as devRejectTask, cancelTask as devCancelTask, approveRelease as devApproveRelease,
   listTasks as devListTasks, taskDetail as devTaskDetail, sessionEvents as devSessionEvents,
-  listReleases as devListReleases,
+  listReleases as devListReleases, saveCustomTool as devSaveCustomTool,
 } from "./devtools.js";
 
 const kbRouter = router({
@@ -480,6 +480,26 @@ const devtoolsRouter = router({
   refreshTools: writeProcedure.mutation(async ({ ctx }) => {
     return devRefreshTools(scopeOf(ctx.identity).workspaceId, { id: ctx.identity.memberNo, type: "human" });
   }),
+  /** 客户自行接入新机床（声明式标准协议 YAML 落盘+热加载） */
+  addCustomTool: writeProcedure
+    .input(z.object({
+      tool_key: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+      display_name: z.string().min(1).max(100),
+      bin: z.string().min(1).max(100),
+      version_args: z.array(z.string()).max(4).optional(),
+      capabilities: z.object({ headless: z.boolean().optional(), streamEvents: z.enum(["jsonl", "text"]).optional(), sessionResume: z.boolean().optional(), sandboxFlag: z.boolean().optional() }).optional(),
+      args: z.array(z.string()).min(1).max(20),
+      resume_args: z.array(z.string()).max(20).optional(),
+      env: z.record(z.string(), z.array(z.string())).optional(),
+      output: z.object({
+        protocol: z.enum(["claude-stream-json", "codex-jsonl", "json-result", "text"]),
+        text_map: z.object({ file_edited: z.string().optional(), command_run: z.string().optional() }).optional(),
+      }),
+      install_hint: z.string().max(300).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return devSaveCustomTool(scopeOf(ctx.identity).workspaceId, input, { id: ctx.identity.memberNo, type: "human" });
+    }),
   /** 仓库白名单 */
   repos: protectedProcedure.query(async ({ ctx }) => {
     return devListRepos(scopeOf(ctx.identity).workspaceId);
