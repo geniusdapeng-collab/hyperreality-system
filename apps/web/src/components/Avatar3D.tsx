@@ -103,8 +103,9 @@ export const Avatar3D = forwardRef<AvatarHandle, {
         // 装备显隐
         if (skin.cape === false || (!skin.cape && name.includes("cape"))) obj.visible = false;
         if (skin.helmetOff && name.includes("helmet")) obj.visible = false;
-        // 默认隐藏手持武器（职场不是战场）
-        if (name.includes("sword") || name.includes("shield")) obj.visible = false;
+        // 默认隐藏全部手持武器与战斗道具（职场不是战场：
+        // 剑/盾/法杖/魔典/匕首/投掷物/弩/斧/酒杯——KayKit 武器节点一律隐藏）
+        if (/sword|shield|wand|staff|spellbook|knife|throwable|crossbow|axe|mug/.test(name)) obj.visible = false;
         // 调色：原贴图色向 tint 轻混 35%（保留角色贴图质感，只罩色调；
         // 全量覆盖会把角色变成色块、强光下糊成一团——大片感走查根因修复）
         if (skin.tint) {
