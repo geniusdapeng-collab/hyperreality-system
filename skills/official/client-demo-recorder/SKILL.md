@@ -1,6 +1,6 @@
 ---
 name: client-demo-recorder
-description: 客户端实拍录屏技能（带声音）——把 WorkLoom 系桌面客户端跑起来，用 CDP 驱动真实用户操作，ffmpeg 录屏 + 神经语音/程序音效配音，产出可用于评审/汇报/宣传的高保真演示视频。触发场景：录屏、录视频、实拍演示、demo 视频、操作演示、给客户看效果、录制客户端、带声音的视频。
+description: 客户端实拍录屏技能（带声音）——把 WorkLoom 系桌面客户端跑起来，用 CDP 驱动真实用户操作，ffmpeg 录屏 + 神经语音/程序音效配音，产出可用于评审/汇报/宣传的高保真演示视频；3D/动画类内容用虚拟时钟离线逐帧渲染保证丝滑。触发场景：录屏、录视频、实拍演示、demo 视频、操作演示、给客户看效果、录制客户端、带声音的视频、视频卡顿、丝滑版、3D 动画录制。
 ---
 
 # 客户端实拍录屏（带声音）
@@ -11,7 +11,48 @@ description: 客户端实拍录屏技能（带声音）——把 WorkLoom 系桌
 
 当用户表达「录个视频 / 实拍演示 / 录屏给我看 / 做个 demo 视频 / 带声音」意图，且目标是 WorkLoom 系仓库（含 `apps/desktop/electron/main.cjs`）时，按本技能执行。
 
-## 全流程四幕
+## 第〇幕 · 先选录制路线（关键判断）
+
+| 内容类型 | 路线 | 理由 |
+|---|---|---|
+| 2D 页面操作演示（点按钮/填表/导航） | **路线 A：实时录屏**（x11grab，第四幕） | 操作流是主角，实时即可 |
+| **3D 场景 / CSS 动画 / 仪式类** | **路线 B：离线逐帧渲染**（本幕） | 沙箱无 GPU 走 CPU 软渲染，实时录必然卡顿——**卡顿是环境的锅但必须由我们解决，不能让客户猜** |
+
+### 路线 B · 虚拟时钟离线逐帧渲染（3D/动画丝滑保证）
+
+原理：动画改由**虚拟时钟**驱动——每渲染完一帧虚拟时间才前进 1/30s，与墙钟/渲染速度完全解耦。产出数学上绝对平滑的帧序列，帧率任选（30/60fps）。
+
+**页面侧契约**（被录页面需实现，一次性改造）：
+```js
+const CAPTURE = location.search.includes("capture");
+// ① 渲染器开启 preserveDrawingBuffer（截图保真）
+// ② 暴露步进接口：前进 dt 虚拟秒 → 驱动 mixer/走位/相机 → render 一帧
+window.__ceremonyStep = (dt) => { /* mixer.update(dt); 事件表按虚拟时间触发; render(); return virtualT; */ };
+window.__ceremonyReady = () => actorsReady;   // 资产加载完成标记
+// ③ 时间轴从 setTimeout 改为「虚拟时间事件表」：{ t, fn } 按 virtualT 触发
+// ④ 无 rAF 循环的副作用（如聚光灯渐亮）在 CAPTURE 分支直接置终态
+```
+
+**捕获侧脚本**（CDP 驱动）：
+```js
+await send("Page.navigate", { url: "<page>?capture=1" });
+// 轮询 __ceremonyReady() === true
+for (let i = 0; i < FPS * SECONDS; i++) {
+  await send("Runtime.evaluate", { expression: `window.__ceremonyStep(${(1/FPS).toFixed(6)})` });
+  const shot = await send("Page.captureScreenshot", { format: "jpeg", quality: 85 });
+  fs.writeFileSync(`f${String(i).padStart(4,"0")}.jpg`, Buffer.from(shot.data, "base64"));
+}
+```
+
+**装配**：`ffmpeg -framerate 30 -i f%04d.jpg -i music.wav -c:v libopenh264 -b:v 4000k -c:a aac -t <秒> -movflags +faststart out.mp4`
+
+纪律：
+- **3D/动画视频一律走路线 B**——"应该是流畅的"是空话，离线渲染是证明；
+- 速度参考：SwiftShader 下约 0.5-0.8s/帧（375 帧 ≈ 4.5 分钟），耐心等；
+- 镜头 DOM 叠加层（横幅/弹窗）与 canvas 同帧截取（Page.captureScreenshot 含 DOM）；
+- 路线 B 同样适用于产品 3D 视图（Floor3D/Stage3D 需同样的 capture 契约——在页面挂 `?capture` 分支即可复用）。
+
+## 全流程四幕（路线 A · 实时录屏）
 
 ### 第一幕 · 起栈（真实客户端，不是浏览器）
 
