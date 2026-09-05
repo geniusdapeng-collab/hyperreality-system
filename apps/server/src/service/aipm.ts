@@ -20,6 +20,27 @@ async function readCredential(workspaceId: string, provider: string): Promise<st
 }
 
 /* ---------------- github-pulse：仓库脉搏（真实 GitHub API） ---------------- */
+/**
+ * API base 回退链：直连 api.github.com 优先；不可达时走公共镜像（gh-proxy.com）。
+ * 可用 GITHUB_API_BASE 环境变量覆盖整条链（逗号分隔多个 base 按序尝试）。
+ * 纪律：无论走哪个 base 都是真实 GitHub 数据；全部失败才落 mock（D4 绝不假装真实）。
+ */
+const GITHUB_API_BASES = (process.env.GITHUB_API_BASE ??
+  "https://api.github.com,https://gh-proxy.com/https://api.github.com"
+).split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
+
+async function ghFetch(path: string, headers: Record<string, string>): Promise<unknown> {
+  let lastErr: unknown = null;
+  for (const base of GITHUB_API_BASES) {
+    try {
+      const res = await fetch(`${base}${path}`, { headers, signal: AbortSignal.timeout(12_000) });
+      if (res.ok) return await res.json();
+      lastErr = new Error(`${base} -> HTTP ${res.status}`);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr ?? new Error("all GitHub API bases failed");
+}
+
 export interface RepoPulse {
   repo: string;
   commits7d: number;
@@ -40,9 +61,9 @@ export async function githubPulse(workspaceId: string, repos: string[]): Promise
     try {
       const since = new Date(Date.now() - 7 * 86400_000).toISOString();
       const [commits, issues, prs] = await Promise.all([
-        fetch(`https://api.github.com/repos/${repo}/commits?since=${since}&per_page=100`, { headers }).then((r) => r.ok ? r.json() : []),
-        fetch(`https://api.github.com/repos/${repo}/issues?state=open&per_page=100`, { headers }).then((r) => r.ok ? r.json() : []),
-        fetch(`https://api.github.com/repos/${repo}/pulls?state=open&per_page=100`, { headers }).then((r) => r.ok ? r.json() : []),
+        ghFetch(`/repos/${repo}/commits?since=${since}&per_page=100`, headers),
+        ghFetch(`/repos/${repo}/issues?state=open&per_page=100`, headers),
+        ghFetch(`/repos/${repo}/pulls?state=open&per_page=100`, headers),
       ]);
       const issueCount = (issues as unknown[]).filter((i) => !(i as { pull_request?: unknown }).pull_request).length;
       pulses.push({

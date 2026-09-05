@@ -24,3 +24,7 @@ description: gh API 读取 issue/PR/提交节奏，LLM 分析产品健康度。
 
 ## 五、与其他技能的协作
 - 产出进晨报素材池；异常与高威胁项挂审批台（review-console）。
+
+## 六、运行配置
+- API base 回退链：默认 `https://api.github.com` 直连优先，不可达自动切 `https://gh-proxy.com/https://api.github.com` 镜像（两条链都是真实 GitHub 数据）。
+- 可用环境变量 `GITHUB_API_BASE` 覆盖整条链（逗号分隔多个 base 按序尝试）；全部失败才落 `mock:true` 兜底（D4 纪律：绝不假装真实）。
