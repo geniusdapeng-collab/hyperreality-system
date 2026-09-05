@@ -1,0 +1,7 @@
+{
+  "baseRepo": "geniusdapeng-collab/workloom-im",
+  "lastSyncedBaseSha": null,
+  "lastSyncAt": null,
+  "filesTouched": 0,
+  "note": "机制初始化基线；lastSyncedBaseSha 由下次 detect/pull 自动刷新"
+}

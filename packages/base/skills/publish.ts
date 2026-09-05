@@ -240,7 +240,7 @@ export async function revokeSkill(
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
     const r = await client.query<{ skill_revoke: boolean }>(
-      `SELECT public.skill_revoke($1, $2, $3)`, // D31：吊销收口 owner 通道（REVOKE app 写权后改 SECURITY DEFINER 函数）
+      `SELECT public.skill_revoke($1, $2, $3)`, // D31：吊销收口 owner 通道（0013⑧ REVOKE app 写权后改 SECURITY DEFINER 函数）
       [input.skillId, input.reason, input.by]);
     if (r.rows[0]?.skill_revoke !== true) {
       await client.query("COMMIT");

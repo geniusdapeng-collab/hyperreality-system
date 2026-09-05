@@ -6,8 +6,6 @@
   "exports": {
     "./router": "./src/trpc/router.ts",
     "./context": "./src/trpc/context.ts",
-    "./video/studio-worker": "./src/video/studio-worker.ts",
-    "./video/router": "./src/video/router.ts",
     "./service/kb": "./src/service/kb.ts",
     "./service/ticket": "./src/service/ticket.ts"
   },
@@ -19,7 +17,6 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
-    "@hyperreality/video-studio": "workspace:*",
     "@trpc/server": "11.18.0",
     "@workloom/base": "workspace:*",
     "@workloom/db": "workspace:*",
@@ -27,8 +24,9 @@
     "@workloom/shared": "workspace:*",
     "hono": "4.13.5",
     "jose": "6.2.10",
-    "yaml": "2.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@hyperreality/video-studio": "workspace:*",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
