@@ -52,6 +52,19 @@ export default function Onboarding() {
   const [st, setSt] = useState<OnboardingStatus | null>(null);
   const [step, setStep] = useState(0);
   const [err, setErr] = useState("");
+  // V4：?mode=customize → 定制向导（行业段：清空→编制→上岗考）
+  const [mode, setMode] = useState<"standard" | "customize">(() =>
+    new URLSearchParams(window.location.search).get("mode") === "customize" ? "customize" : "standard",
+  );
+  // 监听浏览器返回/前进，保持 mode 与 URL 同步（customize ⇄ 落地向导可互切）
+  useEffect(() => {
+    const onPop = () => setMode(new URLSearchParams(window.location.search).get("mode") === "customize" ? "customize" : "standard");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const goCustomize = () => { setMode("customize"); window.history.pushState({}, "", "/onboarding?mode=customize"); };
+  const goStandard = () => { setMode("standard"); window.history.pushState({}, "", "/onboarding"); };
+  const customizeMode = mode === "customize";
 
   // 步骤②表单
   const [prov, setProv] = useState("deepseek");
@@ -224,8 +237,26 @@ export default function Onboarding() {
         {/* 头 */}
         <div className="mb-6 flex items-center gap-3">
           <a href="/" className="rounded border border-line px-2.5 py-1 text-xs text-ink3 no-underline hover:border-gline">← 返回经营主页</a>
-          <h1 className="bg-gradient-to-r from-[#f0f4f9] to-gold bg-clip-text text-lg font-bold text-transparent">落地向导 · 接入真实数据</h1>
+          <h1 className="bg-gradient-to-r from-[#f0f4f9] to-gold bg-clip-text text-lg font-bold text-transparent">
+            {customizeMode ? "定制我的行业版" : "落地向导 · 接入真实数据"}
+          </h1>
+          {/* 双模式互切：落地向导 ⇄ 行业定制（行业装配机制 V4） */}
+          {!customizeMode ? (
+            <button onClick={goCustomize} className="ml-auto rounded border border-gline bg-gold/10 px-3 py-1 text-xs text-gold no-underline hover:bg-gold/20">
+              定制我的行业版 →
+            </button>
+          ) : (
+            <button onClick={goStandard} className="ml-auto rounded border border-line px-3 py-1 text-xs text-ink3 hover:border-gline">
+              ← 返回落地向导
+            </button>
+          )}
         </div>
+
+        {/* 定制模式：四步行业装配向导（清空预览 → 一键清空 → 编制生成 → 上岗考） */}
+        {customizeMode && <CustomizeWizard />}
+
+        {/* 标准落地向导——定制模式下不渲染，避免双向导同屏 */}
+        {!customizeMode && <>
 
         {/* 步骤条 */}
         <div className="mb-6 flex gap-2">
@@ -475,6 +506,7 @@ export default function Onboarding() {
             </div>
           </div>
         )}
+        </>}
       </div>
     </div>
   );
