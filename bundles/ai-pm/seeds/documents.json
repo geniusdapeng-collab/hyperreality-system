@@ -1,0 +1,28 @@
+{
+ "documents": [
+  {
+   "title": "PRD：Agent 长期记忆（初稿）",
+   "type": "prd",
+   "status": "draft",
+   "author": "doc-writer"
+  },
+  {
+   "title": "PRD：模型成本自动降档（初稿）",
+   "type": "prd",
+   "status": "draft",
+   "author": "doc-writer"
+  },
+  {
+   "title": "竞品周报：WorkBuddy 动态追踪",
+   "type": "report",
+   "status": "published",
+   "author": "competitor-scout"
+  },
+  {
+   "title": "发布说明 v0.9.0（初稿）",
+   "type": "release-notes",
+   "status": "draft",
+   "author": "release-guardian"
+  }
+ ]
+}

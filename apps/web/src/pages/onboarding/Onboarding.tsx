@@ -11,6 +11,7 @@
  * 设计纪律：每一步都可跳过但状态如实回显；所有写操作经 onboarding.* 端点五元事件留痕。
  */
 import { useEffect, useMemo, useState } from "react";
+import CustomizeWizard from "./CustomizeWizard";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import type { OnboardingStatus } from "../../components/SimBanner";
 

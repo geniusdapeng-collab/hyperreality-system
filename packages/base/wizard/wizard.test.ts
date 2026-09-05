@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import {
   assertTransition, canTransition, wizardSteps, canActivate, failedChecks,
-  activationProfile, canSendFeedback, DELIVERY_STEPS,
+  activationProfile, canSendFeedback, DELIVERY_STEPS, exampleCustomizeSteps,
   type ActivationChecklist, type FeedbackReport,
 } from "./wizard.js";
 
@@ -16,7 +16,8 @@ describe("wizard 状态机", () => {
     expect(() => assertTransition("design", "delivery")).not.toThrow();
     expect(() => assertTransition("delivery", "need_info")).not.toThrow();
     expect(() => assertTransition("need_info", "delivery")).not.toThrow();
-    expect(() => assertTransition("delivery", "activated")).not.toThrow();
+    expect(() => assertTransition("delivery", "exam")).not.toThrow();
+    expect(() => assertTransition("exam", "activated")).not.toThrow();
     expect(() => assertTransition("activated", "handover")).not.toThrow();
   });
 
@@ -40,7 +41,7 @@ describe("wizard 状态机", () => {
 describe("向导步骤序列（无排期）", () => {
   it("完整通道深度模式含 research 与 design", () => {
     const steps = wizardSteps({ path: "full", mode: "deep", industry: "餐饮" });
-    expect(steps).toEqual(["welcome", "industry_select", "research", "design", "delivery", "activated", "handover"]);
+    expect(steps).toEqual(["welcome", "industry_select", "staffing", "research", "design", "delivery", "exam", "activated", "handover"]);
   });
   it("快速通道与快速上线模式跳过调研", () => {
     expect(wizardSteps({ path: "fast" })).not.toContain("research");
@@ -48,6 +49,21 @@ describe("向导步骤序列（无排期）", () => {
   });
   it("交付配置为六步契约", () => {
     expect(DELIVERY_STEPS).toEqual(["assets", "archive", "authz", "fences", "precheck", "activate"]);
+  });
+
+  it("V4 新状态：示例明示/一键清空/编制生成/上岗考迁移合法", () => {
+    expect(() => assertTransition("welcome", "example_notice")).not.toThrow();
+    expect(() => assertTransition("example_notice", "industry_select")).not.toThrow();
+    expect(() => assertTransition("industry_select", "clear_example")).not.toThrow();
+    expect(() => assertTransition("clear_example", "industry_select")).not.toThrow();
+    expect(() => assertTransition("industry_select", "staffing")).not.toThrow();
+    expect(() => assertTransition("staffing", "delivery")).not.toThrow();
+    expect(() => assertTransition("exam", "delivery")).not.toThrow();   // 未达标回炉
+    // 非法：跳过上岗考直接激活
+    expect(() => assertTransition("delivery", "activated")).toThrow(/非法迁移/);
+    // 示例版定制序列
+    expect(exampleCustomizeSteps()).toContain("clear_example");
+    expect(exampleCustomizeSteps()).toContain("exam");
   });
 });
 

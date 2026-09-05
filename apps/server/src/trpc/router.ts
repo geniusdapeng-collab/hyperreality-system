@@ -252,7 +252,8 @@ const onboardingRouter = router({
         `SELECT archive->>'dataMode' AS data_mode FROM profiles WHERE workspace_id=$1`,
         [scope.workspaceId],
       );
-      const ws = await client.query<{ name: string }>(`SELECT name FROM workspaces WHERE id=$1`, [scope.workspaceId]);
+      const ws = await client.query<{ name: string; bundle_id: string | null; is_example: boolean }>(
+        `SELECT name, bundle_id, is_example FROM workspaces WHERE id=$1`, [scope.workspaceId]);
       const n = async (sql: string) => Number((await client.query<{ n: string }>(sql, [scope.workspaceId])).rows[0]?.n ?? 0);
       const [events, members, agents, memories] = await Promise.all([
         n(`SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1`),
@@ -266,6 +267,8 @@ const onboardingRouter = router({
         dataMode: (prof.rows[0]?.data_mode ?? "simulated") as "simulated" | "real",
         llm: llmAssembly(),
         workspace: { name: ws.rows[0]?.name ?? "", events, members, agents, memories },
+        workspaceId: scope.workspaceId,
+        bundle: { id: ws.rows[0]?.bundle_id ?? null, isExample: !!ws.rows[0]?.is_example },
       };
     } catch (err) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -2021,7 +2024,8 @@ const rosterRouter = router({
         const agent = ar.rows[0];
         if (!agent) return null; // L7.1：越权/不存在一律返回空
 
-        const ws = await client.query<{ name: string }>(`SELECT name FROM workspaces WHERE id=$1`, [scope.workspaceId]);
+        const ws = await client.query<{ name: string; bundle_id: string | null; is_example: boolean }>(
+        `SELECT name, bundle_id, is_example FROM workspaces WHERE id=$1`, [scope.workspaceId]);
 
         // 航道许可：fence_bindings 逐条对账 fence_rules 当前 active 版本（缺规则=声明悬空，标红 F2.10）
         const fences = agent.fence_bindings.length === 0 ? [] : (await client.query<{
@@ -3080,3 +3084,5 @@ export type AppRouter = typeof appRouter;
 /** 上下文类型经 router 入口再导出（前端 AppRouter 类型可移植性，TS2742） */
 export type { TrpcContext } from "./context.js";
 export type { ExamSummary } from "../service/eval.js";
+export type { BundleInstall, StaffingDraft } from "../service/bundle.js";
+export type { IntelItem, RepoPulse } from "../service/aipm.js";

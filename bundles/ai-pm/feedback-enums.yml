@@ -1,0 +1,24 @@
+# AI 产品经理行业包 · 第⑧装配槽：反馈枚举表（D24 自我进化飞轮 M1）
+version: aipm-feedback-enums/v1
+enums:
+  - code: fact.error
+    label: 事实错误
+    appliesTo: [reject, edit]
+  - code: tone.drift
+    label: 口径偏差
+    appliesTo: [reject, edit]
+  - code: threat.misjudge
+    label: 威胁评级不当
+    appliesTo: [reject]
+  - code: structure.incomplete
+    label: 结构不完整
+    appliesTo: [reject, edit]
+  - code: tone.improper
+    label: 语气不当
+    appliesTo: [reject, edit]
+  - code: source.missing
+    label: 来源缺失
+    appliesTo: [reject]
+  - code: other
+    label: 其他（兜底）
+    appliesTo: [reject, edit]

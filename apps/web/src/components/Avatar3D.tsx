@@ -38,6 +38,14 @@ const MODEL_FILES: Record<RoleSkin["model"], string> = {
 export function roleSkinOf(name: string, presetKey: string): RoleSkin {
   const k = `${name}${presetKey}`.toLowerCase();
   if (k.includes("ceo")) return { model: "Knight", cape: true, tint: "#ffd98a", workAction: "Idle" };
+  // —— AI 产品经理团队（ai-pm 行业包；形象语义与岗位一致） ——
+  if (k.includes("pm-staff") || k.includes("参谋")) return { model: "Knight", cape: true, tint: "#ffd98a", workAction: "Idle" };
+  if (k.includes("requirement") || k.includes("需求")) return { model: "Rogue", workAction: "Use_Item" };
+  if (k.includes("industry") || k.includes("瞭望")) return { model: "Rogue_Hooded", tint: "#8ad8ff", workAction: "1H_Ranged_Aiming" };
+  if (k.includes("data") || k.includes("洞察")) return { model: "Mage", workAction: "Spellcasting" };
+  if (k.includes("listener") || k.includes("倾听")) return { model: "Rogue", tint: "#a8e6ff", workAction: "Use_Item" };
+  if (k.includes("doc-writer") || k.includes("主笔")) return { model: "Mage", workAction: "Spellcasting" };
+  if (k.includes("release") || k.includes("护航")) return { model: "Barbarian", workAction: "PickUp" };
   if (k.includes("竞对") || k.includes("scout") || k.includes("competitor"))
     return { model: "Rogue_Hooded", workAction: "1H_Ranged_Aiming" };   // 举镜远眺
   if (k.includes("内容") || k.includes("content") || k.includes("writer"))

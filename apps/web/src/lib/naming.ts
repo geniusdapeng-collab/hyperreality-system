@@ -1,5 +1,13 @@
 /**
- * 数字员工命名规范（F-NAME1）——官衔（岗位角色）+ 人名（人格化花名）。
+ * 数字员工命名规范（F-NAME2）——三层标识模型：ID · 岗位名 · 别名。
+ *
+ *   preset_key（ID，永不变，数据锚点）   requirement-analyst
+ *   role_title（岗位名，bundle 声明）     需求分析官       ← 默认全界面显示
+ *   alias（别名，members.alias 列）       小析（客户自定义）← 设了全覆盖显示
+ *
+ * 显示规则：displayNameOf() = alias ?? role_title ?? 旧人名兜底。
+ * 兼容期：personaOf/staffTitle 保留——旧调用方（官衔·人名）行为不变，
+ * 新调用方一律走 displayNameOf（岗位名/别名优先）。
  *
  * 概念关系（对外统一口径）：
  *   数字员工 = 组织里的「人」——有名字、有官衔、有形象、有编制；
@@ -92,4 +100,59 @@ export function staffTitle(roleName: string | null | undefined, presetKey?: stri
 /** 汇报视图短称：人名为主（团队列队/名牌场景，官衔以副标题呈现时用） */
 export function shortName(presetKey?: string | null, fallback?: string): string {
   return presetKey ? personaOf(presetKey) : (fallback ?? "云生");
+}
+
+/* ================= F-NAME2 三层 API ================= */
+
+/** 别名注册表（运行期由服务端 members.alias 注入；setAlias 写库后同步本表） */
+const ALIAS_MAP = new Map<string, string>();
+
+/** 服务端 members 列表注入（页面初始化时调用一次） */
+export function hydrateAliases(rows: Array<{ presetKey?: string | null; alias?: string | null }>): void {
+  ALIAS_MAP.clear();
+  for (const r of rows) if (r.presetKey && r.alias) ALIAS_MAP.set(r.presetKey, r.alias);
+}
+
+/** 别名读取：未设置返回 null */
+export function aliasOf(presetKey: string | null | undefined): string | null {
+  return presetKey ? (ALIAS_MAP.get(presetKey) ?? null) : null;
+}
+
+/** 别名写入（本地注册表；落库由调用方经 members.updateAlias 端点完成） */
+export function setAliasLocal(presetKey: string, alias: string | null): void {
+  if (alias && alias.trim()) ALIAS_MAP.set(presetKey, alias.trim());
+  else ALIAS_MAP.delete(presetKey);
+}
+
+/**
+ * 岗位名解析（F-NAME2 默认显示名）。
+ * 优先 ACTOR_TEXT/数据库 name（岗位名）；未知名称按 key 词表推断；最终兜底旧人名。
+ */
+export function roleTitleOf(roleName: string | null | undefined, presetKey?: string | null): string {
+  const role = (roleName ?? "").trim();
+  if (role) return role;
+  if (presetKey) {
+    const KEY_TITLE: Record<string, string> = {
+      "competitor-agent": "市场侦察官", "content-agent": "内容主笔官", "desktop-agent": "数字执行官",
+      "inspection-agent": "品质巡检官", "pricing-agent": "收益定价官", "reconcile-agent": "财务司库官",
+      "review-agent": "口碑公关官", "frontdesk-agent": "前台接待官", "housekeeper-agent": "客房管家官",
+      "phone-agent": "语音前台官", "company-ceo": "数字总经理", "captain": "船长",
+    };
+    const hit = KEY_TITLE[presetKey];
+    if (hit) return hit;
+  }
+  return personaOf(presetKey);
+}
+
+/**
+ * 全界面统一显示名（F-NAME2 唯一入口）：
+ *   别名（客户自定义）> 岗位名（bundle 声明/词表）> 旧人名（兜底）
+ */
+export function displayNameOf(opts: {
+  presetKey?: string | null;
+  roleName?: string | null;
+}): string {
+  const alias = aliasOf(opts.presetKey);
+  if (alias) return alias;
+  return roleTitleOf(opts.roleName, opts.presetKey);
 }

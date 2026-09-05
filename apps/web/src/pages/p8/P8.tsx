@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { displayNameOf, setAliasLocal } from "../../lib/naming";
 import { AgentAvatarOf } from "../../components/AgentAvatar";
 import { Bridge } from "../../shell/Bridge";
 import {
@@ -41,7 +42,7 @@ interface HumanRow {
   game: Game;
 }
 interface AgentRow {
-  id: string; presetKey: string; name: string; version: string; kind: string;
+  id: string; presetKey: string; name: string; alias?: string | null; version: string; kind: string;
   readonly: boolean; status: string; invalidReason: string | null;
   fenceBindings: string[]; skills: string[];
   nightShift: boolean; highRisk: boolean; description: string; online: boolean;
@@ -147,7 +148,22 @@ function AgentCard({ a, onOpen }: { a: AgentRow; onOpen: (id: string) => void })
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-body font-bold text-ink">
-            <span className="truncate">{a.name}</span>
+            <span className="truncate">{displayNameOf({ presetKey: a.presetKey, roleName: a.name })}</span>
+            <button
+              type="button"
+              title="起别名（F-NAME2：别名是显示层第三层，岗位名不变）"
+              className="shrink-0 rounded border border-line px-1 py-0 text-micro text-ink3 hover:border-gline hover:text-ink"
+              onClick={async (e) => {
+                e.stopPropagation();
+                const cur = displayNameOf({ presetKey: a.presetKey, roleName: a.name });
+                const next = window.prompt(`给「${a.name}」起个别名（留空清除别名，回到岗位名）`, cur === a.name ? "" : cur);
+                if (next === null) return;
+                await (trpc.members as unknown as { updateAlias: { mutate: (i: { memberNo: string; presetKey: string; alias: string | null }) => Promise<unknown> } })
+                  .updateAlias.mutate({ memberNo: a.id, presetKey: a.presetKey, alias: next.trim() || null });
+                setAliasLocal(a.presetKey, next.trim() || null);
+                window.location.reload();
+              }}
+            >别名</button>
             {a.online && (
               <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-holo shadow-[0_0_8px_rgba(77,150,255,.8)]" title="夜班在线（M4 窗口内自动上线）" />
             )}

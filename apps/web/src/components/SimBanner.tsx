@@ -13,6 +13,7 @@ export interface OnboardingStatus {
   dataMode: "simulated" | "real";
   llm: { provider: string; model: string; baseUrl: string; real: boolean };
   workspace: { name: string; events: number; members: number; agents: number; memories: number };
+  bundle?: { id: string | null; isExample: boolean };
 }
 
 export function SimBanner() {
@@ -36,6 +37,24 @@ export function SimBanner() {
     };
   }, []);
   if (!st) return null;
+  // V4 §2：示例版银带（深空银辉语义——不是警告，是身份说明；与黄色模拟态警示分色）
+  if (st.bundle?.isExample) {
+    return (
+      <div className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-bg800/90 px-4 py-1.5 text-[12px] text-ink2 backdrop-blur">
+        <span aria-hidden className="text-gold">◈</span>
+        <span className="min-w-0 flex-1">
+          当前运行：<b className="text-ink">行业示例版</b>（{st.workspace.name}）——这是基座的示例装配，数据与团队可真实操作；
+          也可一键清空后按引导定制您的专属行业版。
+        </span>
+        <a
+          href="/onboarding?mode=customize"
+          className="shrink-0 rounded border border-gline bg-bg700 px-3 py-1 font-bold text-ink no-underline transition-colors hover:bg-bg700"
+        >
+          定制我的行业版 →
+        </a>
+      </div>
+    );
+  }
   const simData = st.dataMode === "simulated";
   const mockLlm = !st.llm.real;
   if (!simData && !mockLlm) return null;

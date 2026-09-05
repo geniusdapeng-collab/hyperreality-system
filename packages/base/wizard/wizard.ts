@@ -17,25 +17,33 @@
 
 export type WizardStatus =
   | "welcome"          // 装机完成，引导卡片待确认
+  | "example_notice"   // 示例明示（V4：is_example 装配时的首态——"这是示例版"）
+  | "clear_example"    // 一键清空（V4：快照→台账卸载→留痕）
   | "industry_select"  // 选择已有行业 / 输入新行业
+  | "staffing"         // L3 编制生成（V4：草案先行，人审才装配）
   | "research"         // 完整通道：技能一/二并行执行
   | "design"           // 完整通道：技能三落地方案设计（含反哺清单）
   | "delivery"         // 技能四：交付配置（六步，交互式）
+  | "exam"             // 上岗考（V4：考试院门禁，达标才激活）
   | "need_info"        // 交付配置缺授权/缺信息，待客户补齐
-  | "activated"        // 装配检查单全绿 + dry-run 通过 + 审批通过
+  | "activated"        // 装配检查单全绿 + 上岗考达标 + 审批通过
   | "handover"         // 交付页输出，首份决策包已预约
   | "paused";          // 用户暂停/离线，可断点续跑
 
 const TRANSITIONS: Record<WizardStatus, WizardStatus[]> = {
-  welcome: ["industry_select", "paused"],
-  industry_select: ["research", "delivery", "paused"], // research=完整通道；delivery=快速通道（已有Bundle跳过调研）
+  welcome: ["industry_select", "example_notice", "paused"],
+  example_notice: ["industry_select", "handover", "paused"],  // 定制→行业选择；继续体验示例→交付页
+  clear_example: ["industry_select", "paused"],                // 清空完成即入行业选择（清空不是终点是起点）
+  industry_select: ["staffing", "research", "delivery", "clear_example", "paused"], // staffing=新行业L3编制；delivery=快速通道（已有Bundle）；已有装配先清空
+  staffing: ["research", "delivery", "paused"],
   research: ["design", "paused"],
   design: ["delivery", "paused"],
-  delivery: ["need_info", "activated", "paused"],
+  delivery: ["exam", "need_info", "paused"],                   // V4：delivery→exam（原直 activated 改为先考试）
+  exam: ["activated", "delivery", "paused"],                   // 达标激活；未达标回炉修订
   need_info: ["delivery", "paused"],
   activated: ["handover"],
   handover: [],
-  paused: ["welcome", "industry_select", "research", "design", "delivery", "need_info"], // 断点续跑：回到任一挂起点
+  paused: ["welcome", "example_notice", "industry_select", "staffing", "research", "design", "delivery", "exam", "need_info"], // 断点续跑：回到任一挂起点
 };
 
 export class WizardTransitionError extends Error {
@@ -67,18 +75,23 @@ export interface WizardContext {
   offline?: boolean;            // 离线降级：骨架版先行，联网后补跑
 }
 
-/** 各通道的步骤序列（排期禁令：只有顺序与依赖，无工期） */
+/** 各通道的步骤序列（排期禁令：只有顺序与依赖，无工期；V4：全部以 exam 上岗考收口） */
 export function wizardSteps(ctx: WizardContext): WizardStatus[] {
-  if (ctx.path === "fast") return ["welcome", "industry_select", "delivery", "activated", "handover"];
-  if (ctx.mode === "quick") return ["welcome", "industry_select", "delivery", "activated", "handover"]; // 快速上线模式：骨架模板直配
-  return ["welcome", "industry_select", "research", "design", "delivery", "activated", "handover"];
+  if (ctx.path === "fast") return ["welcome", "industry_select", "delivery", "exam", "activated", "handover"];
+  if (ctx.mode === "quick") return ["welcome", "industry_select", "delivery", "exam", "activated", "handover"]; // 快速上线模式：骨架模板直配
+  return ["welcome", "industry_select", "staffing", "research", "design", "delivery", "exam", "activated", "handover"];
+}
+
+/** 示例版通道（V4：is_example 工作区的定制序列——明示→清空→编制→装配→上岗考） */
+export function exampleCustomizeSteps(): WizardStatus[] {
+  return ["example_notice", "clear_example", "industry_select", "staffing", "delivery", "exam", "activated", "handover"];
 }
 
 /* ---------- 交付配置六步（delivery-config 技能编排契约） ---------- */
 
 export type DeliveryStep =
   | "assets"      // ①资产生成（createBundleDraft）
-  | "archive"     // ②一企一档（品牌档案）初始化（必填基础信息）
+  | "archive"     // ②一店一档初始化（必填基础信息）
   | "authz"       // ③系统授权（凭据走L4 Patch注入，不进事件明文）
   | "fences"      // ④围栏确认（只紧不松+dry-run回放）
   | "precheck"    // ⑤装配检查单（任一红灯禁止激活）

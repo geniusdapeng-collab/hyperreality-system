@@ -1,0 +1,49 @@
+{
+  "name": "@workloom/ai-pm",
+  "version": "1.0.0",
+  "workloom": {
+    "industry": "ai-pm",
+    "displayName": "WorkLoom · AI 产品经理版（示例 Bundle）",
+    "description": "AI 产品经理行业示例包：8 个数字员工 preset + 基线围栏 + 8 个技能 + 楼层场景 + 运行态种子数据 + 行业考题（方案 V4 §7-§12）",
+    "example": true,
+    "provides": {
+      "presets": [
+        "presets/pm-staff-officer.yml",
+        "presets/requirement-analyst.yml",
+        "presets/competitor-scout.yml",
+        "presets/data-insight.yml",
+        "presets/user-listener.yml",
+        "presets/doc-writer.yml",
+        "presets/industry-radar.yml",
+        "presets/release-guardian.yml"
+      ],
+      "fences": ["fences/ai-pm-baseline.yml"],
+      "skills": [
+        "skills/prd-forge/SKILL.md",
+        "skills/competitor-scan/SKILL.md",
+        "skills/industry-radar/SKILL.md",
+        "skills/review-miner/SKILL.md",
+        "skills/metric-digest/SKILL.md",
+        "skills/release-notes/SKILL.md",
+        "skills/github-pulse/SKILL.md",
+        "skills/meeting-digest/SKILL.md"
+      ],
+      "schemas": ["schemas/objects.json", "schemas/stages.json", "schemas/archive.schema.json"],
+      "floorScene": "floor-scene.json",
+      "modelPolicy": "model-policy.yml",
+      "feedbackEnums": "feedback-enums.yml",
+      "serviceFront": ["service-front/faq.json"],
+      "evalQuestions": "eval/questions.json",
+      "seeds": [
+        "seeds/requirements.json",
+        "seeds/competitors.json",
+        "seeds/metrics.json",
+        "seeds/feedback.json",
+        "seeds/documents.json",
+        "seeds/approvals.json",
+        "seeds/night-jobs.json",
+        "seeds/kb.json"
+      ]
+    }
+  }
+}

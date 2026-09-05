@@ -1,0 +1,17 @@
+# AI 产品经理行业包 · 模型档位策略（沿用 L0-L3 体系）
+tiers:
+  L0: { use: 闲聊与兜底, model: local-small }
+  L1: { use: 情报聚合/聚类/日报骨架, model: cost-efficient }
+  L2: { use: PRD 起草/竞品报告/周报正文, model: mid-tier }
+  L3: { use: 考试院阅卷/编制生成/威胁评级终审, model: flagship }
+scene_policy:
+  industry-radar: L1
+  review-miner: L1
+  metric-digest: L1
+  prd-forge: L2
+  competitor-scan: L2
+  release-notes: L2
+  github-pulse: L1
+  meeting-digest: L2
+  eval-judge: L3
+  wizard-staffing: L3

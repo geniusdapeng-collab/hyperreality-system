@@ -52,7 +52,8 @@
     "app:dev": "tsx scripts/desktop-app.mts --dev",
     "app:pack": "electron-builder --dir",
     "app:dist": "electron-builder",
-    "setup:lite": "tsx scripts/setup-lite.mts"
+    "setup:lite": "tsx scripts/setup-lite.mts",
+    "db:seed:aipm": "tsx --env-file=.env scripts/seed-aipm.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

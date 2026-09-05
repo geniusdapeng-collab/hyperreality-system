@@ -30,7 +30,9 @@ import { eventHash, safeParseReplayAwareEvent } from "@workloom/base/workdata";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
-const BUNDLE_DIR = join(REPO_ROOT, "bundles/hotel");
+const BUNDLE_DIR = process.env.BUNDLE_DIR
+  ? join(REPO_ROOT, process.env.BUNDLE_DIR)
+  : join(REPO_ROOT, "bundles/hotel");
 
 const DATABASE_URL =
   process.env.DATABASE_URL ?? "postgres://postgres:workloom@localhost:5432/workloom";
