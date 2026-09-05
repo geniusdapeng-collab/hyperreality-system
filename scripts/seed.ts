@@ -612,6 +612,24 @@ async function main(): Promise<void> {
   }
   console.log(`✓ 官方技能 ×${skillsDocs.length} 已安装（围栏绑定随安装生效，安装快照已落）`);
 
+  // —— bundle_installs 装配台账登记（V4：一键清空的精确卸载依据；幂等） ——
+  await q(
+    `INSERT INTO bundle_installs (id, workspace_id, bundle_id, assets, status)
+     VALUES ($1,$2,$3,$4,'active')
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      `bi-${WS_ID}-${BUNDLE_DIR.split("/").pop()}`,
+      WS_ID,
+      BUNDLE_DIR.split("/").pop(),
+      JSON.stringify({
+        preset_ids: presets.map((p) => `agt-${p.preset_key}`),
+        fence_rule_ids: fences.map((r) => `fr-${r.rule_id.toLowerCase()}-v1-${WS_ID}`),
+        skill_ids: skillsDocs.map((s) => `skill-${s.name}`),
+      }),
+    ],
+  );
+  console.log("✓ 装配台账登记（bundle_installs）");
+
   // 团队技能 + 行业共享技能（P6 装备库三区演示数据；F8.1 三级体系；幂等 ON CONFLICT）
   await q(
     `INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized)
