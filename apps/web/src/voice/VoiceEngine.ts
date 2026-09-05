@@ -40,7 +40,12 @@ export const VOICE_PRESETS: Record<string, { pitch: number; rate: number; female
   "review-agent": { pitch: 1.2, rate: 1.0, female: true },
   "desktop-agent": { pitch: 1.0, rate: 1.1 },
   // —— AI 产品经理团队 ——
-  "pm-staff-officer": { pitch: 0.9, rate: 0.92 },
+  "chief-pm": { pitch: 0.9, rate: 0.92 },
+  "model-scout": { pitch: 1.0, rate: 1.0 },
+  "eval-master": { pitch: 0.95, rate: 0.95 },
+  "prompt-curator": { pitch: 1.0, rate: 1.0 },
+  "red-teamer": { pitch: 0.9, rate: 1.0 },
+  "knowledge-curator": { pitch: 1.05, rate: 0.95, female: true },
   "requirement-analyst": { pitch: 1.0, rate: 1.0 },
   "competitor-scout": { pitch: 1.1, rate: 1.05 },
   "data-insight": { pitch: 0.95, rate: 0.95 },
@@ -118,12 +123,12 @@ class VoiceEngineImpl {
   }
 
   /* ---- 口型同步钩子（数字人驱动）：boundary/start/end 三事件 ---- */
-  private lipListeners = new Set<(ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string }) => void>();
-  onLipSync(cb: (ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string }) => void): () => void {
+  private lipListeners = new Set<(ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string; text?: string }) => void>();
+  onLipSync(cb: (ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string; text?: string }) => void): () => void {
     this.lipListeners.add(cb);
     return () => this.lipListeners.delete(cb);
   }
-  private emitLip(ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string }): void {
+  private emitLip(ev: { type: "start" | "boundary" | "end"; charIndex?: number; role?: string; text?: string }): void {
     for (const cb of this.lipListeners) { try { cb(ev); } catch { /* 静默 */ } }
   }
 
@@ -149,9 +154,9 @@ class VoiceEngineImpl {
       const v = this.pickVoice(preset.female);
       if (v) utt.voice = v;
       await new Promise<void>((resolve) => {
-        utt.onstart = () => this.emitLip({ type: "start", role: next.role });
+        utt.onstart = () => this.emitLip({ type: "start", role: next.role, text: next.text });
         utt.onboundary = (e: SpeechSynthesisEvent) => {
-          this.emitLip({ type: "boundary", charIndex: e.charIndex ?? 0, role: next.role });
+          this.emitLip({ type: "boundary", charIndex: e.charIndex ?? 0, role: next.role, text: next.text });
         };
         utt.onend = () => { this.emitLip({ type: "end", role: next.role }); resolve(); };
         utt.onerror = () => { this.emitLip({ type: "end", role: next.role }); resolve(); };

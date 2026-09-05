@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { VoiceEngine } from "../../voice/VoiceEngine";
-import { MateDigitalHuman, type MateMood, type MateGesture } from "./MateDigitalHuman";
+import { MateLive2D, type MateMood, type MateGesture } from "./MateLive2D";
 
 /* ---------------- 类型 ---------------- */
 interface Settings {
@@ -237,7 +237,7 @@ export function LoomMate() {
         </button>
         <button onClick={() => void openPanel("chat")} className="relative cursor-pointer transition-transform hover:scale-[1.02]">
           {webglOk
-            ? <MateDigitalHuman size={Math.min(520, Math.round((typeof window !== "undefined" ? window.innerHeight : 900) * 0.55))} mood={mood} gesture={mateGesture} />
+            ? <MateLive2D size={Math.min(520, Math.round((typeof window !== "undefined" ? window.innerHeight : 900) * 0.55))} mood={mood} gesture={mateGesture} />
             : <MateAvatar size={Math.min(520, Math.round((typeof window !== "undefined" ? window.innerHeight : 900) * 0.55))} excited={unread > 0} />}
           {unread > 0 && (
             <span className="absolute right-4 top-4 flex h-10 min-w-10 items-center justify-center rounded-full bg-alert px-2 text-[16px] font-bold text-white shadow-xl">
@@ -318,7 +318,7 @@ export function LoomMate() {
       <div className="flex flex-col items-center">
         <button onClick={() => void openPanel("chat")} className="relative block cursor-pointer transition-transform hover:scale-105" title={`${personaName}（点击聊聊）`}>
           {webglOk
-            ? <MateDigitalHuman size={dim} mood={mood} gesture={mateGesture} />
+            ? <MateLive2D size={dim} mood={mood} gesture={mateGesture} />
             : <MateAvatar size={dim} excited={unread > 0} />}
           {unread > 0 && (
             <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-[11px] font-bold text-white shadow-lg">

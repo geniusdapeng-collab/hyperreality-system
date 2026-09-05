@@ -16,6 +16,8 @@
     "@tanstack/react-query": "5.102.5",
     "@trpc/client": "11.18.0",
     "@workloom/server": "workspace:*",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^6.5.10",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-router": "8.3.0",
