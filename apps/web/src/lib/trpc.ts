@@ -19,7 +19,7 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-export const trpc = createTRPCClient<AppRouter>({
+export const trpc: ReturnType<typeof createTRPCClient<AppRouter>> = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: "/trpc",

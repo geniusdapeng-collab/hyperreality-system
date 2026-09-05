@@ -15,6 +15,8 @@ export interface Utterance {
   persona: string;
   text: string;
   priority: VoicePriority;
+  /** 音色覆盖（织伴等自定义音色场景；缺省走 role 预设） */
+  voiceOverride?: { pitch: number; rate: number; female?: boolean };
 }
 
 export interface Caption {
@@ -129,7 +131,7 @@ class VoiceEngineImpl {
     if (!next) return;
     this.speaking = true;
     try {
-      const preset = VOICE_PRESETS[next.role] ?? DEFAULT_PRESET;
+      const preset = next.voiceOverride ?? VOICE_PRESETS[next.role] ?? DEFAULT_PRESET;
       const utt = new SpeechSynthesisUtterance(next.text);
       utt.lang = "zh-CN";
       utt.pitch = preset.pitch;

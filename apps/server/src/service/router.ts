@@ -41,6 +41,12 @@ import {
   listTasks as devListTasks, taskDetail as devTaskDetail, sessionEvents as devSessionEvents,
   listReleases as devListReleases, saveCustomTool as devSaveCustomTool,
 } from "./devtools.js";
+import {
+  getSettings as secGetSettings, saveSettings as secSaveSettings, scan as secScan,
+  inbox as secInbox, markInbox as secMarkInbox, addReminder as secAddReminder,
+  listReminders as secListReminders, memoryPanel as secMemoryPanel,
+  remember as secRemember, forget as secForget, chat as secChat,
+} from "./secretary.js";
 
 const kbRouter = router({
   listCollections: protectedProcedure.query(async ({ ctx }) => {
@@ -580,6 +586,74 @@ const devtoolsRouter = router({
   }),
 });
 
+/**
+ * 织伴（LoomMate）贴身小秘书：设置/事件扫描/收件箱/提醒/六层记忆/对话
+ * 铁律：不替人决策、不打扰（勿扰+聚合）、不装在线；全部写操作留痕。
+ */
+const secretaryRouter = router({
+  settings: protectedProcedure.query(async ({ ctx }) => {
+    return secGetSettings(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo);
+  }),
+  saveSettings: writeProcedure
+    .input(z.object({
+      display_name: z.string().max(30).optional(),
+      persona_key: z.enum(["tianmei", "yuanqi", "chenwen", "custom"]).optional(),
+      persona_custom: z.object({ name: z.string().max(20).optional(), tone: z.string().max(200).optional() }).optional(),
+      voice_key: z.enum(["sweet", "bright", "soft", "calm"]).optional(),
+      voice_on: z.boolean().optional(),
+      widget_size: z.enum(["large", "small"]).optional(),
+      quiet_start: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      quiet_end: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      channels: z.object({
+        im: z.object({ provider: z.string(), target: z.string() }).optional(),
+        outbox_urls: z.array(z.string().url()).max(3).optional(),
+      }).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return secSaveSettings(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo, input, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  /** 事件扫描（客户端 20s 轮询驱动；幂等） */
+  scan: protectedProcedure.mutation(async ({ ctx }) => {
+    return secScan(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo);
+  }),
+  inbox: protectedProcedure
+    .input(z.object({ unreadOnly: z.boolean().default(false) }).optional())
+    .query(async ({ ctx, input }) => {
+      return secInbox(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo, input?.unreadOnly ?? false);
+    }),
+  markInbox: writeProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(50), status: z.enum(["read", "acted"]) }))
+    .mutation(async ({ ctx, input }) => {
+      return secMarkInbox(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo, input.ids, input.status);
+    }),
+  addReminder: writeProcedure
+    .input(z.object({ text: z.string().min(1).max(200), dueAt: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return secAddReminder(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo, input.text, input.dueAt, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  reminders: protectedProcedure.query(async ({ ctx }) => {
+    return secListReminders(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo);
+  }),
+  memoryPanel: protectedProcedure.query(async ({ ctx }) => {
+    return secMemoryPanel(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo);
+  }),
+  remember: writeProcedure
+    .input(z.object({ layer: z.string().optional(), key: z.string().min(1).max(80), content: z.string().min(1).max(500), expiresDays: z.number().int().min(1).max(365).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      return secRemember(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo, input, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  forget: writeProcedure
+    .input(z.object({ memoryId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return secForget(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo, input.memoryId, { id: ctx.identity.memberNo, type: "human" });
+    }),
+  chat: writeProcedure
+    .input(z.object({ text: z.string().min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      return secChat(scopeOf(ctx.identity).workspaceId, ctx.identity.memberNo, input.text, { id: ctx.identity.memberNo, type: "human" });
+    }),
+});
+
 export const serviceRouter = router({
   kb: kbRouter,
   tickets: ticketsRouter,
@@ -588,4 +662,5 @@ export const serviceRouter = router({
   aipm: aipmRouter,
   bundle: bundleRouter,
   devtools: devtoolsRouter,
+  secretary: secretaryRouter,
 });
