@@ -1,0 +1,73 @@
+# ============================================================
+# WorkLoom IM · 基座能力心跳对齐（base-sync heartbeat · 子仓侧）
+#
+# 这是子仓模板——由 workloom-im/sync/adopt.sh 注入，不要手工改本文件逻辑；
+# 引擎与范围声明始终从基座仓 main 拉取最新版（防副本漂移），本文件只是触发器。
+#
+# 触发：每日定时（错峰）+ 手动 + push 后自检
+# 行为：
+#   ① 检测基座落后 → 配置了 SYNC_TOKEN → 自动拉齐并推送（全自动）
+#   ② 检测基座落后 → 未配置 → CI 标红 + Summary 输出待对齐清单（半自动提醒）
+# ============================================================
+name: base-sync-heartbeat
+
+on:
+  schedule:
+    - cron: "37 4 * * *"          # adopt.sh 按仓名哈希错峰生成，避免 7+ 仓同时打 API
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  BASE_REPO: geniusdapeng-collab/workloom-im
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 拉取最新 base-sync 引擎（始终基座 main 版）
+        run: |
+          mkdir -p /tmp/base-sync/sync
+          curl -fsSL "https://raw.githubusercontent.com/${BASE_REPO}/main/sync/base-sync.mjs" -o /tmp/base-sync/sync/base-sync.mjs
+          echo "引擎就绪：$(wc -l < /tmp/base-sync/sync/base-sync.mjs) 行"
+
+      - name: pnpm 就绪（锚点合并后 lockfile 刷新依赖）
+        run: corepack enable && corepack prepare pnpm@10.14.0 --activate
+
+      - name: 心跳检测 + 自动对齐
+        id: sync
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          set +e
+          node /tmp/base-sync/sync/base-sync.mjs detect --repo . 2>&1 | tee /tmp/detect.log
+          CODE=$?
+          set -e
+          if [ "$CODE" = "0" ]; then
+            echo "result=aligned" >> $GITHUB_OUTPUT
+          elif [ -n "$SYNC_TOKEN" ]; then
+            echo "result=auto-sync" >> $GITHUB_OUTPUT
+            cd . && node /tmp/base-sync/sync/base-sync.mjs pull --repo . --push
+          else
+            echo "result=behind-no-token" >> $GITHUB_OUTPUT
+            echo "## ⚠️ 基座能力落后" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/detect.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "修复：① 配置 SYNC_TOKEN secret 后重跑本工作流（自动对齐）；② 或本地执行 \`node sync/base-sync.mjs pull --repo . --push\`" >> $GITHUB_STEP_SUMMARY
+            exit 2
+          fi
