@@ -2,11 +2,19 @@
  * 织伴数字人 · Live2D 渲染后端（行业标准路线，彻底绕开写实 3D 恐怖谷）
  *
  * 驱动四要素：
- *  - 口型：VoiceEngine.onLipSync（boundary charIndex）→ 中文逐字开口度时间线
- *          → PARAM_MOUTH_OPEN_Y 直写（逐帧包络，自动闭口）；音频文件可经 speakWithAudio 振幅驱动
+ *  - 口型：VoiceEngine.onLipSync（boundary charIndex）→ 中文逐字开口度时间线；
+ *          音频文件经 speakWithAudio 振幅+频带驱动。统一进「口型平滑引擎」：
+ *          目标值逐帧指数趋近（快开慢收），消灭方波硬切的嘴部跳变
  *  - 表情：mood → Live2D expression（f01 微笑/f02 害羞/f03 认真/f04 惊讶）
  *  - 动作：gesture → Live2D motion（招呼 tap_body；常态 idle 循环呼吸感）
  *  - 情绪表达：mood + 动作 + 口型三线并发
+ *
+ * 体验升级（v2 驱动自研）：
+ *  - 按需渲染：活跃信号（说话/表情/动作/视线）驱动满帧渲染，静止 2.6s 后进
+ *    12fps 生态模式——角落挂件常驻桌面的功耗大头就此掐掉
+ *  - 视线追随：窗口鼠标 → model.focus（节流+双层惯性）；无操作时注视点自主
+ *    游移，"她在照看团队"的拟人感来源。capture 模式禁用（录屏确定性）
+ *  - 启动预热：应用空闲 1.5s 后预载 Cubism 双 core，挂件首开不再干等
  *
  * 虚拟时钟契约（录屏技能路线 B）：
  *  capture 模式挂 window.__loommateStep(dt)：model.update(dt*1000) + render，
@@ -23,7 +31,7 @@ export type MateGesture = "handup" | "thumbup" | null;
 export interface Live2DHandle {
   setMood: (m: MateMood) => void;
   gesture: (g: Exclude<MateGesture, null>) => void;
-  /** 音频文件驱动口型（RMS 振幅 → 开口度，用于录音频演示/验收） */
+  /** 音频文件驱动口型（RMS 振幅+频带 → 开口度/嘴形，用于录音频演示/验收） */
   speakWithAudio: (url: string) => void;
 }
 
@@ -73,6 +81,11 @@ function ensureCore(): Promise<void> {
   return corePromise;
 }
 
+/* 启动预热：应用空闲 1.5s 后预载双 core（不与首屏关键资源争抢），挂件首开即载即演 */
+if (typeof window !== "undefined") {
+  window.setTimeout(() => { void ensureCore().catch(() => undefined); }, 1500);
+}
+
 export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = "/live2d/shizuku/shizuku.model.json", onReady }: {
   size: number;
   mood?: MateMood;
@@ -91,6 +104,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
   useEffect(() => {
     let disposed = false;
     let offLip: (() => void) | null = null;
+    let offMouse: (() => void) | null = null;
     let raf = 0;
     let last = performance.now();
 
@@ -132,25 +146,102 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
       const expr = MOOD_EXPR[moodRef.current];
       if (expr) await model.expression(expr).catch(() => undefined);
 
-      /* ---------- 口型驱动：文本逐字开口度 → PARAM_MOUTH_OPEN_Y ---------- */
-      const setMouth = (v: number) => {
+      /* ================= 口型平滑引擎 =================
+       * 驱动方只设「目标值」，引擎在 tick 内指数趋近：开口快（k=0.55）闭口慢（k=0.18），
+       * 逐帧包络连续无跳变；说话结束回落 0.06 微张底噪（自然唇齿），end 归零。 */
+      let mouthTarget = 0;
+      let mouthCur = 0;
+      let openUntil = 0;              // 开口保持截止（按字时值自动回落）
+      let lastBoundaryAt = 0;
+      let boundaryGap = 140;          // 逐字间隔估计（随 boundary 流自适应）
+      const setParam = (k: string, v: number) => {
         try {
-          (model.internalModel.coreModel as unknown as { setParamFloat: (k: string, v: number) => void })
-            .setParamFloat("PARAM_MOUTH_OPEN_Y", v);
+          (model.internalModel.coreModel as unknown as { setParamFloat: (p: string, x: number) => void })
+            .setParamFloat(k, v);
         } catch { /* 静默 */ }
       };
+      const setMouth = (v: number) => setParam("PARAM_MOUTH_OPEN_Y", v);
+      // 嘴形参数探测（Cubism 3+ 才有 PARAM_MOUTH_FORM；shizuku 这类老模型没有则自动弃用）
+      let formOK: boolean | null = null;
+      const setMouthForm = (v: number) => {
+        if (formOK === false) return;
+        setParam("PARAM_MOUTH_FORM", v);
+        if (formOK === null) {
+          try {
+            const got = (model.internalModel.coreModel as unknown as { getParamFloat?: (p: string) => number })
+              .getParamFloat?.("PARAM_MOUTH_FORM");
+            formOK = typeof got === "number" && Math.abs(got - v) < 0.02;
+          } catch { formOK = false; }
+        }
+      };
+
+      /* ================= 活跃信号 → 按需渲染 =================
+       * 满帧条件：任一驱动事件近 2.6s 内发生；否则降 12fps 生态模式（角落常驻功耗） */
+      let lastActive = performance.now();
+      let ecoDiv = 0;
+      const poke = () => { lastActive = performance.now(); };
+      const isEco = (now: number) => now - lastActive > 2600;
+
+      /* ================= 视线追随 + 自主游移 =================
+       * 鼠标：window mousemove 节流 90ms → 归一化注视点；无鼠标 4s 后每 3.5~7s 随机游移。
+       * tick 内 focusCur 以 0.06 惯性趋近目标（叠模型内部惯性，双层平滑）。capture 禁用。 */
+      let focusTX = 0, focusTY = 0, focusCX = 0, focusCY = 0;
+      let lastMouse = 0, nextWander = 0;
+      if (!capture && typeof window !== "undefined") {
+        let mThrottle = 0;
+        const onMove = (e: MouseEvent) => {
+          const now = performance.now();
+          if (now - mThrottle < 90) return;
+          mThrottle = now;
+          lastMouse = now;
+          const r = (app.view as HTMLCanvasElement).getBoundingClientRect();
+          if (r.width === 0) return;
+          focusTX = Math.max(-1, Math.min(1, ((e.clientX - (r.left + r.width / 2)) / (r.width / 2)) * 0.8));
+          focusTY = Math.max(-1, Math.min(1, ((e.clientY - (r.top + r.height / 2)) / (r.height / 2)) * 0.8));
+          poke();
+        };
+        window.addEventListener("mousemove", onMove, { passive: true });
+        offMouse = () => window.removeEventListener("mousemove", onMove);
+      }
+      const applyFocus = (now: number) => {
+        if (capture) return;
+        if (now - lastMouse > 4000 && now > nextWander) {
+          // 自主游移：小幅度随机注视点（垂直偏小，像偶尔走神/扫视）。
+          // 注意：游移是「空闲装饰行为」，刻意不 poke()——否则它自己阻止 eco 降帧（已踩过）
+          focusTX = (Math.random() * 2 - 1) * 0.45;
+          focusTY = (Math.random() * 2 - 1) * 0.22;
+          nextWander = now + 3500 + Math.random() * 3500;
+        }
+        const dx = focusTX - focusCX, dy = focusTY - focusCY;
+        if (Math.abs(dx) > 0.004 || Math.abs(dy) > 0.004) {
+          focusCX += dx * 0.06;
+          focusCY += dy * 0.06;
+          const r = (app.view as HTMLCanvasElement).getBoundingClientRect();
+          if (r.width > 0) {
+            try { model.focus(r.left + r.width / 2 + focusCX * r.width * 0.45, r.top + r.height / 2 + focusCY * r.height * 0.45); } catch { /* 静默 */ }
+          }
+        }
+      };
+
+      /* ---------- 口型驱动①：VoiceEngine 逐字 boundary → 开口度目标 ---------- */
       offLip = VoiceEngine.onLipSync((ev) => {
         if (ev.type === "start") {
           if (lipTimer.current) window.clearInterval(lipTimer.current);
+          lastBoundaryAt = 0;
+          poke();
         } else if (ev.type === "boundary") {
-          // 逐字开口度（按原文取字映射韵母；取不到字时随机包络兜底）
+          const now = performance.now();
+          if (lastBoundaryAt) boundaryGap = Math.max(70, Math.min(320, now - lastBoundaryAt));
+          lastBoundaryAt = now;
           const ch = ev.text && typeof ev.charIndex === "number" ? ev.text.charAt(ev.charIndex) : "";
-          const open = ch ? OPEN_OF_CHAR(ch) : 0.3 + Math.random() * 0.5;
-          setMouth(open);
-          window.setTimeout(() => setMouth(0.1), 130);
+          mouthTarget = ch ? OPEN_OF_CHAR(ch) : 0.3 + Math.random() * 0.5;
+          openUntil = now + boundaryGap * 0.85;   // 字时值 85% 后向底噪回落（连贯语流感）
+          poke();
         } else {
-          setMouth(0);
+          mouthTarget = 0;
+          openUntil = 0;
           if (lipTimer.current) { window.clearInterval(lipTimer.current); lipTimer.current = null; }
+          poke();
         }
       });
 
@@ -161,31 +252,54 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
           const e = MOOD_EXPR[m];
           if (e) void model.expression(e).catch(() => undefined);
           else void model.expression(null as unknown as string).catch(() => undefined);
+          poke();
         },
         gesture: (g) => {
           if (g === "handup" || g === "thumbup") void model.motion("tap_body").catch(() => undefined);
+          poke();
         },
         speakWithAudio: (url) => {
-          // 振幅口型（AnalyserNode RMS → PARAM_MOUTH_OPEN_Y；录音频演示/验收用）
+          /* 口型驱动②：音频文件 —— RMS 振幅 → 开口度目标；频带能量比 → 嘴形（若模型支持）。
+           * 低频占比高偏圆唇(o/u)，中高频占比高偏展唇(a/i)。 */
           void (async () => {
             try {
               const audio = new Audio(url);
               const ctx = new AudioContext();
               const src = ctx.createMediaElementSource(audio);
               const analyser = ctx.createAnalyser();
-              analyser.fftSize = 256;
+              analyser.fftSize = 512;
+              analyser.smoothingTimeConstant = 0.45;
               src.connect(analyser);
               analyser.connect(ctx.destination);
-              const buf = new Uint8Array(analyser.frequencyBinCount);
+              const tbuf = new Uint8Array(analyser.frequencyBinCount);
+              const fbuf = new Uint8Array(analyser.frequencyBinCount);
+              const binHz = (ctx.sampleRate / 2) / analyser.frequencyBinCount;
               let alive = true;
-              audio.onended = () => { alive = false; setMouth(0); void ctx.close(); };
+              audio.onended = () => { alive = false; mouthTarget = 0; openUntil = 0; void ctx.close(); };
               const loop = () => {
                 if (!alive) return;
-                analyser.getByteTimeDomainData(buf);
+                analyser.getByteTimeDomainData(tbuf);
                 let sum = 0;
-                for (const v of buf) sum += (v - 128) * (v - 128);
-                const rms = Math.sqrt(sum / buf.length) / 128;
-                setMouth(Math.min(1, rms * 3.2));
+                for (const v of tbuf) sum += (v - 128) * (v - 128);
+                const rms = Math.sqrt(sum / tbuf.length) / 128;
+                mouthTarget = Math.min(1, rms * 3.2);
+                openUntil = performance.now() + 120;   // 振幅流持续刷新开口窗口
+                if (formOK !== false) {
+                  analyser.getByteFrequencyData(fbuf);
+                  let lo = 0, hi = 0, ln = 0, hn = 0;
+                  for (let i = 1; i < fbuf.length; i++) {
+                    const hz = i * binHz;
+                    const fv = fbuf[i] ?? 0;
+                    if (hz < 850) { lo += fv; ln++; }
+                    else if (hz < 4200) { hi += fv; hn++; }
+                  }
+                  const tot = lo / Math.max(1, ln) + hi / Math.max(1, hn);
+                  if (tot > 26) {  // 有语音能量才调嘴形，静音不漂
+                    const ratio = (lo / Math.max(1, ln)) / tot;   // 低频占比 0~1
+                    setMouthForm(Math.max(-1, Math.min(1, ratio * 2 - 0.85)));
+                  }
+                }
+                poke();
                 requestAnimationFrame(loop);
               };
               await audio.play();
@@ -198,9 +312,9 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
       window.__loommateLive2DReady = () => true;
       onReady?.(handle);
 
-      /* ---------- 时钟：capture=虚拟步进；常态=rAF ---------- */
+      /* ---------- 时钟：capture=虚拟步进；常态=rAF（按需渲染+生态降帧） ---------- */
       if (capture) {
-        // 路线 B：虚拟时钟——口型/动作/物理全部按 dt 推进，与墙钟解耦
+        // 路线 B：虚拟时钟——口型/动作/物理全部按 dt 推进，与墙钟解耦（契约不动）
         let virtualT = 0;
         let speakUntil = -1;
         (window as unknown as { __loommateSay?: (sec: number) => void }).__loommateSay = (sec: number) => {
@@ -224,6 +338,20 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
           if (disposed) return;
           const dt = Math.min(100, now - last);
           last = now;
+          // 口型平滑：快开慢收指数趋近
+          if (now > openUntil && mouthTarget > 0.06) mouthTarget = 0.06;
+          const k = mouthTarget > mouthCur ? 0.55 : 0.18;
+          mouthCur += (mouthTarget - mouthCur) * k;
+          if (Math.abs(mouthCur - mouthTarget) < 0.004) mouthCur = mouthTarget;
+          setMouth(mouthCur);
+          // 视线（含自主游移）
+          applyFocus(now);
+          // 按需渲染：活跃满帧；生态模式 5 帧走 1 帧（≈12fps）
+          if (isEco(now)) {
+            if (++ecoDiv % 5 !== 0) { raf = requestAnimationFrame(tick); return; }
+          } else {
+            ecoDiv = 0;
+          }
           model.update(dt);
           app.render();
           raf = requestAnimationFrame(tick);
@@ -239,6 +367,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
       disposed = true;
       cancelAnimationFrame(raf);
       offLip?.();
+      offMouse?.();
       if (lipTimer.current) window.clearInterval(lipTimer.current);
       window.__loommateLive2DReady = undefined;
       window.__loommateStep = undefined;
