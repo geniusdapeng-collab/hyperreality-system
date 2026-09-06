@@ -55,53 +55,29 @@ const svc = () => trpc.service as unknown as {
   };
 };
 
-/* ---------------- 甜妹形象（可爱·大眼睛·会眨眼·纯 SVG） ---------------- */
+/* ---------------- 小织形象兜底（真实 Mao 海报 · 禁自创） ----------------
+ * Live2D 主路径不可用（无 WebGL/模型加载失败）时的兜底：展示官方 Mao 模型的
+ * 真实静态海报（poster.png，取自系统实拍），配呼吸动画——
+ * 纪律：兜底形象必须是系统内真实形象，禁止手绘/自创替代品（2026-09 教训：
+ * 此处曾长期残留已淘汰的紫发卡通 SVG，造成品牌事故；后又被手绘金毛 SVG 二次污染）。
+ * 换形象 = 换模型 + 换 poster.png，两件必须同批。 */
 function MateAvatar({ size, excited }: { size: number; excited: boolean }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 120 120" className={excited ? "animate-[matewave_0.9s_ease-in-out_infinite]" : "animate-[matebreath_3.2s_ease-in-out_infinite]"}>
+    <>
       <style>{`
         @keyframes matebreath { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-2.5px) } }
         @keyframes matewave { 0%,100% { transform: rotate(-3deg) } 50% { transform: rotate(3deg) } }
-        @keyframes mateblink { 0%,92%,100% { transform: scaleY(1) } 95%,97% { transform: scaleY(0.06) } }
-        .mate-eye { transform-origin: center; transform-box: fill-box; animation: mateblink 4.2s infinite; }
       `}</style>
-      {/* 发髻小揪揪 */}
-      <circle cx="36" cy="26" r="11" fill="#8b5e83" />
-      <circle cx="84" cy="26" r="11" fill="#8b5e83" />
-      <circle cx="36" cy="26" r="5.5" fill="#e8a0bf" opacity="0.7" />
-      <circle cx="84" cy="26" r="5.5" fill="#e8a0bf" opacity="0.7" />
-      {/* 头发 */}
-      <ellipse cx="60" cy="62" rx="42" ry="44" fill="#8b5e83" />
-      {/* 脸 */}
-      <ellipse cx="60" cy="66" rx="34" ry="32" fill="#ffe3d6" />
-      {/* 刘海 */}
-      <path d="M26 58 Q30 30 60 28 Q90 30 94 58 Q86 44 76 46 Q80 38 74 34 Q68 44 60 44 Q52 44 46 34 Q40 38 44 46 Q34 44 26 58Z" fill="#8b5e83" />
-      {/* 大眼睛（会眨） */}
-      <g className="mate-eye">
-        <ellipse cx="46" cy="66" rx="8.5" ry="10.5" fill="#fff" />
-        <ellipse cx="46" cy="68" rx="5.5" ry="7.5" fill="#5b3a56" />
-        <circle cx="48" cy="65" r="2.6" fill="#fff" />
-        <circle cx="43.5" cy="70.5" r="1.3" fill="#fff" opacity="0.8" />
-      </g>
-      <g className="mate-eye" style={{ animationDelay: "0.08s" }}>
-        <ellipse cx="74" cy="66" rx="8.5" ry="10.5" fill="#fff" />
-        <ellipse cx="74" cy="68" rx="5.5" ry="7.5" fill="#5b3a56" />
-        <circle cx="76" cy="65" r="2.6" fill="#fff" />
-        <circle cx="71.5" cy="70.5" r="1.3" fill="#fff" opacity="0.8" />
-      </g>
-      {/* 睫毛 */}
-      <path d="M37 57 Q46 52 55 57" stroke="#5b3a56" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-      <path d="M65 57 Q74 52 83 57" stroke="#5b3a56" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-      {/* 腮红 */}
-      <ellipse cx="37" cy="78" rx="6" ry="3.6" fill="#f9b4c4" opacity="0.75" />
-      <ellipse cx="83" cy="78" rx="6" ry="3.6" fill="#f9b4c4" opacity="0.75" />
-      {/* 嘴（开心笑） */}
-      <path d="M53 80 Q60 87 67 80" stroke="#c2557a" strokeWidth="2.4" fill="none" strokeLinecap="round" />
-      {/* 头顶小星星 */}
-      <path d="M60 8l1.8 4.2 4.2 1.8-4.2 1.8L60 20l-1.8-4.2L54 14l4.2-1.8z" fill="#ffd97a">
-        <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite" />
-      </path>
-    </svg>
+    <img
+      src="/live2d/mao/poster.png"
+      width={size}
+      height={Math.round(size * (400 / 414))}
+      alt="小织"
+      draggable={false}
+      className={excited ? "animate-[matewave_0.9s_ease-in-out_infinite]" : "animate-[matebreath_3.2s_ease-in-out_infinite]"}
+      style={{ objectFit: "contain", userSelect: "none" }}
+    />
+    </>
   );
 }
 

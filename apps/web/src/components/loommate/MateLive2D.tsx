@@ -45,13 +45,17 @@ declare global {
   }
 }
 
-/** shizuku 表情映射（f01 微笑/f02 羞涩/f03 认真/f04 吃惊） */
-const MOOD_EXPR: Record<MateMood, string | null> = {
-  neutral: null,
-  happy: "f01",
-  love: "f02",
-  fear: "f04",
+/** 表情映射按模型登记（残留教训：曾硬编码 shizuku 表情 ID，换 Mao 后情绪静默失效）
+ *  Mao（Cubism 3.0 官样）：exp_02 眯眼笑 / exp_06 脸红羞涩 / exp_07 睁大吃惊
+ *  shizuku（备份模型）：f01 微笑 / f02 羞涩 / f04 吃惊 */
+const MODEL_EXPR: Record<string, Record<MateMood, string | null>> = {
+  mao:     { neutral: null, happy: "exp_02", love: "exp_06", fear: "exp_07" },
+  shizuku: { neutral: null, happy: "f01",    love: "f02",    fear: "f04"    },
 };
+function moodExprOf(modelUrl: string, mood: MateMood): string | null {
+  const key = Object.keys(MODEL_EXPR).find((k) => modelUrl.toLowerCase().includes(k)) ?? "mao";
+  return MODEL_EXPR[key]![mood];
+}
 
 /** 中文开口度：按常见韵母映射（与 TalkingHead 版同口径） */
 const OPEN_OF_CHAR = (ch: string): number => {
@@ -86,7 +90,7 @@ if (typeof window !== "undefined") {
   window.setTimeout(() => { void ensureCore().catch(() => undefined); }, 1500);
 }
 
-export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = "/live2d/shizuku/shizuku.model.json", frame = "bust", onReady }: {
+export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = "/live2d/mao/Mao.model3.json", frame = "bust", onReady }: {
   size: number;
   mood?: MateMood;
   gesture?: MateGesture;
@@ -154,7 +158,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
 
       // 常态 idle 呼吸循环 + 初始表情
       void model.motion("idle");
-      const expr = MOOD_EXPR[moodRef.current];
+      const expr = moodExprOf(modelUrl, moodRef.current);
       if (expr) await model.expression(expr).catch(() => undefined);
 
       /* ================= 口型平滑引擎 =================
@@ -260,7 +264,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
       const handle: Live2DHandle = {
         setMood: (m) => {
           moodRef.current = m;
-          const e = MOOD_EXPR[m];
+          const e = moodExprOf(modelUrl, m);
           if (e) void model.expression(e).catch(() => undefined);
           else void model.expression(null as unknown as string).catch(() => undefined);
           poke();
@@ -392,7 +396,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
   useEffect(() => {
     const model = modelRef.current;
     if (!model) return;
-    const e = MOOD_EXPR[mood];
+    const e = moodExprOf(modelUrl, mood);
     if (e) void model.expression(e).catch(() => undefined);
   }, [mood]);
 
