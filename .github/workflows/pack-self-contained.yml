@@ -1,0 +1,73 @@
+# WorkLoom 自包含安装包 CI（D16：普通用户下载 zip 解压即跑，零开发环境）
+# 触发：打 tag（v*）或手动 dispatch；Mac/Windows 双平台真实装配 + 冒烟验收 + 上传 Release
+# 产物：WorkLoom-macOS.zip（PG17+pgvector 内嵌）/ WorkLoom-Windows.zip（PG17+pgvector 内嵌）
+# 注意：.github/workflows/** 不在 base-sync 同步范围；各仓复用时改 productName/版本即可
+name: pack-self-contained
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 v1.1.0）"
+        required: true
+        default: "v1.1.0"
+
+permissions:
+  contents: write
+
+env:
+  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - name: 装配 macOS 自包含包（PG17+pgvector 内嵌）
+        run: bash scripts/pack-macos.sh --version "$VERSION" --arch arm64
+      - name: 冒烟验收（首启自愈全流程：装配→initdb→迁移→种子→起服务→健康检查）
+        run: |
+          unzip -q dist/WorkLoom-macOS.zip -d /tmp/wl-smoke
+          WORKLOOM_SMOKE=1 bash /tmp/wl-smoke/WorkLoom.app/Contents/MacOS/WorkLoom
+      - name: 上传产物
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WorkLoom-macOS.zip*
+          name: ${{ env.VERSION }}
+          generate_release_notes: true
+          body: |
+            ## 安装说明
+            **macOS**：下载 `WorkLoom-macOS.zip` 解压 → 把 `WorkLoom.app` 拖入「应用程序」→ 首次打开右键→「打开」（仅首次需要）→ 等待首启初始化约 30 秒 → 自动打开系统。
+            **Windows**：下载 `WorkLoom-Windows.zip` 解压到任意目录 → 双击 `WorkLoom.bat` → SmartScreen 点「更多信息 → 仍要运行」（仅首次）→ 等待首启初始化约 30 秒 → 自动打开系统。
+            > 开箱即「体验模式」（演示数据+离线可用）；体验完可一键清理，按「配置引导」定制自己行业版，填入模型 Key 即可真实使用。
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - name: 编译 pgvector（官方无 Windows 预编译件，MSVC 源码构建）
+        shell: pwsh
+        run: scripts/build-pgvector-win.ps1
+      - name: 装配 Windows 自包含包（PG17+pgvector 内嵌）
+        shell: bash
+        run: bash scripts/pack-windows.sh --version "$VERSION"
+      - name: 冒烟验收（首启自愈全流程）
+        shell: cmd
+        run: |
+          tar -xf dist/WorkLoom-Windows.zip -C %TEMP%
+          set WORKLOOM_SMOKE=1
+          call %TEMP%\WorkLoom\WorkLoom.bat
+      - name: 上传产物
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WorkLoom-Windows.zip*
+          name: ${{ env.VERSION }}
+          generate_release_notes: true
