@@ -61,10 +61,25 @@ jobs:
         run: bash scripts/pack-windows.sh --version "$VERSION"
       - name: 冒烟验收（首启自愈全流程）
         shell: cmd
+        id: smoke
+        timeout-minutes: 25
         run: |
           tar -xf dist/WorkLoom-Windows.zip -C %TEMP%
           set WORKLOOM_SMOKE=1
           call %TEMP%\WorkLoom\WorkLoom.bat
+      - name: 失败留证（冒烟日志上传 Release 供远程诊断）
+        if: failure() && steps.smoke.outcome == 'failure'
+        shell: cmd
+        run: |
+          mkdir smoke-logs
+          copy /Y "%LOCALAPPDATA%\WorkLoom\Logs\*.log" smoke-logs\ 2>nul || echo no-logs > smoke-logs\no-logs.txt
+      - name: 上传冒烟日志
+        if: failure() && steps.smoke.outcome == 'failure'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: smoke-logs/**
+          name: ${{ env.VERSION }}
+          fail_on_unmatched_files: false
       - name: 上传产物
         uses: softprops/action-gh-release@v2
         with:

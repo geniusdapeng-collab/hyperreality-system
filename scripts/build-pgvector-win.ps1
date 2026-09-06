@@ -49,6 +49,19 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "nmake install 失败（exit $LASTEXITCODE）" }
 } finally { Pop-Location }
 
+# ---------- 3.5 暂存运行时 PG 树（与编译底座同源，ABI 绝对一致） ----------
+# 背景：v2.0.13 实证 choco(17.6) 编译的 vector.dll 在 zonky(17.2) 运行时缺符号
+# （"The specified procedure could not be found"）——运行时与编译底座必须同源。
+# 顺带收益：EDB 全量树含 psql/pg_isready 等完整工具链（zonky 仅三件套）。
+$RunPg = "vendor/pg-win"
+if (-not (Test-Path "$RunPg\bin\postgres.exe")) {
+  New-Item -ItemType Directory -Force -Path $RunPg | Out-Null
+  foreach ($d in @("bin", "lib", "share")) {
+    Copy-Item "$PgRoot\$d" "$RunPg\$d" -Recurse -Force
+  }
+  Write-Host "✓ 运行时 PG 树已暂存：$RunPg（与编译底座同源）"
+}
+
 # ---------- 4. 归集产物 ----------
 New-Item -ItemType Directory -Force -Path "$Out\lib", "$Out\share\extension" | Out-Null
 Copy-Item "$PgRoot\lib\vector.dll" "$Out\lib\" -Force
