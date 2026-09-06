@@ -93,6 +93,47 @@ export function LoomMate() {
   const [memory, setMemory] = useState<Record<string, MemRow[]> | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
   const size = settings?.widget_size ?? "large";
+
+  /* —— 浮层交互（拖拽移动 / 迷你球 / 隐藏把手；本机偏好存 localStorage，2026-09 浮层 UX 专项） —— */
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(() => {
+    try { const v = localStorage.getItem("loommate.pos"); return v ? JSON.parse(v) as { x: number; y: number } : null; } catch { return null; }
+  });
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem("loommate.hidden") === "1"; } catch { return false; } });
+  const [mini, setMini] = useState(() => { try { return localStorage.getItem("loommate.mini") === "1"; } catch { return false; } });
+  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
+  const persistLocal = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+  const widgetW = size === "large" ? 480 : 120;
+  const widgetH = size === "large" ? 560 : 170;
+  const clampPos = (x: number, y: number) => ({
+    x: Math.min(Math.max(0, x), window.innerWidth - widgetW),
+    y: Math.min(Math.max(0, y), window.innerHeight - widgetH),
+  });
+  const defaultPos = () => ({ x: window.innerWidth - widgetW - 16, y: window.innerHeight - widgetH - 16 });
+  const docked: "left" | "right" = pos ? (pos.x + widgetW / 2 < window.innerWidth / 2 ? "left" : "right") : "right";
+  const onDragStart = (e: React.PointerEvent) => {
+    const base = pos ?? defaultPos();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: base.x, baseY: base.y, moved: false };
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onDragMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+    if (!d.moved && Math.hypot(dx, dy) < 6) return; // 6px 阈值：小于视为点击
+    d.moved = true;
+    setPos(clampPos(d.baseX + dx, d.baseY + dy));
+  };
+  const onDragEnd = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d || !d.moved) { void openPanel("chat"); return; } // 未拖动=点击开聊
+    setPos((p) => {
+      if (!p) return p;
+      const snapped = { x: p.x + widgetW / 2 < window.innerWidth / 2 ? 16 : window.innerWidth - widgetW - 16, y: p.y };
+      persistLocal("loommate.pos", JSON.stringify(snapped));
+      return snapped;
+    });
+  };
   const webglOk = useMemo(() => {
     try {
       const c = document.createElement("canvas");
@@ -262,8 +303,29 @@ export function LoomMate() {
     );
   }
 
+  // 隐藏态：只留屏幕边缘「小织」把手，点一下唤回（不挡任何功能模块）
+  if (hidden) {
+    return (
+      <button
+        onClick={() => { setHidden(false); persistLocal("loommate.hidden", "0"); }}
+        title="唤回小织"
+        className="fixed z-[70] flex h-20 w-7 flex-col items-center justify-center gap-1 rounded-l-xl border border-gline bg-bg900/95 text-[11px] font-semibold text-gold shadow-xl hover:bg-bg850"
+        style={docked === "left"
+          ? { left: 0, top: pos?.y ?? "45%", borderRadius: "0 12px 12px 0" }
+          : { right: 0, top: pos?.y ?? "45%" }}
+      >
+        <span style={{ writingMode: "vertical-rl" }}>小织</span>
+        <span>{docked === "left" ? "▸" : "◂"}</span>
+      </button>
+    );
+  }
+
+  const rootStyle: React.CSSProperties = pos
+    ? { position: "fixed", left: pos.x, top: pos.y, zIndex: 70 }
+    : { position: "fixed", right: 16, bottom: 16, zIndex: 70 };
+
   return (
-    <div className="fixed bottom-4 right-4 z-[70] flex flex-col items-end gap-2" style={{ fontFamily: "inherit" }}>
+    <div className={`flex flex-col gap-2 ${docked === "left" ? "items-start" : "items-end"}`} style={{ fontFamily: "inherit", ...rootStyle }}>
       {/* 气泡提醒（最多叠 3 条） */}
       {open === "none" && items.slice(0, 3).map((it) => (
         <div key={it.id} className={`w-[300px] rounded-2xl border p-3 shadow-xl backdrop-blur ${LEVEL_STYLE[it.level]}`}>
@@ -290,9 +352,29 @@ export function LoomMate() {
         />
       )}
 
-      {/* 本体：形象 + 名字 + 尺寸切换 */}
+      {/* 本体：形象（可拖拽·松手边缘吸附）+ 名字 + 控制条 */}
+      {mini && open === "none" ? (
+        /* 迷你球：64px 圆球贴在原位置，点击展开 */
+        <button
+          onClick={() => { setMini(false); persistLocal("loommate.mini", "0"); }}
+          title="展开小织"
+          className="relative block h-16 w-16 overflow-hidden rounded-full border-2 border-gold/60 bg-bg900 shadow-xl transition-transform hover:scale-110"
+        >
+          <img src="/live2d/mao/poster.png" alt={personaName} draggable={false} className="h-full w-full object-cover" />
+          {unread > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-alert px-1 text-[10px] font-bold text-white shadow-lg">
+              {unread}
+            </span>
+          )}
+        </button>
+      ) : (
       <div className="flex flex-col items-center">
-        <button onClick={() => void openPanel("chat")} className="relative block cursor-pointer transition-transform hover:scale-105" title={`${personaName}（点击聊聊）`}>
+        <div
+          role="button" tabIndex={0}
+          onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd}
+          className="relative block cursor-grab touch-none select-none transition-transform hover:scale-105 active:cursor-grabbing"
+          title={`${personaName}（拖拽挪位置 · 点击聊聊）`}
+        >
           {webglOk
             ? <MateLive2D size={dim} mood={mood} gesture={mateGesture} />
             : <MateAvatar size={dim} excited={unread > 0} />}
@@ -301,17 +383,26 @@ export function LoomMate() {
               {unread}
             </span>
           )}
-        </button>
+        </div>
         <div className="mt-0.5 flex items-center gap-1.5">
           <span className={`rounded-full bg-bg900/90 px-2.5 py-0.5 text-ink shadow ${size === "large" ? "text-[12px]" : "text-[10px]"}`}>
             {personaName}
           </span>
           <button onClick={() => void toggleSize()} title="切换大小"
-            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 hover:text-ink shadow">
+            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
             {MODE_LABEL[size] ?? "变大"}
+          </button>
+          <button onClick={() => { setMini(true); persistLocal("loommate.mini", "1"); }} title="收起为小球（不挡界面）"
+            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
+            收起
+          </button>
+          <button onClick={() => { setHidden(true); persistLocal("loommate.hidden", "1"); setPos((p) => p ?? defaultPos()); }} title="隐藏（屏幕边缘留「小织」把手，点一下唤回）"
+            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
+            隐藏
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
