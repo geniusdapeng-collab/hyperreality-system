@@ -176,13 +176,15 @@ export default function P0() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [isExample, setIsExample] = useState(false);
+  const [bundleId, setBundleId] = useState<string | null>(null);
   useEffect(() => {
     void ensureDemoLogin().then(() =>
       trpc.onboarding.status.query()
         .then((r) => {
-          const rr = r as { workspace?: { name?: string }; bundle?: { isExample?: boolean }; workspaceId?: string };
+          const rr = r as { workspace?: { name?: string }; bundle?: { id?: string | null; isExample?: boolean }; workspaceId?: string };
           const n = rr.workspace?.name;
           if (n) setWsName(n);
+          setBundleId(rr.bundle?.id ?? null);
           const wsId = rr.workspaceId ?? null;
           if (wsId) setWorkspaceId(wsId);
           if (rr.bundle?.isExample) {
@@ -572,6 +574,7 @@ export default function P0() {
             ...data.satellites.map((a): CeremonyActor => ({ presetKey: a.presetKey, name: a.name })),
           ]}
           bundleName={wsName}
+          industry={bundleId}
           onDone={() => {
             if (workspaceId) markWelcomed(workspaceId);
             setShowWelcome(false);

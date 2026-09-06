@@ -86,12 +86,14 @@ if (typeof window !== "undefined") {
   window.setTimeout(() => { void ensureCore().catch(() => undefined); }, 1500);
 }
 
-export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = "/live2d/shizuku/shizuku.model.json", onReady }: {
+export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = "/live2d/shizuku/shizuku.model.json", frame = "bust", onReady }: {
   size: number;
   mood?: MateMood;
   gesture?: MateGesture;
   /** 模型 .model.json 路径（客户/行业版可换自制模型） */
   modelUrl?: string;
+  /** 取景：bust 头肩胸（挂件默认）；full 全身像完整入镜（首装欢迎仪式舞台位） */
+  frame?: "bust" | "full";
   onReady?: (h: Live2DHandle) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -133,12 +135,21 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
       const model = await Live2DModel.from(modelUrl, { autoUpdate: false });
       if (disposed) return;
       modelRef.current = model;
-      // 构图：头肩胸取景——模型向下多探，让脸部占据视窗上中部（shizuku 为带课桌全身模型）
-      const s = size / Math.max(model.width, model.height) * 2.0;
-      model.scale.set(s);
-      model.x = size / 2;
-      model.y = size * 1.72;
-      model.anchor.set(0.5, 1);
+      // 构图：bust=头肩胸取景——模型向下多探，让脸部占据视窗上中部（shizuku 为带课桌全身模型）；
+      //      full=全身像——整体缩放至视口 ~92%，脚底贴视口底部（首装仪式舞台位，完整入镜不裁切）
+      if (frame === "full") {
+        const s = (size / Math.max(model.width, model.height)) * 0.92;
+        model.scale.set(s);
+        model.x = size / 2;
+        model.y = size * 0.985;
+        model.anchor.set(0.5, 1);
+      } else {
+        const s = size / Math.max(model.width, model.height) * 2.0;
+        model.scale.set(s);
+        model.x = size / 2;
+        model.y = size * 1.72;
+        model.anchor.set(0.5, 1);
+      }
       app.stage.addChild(model);
 
       // 常态 idle 呼吸循环 + 初始表情
@@ -375,7 +386,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
       appRef.current = null;
       modelRef.current = null;
     };
-  }, [size, modelUrl, onReady]);
+  }, [size, modelUrl, frame, onReady]);
 
   // mood 联动
   useEffect(() => {

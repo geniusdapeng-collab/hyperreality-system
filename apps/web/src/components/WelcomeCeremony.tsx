@@ -1,11 +1,14 @@
 /**
- * WelcomeCeremony · 首次启动欢迎仪式（方案 V4 §0）
- * 全屏覆盖层：3D 团队仪式（CeremonyStage）+ 金色横幅 + 彩带 + 剪彩 → 主弹窗。
- * 触发：is_example 工作区 + 首次启动（localStorage + 仅一次）；右上角「跳过仪式」。
- * 文案变体：行业版按 bundle 显示名与团队人数替换（八仓通用）。
+ * WelcomeCeremony · 首次启动欢迎仪式（方案 V4 §0 + 织伴开场 v1.2）
+ * 全屏覆盖层：织伴开场序列（MateWelcome：全身像自我介绍/行业化系统介绍/官方详细介绍/过渡）
+ *   → 3D 团队仪式（CeremonyStage）+ 金色横幅 + 彩带 + 剪彩 → 主弹窗。
+ * 触发：is_example 工作区 + 首次启动（localStorage + 仅一次）。
+ * 跳过：织伴开场期右下角「跳过开场，直接进入」直达系统首页；团队仪式期右上角「跳过仪式」直达主弹窗。
+ * 文案变体：行业版按 bundle 显示名与团队人数替换（八仓通用）；织伴 S2 话术按 bundle id 切换（缺省回落通用版）。
  */
 import { useEffect, useMemo, useState } from "react";
 import { CeremonyStage, type CeremonyActor } from "./CeremonyStage";
+import { MateWelcome } from "./MateWelcome";
 
 const CONFETTI_COLORS = ["#d6dce4", "#f0f4f9", "#ffd98a", "#8fa9c9", "#a8b2be"];
 
@@ -31,22 +34,26 @@ function Confetti({ count, seed }: { count: number; seed: number }) {
   );
 }
 
-export function WelcomeCeremony({ actors, bundleName, onDone }: {
+export function WelcomeCeremony({ actors, bundleName, industry = null, onDone }: {
   actors: CeremonyActor[];
   bundleName: string;
+  /** bundle id（如 hotel / ai-pm）：织伴 S2 行业话术切换；缺省回落通用版 */
+  industry?: string | null;
   onDone: () => void;
 }) {
-  // 阶段：entrance(0-1.6s) → dance(1.6-7s) → ribbon(7-8.2s) → modal(8.2s+)
-  const [phase, setPhase] = useState<"entrance" | "dance" | "ribbon" | "modal">("entrance");
+  // 阶段：mate(织伴开场 S0-S4) → entrance(0-1.6s) → dance(1.6-7s) → ribbon(7-8.2s) → modal(8.2s+)
+  const [phase, setPhase] = useState<"mate" | "entrance" | "dance" | "ribbon" | "modal">("mate");
 
+  // 团队仪式计时：织伴开场演完（team-bridge）进入 entrance 后才启动
   useEffect(() => {
+    if (phase !== "entrance") return;
     const timers = [
       setTimeout(() => setPhase("dance"), 1600),
       setTimeout(() => setPhase("ribbon"), 7000),
       setTimeout(() => setPhase("modal"), 8400),
     ];
     return () => timers.forEach(clearTimeout);
-  }, []);
+  }, [phase]);
 
   const skip = () => { setPhase("modal"); };
 
@@ -55,12 +62,23 @@ export function WelcomeCeremony({ actors, bundleName, onDone }: {
       position: "fixed", inset: 0, zIndex: 100, background: "#0b0d10",
       fontFamily: "inherit",
     }}>
-      {/* 3D 仪式舞台 */}
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end" }}>
-        <div style={{ width: "100%", height: "100%" }}>
-          <CeremonyStage actors={actors} occasion="first-install" dancing={phase === "dance"} height={1000} />
+      {/* 织伴开场序列（S0-S4：全身像独占舞台；右下角跳过直达首页） */}
+      {phase === "mate" && (
+        <MateWelcome
+          industry={industry}
+          onBridge={() => setPhase("entrance")}
+          onSkipAll={onDone}
+        />
+      )}
+
+      {/* 3D 仪式舞台（织伴开场谢幕后登场） */}
+      {phase !== "mate" && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end" }}>
+          <div style={{ width: "100%", height: "100%" }}>
+            <CeremonyStage actors={actors} occasion="first-install" dancing={phase === "dance"} height={1000} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 金色横幅 */}
       {phase !== "entrance" && phase !== "modal" && (
@@ -99,8 +117,8 @@ export function WelcomeCeremony({ actors, bundleName, onDone }: {
         </div>
       )}
 
-      {/* 跳过仪式 */}
-      {phase !== "modal" && (
+      {/* 跳过仪式（团队仪式期；织伴开场期由 MateWelcome 右下角按钮接管） */}
+      {phase !== "modal" && phase !== "mate" && (
         <button
           onClick={skip}
           style={{
