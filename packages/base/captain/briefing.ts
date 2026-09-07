@@ -16,6 +16,8 @@ export interface BriefFacts {
   goalDeviation?: string;
   /** v3.0 路由质量（最近一次 model.router_review；进晨报风险栏） */
   routerReview?: { overallRate: number; raiseTierScenes: string[]; totalGenerations: number };
+  /** 定制中心（覆盖层）健康：滞留草稿/超龄灰度预警（可选域，无数据不显示） */
+  overlayHealth?: { drafts: number; staleDrafts: number; staleCanaries: number };
 }
 
 export type BriefingKind = "daily" | "weekly" | "monthly" | "fleet_daily";
@@ -73,13 +75,38 @@ export async function gatherBriefFacts(app: pg.Pool, scope: Scope, sinceHours = 
         totalGenerations: Number(review[0].gens ?? 0),
       }
     : undefined;
+  const overlayHealth = await gatherOverlayHealth(app, scope);
   return {
     kpi: { 事件库规模: `${total[0]?.n ?? 0} 条（哈希链可验）` },
     actionsTop: events.map((e) => ({ action: e.action, n: Number(e.n) })),
     pendingByTier: Object.fromEntries(tiers.map((t) => [t.tier, Number(t.n)])),
     incidents: Number(incidents[0]?.n ?? 0),
     routerReview,
+    overlayHealth,
   };
+}
+
+/** 定制中心健康（覆盖层滞留预警；表不存在的环境静默降级为空——overlay 为可选域） */
+async function gatherOverlayHealth(
+  app: pg.Pool, scope: Scope,
+): Promise<BriefFacts["overlayHealth"]> {
+  try {
+    const rows = await q<{ status: string; stale: string }>(
+      app, scope,
+      `SELECT status,
+              GREATEST(0, EXTRACT(EPOCH FROM (now() - updated_at)) / 86400)::int AS stale
+         FROM tenant_overlays WHERE workspace_id=$1 AND status IN ('draft','canary')`,
+      [scope.workspaceId],
+    );
+    if (rows.length === 0) return undefined;
+    const drafts = rows.filter((r) => r.status === "draft");
+    const canaries = rows.filter((r) => r.status === "canary");
+    return {
+      drafts: drafts.length,
+      staleDrafts: drafts.filter((r) => Number(r.stale) > 3).length,
+      staleCanaries: canaries.filter((r) => Number(r.stale) > 7).length,
+    };
+  } catch { return undefined; } // tenant_overlays 未迁移的环境：晨报不受影响
 }
 
 export type BriefingFactProvider = (app: pg.Pool, scope: Scope, sinceHours: number) => Promise<BriefFacts>;
@@ -100,9 +127,14 @@ export function composeBriefing(kind: BriefingKind, f: BriefFacts, name: string)
     `二、系统动态（近窗）：${f.actionsTop.map((a) => `${a.action} ×${a.n}`).join(" · ") || "静默"}`,
     `三、请示与裁决：L2 待我裁决 ${f.pendingByTier.l2_captain ?? 0} 件 · L3 待集团 ${f.pendingByTier.l3_fleet ?? 0} 件 · **L4 请示董事长 ${f.pendingByTier.l4_chairman ?? 0} 件**`,
     `四、风险：近 7 天断点 ${f.incidents} 起${f.goalDeviation ? `；目标偏差：${f.goalDeviation}` : ""}${f.routerReview ? `；模型路由升级率 ${(f.routerReview.overallRate * 100).toFixed(1)}%（${f.routerReview.totalGenerations} 次生成）${f.routerReview.raiseTierScenes.length > 0 ? `，建议上调默认档：${f.routerReview.raiseTierScenes.join("、")}` : "，各场景健康"}` : ""}`,
+    f.overlayHealth && (f.overlayHealth.staleDrafts > 0 || f.overlayHealth.staleCanaries > 0)
+      ? `五、定制中心：⚠️ 定制草稿 ${f.overlayHealth.drafts} 份待流转（超 3 天 ${f.overlayHealth.staleDrafts} 份）· 灰度超 7 天 ${f.overlayHealth.staleCanaries} 项——请速到「定制中心 /p26」处置`
+      : f.overlayHealth
+        ? `五、定制中心：运转正常（在途草稿 ${f.overlayHealth.drafts} 份，无滞留）`
+        : null,
     `以上数字均来自事件库实时取数，可下钻溯源。`,
   ];
-  return lines.join("\n");
+  return lines.filter((l): l is string => typeof l === "string").join("\n");
 }
 
 export async function generateBriefing(
