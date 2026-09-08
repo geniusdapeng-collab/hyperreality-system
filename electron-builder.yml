@@ -25,6 +25,8 @@ extraResources:
 extraMetadata:
   main: apps/desktop/electron/main.cjs
 asar: true
+# 产物名带平台与架构（GitHub 会剥离中文，arch 后缀是用户分辨安装包的唯一依据）
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 
 # Windows：NSIS 安装包（一键安装、桌面快捷方式）
 win:

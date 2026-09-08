@@ -110,7 +110,8 @@ jobs:
         run: bash scripts/pack-electron-payload.sh --platform win --arch x64 --version "$VERSION"
 
       - name: 打包 NSIS 安装包
-        run: pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="$($env:VERSION.TrimStart('v'))"
+        shell: bash  # pwsh 会把 -c.extraMetadata.version="x" 的 -c 吞掉（ENOENT 实证），统一 bash
+        run: pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
           ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
