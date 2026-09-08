@@ -159,6 +159,21 @@ else
   echo "✓ pgvector 合入（vector.dll + control + sql）"
 fi
 
+# ---------- 5.5 内嵌 nats-server（P0-3 决策点 4：+20MB 开箱即持久化事件总线） ----------
+NATS_VER="v2.11.4"
+if [ "$STRUCTURE_ONLY" = "1" ]; then
+  mkdir -p "$PKG/nats"
+  printf 'structure-only placeholder
+' > "$PKG/nats/PLACEHOLDER-NOT-FOR-RELEASE"
+else
+  echo "→ nats-server ${NATS_VER} windows-amd64…"
+  curl -sfL --retry 4 -o "$STAGE/nats.zip" "https://github.com/nats-io/nats-server/releases/download/${NATS_VER}/nats-server-${NATS_VER}-windows-amd64.zip"
+  unzip -qo "$STAGE/nats.zip" -d "$STAGE/nats-x"
+  mkdir -p "$PKG/nats"
+  cp "$STAGE/nats-x/nats-server-${NATS_VER}-windows-amd64/nats-server.exe" "$PKG/nats/"
+  [ -f "$PKG/nats/nats-server.exe" ] || { echo "❌ nats-server.exe 未随包"; exit 1; }
+fi
+
 # ---------- 6. 启动器 ----------
 copy apps/desktop/windows/WorkLoom.bat "$PKG/WorkLoom.bat"
 

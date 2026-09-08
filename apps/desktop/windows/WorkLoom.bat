@@ -42,6 +42,10 @@ if not "%PAYLOAD_VER%"=="%INSTALLED_VER%" (
   if exist "%SUPPORT%\pg" rmdir /s /q "%SUPPORT%\pg"
   robocopy "%~dp0node" "%SUPPORT%\node" /E /NFL /NDL /NJH /NJS >nul
   robocopy "%~dp0pg" "%SUPPORT%\pg" /E /NFL /NDL /NJH /NJS >nul
+  if exist "%~dp0nats" (
+    if exist "%SUPPORT%\nats" rmdir /s /q "%SUPPORT%\nats"
+    robocopy "%~dp0nats" "%SUPPORT%\nats" /E /NFL /NDL /NJH /NJS >nul
+  )
   echo %PAYLOAD_VER%>"%SUPPORT%\VERSION"
   if exist "%SUPPORT%\.bootstrapped" del "%SUPPORT%\.bootstrapped"
   call :say "✅ 装配完成"
@@ -87,6 +91,31 @@ set "WORKLOOM_RUNTIME=%RUNTIME%"
 "%NODEBIN%\node.exe" "%RUNTIME%\scripts\desktop-bootstrap-db.mjs" >> "%LOG%" 2>&1
 if errorlevel 1 goto :die_pg
 call :say "✓ 数据库引导完成（角色/库/vector）"
+
+rem ---------- 1.5 NATS JetStream：内嵌事件总线（P0-3：开箱即持久化；缺失/失败降级 memory 不阻断） ----------
+set "NATSBIN=%SUPPORT%\nats\nats-server.exe"
+if not exist "%NATSBIN%" goto :nats_missing
+rem 已在监听则复用（复用外部 NATS 亦可——EVENT_BUS_URL 仍指向 4222）
+netstat -ano | findstr /c:":4222 " | findstr /c:"LISTENING" >nul 2>&1
+if not errorlevel 1 goto :nats_up
+call :say "→ 启动内嵌 nats-server（JetStream，用户态）…"
+if not exist "%SUPPORT%\nats-data" mkdir "%SUPPORT%\nats-data"
+start "WorkLoom-NATS" /min cmd /c ""%NATSBIN%" -js --store_dir "%SUPPORT%\nats-data" -a 127.0.0.1 -p 4222 <nul >>"%LOGDIR%\nats.log" 2>&1"
+rem 等就绪（约 10 秒）
+for /l %%i in (1,1,10) do (
+  netstat -ano | findstr /c:":4222 " | findstr /c:"LISTENING" >nul 2>&1 && goto :nats_up
+  ping -n 2 127.0.0.1 >nul
+)
+call :say "⚠ nats-server 未就绪——事件总线降级 memory（详见 %LOGDIR%\nats.log）"
+goto :nats_done
+:nats_up
+set "EVENT_BUS=nats"
+set "EVENT_BUS_URL=nats://127.0.0.1:4222"
+call :say "✓ 事件总线：nats（JetStream 持久化）"
+goto :nats_done
+:nats_missing
+call :say "⚠ 内嵌 nats-server 未随包——事件总线降级 memory"
+:nats_done
 
 rem ---------- 2. 配置：.env 默认即本地自足 ----------
 call :say "→ 配置检查…"
