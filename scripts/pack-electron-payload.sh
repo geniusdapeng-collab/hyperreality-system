@@ -66,7 +66,7 @@ for f in package.json pnpm-workspace.yaml tsconfig.base.json .env.example; do
   [ -f "$f" ] && cp "$f" "$R/"
 done
 [ -f "$R/.env.defaults" ] || cp .env.example "$R/.env.defaults"
-for d in apps/server apps/web/src apps/web/index.html apps/web/public apps/web/package.json apps/web/vite.config.ts apps/web/tsconfig.json packages/db packages/base packages/shared packages/runtime bundles; do
+for d in apps/server apps/web/src apps/web/index.html apps/web/public apps/web/package.json apps/web/vite.config.ts apps/web/tsconfig.json packages bundles; do
   [ -e "$d" ] || continue
   mkdir -p "$R/$(dirname "$d")"
   copy "$d" "$R/$(dirname "$d")/"
@@ -89,12 +89,18 @@ node scripts/pack-nm-merge.mjs "$NM_STAGE/package.json"
 NPM_REG="${NPM_REGISTRY:-https://registry.npmjs.org}"
 ( cd "$NM_STAGE" && npm install --no-audit --no-fund --legacy-peer-deps --registry="$NPM_REG" )
 copy "$NM_STAGE/node_modules" "$R/node_modules"
-# 内部工作区包以实体目录入 node_modules（seed-aipm.ts 等导入 @workloom/base，v2.0.14 实证）
-mkdir -p "$R/node_modules/@workloom"
-for pkg in shared db base runtime; do
-  [ -d "packages/$pkg" ] && copy "packages/$pkg" "$R/node_modules/@workloom/$pkg"
+# 内部工作区包以实体目录入 node_modules（v2.0.14 @workloom 缺失实证）——
+# 按各包 package.json 的 name 动态注册（行业仓有自定义包，如 @hyperreality/video-studio，
+# v1.0.0 hyperreality/workloom 冒烟 ERR_MODULE_NOT_FOUND 实证，不再硬编码 @workloom 四包）
+for pkgjson in packages/*/package.json; do
+  [ -f "$pkgjson" ] || continue
+  pname="$(node -p "try{require('./$pkgjson').name||''}catch(e){''}" 2>/dev/null)"
+  [ -n "$pname" ] || continue
+  pdir="$(dirname "$pkgjson")"
+  mkdir -p "$R/node_modules/$(dirname "$pname")"
+  copy "$pdir" "$R/node_modules/$pname"
 done
-find "$R/node_modules/@workloom" -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
+find "$R/node_modules" -maxdepth 3 -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
 
 # ---------- 3. Node 官方二进制（按平台/架构） ----------
 echo "→ Node ${NODE_VER} ${PLATFORM}-${ARCH}…"

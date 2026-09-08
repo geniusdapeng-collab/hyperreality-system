@@ -7,7 +7,7 @@
 //   过滤：workspace:* 协议（内部包，源码随包）/ electron* / playwright*（运行期不需要）
 //   冲突：后写覆盖先写并告警（monorepo 版本基本对齐，运行期可容忍）
 // 用法：node scripts/pack-nm-merge.mjs <输出 package.json 路径>
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,13 +18,16 @@ if (!OUT) { console.error("用法：node scripts/pack-nm-merge.mjs <输出路径
 const SKIP_VALUE = (v) => typeof v === "string" && v.startsWith("workspace:");
 const SKIP_NAME = (n) => /^(electron|electron-builder|@electron|playwright|@playwright)/.test(n);
 
+// packages/*/package.json 动态收集（行业仓有自定义包，如 @hyperreality/video-studio——
+// v1.0.0 硬编码四包漏收集其运行依赖实证）
+const pkgSources = readdirSync(join(ROOT, "packages"), { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => [`packages/${d.name}/package.json`, ["dependencies"]]);
+
 const sources = [
   ["package.json", ["dependencies"]],
   ["apps/server/package.json", ["dependencies"]],
-  ["packages/shared/package.json", ["dependencies"]],
-  ["packages/db/package.json", ["dependencies"]],
-  ["packages/base/package.json", ["dependencies"]],
-  ["packages/runtime/package.json", ["dependencies"]],
+  ...pkgSources,
   // 运行期工具（来自 devDependencies，仅取这两个）
   ["package.json", ["devDependencies"], ["tsx"]],
   ["apps/web/package.json", ["devDependencies"], ["vite", "@tailwindcss/vite", "@vitejs/plugin-react"]],
