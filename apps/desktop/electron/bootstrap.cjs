@@ -50,6 +50,20 @@ function run(cmd, args, opts = {}) {
   return { code: r.status ?? -1, out: String(r.stdout || ""), err: String(r.stderr || "") };
 }
 
+// runToLog：会派生守护进程的命令（pg_ctl start/stop）必须走文件句柄而非管道——
+// postmaster 继承管道写端会导致 spawnSync 永远等不到 EOF 假死
+//（v2.1.2 Windows 冒烟挂死 15 分钟实证；与 bat 版 <nul >file 2>&1 句柄脱离同纪律）
+function runToLog(cmd, args, logFile) {
+  fs.mkdirSync(path.dirname(logFile), { recursive: true });
+  const fd = fs.openSync(logFile, "a");
+  try {
+    const r = spawnSync(cmd, args, { stdio: ["ignore", fd, fd] });
+    return { code: r.status ?? -1, out: "", err: "" };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function spawnLogged(cmd, args, opts, logFile) {
   fs.mkdirSync(path.dirname(logFile), { recursive: true });
   const fd = fs.openSync(logFile, "a");
@@ -156,9 +170,10 @@ async function bootstrap(opts) {
       if (r.code !== 0) throw new Error(`initdb 失败：${r.err.slice(-300)}`);
     }
     status("→ 启动 PostgreSQL 17 …");
-    // pg_ctl 起服（Windows 上由它对管理员会话降权，v2.0.9 实证不能用 postgres.exe 直起）
-    const r = run(pgBin("pg_ctl"), pgCtlArgs(["-l", path.join(logDir, "pg.log"), "-o", `-p ${PG_PORT} -c listen_addresses=127.0.0.1`, "-w", "-t", "60", "start"]));
-    if (r.code !== 0) throw new Error(`PostgreSQL 启动失败（详见 logs/pg.log）：${r.err.slice(-300)}`);
+    // pg_ctl 起服（Windows 上由它对管理员会话降权，v2.0.9 实证不能用 postgres.exe 直起；
+    // 输出走文件句柄——postmaster 继承管道会假死，v2.1.2 实证）
+    const r = runToLog(pgBin("pg_ctl"), pgCtlArgs(["-l", path.join(logDir, "pg.log"), "-o", `-p ${PG_PORT} -c listen_addresses=127.0.0.1`, "-w", "-t", "60", "start"]), path.join(logDir, "pgctl.log"));
+    if (r.code !== 0) throw new Error(`PostgreSQL 启动失败（详见 logs/pg.log 与 logs/pgctl.log）`);
     let up = false;
     for (let i = 0; i < 40 && !up; i++) { up = pgUp(); if (!up) await sleep(1000); }
     if (!up) throw new Error("PostgreSQL 40s 内未就绪");
@@ -246,7 +261,7 @@ async function bootstrap(opts) {
     say("→ 停止服务…");
     for (const c of children) killTree(c);
     if (fs.existsSync(path.join(PGDATA, "postmaster.pid"))) {
-      run(pgBin("pg_ctl"), pgCtlArgs(["stop", "-m", "fast"]));
+      runToLog(pgBin("pg_ctl"), pgCtlArgs(["stop", "-m", "fast"]), path.join(logDir, "pgctl.log"));
     }
     say("== 已停止 ==");
   };
