@@ -53,7 +53,7 @@ copy() {
   if cp --version 2>/dev/null | grep -q GNU; then cp -aL "$1" "$2"; else cp -pRL "$1" "$2"; fi
 }
 
-echo "== 装配 Electron 自包含载荷（$VERSION · $PLATFORM-$ARCH）=="
+echo "== 装配 Electron 自包含载荷（${VERSION} · ${PLATFORM}-${ARCH}）=="
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
@@ -96,7 +96,7 @@ done
 find "$R/node_modules/@workloom" -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
 
 # ---------- 3. Node 官方二进制（按平台/架构） ----------
-echo "→ Node $NODE_VER $PLATFORM-$ARCH…"
+echo "→ Node ${NODE_VER} ${PLATFORM}-${ARCH}…"
 case "$PLATFORM-$ARCH" in
   mac-arm64) NODE_DIST="node-v${NODE_VER}-darwin-arm64.tar.gz" ;;
   mac-x64)   NODE_DIST="node-v${NODE_VER}-darwin-x64.tar.gz" ;;
@@ -165,4 +165,4 @@ else
 fi
 
 SIZE=$(du -sh "$OUT" | cut -f1)
-echo "✅ 载荷就绪：$OUT（${SIZE}）"
+echo "✅ 载荷就绪：${OUT}（${SIZE}）"

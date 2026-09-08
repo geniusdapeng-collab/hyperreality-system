@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  issues: write  # 冒烟失败留证开 Issue（沙箱无法直读 Actions 日志）
 
 env:
   VERSION: ${{ github.event.inputs.version || github.ref_name }}
