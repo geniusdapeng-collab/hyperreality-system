@@ -100,7 +100,9 @@ for pkgjson in packages/*/package.json; do
   mkdir -p "$R/node_modules/$(dirname "$pname")"
   copy "$pdir" "$R/node_modules/$pname"
 done
-find "$R/node_modules" -maxdepth 3 -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
+find "$R/node_modules" -mindepth 2 -maxdepth 4 -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
+# ⚠️ 必须 -mindepth 2：根目录本身也叫 node_modules，不带 mindepth 会整目录自毁
+#（hyperreality/workloom v1.0.0 冒烟「tsx 缺失」实证）；maxdepth 4 覆盖 @scope/pkg/node_modules
 
 # ---------- 3. Node 官方二进制（按平台/架构） ----------
 echo "→ Node ${NODE_VER} ${PLATFORM}-${ARCH}…"
