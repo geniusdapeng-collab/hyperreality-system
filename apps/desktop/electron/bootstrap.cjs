@@ -35,10 +35,11 @@ const NATS_PORT = 4222;
 /* ---------------- 日志 ---------------- */
 function makeLogger(logDir) {
   fs.mkdirSync(logDir, { recursive: true });
-  const stream = fs.createWriteStream(path.join(logDir, `launch-${Date.now()}.log`), { flags: "a" });
+  const logFile = path.join(logDir, `launch-${Date.now()}.log`);
+  // appendFileSync 同步落盘——进程异常退出（CI 冒烟失败）时日志不丢（v2.1.1 流未冲刷实证）
   return (msg) => {
     const line = `${new Date().toTimeString().slice(0, 8)} ${msg}`;
-    stream.write(line + "\n");
+    try { fs.appendFileSync(logFile, line + "\n"); } catch { /* 忽略 */ }
     console.log(line);
   };
 }

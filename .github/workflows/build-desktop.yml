@@ -127,9 +127,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $fence = [string][char]96 + [string][char]96 + [string][char]96
           $report = "## build-desktop windows 失败留证（run ${{ github.run_id }}）`n"
           Get-ChildItem "$env:TEMP\wl-smoke\logs\*.log" -ErrorAction SilentlyContinue | ForEach-Object {
-            $report += "`n### $($_.Name)（尾部 120 行）`n``````n" + (Get-Content $_.FullName -Tail 120 | Out-String) + "``````n"
+            $report += "`n### $($_.Name)（尾部 120 行）`n$fence`n" + (Get-Content $_.FullName -Tail 120 | Out-String) + "$fence`n"
           }
           $report | Out-File -Encoding utf8 smoke-report.md
           gh issue create --title "build-desktop Windows 冒烟失败留证（${{ env.VERSION }} run ${{ github.run_id }}）" --body-file smoke-report.md

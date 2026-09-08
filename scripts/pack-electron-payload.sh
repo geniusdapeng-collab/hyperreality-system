@@ -49,8 +49,9 @@ fetch() { # fetch <out> <url...>：按序回退
 }
 
 # 跨平台解引用拷贝：macOS 自带 BSD cp 无 -a（用 -pRL 跟随符号链接），GNU cp 用 -aL
+# 必须 "$@" 透传——调用方有 glob 多文件展开（v2.1.1 实证 $1/$2 只拷首文件致 node.exe 丢失）
 copy() {
-  if cp --version 2>/dev/null | grep -q GNU; then cp -aL "$1" "$2"; else cp -pRL "$1" "$2"; fi
+  if cp --version 2>/dev/null | grep -q GNU; then cp -aL "$@"; else cp -pRL "$@"; fi
 }
 
 echo "== 装配 Electron 自包含载荷（${VERSION} · ${PLATFORM}-${ARCH}）=="
