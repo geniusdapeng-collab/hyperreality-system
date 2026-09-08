@@ -1,6 +1,8 @@
+# 【已降级为应急回退线，v2.1.0 起】唯一发行形态为 build-desktop.yml 的
+# Electron 完全自包含安装包（DMG/NSIS，客户端窗口即产品）。
+# 本管线（zip 浏览器壳）不再随 tag 触发，仅保留手动 dispatch 应急；产物禁止上传正式 Release。
 # ============================================================
 # WorkLoom macOS 发行管线（W2 / D16）
-# 触发：推 tag v*（或手动 workflow_dispatch）
 # 产物：WorkLoom-macOS.zip + .sha256 → GitHub Release
 # 验收：macos-14 runner 上以 WORKLOOM_SMOKE=1 跑启动器首航冒烟
 #       （PG 起停 + 迁移 + 种子 + server/web 健康检查）通过才发布
@@ -8,12 +10,10 @@
 name: release-macos
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "发布版本号（如 v1.1.0，仅手动触发时需要）"
+        description: "发布版本号（如 v1.1.0，仅手动触发；应急回退，禁止上传正式 Release）"
         required: false
         default: "v1.1.0"
 

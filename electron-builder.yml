@@ -1,8 +1,9 @@
-# WorkLoom 桌面客户端 · electron-builder 分发配置
-# 用法：pnpm app:dist（先 pnpm -C apps/web build；产物在 release/）
-# 说明：本配置面向"客户机/开发机克隆仓库后自助打包"。客户端运行时依赖本仓
-#       server（pnpm -C apps/server start）与 PG（pnpm setup 初始化）——
-#       完全自包含（内置 Node+PG）的分发形态沿用 apps/desktop/WorkLoom.app 路线。
+# WorkLoom 桌面客户端 · electron-builder 分发配置（完全自包含形态）
+# 用法：先 bash scripts/pack-electron-payload.sh 装配 dist-payload/，再 pnpm app:dist
+# 说明（v2.1.0 起）：客户端完全自包含——extraResources 打入 Node 24 + PostgreSQL 17
+#       (+pgvector) + nats-server + 产品载荷，用户机零依赖；首启由
+#       apps/desktop/electron/bootstrap.cjs 自动完成装配→initdb→迁移→种子→起服务，
+#       客户端窗口即产品（不再打开外部浏览器）。
 appId: com.workloom.im
 productName: WorkLoom 织元
 copyright: Copyright © 2026 WorkLoom
@@ -12,11 +13,20 @@ directories:
 files:
   - apps/desktop/electron/**/*
   - package.json
+extraResources:
+  - from: dist-payload/runtime
+    to: payload/runtime
+  - from: dist-payload/node
+    to: payload/node
+  - from: dist-payload/pg
+    to: payload/pg
+  - from: dist-payload/nats
+    to: payload/nats
 extraMetadata:
   main: apps/desktop/electron/main.cjs
 asar: true
 
-# Windows：NSIS 安装包（客户机上一键安装、桌面快捷方式、开机自启可选）
+# Windows：NSIS 安装包（一键安装、桌面快捷方式）
 win:
   target: nsis
   icon: apps/desktop/electron/assets/icon.png
@@ -28,16 +38,8 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: WorkLoom 织元
 
-# macOS：DMG（Apple Silicon + Intel 双架构）
+# macOS：DMG（按架构分包：arm64 / x64——载荷内 Node 为架构专属，不打 universal）
 mac:
   target: dmg
   category: public.app-category.business
   icon: apps/desktop/electron/assets/icon.png
-
-# Linux：AppImage（免安装单文件）+ deb
-linux:
-  target:
-    - AppImage
-    - deb
-  category: Office
-  icon: apps/desktop/electron/assets

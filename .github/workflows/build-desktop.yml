@@ -1,63 +1,141 @@
-# WorkLoom 桌面客户端 · Windows/macOS 安装包 CI
+# WorkLoom 桌面客户端 · 完全自包含安装包 CI（唯一发行形态，v2.1.0 起）
 # 触发：打 tag（v*）或手动 dispatch；产出上传 GitHub Release
-# 产物：Windows NSIS 安装包（.exe）+ macOS DMG（.dmg，双架构）
+# 产物：
+#   macOS   WorkLoom 织元-<ver>-arm64.dmg / -x64.dmg（Electron 自包含：Node+PG17+pgvector+nats+载荷）
+#   Windows WorkLoom 织元 Setup <ver>.exe（NSIS，同口径自包含）
+# 冒烟验收：两平台均在打包后以 bootstrap.cjs --smoke 跑首启全流程
+#   （装配→initdb→迁移→seed-aipm 种子→起服务→健康检查），全绿才上传 Release。
 name: build-desktop
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 v2.1.0）"
+        required: true
+        default: "v2.1.0"
 
 permissions:
   contents: write
 
+env:
+  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            builder: --win nsis
-            artifact: release/*.exe
-          - os: macos-latest
-            builder: --mac dmg --universal
-            artifact: release/*.dmg
-    runs-on: ${{ matrix.os }}
+  macos:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+        with: { node-version: 24, cache: pnpm }
 
-      - name: 安装依赖（electron-builder 打包用，无需数据库）
-        run: pnpm install --frozen-lockfile=false
-        env:
-          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+      - name: 安装依赖 + 构建 web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -C apps/web build
 
-      - name: 构建安装包
-        run: pnpm exec electron-builder ${{ matrix.builder }} --publish never
+      - name: 装配自包含载荷（darwin-arm64）
+        run: bash scripts/pack-electron-payload.sh --platform mac --arch arm64 --version "$VERSION"
+
+      - name: 打包 DMG（arm64）
+        run: pnpm exec electron-builder --mac dmg --arm64 --publish never -c.extraMetadata.version="${VERSION#v}"
         env:
-          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
-          # 未配置代码签名：Windows 跳过 signtool、macOS 跳过 notarize
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      - name: 上传 Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: 冒烟验收（首启自愈全流程：装配→initdb→迁移→seed-aipm→起服务→健康检查）
+        run: node apps/desktop/electron/bootstrap.cjs --smoke --resources dist-payload --support /tmp/wl-smoke
+        timeout-minutes: 10
+
+      - name: 装配自包含载荷（darwin-x64）
+        run: bash scripts/pack-electron-payload.sh --platform mac --arch x64 --version "$VERSION"
+
+      - name: 打包 DMG（x64）
+        run: pnpm exec electron-builder --mac dmg --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## build-desktop macos 失败留证（run ${{ github.run_id }}）"
+            for f in /tmp/wl-smoke/logs/launch-*.log /tmp/wl-smoke/logs/pg.log /tmp/wl-smoke/logs/server.log /tmp/wl-smoke/logs/web.log; do
+              [ -f "$f" ] || continue
+              echo ""; echo "### $(basename "$f")（尾部 120 行）"; echo '```'
+              tail -120 "$f"; echo '```'
+            done
+          } > smoke-report.md
+          gh issue create --title "build-desktop macOS 冒烟失败留证（${{ env.VERSION }} run ${{ github.run_id }}）" --body-file smoke-report.md || true
+
+      - name: 上传产物（macOS 双架构 DMG + 安装说明）
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact }}
-          generateReleaseNotes: true
+          files: release/*.dmg
+          name: ${{ env.VERSION }}
+          generate_release_notes: true
+          body: |
+            ## 安装说明
+            **macOS（Apple Silicon，M 系列芯片）**：下载 `WorkLoom 织元-*-arm64.dmg` → 拖入「应用程序」→ 首次打开右键→「打开」（仅首次需要）→ 首启自动初始化约 1 分钟 → 客户端窗口自动出现。
+            **macOS（Intel 芯片）**：下载 `WorkLoom 织元-*-x64.dmg`，其余同上。
+            **Windows**：下载 `WorkLoom 织元 Setup *.exe` → 双击安装 → SmartScreen 点「更多信息 → 仍要运行」（仅首次需要）→ 桌面双击「WorkLoom 织元」→ 首启自动初始化约 1 分钟。
+            > 开箱即「体验模式」：内置 AI 产品经理示例团队（织元产品部，14 名数字员工在岗）+ 离线可用；体验完可一键清理，按「配置引导」定制自己行业版，填入模型 Key 即可真实使用。
+            > 客户端完全自包含（内嵌 Node 24 + PostgreSQL 17 + pgvector + 事件总线），无需安装任何依赖、不打开外部浏览器。
 
-      - name: 上传构件（手动触发时也可下载）
-        uses: actions/upload-artifact@v4
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+
+      - name: 编译 pgvector + 同源 PG 运行时（vendor/pg-win + vendor/pgvector-win）
+        shell: pwsh
+        run: scripts/build-pgvector-win.ps1
+
+      - name: 安装依赖 + 构建 web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -C apps/web build
+
+      - name: 装配自包含载荷（win-x64）
+        shell: bash
+        run: bash scripts/pack-electron-payload.sh --platform win --arch x64 --version "$VERSION"
+
+      - name: 打包 NSIS 安装包
+        run: pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="$($env:VERSION.TrimStart('v'))"
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: 冒烟验收（首启自愈全流程）
+        run: node apps/desktop/electron/bootstrap.cjs --smoke --resources dist-payload --support "$env:TEMP\wl-smoke"
+        shell: pwsh
+        timeout-minutes: 15
+
+      - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
+        if: failure()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $report = "## build-desktop windows 失败留证（run ${{ github.run_id }}）`n"
+          Get-ChildItem "$env:TEMP\wl-smoke\logs\*.log" -ErrorAction SilentlyContinue | ForEach-Object {
+            $report += "`n### $($_.Name)（尾部 120 行）`n``````n" + (Get-Content $_.FullName -Tail 120 | Out-String) + "``````n"
+          }
+          $report | Out-File -Encoding utf8 smoke-report.md
+          gh issue create --title "build-desktop Windows 冒烟失败留证（${{ env.VERSION }} run ${{ github.run_id }}）" --body-file smoke-report.md
+          if ($LASTEXITCODE -ne 0) { Write-Host "issue 创建失败（忽略）" }
+
+      - name: 上传产物（Windows NSIS）
+        uses: softprops/action-gh-release@v2
         with:
-          name: desktop-${{ matrix.os }}
-          path: ${{ matrix.artifact }}
-          retention-days: 14
+          files: release/*.exe
+          name: ${{ env.VERSION }}
+          generate_release_notes: true

@@ -79,8 +79,8 @@ for d in apps/server apps/web/src apps/web/index.html apps/web/public apps/web/p
 done
 mkdir -p "$R/scripts"
 copy scripts/migrate.ts "$R/scripts/"
-copy scripts/seed.ts "$R/scripts/"
 copy scripts/desktop-bootstrap-db.mjs "$R/scripts/"
+for sf in scripts/seed*.ts; do copy "$sf" "$R/scripts/"; done  # 全部行业种子随包（按 DESKTOP_SEED_SCRIPT 选用）
 printf '%s\n' "$VERSION" > "$R/VERSION"
 # 源码不携带 node_modules：各包自带 pnpm 链接版会抢占解析且缺嵌套依赖（v2.0.8 esbuild 缺失实证），
 # 运行期统一由下方 npm 扁平化安装的根 node_modules 提供

@@ -130,8 +130,10 @@ call :say "→ 首航引导：数据库迁移 + 演示数据种子（约 30 秒�
 pushd "%RUNTIME%"
 call "%TSX%" --env-file=.env scripts/migrate.ts >> "%LOG%" 2>&1
 if errorlevel 1 ( popd & goto :die_migrate )
-set BUNDLE_DIR=bundles/hotel
-call "%TSX%" --env-file=.env scripts/seed.ts >> "%LOG%" 2>&1
+rem 种子脚本按仓配置（.env.defaults DESKTOP_SEED_SCRIPT；不在 base-sync 同步范围）
+set "SEED_SCRIPT=scripts/seed-aipm.ts"
+for /f "tokens=1,* delims==" %%a in ('findstr /b "DESKTOP_SEED_SCRIPT=" "%RUNTIME%\.env.defaults" 2^>nul') do set "SEED_SCRIPT=%%b"
+call "%TSX%" --env-file=.env "%SEED_SCRIPT%" >> "%LOG%" 2>&1
 if errorlevel 1 ( popd & goto :die_migrate )
 popd
 echo done>"%SUPPORT%\.bootstrapped"

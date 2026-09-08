@@ -58,7 +58,8 @@ for d in apps/server apps/web packages bundles; do
   rsync -aR --exclude node_modules --exclude dist --exclude .dsh-home --exclude 'dsh-gate/out' "$d" "$R/"
 done
 mkdir -p "$R/scripts"
-cp scripts/migrate.ts scripts/seed.ts "$R/scripts/"
+cp scripts/migrate.ts scripts/desktop-bootstrap-db.mjs "$R/scripts/"
+cp scripts/seed*.ts "$R/scripts/"  # 全部行业种子随包（按 .env.defaults DESKTOP_SEED_SCRIPT 选用）
 printf '%s\n' "$VERSION" > "$R/VERSION"
 
 # 3. 依赖与 web 构建产物（需在装配机先 pnpm install + build）
