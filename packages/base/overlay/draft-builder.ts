@@ -4,7 +4,8 @@
  * 接待班/小织把客户的自然语言诉求澄清为结构化意图（L1 产物），
  * 本模块负责：意图 → 覆盖项草稿（类型安全转换）→ 语义校验 → 存草稿 →（可选）直接进流水线。
  * 设计纪律：
- *  - 意图白名单六种（tone/faq/threshold/crew/skill/brand）——AI 只能在这些槽位里填，防"创意越界"；
+ *  - 意图白名单九种（tone/faq/threshold/crew/skill/brand + P0-2 扩编 service-item/business-rule/forbidden-add）
+ *    ——AI 只能在这些槽位里填，防"创意越界"；business-rule 只调 biz/ 前缀数值参数，永不生成围栏 DSL；
  *  - 每条意图都经 parseOverlay 全量校验，越界即拒（与手工编辑同一道闸）；
  *  - 生成的草稿一律带 source: "l1-intake" 溯源标记，账本可查"这句话是谁说进来的"。
  */
@@ -13,7 +14,7 @@ import { parseOverlay, type OverlayDoc, type OverlayItem } from "./model.js";
 import { saveDraft, type OverlayScope } from "./store.js";
 import type { Queryable } from "./pipeline.js";
 
-/** L1 结构化意图（AI 澄清产物；kind 白名单六种） */
+/** L1 结构化意图（AI 澄清/文档抽取产物；kind 白名单九种） */
 export const L1IntentSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("tone"),
@@ -53,6 +54,33 @@ export const L1IntentSchema = z.discriminatedUnion("kind", [
     field: z.enum(["name", "logo", "theme", "mate-name"]),
     value: z.string().min(1).max(200),
   }),
+  /* ---- P0-2 扩编（六种 → 九种）：文档/对话录入高频产物 ---- */
+  z.object({
+    kind: z.literal("service-item"),
+    /** 服务目录条目：例「红糖姜茶，免费，机器人送」 */
+    name: z.string().min(1).max(100),
+    /** 价格（0=免费）；缺省=未定价（意图卡上高亮待客户确认） */
+    price: z.number().min(0).max(1_000_000).optional(),
+    unit: z.string().max(20).optional(),
+    category: z.string().max(50).optional(),
+    /** 机器人/无人配送可达（酒店等行业语义；其他行业忽略） */
+    robot: z.boolean().optional(),
+    note: z.string().max(500).optional(),
+  }),
+  z.object({
+    kind: z.literal("business-rule"),
+    /** 营业规则数值参数（biz/ 前缀阈值键；只调参数，不生成围栏 DSL——围栏变更走 L3 人审） */
+    key: z.string().regex(/^[a-z0-9][a-z0-9/-]{0,80}$/),
+    value: z.number(),
+    /** 基座允许区间（AI 从阈值目录读出后填入；越界即拒） */
+    bounds: z.object({ min: z.number(), max: z.number() }),
+    note: z.string().max(200).optional(),
+  }),
+  z.object({
+    kind: z.literal("forbidden-add"),
+    /** 禁用表达/禁用承诺（写入档案 forbidden 集合，与 L1.6 硬约束同源；只增不删） */
+    rule: z.string().min(2).max(300),
+  }),
 ]);
 export type L1Intent = z.infer<typeof L1IntentSchema>;
 
@@ -83,6 +111,26 @@ export function intentToItems(intent: L1Intent): OverlayItem[] {
         : [{ type: "skill", op: "params", path: `skills/${intent.name}`, value: { enabled: true } }];
     case "brand":
       return [{ type: "brand", op: "override", path: intent.field, value: intent.value }];
+    case "service-item":
+      return [{
+        type: "kb", op: "append", path: "service-catalog",
+        value: {
+          q: intent.name, a: intent.note?.trim() || "服务目录条目（L1 配置录入）",
+          price: intent.price ?? null, unit: intent.unit ?? null,
+          category: intent.category ?? null, robot: intent.robot ?? null,
+          source: "l1-intake",
+        },
+      }];
+    case "business-rule":
+      return [{
+        type: "threshold", op: "override", path: `biz/${intent.key}`,
+        value: intent.value, bounds: intent.bounds,
+      }];
+    case "forbidden-add":
+      return [{
+        type: "kb", op: "append", path: "forbidden",
+        value: { q: intent.rule, a: "禁用表达（L1 配置录入）", rule: intent.rule, source: "l1-intake" },
+      }];
   }
 }
 

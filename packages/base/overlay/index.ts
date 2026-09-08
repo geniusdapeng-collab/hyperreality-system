@@ -5,3 +5,4 @@ export * from "./assembly-hook.js";
 export * from "./pipeline.js";
 export * from "./rebase.js";
 export * from "./draft-builder.js";
+export * from "./doc-intake.js";
