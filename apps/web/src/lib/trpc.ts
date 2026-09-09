@@ -17,7 +17,12 @@ export function setToken(token: string): void {
 }
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
 }
+
+const REFRESH_KEY = "workloom.accounts.refresh";
+export function getRefreshToken(): string | null { return localStorage.getItem(REFRESH_KEY); }
+export function setRefreshToken(token: string): void { localStorage.setItem(REFRESH_KEY, token); }
 
 export const trpc: ReturnType<typeof createTRPCClient<AppRouter>> = createTRPCClient<AppRouter>({
   links: [

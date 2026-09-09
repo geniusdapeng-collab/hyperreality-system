@@ -56,7 +56,7 @@ export type Gesture = (typeof GESTURES)[number];
 export const GESTURE_WEIGHT: Record<Gesture, number> = { approve: 1, edit: 2, reject: 3 };
 
 /** 人类成员角色（F5.6 三端权限一致） */
-export const MEMBER_ROLES = ["owner", "manager", "readonly", "group", "channel"] as const;
+export const MEMBER_ROLES = ["owner", "manager", "staff", "readonly", "group", "channel"] as const;
 export type MemberRole = (typeof MEMBER_ROLES)[number];
 
 /** 版本能力矩阵（F7.2）：社区版 / Pro / Teams / VPC */

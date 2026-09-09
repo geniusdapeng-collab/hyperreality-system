@@ -31,6 +31,7 @@
     "./dev-bridge": "./dev-bridge/index.ts",
     "./overlay": "./overlay/index.ts",
     "./event-bus": "./event-bus/index.ts",
+    "./accounts": "./accounts/index.ts",
     "./asset-cms": "./asset-cms/index.ts",
     "./publish-rpa": "./publish-rpa/index.ts",
     "./social-listening": "./social-listening/index.ts",
