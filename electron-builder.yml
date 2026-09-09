@@ -13,15 +13,26 @@ directories:
 files:
   - apps/desktop/electron/**/*
   - package.json
+# 关键纪律（v2.2.0 漏包实证）：electron-builder 的 extraResources 默认跳过
+# **/node_modules/**——载荷的扁平化运行依赖（tsx/hono/pg）会被静默丢弃，
+# 产物外观正常但首启装配必崩。每个资源块必须显式 filter: ["**/*"] 强制全量复制。
 extraResources:
   - from: dist-payload/runtime
     to: payload/runtime
+    filter:
+      - "**/*"
   - from: dist-payload/node
     to: payload/node
+    filter:
+      - "**/*"
   - from: dist-payload/pg
     to: payload/pg
+    filter:
+      - "**/*"
   - from: dist-payload/nats
     to: payload/nats
+    filter:
+      - "**/*"
 extraMetadata:
   main: apps/desktop/electron/main.cjs
 asar: true
