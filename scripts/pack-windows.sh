@@ -133,7 +133,7 @@ if [ -f "vendor/pg-win/bin/postgres.exe" ]; then
   echo "→ PG 运行时：vendor/pg-win（与 pgvector 编译底座同源，ABI 一致）…"
   cp -a vendor/pg-win/bin vendor/pg-win/lib vendor/pg-win/share "$PKG/pg/"
 else
-  echo "→ PG 运行时：zonky $PG_ZONKY_VER（回退；注意与 pgvector ABI 需同小版本）…"
+  echo "→ PG 运行时：zonky ${PG_ZONKY_VER}（回退；注意与 pgvector ABI 需同小版本）…"
   fetch "${ZONKY_URLS[@]}" -o "$STAGE/pg.jar"
   mkdir -p "$STAGE/pgjar"
   if command -v unzip >/dev/null; then unzip -q -o "$STAGE/pg.jar" -d "$STAGE/pgjar"; else tar -xf "$STAGE/pg.jar" -C "$STAGE/pgjar"; fi

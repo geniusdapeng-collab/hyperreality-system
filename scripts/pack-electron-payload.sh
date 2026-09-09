@@ -156,7 +156,7 @@ else
 fi
 
 # ---------- 5. nats-server（JetStream；+20MB 开箱即持久化事件总线） ----------
-echo "→ nats-server $NATS_VER…"
+echo "→ nats-server ${NATS_VER}…"
 mkdir -p "$OUT/nats"
 case "$PLATFORM-$ARCH" in
   mac-arm64) NATS_DIST="nats-server-${NATS_VER}-darwin-arm64.tar.gz" ;;
@@ -173,6 +173,24 @@ else
   cp "$STAGE/nats-x/nats-server-${NATS_VER}-"*/nats-server "$OUT/nats/"
   chmod +x "$OUT/nats/nats-server"
 fi
+
+# ---------- 9. 载荷自检（v2.2.1 实证：NATS 段变量粘连致脚本中途异常但步骤未失败，
+#      DMG 带着残缺载荷照出——装配脚本必须自证完整，防"静默半成品"） ----------
+for f in runtime/node_modules/tsx/package.json runtime/node_modules/hono/package.json \
+         runtime/scripts/migrate.ts; do
+  [ -f "$OUT/$f" ] || { echo "❌ 载荷自检失败：$f 缺失"; exit 1; }
+done
+# 种子脚本按仓各异（seed-aipm/seed-trading/seed-video…），存在其一即可
+compgen -G "$OUT/runtime/scripts/seed*.ts" > /dev/null || { echo "❌ 载荷自检失败：runtime/scripts/seed*.ts 缺失"; exit 1; }
+if [ "$PLATFORM" = "win" ]; then
+  [ -f "$OUT/nats/nats-server.exe" ] || { echo "❌ 载荷自检失败：nats/nats-server.exe 缺失"; exit 1; }
+  [ -f "$OUT/node/node.exe" ] || { echo "❌ 载荷自检失败：node/node.exe 缺失"; exit 1; }
+else
+  [ -f "$OUT/nats/nats-server" ] || { echo "❌ 载荷自检失败：nats/nats-server 缺失"; exit 1; }
+  [ -f "$OUT/node/bin/node" ] || { echo "❌ 载荷自检失败：node/bin/node 缺失"; exit 1; }
+  [ -f "$OUT/pg/bin/initdb" ] || { echo "❌ 载荷自检失败：pg/bin/initdb 缺失"; exit 1; }
+fi
+echo "✓ 载荷自检通过"
 
 SIZE=$(du -sh "$OUT" | cut -f1)
 echo "✅ 载荷就绪：${OUT}（${SIZE}）"
