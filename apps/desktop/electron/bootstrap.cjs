@@ -215,8 +215,13 @@ async function bootstrap(opts) {
   if (!fs.existsSync(envFile)) {
     fs.copyFileSync(path.join(RUNTIME, ".env.defaults"), envFile);
     const secret = `wl-${crypto.randomBytes(24).toString("hex")}`;
-    fs.writeFileSync(envFile, fs.readFileSync(envFile, "utf-8").replace(/^JWT_SECRET=.*/m, `JWT_SECRET=${secret}`));
-    say("→ 生成默认配置 .env（JWT 密钥已随机化）");
+    const piiSalt = `pii-${crypto.randomBytes(24).toString("hex")}`;
+    // D-SEC2 交付审计实证：PII_SALT 此前全客户共用仓内默认值——
+    // PII 占位符为 HMAC(盐)，盐相同则跨客户可关联、且盐值公开在仓库里，必须随首启一机一盐
+    fs.writeFileSync(envFile, fs.readFileSync(envFile, "utf-8")
+      .replace(/^JWT_SECRET=.*/m, `JWT_SECRET=${secret}`)
+      .replace(/^PII_SALT=.*/m, `PII_SALT=${piiSalt}`));
+    say("→ 生成默认配置 .env（JWT 密钥与 PII 盐已随机化）");
   }
 
   /* ---------- 3. 首启引导：迁移 + 种子（幂等） ---------- */

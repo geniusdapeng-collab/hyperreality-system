@@ -25,7 +25,14 @@ const app = new Hono();
 app.use(
   "*",
   cors({
-    origin: (origin) => origin ?? "*", // 本地开发：vite dev server 代理外也允许直连
+    // 桌面自包含/生产：仅本机回环来源（web 从 127.0.0.1:5173 跨端口调 8787 属跨域，
+    // 必须显式放行回环）；开发期放宽任意来源直连（D-SEC1 交付审计实证：反射 * + 0.0.0.0 = 局域网裸奔）
+    origin: (origin) => {
+      if (process.env.NODE_ENV === "production") {
+        return origin && /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin) ? origin : null;
+      }
+      return origin ?? "*";
+    },
     credentials: true,
   }),
 );
@@ -89,8 +96,11 @@ if (existsSync(webcDist)) {
   console.log(`apps/webc 静态托管已挂载：/app/c → ${webcDist}`);
 }
 
-serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`WorkLoom IM 底座 server 已启动：http://localhost:${info.port}（tRPC: /trpc/*，C 端网关: /c/*）`);
+// 桌面自包含默认仅本机回环（D-SEC1 交付审计实证：@hono/node-server 缺省绑 0.0.0.0，
+// 客户机上等于对局域网开放 API）；官方服务端部署用 SERVER_HOST=0.0.0.0 显式放开
+const host = process.env.SERVER_HOST ?? "127.0.0.1";
+serve({ fetch: app.fetch, port, hostname: host }, (info) => {
+  console.log(`WorkLoom IM 底座 server 已启动：http://${host}:${info.port}（tRPC: /trpc/*，C 端网关: /c/*）`);
 });
 
 // 技能保鲜环 · 夜班窗口自动同步（机制即自动，客户零操作）：
