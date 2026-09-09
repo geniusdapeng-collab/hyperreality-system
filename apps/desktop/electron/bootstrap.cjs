@@ -134,7 +134,10 @@ async function bootstrap(opts) {
       fs.rmSync(cacheDir, { recursive: true, force: true });
       fs.mkdirSync(cacheDir, { recursive: true });
       // 两平台 tar 均可信：macOS 自带 bsdtar；Win10 1803+ System32 自带 tar.exe（bsdtar）
-      const r = run("tar", ["-xzf", archiveFile, "-C", cacheDir]);
+      // 注意：必须以 cwd + 相对文件名调用——GNU tar（CI 的 Git Bash）会把
+      // "D:\..." 盘符误判为远程主机（host:path 语法，报 Cannot connect to D:，v2.2.1 实证）；
+      // host:path 解析只作用于 -f 参数，-C 绝对路径不受影响
+      const r = run("tar", ["-xzf", path.basename(archiveFile), "-C", cacheDir], { cwd: resourcesDir });
       if (r.code !== 0) throw new Error(`载荷解压失败：${(r.err || r.out).slice(-300)}`);
       status("✅ 载荷解压完成");
     }
