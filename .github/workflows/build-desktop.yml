@@ -82,10 +82,10 @@ jobs:
           generate_release_notes: true
           body: |
             ## 安装说明
-            **macOS（Apple Silicon，M 系列芯片）**：下载 `WorkLoom 织元-*-arm64.dmg` → 拖入「应用程序」→ 首次打开右键→「打开」（仅首次需要）→ 首启自动初始化约 1 分钟 → 客户端窗口自动出现。
-            **macOS（Intel 芯片）**：下载 `WorkLoom 织元-*-x64.dmg`，其余同上。
-            **Windows**：下载 `WorkLoom 织元 Setup *.exe` → 双击安装 → SmartScreen 点「更多信息 → 仍要运行」（仅首次需要）→ 桌面双击「WorkLoom 织元」→ 首启自动初始化约 1 分钟。
-            > 开箱即「体验模式」：内置 AI 产品经理示例团队（织元产品部，14 名数字员工在岗）+ 离线可用；体验完可一键清理，按「配置引导」定制自己行业版，填入模型 Key 即可真实使用。
+            **macOS（Apple Silicon，M 系列芯片）**：下载 `*-mac-arm64.dmg`；**macOS（Intel 芯片）**：下载 `*-mac-x64.dmg`。
+            → 拖入「应用程序」→ **首次打开前在「终端」执行一次** `xattr -cr "/Applications/WorkLoom 织元.app"`（清除下载隔离属性——未签名应用必做，否则报"已损坏"；也可双击报错后去 系统设置→隐私与安全性→安全性 点「仍要打开」）→ 双击打开 → 首启自动初始化约 1 分钟 → 客户端窗口自动出现。
+            **Windows**：下载 `*-win-x64.exe` → 双击安装 → SmartScreen 点「更多信息 → 仍要运行」（仅首次需要）→ 桌面双击「WorkLoom 织元」→ 首启自动初始化约 1 分钟。
+            > 开箱即「体验模式」：默认游客身份，无需登录即可完整体验（数字人/汇报/各页面）；进入「配置引导」正式开通时才登录注册。体验完可一键清理，填入模型 Key 即可真实使用。
             > 客户端完全自包含（内嵌 Node 24 + PostgreSQL 17 + pgvector + 事件总线），无需安装任何依赖、不打开外部浏览器。
 
   windows:
