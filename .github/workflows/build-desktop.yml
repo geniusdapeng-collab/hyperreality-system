@@ -46,18 +46,16 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      - name: 拆包验收（DMG 内 .app 必须含完整 node_modules——v2.2.0 漏包实证，防 extraResources 静默丢依赖）
+      - name: 拆包验收 + 冒烟（对 .app 内载荷归档跑首启全流程——验证用户拿到的内容）
         run: |
-          APP="release/mac-arm64/WorkLoom 织元.app/Contents/Resources/payload"
-          for f in runtime/node_modules/tsx/package.json runtime/node_modules/hono/package.json runtime/scripts/migrate.ts; do
-            test -f "$APP/$f" || { echo "❌ 拆包验收失败：$f 未进包"; exit 1; }
-          done
-          echo "✅ 拆包验收通过（arm64 .app 载荷完整）"
-
-      - name: 冒烟验收（对拆包后的 .app 载荷跑首启全流程——验证的就是用户拿到的内容）
-        run: node apps/desktop/electron/bootstrap.cjs --smoke --resources "release/mac-arm64/WorkLoom 织元.app/Contents/Resources/payload" --support /tmp/wl-smoke
-        timeout-minutes: 10
-
+          RES="release/mac-arm64/WorkLoom 织元.app/Contents/Resources"
+          test -f "$RES/payload.tar.gz" || { echo "❌ 拆包验收失败：payload.tar.gz 未进包"; exit 1; }
+          test -f "$RES/payload/PAYLOAD_VERSION" || { echo "❌ 拆包验收失败：PAYLOAD_VERSION 未进包（缺失将致每次启动重解压）"; exit 1; }
+          tar -tzf "$RES/payload.tar.gz" | grep -q "runtime/node_modules/tsx/package.json" || { echo "❌ 拆包验收失败：归档内缺 tsx"; exit 1; }
+          tar -tzf "$RES/payload.tar.gz" | grep -q "nats/nats-server" || { echo "❌ 拆包验收失败：归档内缺 nats"; exit 1; }
+          echo "✅ 拆包验收通过（arm64 .app 载荷归档完整）"
+          node apps/desktop/electron/bootstrap.cjs --smoke --resources "$RES" --support /tmp/wl-smoke
+        timeout-minutes: 12
       - name: 装配自包含载荷（darwin-x64）
         run: bash scripts/pack-electron-payload.sh --platform mac --arch x64 --version "$VERSION"
 
@@ -66,12 +64,12 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      - name: 拆包验收（x64 .app 载荷完整性；arm64 runner 无法跑 x64 二进制，文件级核验）
+      - name: 拆包验收（x64 .app 载荷归档完整性；arm64 runner 无法跑 x64 二进制，文件级核验）
         run: |
-          APP="release/mac/WorkLoom 织元.app/Contents/Resources/payload"
-          test -f "$APP/runtime/node_modules/tsx/package.json" || { echo "❌ x64 漏 node_modules"; exit 1; }
+          RES="release/mac/WorkLoom 织元.app/Contents/Resources"
+          test -f "$RES/payload.tar.gz" || { echo "❌ x64 载荷归档未进包"; exit 1; }
+          tar -tzf "$RES/payload.tar.gz" | grep -q "runtime/node_modules/tsx/package.json" || { echo "❌ x64 归档内缺 tsx"; exit 1; }
           echo "✅ x64 拆包验收通过"
-
       - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
         if: failure()
         shell: bash
@@ -130,14 +128,15 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
           ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
 
-      - name: 拆包验收 + 冒烟（对 win-unpacked 载荷跑首启全流程——验证用户拿到的内容）
+      - name: 拆包验收 + 冒烟（对 win-unpacked 载荷归档跑首启全流程——验证用户拿到的内容）
         shell: bash
         run: |
-          APP="release/win-unpacked/resources/payload"
-          test -f "$APP/runtime/node_modules/tsx/package.json" || { echo "❌ 拆包验收失败：tsx 未进包"; exit 1; }
-          node apps/desktop/electron/bootstrap.cjs --smoke --resources "$APP" --support "${TEMP}/wl-smoke"
+          RES="release/win-unpacked/resources"
+          test -f "$RES/payload.tar.gz" || { echo "❌ 拆包验收失败：payload.tar.gz 未进包"; exit 1; }
+          test -f "$RES/payload/PAYLOAD_VERSION" || { echo "❌ 拆包验收失败：PAYLOAD_VERSION 未进包（缺失将致每次启动重解压）"; exit 1; }
+          tar -tzf "$RES/payload.tar.gz" | grep -q "runtime/node_modules/tsx/package.json" || { echo "❌ 拆包验收失败：归档内缺 tsx"; exit 1; }
+          node apps/desktop/electron/bootstrap.cjs --smoke --resources "$RES" --support "${TEMP}/wl-smoke"
         timeout-minutes: 15
-
       - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
         if: failure()
         shell: pwsh

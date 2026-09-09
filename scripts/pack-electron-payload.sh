@@ -192,5 +192,14 @@ else
 fi
 echo "✓ 载荷自检通过"
 
+# ---------- 10. 载荷压缩包（electron-builder extraResources 对 **/node_modules/** 有硬排除，
+#      filter: ["**/*"] 无效——v2.2.0/v2.2.1 三轮实证；改单文件归档随包，
+#      不受目录过滤规则影响，bootstrap 首启按需解压） ----------
+echo "$VERSION" > "$OUT/PAYLOAD_VERSION"
+rm -f dist-payload.tar.gz
+tar -czf dist-payload.tar.gz -C "$OUT" .
+[ -s dist-payload.tar.gz ] || { echo "❌ 载荷归档失败"; exit 1; }
+
 SIZE=$(du -sh "$OUT" | cut -f1)
-echo "✅ 载荷就绪：${OUT}（${SIZE}）"
+ASIZE=$(du -sh dist-payload.tar.gz | cut -f1)
+echo "✅ 载荷就绪：${OUT}（${SIZE}）+ dist-payload.tar.gz（${ASIZE}）"

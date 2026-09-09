@@ -119,13 +119,33 @@ async function bootstrap(opts) {
 
   /* ---------- 0. 载荷装配（版本变化才覆盖） ---------- */
   const readIf = (p) => { try { return fs.readFileSync(p, "utf-8").trim(); } catch { return null; } };
-  const payloadVer = readIf(path.join(resourcesDir, "runtime", "VERSION")) || "unknown";
+  // 载荷以单文件归档随包（electron-builder extraResources 对 **/node_modules/** 有硬排除、
+  // filter 无效——v2.2.0/v2.2.1 三轮实证）：Resources 内为 payload.tar.gz；
+  // 按需解压到 supportDir/.payload-cache（PAYLOAD_VERSION 变化才重解），再按老逻辑装配。
+  const archiveFile = path.join(resourcesDir, "payload.tar.gz");
+  let effResources = resourcesDir;
+  const payloadVer = readIf(path.join(resourcesDir, "payload", "PAYLOAD_VERSION"))
+    || readIf(path.join(resourcesDir, "runtime", "VERSION")) || "unknown";
+  if (fs.existsSync(archiveFile)) {
+    const cacheDir = path.join(supportDir, ".payload-cache");
+    const cacheVer = readIf(path.join(cacheDir, "PAYLOAD_VERSION")) || "none";
+    if (cacheVer !== payloadVer || !fs.existsSync(path.join(cacheDir, "runtime", "VERSION"))) {
+      status(`→ 解压运行时载荷（${payloadVer}）…（首次约 1 分钟）`);
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+      fs.mkdirSync(cacheDir, { recursive: true });
+      // 两平台 tar 均可信：macOS 自带 bsdtar；Win10 1803+ System32 自带 tar.exe（bsdtar）
+      const r = run("tar", ["-xzf", archiveFile, "-C", cacheDir]);
+      if (r.code !== 0) throw new Error(`载荷解压失败：${(r.err || r.out).slice(-300)}`);
+      status("✅ 载荷解压完成");
+    }
+    effResources = cacheDir;
+  }
   const installedVer = readIf(path.join(supportDir, "VERSION")) || "none";
   if (payloadVer !== installedVer) {
     status(`→ 装配运行时载荷（${payloadVer}）…（首次约 1 分钟）`);
     fs.mkdirSync(supportDir, { recursive: true });
     for (const part of ["runtime", "node", "pg", "nats"]) {
-      const src = path.join(resourcesDir, part);
+      const src = path.join(effResources, part);
       if (!fs.existsSync(src)) continue;
       const dst = path.join(supportDir, part);
       fs.rmSync(dst, { recursive: true, force: true });

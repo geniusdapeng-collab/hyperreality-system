@@ -17,22 +17,14 @@ files:
 # **/node_modules/**——载荷的扁平化运行依赖（tsx/hono/pg）会被静默丢弃，
 # 产物外观正常但首启装配必崩。每个资源块必须显式 filter: ["**/*"] 强制全量复制。
 extraResources:
-  - from: dist-payload/runtime
-    to: payload/runtime
-    filter:
-      - "**/*"
-  - from: dist-payload/node
-    to: payload/node
-    filter:
-      - "**/*"
-  - from: dist-payload/pg
-    to: payload/pg
-    filter:
-      - "**/*"
-  - from: dist-payload/nats
-    to: payload/nats
-    filter:
-      - "**/*"
+  # 载荷以单文件归档随包（electron-builder extraResources 对 **/node_modules/** 有硬排除，
+  # filter: ["**/*"] 无效——v2.2.0/v2.2.1 三轮实证）；bootstrap 首启按需解压到
+  # supportDir/.payload-cache（PAYLOAD_VERSION 变化才重解——版本文件必须随包，
+  # 否则版本读不到会导致每次启动都重解压）
+  - from: dist-payload.tar.gz
+    to: payload.tar.gz
+  - from: dist-payload/PAYLOAD_VERSION
+    to: payload/PAYLOAD_VERSION
 extraMetadata:
   main: apps/desktop/electron/main.cjs
 asar: true
