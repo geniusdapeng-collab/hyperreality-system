@@ -17,6 +17,13 @@ import P24 from "./pages/p24/P24";
 import P25 from "./pages/p25/P25";
 import P26 from "./pages/p26/P26";
 import P27 from "./pages/p27/P27";
+import P28 from "./pages/p28/P28";
+import P29 from "./pages/p29/P29";
+import P30 from "./pages/p30/P30";
+import P31 from "./pages/p31/P31";
+import Login from "./pages/accounts/Login";
+import Activate from "./pages/accounts/Activate";
+import InviteAccept from "./pages/accounts/InviteAccept";
 import DevMatrix from "./pages/dev/DevMatrix";
 import Onboarding from "./pages/onboarding/Onboarding";
 import { Bridge } from "./shell/Bridge";
@@ -29,7 +36,7 @@ import { LoomMate } from "./components/loommate/LoomMate";
 function Shell() {
   const { pathname } = useLocation();
   // 非产品路由（开发矩阵/落地向导）不带常驻导航；其余全部页面左侧导航常驻
-  const bare = pathname === "/dev" || pathname.startsWith("/onboarding");
+  const bare = pathname === "/dev" || pathname.startsWith("/onboarding") || pathname === "/login" || pathname === "/activate" || pathname === "/invite";
   return (
     <div className="flex min-h-screen">
       {!bare && <SideNav />}
@@ -58,6 +65,13 @@ function Shell() {
       <Route path="/p25" element={<P25 />} />
       <Route path="/p26" element={<P26 />} />
       <Route path="/p27" element={<P27 />} />
+      <Route path="/p28" element={<P28 />} />
+      <Route path="/p29" element={<P29 />} />
+      <Route path="/p30" element={<P30 />} />
+      <Route path="/p31" element={<P31 />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/activate" element={<Activate />} />
+      <Route path="/invite" element={<InviteAccept />} />
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/dev" element={<Bridge><DevMatrix /></Bridge>} />
       <Route path="*" element={<P0 />} />
