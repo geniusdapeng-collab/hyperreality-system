@@ -12,6 +12,7 @@ import P5 from "./pages/p5/P5";
 import P6 from "./pages/p6/P6";
 import P7 from "./pages/p7/P7";
 import P8 from "./pages/p8/P8";
+import P10 from "./pages/p10/P10";
 import P23 from "./pages/p23/P23";
 import P24 from "./pages/p24/P24";
 import P25 from "./pages/p25/P25";
@@ -42,6 +43,7 @@ function Shell() {
       {!bare && <SideNav />}
       {!bare && <LoomMate />}
       <div className="min-w-0 flex-1">
+
         <StarRing />
         <Routes>
       <Route path="/" element={<P0 />} />
@@ -58,6 +60,7 @@ function Shell() {
       <Route path="/p7" element={<P7 />} />
       <Route path="/p8" element={<P8 />} />
       <Route path="/p8/agent/:agentId" element={<P8 />} />
+      <Route path="/p10" element={<P10 />} />
       <Route path="/p23" element={<P23 />} />
       <Route path="/p24" element={<P24 />} />
       <Route path="/p25" element={<P25 />} />
@@ -75,7 +78,7 @@ function Shell() {
         isGuest() ? <Navigate to="/login?next=/onboarding" replace /> : <Onboarding />
       } />
       <Route path="/dev" element={<Bridge><DevMatrix /></Bridge>} />
-          <Route path="*" element={<P0 />} />
+      <Route path="*" element={<P0 />} />
         </Routes>
       </div>
       {/* 游客模式浮标（F-GUEST1：随时可去正式开通/登录） */}
