@@ -3,8 +3,8 @@
  * 演示入口（loginAs）仅开发环境展示；生产不出现。
  */
 import { useState } from "react";
-import { useNavigate } from "react-router";
-import { trpc, setToken, setRefreshToken, ensureDemoLogin } from "../../lib/trpc";
+import { useNavigate, useSearchParams } from "react-router";
+import { trpc, setToken, setRefreshToken, ensureDemoLogin, DEV_DEMO_MEMBER, clearGuestFlag } from "../../lib/trpc";
 
 const WS = (import.meta.env.VITE_DEMO_WORKSPACE as string | undefined) ?? "yunqi-hotel";
 
@@ -12,6 +12,9 @@ type Tab = "code" | "password";
 
 export default function Login() {
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  // F-GUEST1：游客进配置引导被拦到这里时，登录成功后送回原目的地
+  const next = params.get("next") || "/p28";
   const [tab, setTab] = useState<Tab>("code");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -44,16 +47,18 @@ export default function Login() {
       const r = tab === "code"
         ? await svc().loginWithCode.mutate({ phone, code, workspaceSlug: WS })
         : await svc().loginWithPassword.mutate({ email, password, workspaceSlug: WS });
+      clearGuestFlag(); // 正式身份进场，摘掉游客标记
       setToken(r.accessToken);
       setRefreshToken(r.refreshToken);
-      nav("/p28");
+      nav(next);
     } catch (e) { setErr(e instanceof Error ? e.message : "登录失败"); }
     finally { setBusy(false); }
   }
 
   async function demoEnter() {
-    await ensureDemoLogin();
-    nav("/p28");
+    // 开发后门（仅 DEV 展示）：以种子成员真身份进入，绕过账号体系
+    await ensureDemoLogin(DEV_DEMO_MEMBER);
+    nav(next);
   }
 
   return (

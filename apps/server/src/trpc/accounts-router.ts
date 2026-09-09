@@ -25,6 +25,7 @@ import {
   linkTenant, childTenants, type Archetype,
 } from "@workloom/base/accounts";
 import { router, publicProcedure, protectedProcedure, writeProcedure, scopeOf } from "./context.js";
+import { signDemoToken, type Identity } from "@workloom/base/tenancy";
 
 const sms = new DevEchoSms(); // seam：生产经环境注入真实短信通道（PRD §4.1 微信/短信）
 const deps = (): AccountsDeps => ({ q: (t: string, p?: unknown[]) => getAppPool().query(t, p as never[]) as Promise<{ rows: Record<string, unknown>[] }>, sms });
@@ -85,6 +86,36 @@ export const accountsRouter = router({
     partnerRefresh: publicProcedure
       .input(z.object({ refreshToken: z.string().min(20) }))
       .mutation(async ({ input }) => partnerRefresh(ownerDeps(), input)),
+
+    /**
+     * 游客进场（F-GUEST1 首次装机体验口径）：
+     * 默认游客身份直接进系统——可完整浏览示例工作区（数字人/汇报/页面能力），
+     * 直至进入配置引导（/onboarding）才要求正式登录。
+     * 纪律：① 不写死工作区 slug——自动发现 is_example 工作区（各行业包种子均建一个）；
+     *      ② 游客=readonly 角色——writeProcedure 服务端 403 一切写操作（E2.6 已有守卫），
+     *         体验全程零写入、零审批、零扣费；
+     *      ③ 24h 令牌与演示 JWT 同构（Identity），前端以 GUEST memberNo 识别并展示「游客体验中」。
+     */
+    guestEnter: publicProcedure
+      .input(z.object({ device, ip }))
+      .mutation(async () => {
+        // 登录引导例外点（F7.1 同 loginAs）：身份未建立前的示例工作区发现走 owner 池
+        const ws = await getOwnerPool().query<{ id: string; tenant_id: string; slug: string; name: string }>(
+          `SELECT id, tenant_id, slug, name FROM workspaces WHERE is_example=true ORDER BY id LIMIT 1`);
+        const row = ws.rows[0];
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "示例工作区未就绪（首启种子未完成）" });
+        const t = await getOwnerPool().query<{ plan: Identity["plan"] }>(`SELECT plan FROM tenants WHERE id=$1`, [row.tenant_id]);
+        const identity: Identity = {
+          memberId: "guest",
+          memberNo: "GUEST",
+          name: "游客",
+          role: "readonly",
+          tenantId: row.tenant_id,
+          workspaceId: row.id,
+          plan: t.rows[0]?.plan ?? "pro",
+        };
+        return { token: await signDemoToken(identity), identity, workspace: { slug: row.slug, name: row.name } };
+      }),
   }),
 
   my: router({
