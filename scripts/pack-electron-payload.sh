@@ -66,7 +66,7 @@ for f in package.json pnpm-workspace.yaml tsconfig.base.json .env.example; do
   [ -f "$f" ] && cp "$f" "$R/"
 done
 [ -f "$R/.env.defaults" ] || cp .env.example "$R/.env.defaults"
-for d in apps/server apps/web/src apps/web/index.html apps/web/public apps/web/package.json apps/web/vite.config.ts apps/web/tsconfig.json packages bundles; do
+for d in apps/server apps/web/src apps/web/index.html apps/web/public apps/web/package.json apps/web/vite.config.ts apps/web/tsconfig.json packages bundles platform-ops; do
   [ -e "$d" ] || continue
   mkdir -p "$R/$(dirname "$d")"
   copy "$d" "$R/$(dirname "$d")/"
@@ -90,9 +90,10 @@ NPM_REG="${NPM_REGISTRY:-https://registry.npmjs.org}"
 ( cd "$NM_STAGE" && npm install --no-audit --no-fund --legacy-peer-deps --registry="$NPM_REG" )
 copy "$NM_STAGE/node_modules" "$R/node_modules"
 # 内部工作区包以实体目录入 node_modules（v2.0.14 @workloom 缺失实证）——
-# 按各包 package.json 的 name 动态注册（行业仓有自定义包，如 @hyperreality/video-studio，
-# v1.0.0 hyperreality/workloom 冒烟 ERR_MODULE_NOT_FOUND 实证，不再硬编码 @workloom 四包）
-for pkgjson in packages/*/package.json; do
+# 按各包 package.json 的 name 动态注册（行业仓有自定义包，如 @hyperreality/video-studio；
+# 仓根级一方包如 andromeda 的 platform-ops/（@workloom/platform-ops）同口径注册，
+# v1.1.0 andromeda 冒烟 ERR_MODULE_NOT_FOUND 实证）
+for pkgjson in packages/*/package.json platform-ops/package.json; do
   [ -f "$pkgjson" ] || continue
   pname="$(node -p "try{require('./$pkgjson').name||''}catch(e){''}" 2>/dev/null)"
   [ -n "$pname" ] || continue

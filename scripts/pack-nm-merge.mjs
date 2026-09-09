@@ -7,7 +7,7 @@
 //   过滤：workspace:* 协议（内部包，源码随包）/ electron* / playwright*（运行期不需要）
 //   冲突：后写覆盖先写并告警（monorepo 版本基本对齐，运行期可容忍）
 // 用法：node scripts/pack-nm-merge.mjs <输出 package.json 路径>
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +23,8 @@ const SKIP_NAME = (n) => /^(electron|electron-builder|@electron|playwright|@play
 const pkgSources = readdirSync(join(ROOT, "packages"), { withFileTypes: true })
   .filter((d) => d.isDirectory())
   .map((d) => [`packages/${d.name}/package.json`, ["dependencies"]]);
+// 仓根级一方包（andromeda platform-ops/ 等，存在才收集——v1.1.0 缺失实证）
+if (existsSync(join(ROOT, "platform-ops/package.json"))) pkgSources.push(["platform-ops/package.json", ["dependencies"]]);
 
 const sources = [
   ["package.json", ["dependencies"]],
