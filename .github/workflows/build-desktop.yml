@@ -39,6 +39,8 @@ jobs:
           VITE_DEMO_MEMBER: MEM-V01
         run: |
           pnpm install --frozen-lockfile
+          grep -q 'app.disableHardwareAcceleration()' apps/desktop/electron/main.cjs
+          grep -q 'disable-gpu-compositing' apps/desktop/electron/main.cjs
           pnpm -C apps/web build
 
       - name: 装配自包含载荷（darwin-arm64）

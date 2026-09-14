@@ -15,6 +15,7 @@
  *   WORKLOOM_RESOURCES   Resources 根目录（默认 process.resourcesPath）
  *   WORKLOOM_SUPPORT_DIR 支持目录（默认当前应用独立 userData）
  *   WORKLOOM_APP_SMOKE   设为 1 时执行真实应用首启冒烟后退出
+ *   WORKLOOM_ENABLE_GPU  macOS 上设为 1 时重新启用硬件加速（默认软件合成，避免黑屏）
  *   WORKLOOM_WEB_PORT    Web 端口（默认 5173）
  *   WORKLOOM_SERVER_PORT 后端端口（默认 8787）
  *   WORKLOOM_PG_PORT     PostgreSQL 端口（默认 5432）
@@ -47,8 +48,15 @@ const APP_SMOKE = process.env.WORKLOOM_APP_SMOKE === "1";
 const WEB_PORT = Number(process.env.WORKLOOM_WEB_PORT || 5173);
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
 
-// 软件渲染环境（虚拟机/远程桌面/老显卡）放行 SwiftShader WebGL——
-// 3D 舞台（Stage3D）在这类环境用软件渲染可用；有 GPU 的机器此开关无效果。
+// Electron/Chromium 在部分 macOS + Apple Silicon 组合上会出现：DOM 已完整渲染，
+// 但 GPU 合成后整个 BrowserWindow 只有黑色像素。为保证分发包稳定，macOS
+// 默认使用 Chromium 软件合成；已确认 GPU 兼容的机器可用环境变量显式开启。
+if (process.platform === "darwin" && process.env.WORKLOOM_ENABLE_GPU !== "1") {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("disable-gpu-compositing");
+}
+
+// 软件渲染时保留 SwiftShader WebGL，让 3D 舞台（Stage3D）仍可用。
 app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 
 /** 设计稿逻辑分辨率——所有页面按此比例设计，窗口只做等比缩放 */
