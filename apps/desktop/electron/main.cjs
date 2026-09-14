@@ -57,6 +57,12 @@ const SAFE_RENDERING = process.env.WORKLOOM_SAFE_RENDERING === "1" || process.ar
 const WEB_PORT = Number(process.env.WORKLOOM_WEB_PORT || 5173);
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
 
+// 渲染验收必须使用隔离的 Chromium 配置，否则开发机上“已看过欢迎页”的 localStorage
+// 会让冒烟绕过首装流程；CI 与本地执行因此保持完全相同的干净首启条件。
+if (RENDER_SMOKE && process.env.WORKLOOM_SUPPORT_DIR) {
+  app.setPath("userData", path.resolve(process.env.WORKLOOM_SUPPORT_DIR));
+}
+
 // Live2D/Pixi 和团队 Three.js 舞台以 WebGL 为正式渲染后端，硬件加速必须默认开启。
 // 只有显式安全模式才关闭 GPU；renderer 会通过 ?render=vector2d 选择完整动态 SVG 后端。
 if (SAFE_RENDERING) {
@@ -235,6 +241,9 @@ async function runRenderSmoke() {
   fs.writeFileSync(screenshotPath, shot.toPNG());
   const pixels = pixelHealth(shot);
   const report = { ...probe, pixels, safeRendering: SAFE_RENDERING, screenshotPath, checkedAt: new Date().toISOString() };
+  const reportPath = path.join(logDir, SAFE_RENDERING ? "render-safe.json" : "render-default.json");
+  const saveReport = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  saveReport();
   const expectedMode = SAFE_RENDERING ? "vector2d" : "live2d-webgl";
   if (!report.productReady) throw new Error(`产品页面未就绪：${JSON.stringify(report)}`);
   if (!report.avatarReady || report.renderMode !== expectedMode) throw new Error(`数字人后端不符合契约（期望 ${expectedMode}）：${JSON.stringify(report)}`);
@@ -242,9 +251,51 @@ async function runRenderSmoke() {
   if (report.bundle === "ai-pm" && Number(report.actorCount) !== 14) throw new Error(`AI 产品经理 Bundle 编制应为 14 人：${JSON.stringify(report)}`);
   if (pixels.variance < 35 || pixels.visibleRatio < 0.015) throw new Error(`画面疑似纯黑/纯色：${JSON.stringify(report)}`);
 
-  // 通过产品内的确定性测试钩子进入团队态，避免模型加载速度影响模拟点击次数。
-  const enteredTeam = await win.webContents.executeJavaScript(`typeof window.__workloomEnterTeam === 'function' && (window.__workloomEnterTeam(), true)`, true);
-  if (!enteredTeam) throw new Error("团队仪式测试钩子不可用");
+  // 驱动的仍是正式口型参数、眨眼状态机和正式 motion group；只替代 CI 中不可预测的系统 TTS boundary。
+  const exercised = await win.webContents.executeJavaScript(`typeof window.__loommateExercise === 'function' && (window.__loommateExercise(), true)`, true);
+  if (!exercised) throw new Error("数字人动作验收探针不可用");
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const avatarTelemetry = await win.webContents.executeJavaScript(`window.__loommateTelemetry ? JSON.parse(JSON.stringify(window.__loommateTelemetry)) : null`, true);
+  report.avatarTelemetry = avatarTelemetry;
+  saveReport();
+  if (!avatarTelemetry || avatarTelemetry.mouthPeak < 0.25 || avatarTelemetry.lipStarts < 1) {
+    throw new Error(`数字人口型没有实际变化：${JSON.stringify(report)}`);
+  }
+  if (avatarTelemetry.blinkCount < 1) throw new Error(`数字人没有完成眨眼：${JSON.stringify(report)}`);
+  if (avatarTelemetry.gestureCount < 1) throw new Error(`数字人手势动作组没有真正启动：${JSON.stringify(report)}`);
+  if (avatarTelemetry.backend === "live2d-webgl" && (avatarTelemetry.parameterWrites < 1 || avatarTelemetry.parameterWriteFailures > 0)) {
+    throw new Error(`Live2D 参数写入失败：${JSON.stringify(report)}`);
+  }
+
+  // 完整走真实用户流程：逐段点击欢迎舞台，必须经过 bridge -> exiting -> entrance。
+  // 禁止直接 setPhase("dance")，否则会再次漏掉退场定时器被 cleanup 清除一类的状态机错误。
+  const transitionTrace = [];
+  for (let i = 0; i < 9; i++) {
+    const state = await win.webContents.executeJavaScript(`(() => {
+      const ceremony = document.querySelector('[data-welcome-phase]');
+      const welcome = document.querySelector('[aria-label^="织伴开场介绍"]');
+      return {
+        phase: ceremony?.getAttribute('data-welcome-phase') || null,
+        segment: welcome?.getAttribute('data-welcome-segment') || null,
+        exiting: welcome?.getAttribute('data-welcome-exiting') || null
+      };
+    })()`, true);
+    transitionTrace.push(state);
+    if (state.phase && state.phase !== "mate") break;
+    const clicked = await win.webContents.executeJavaScript(`(() => {
+      const welcome = document.querySelector('[aria-label^="织伴开场介绍"]');
+      if (!welcome) return false;
+      welcome.click();
+      return true;
+    })()`, true);
+    if (!clicked) break;
+    await new Promise((resolve) => setTimeout(resolve, state.exiting === "true" ? 1350 : state.segment === "bridge" ? 120 : 260));
+  }
+  report.transitionTrace = transitionTrace;
+  saveReport();
+  if (!transitionTrace.some((state) => state.segment === "bridge")) throw new Error(`真实流程没有到达 bridge：${JSON.stringify(report)}`);
+  if (!transitionTrace.some((state) => state.exiting === "true")) throw new Error(`真实流程没有经过 exiting：${JSON.stringify(report)}`);
+
   const teamDeadline = Date.now() + 20000;
   let teamProbe = null;
   while (Date.now() < teamDeadline) {
@@ -263,7 +314,7 @@ async function runRenderSmoke() {
   const teamPixels = pixelHealth(teamShot);
   const expectedTeamMode = "vector2d";
   Object.assign(report, { team: { ...teamProbe, pixels: teamPixels, screenshotPath: teamScreenshotPath } });
-  fs.writeFileSync(path.join(logDir, SAFE_RENDERING ? "render-safe.json" : "render-default.json"), JSON.stringify(report, null, 2));
+  saveReport();
   if (!teamProbe?.ready || teamProbe.mode !== expectedTeamMode) throw new Error(`团队仪式后端不符合契约（期望 ${expectedTeamMode}）：${JSON.stringify(report)}`);
   if (report.bundle === "ai-pm" && teamProbe.actors !== Number(report.actorCount) + 1) throw new Error(`AI 产品经理团队仪式名单不完整：${JSON.stringify(report)}`);
   if (teamPixels.variance < 35 || teamPixels.visibleRatio < 0.015) throw new Error(`团队仪式画面疑似纯黑/纯色：${JSON.stringify(report)}`);

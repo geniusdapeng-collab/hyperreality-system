@@ -49,9 +49,11 @@ bootstrap → session validated → welcome/mate → team/entrance
 1. 后端冒烟：解包、数据库初始化、迁移、Bundle 种子、服务健康检查。
 2. 渲染冒烟：真实创建 BrowserWindow，等待 `data-product-ready=true` 和 `data-avatar-ready=true`。
 3. 双后端冒烟：默认数字人必须得到 `live2d-webgl`；安全模式数字人必须得到 `vector2d`；两者的团队仪式都必须得到独立的动态 `vector2d` 舞台。
-4. 画面检查：保存截图并检测亮度方差、人物包围盒和关键文本，纯黑/纯色画面直接失败。
-5. 内容检查：页面报告的 Bundle id、工作区名、岗位数、技能数与构建清单一致。
-6. 语音单元测试：正常播报绝不重叠；快进产生取消；熔断是唯一抢占路径。
+4. 数字人动作检查：模型声明的嘴型/眨眼参数必须真实写入且读取成功；至少完成一次开口、一次完整眨眼和一次已被 MotionManager 接受的手势动作。只检查“canvas 存在”或“人物轻微晃动”不算通过。
+5. 真实状态机检查：验收必须按用户交互依次推进 `enter → intro → system → detail → bridge → exiting → entrance`，禁止用 `setPhase` 等测试钩子直接跳到团队态。
+6. 画面检查：欢迎页和团队页分别保存截图并检测亮度方差、人物包围盒和关键文本，纯黑/纯色画面直接失败。
+7. 内容检查：页面报告的 Bundle id、工作区名、岗位数、技能数与构建清单一致；团队画面人数必须等于 Bundle 岗位数加 CEO。
+8. 语音单元测试：正常播报绝不重叠；快进产生取消；熔断是唯一抢占路径；系统 TTS 不提供 `boundary` 时仍必须启用文本节律口型。
 
 Actions 必须上传两种渲染模式的截图和 JSON 探针结果。任一门禁失败，不创建或更新 Release。
 

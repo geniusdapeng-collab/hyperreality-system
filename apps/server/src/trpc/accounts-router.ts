@@ -105,8 +105,16 @@ export const accountsRouter = router({
         const row = ws.rows[0];
         if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "示例工作区未就绪（首启种子未完成）" });
         const t = await getOwnerPool().query<{ plan: Identity["plan"] }>(`SELECT plan FROM tenants WHERE id=$1`, [row.tenant_id]);
+        // 使用工作区内真实成员主键承载只读游客身份。旧值 "guest" 不存在于 members，
+        // 任何需要成员关联/RLS 的产品查询都会在部分行业包中静默返回空或失败。
+        const member = await getOwnerPool().query<{ id: string }>(
+          `SELECT id FROM members WHERE workspace_id=$1
+           ORDER BY CASE WHEN role='readonly' THEN 0 ELSE 1 END, member_no LIMIT 1`,
+          [row.id],
+        );
+        if (!member.rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "示例工作区没有可承载游客会话的成员" });
         const identity: Identity = {
-          memberId: "guest",
+          memberId: member.rows[0].id,
           memberNo: "GUEST",
           name: "游客",
           role: "readonly",

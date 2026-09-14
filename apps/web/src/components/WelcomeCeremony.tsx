@@ -44,13 +44,6 @@ export function WelcomeCeremony({ actors, bundleName, industry = null, onDone }:
   // 阶段：mate(织伴开场 S0-S4) → entrance(0-1.6s) → dance(1.6-7s) → ribbon(7-8.2s) → modal(8.2s+)
   const [phase, setPhase] = useState<"mate" | "entrance" | "dance" | "ribbon" | "modal">("mate");
 
-  // 打包后真实窗口冒烟使用的确定性状态钩子；不改变用户流程，也不依赖模拟点击时序。
-  useEffect(() => {
-    const target = window as unknown as { __workloomEnterTeam?: () => void };
-    target.__workloomEnterTeam = () => setPhase("dance");
-    return () => { target.__workloomEnterTeam = undefined; };
-  }, []);
-
   // 团队仪式计时：织伴开场演完（team-bridge）进入 entrance 后才启动
   useEffect(() => {
     if (phase !== "entrance") return;
@@ -65,7 +58,7 @@ export function WelcomeCeremony({ actors, bundleName, industry = null, onDone }:
   const skip = () => { setPhase("modal"); };
 
   return (
-    <div style={{
+    <div data-welcome-phase={phase} style={{
       position: "fixed", inset: 0, zIndex: 100, background: "#0b0d10",
       fontFamily: "inherit",
     }}>

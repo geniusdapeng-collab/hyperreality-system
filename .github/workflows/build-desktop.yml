@@ -46,6 +46,9 @@ jobs:
           grep -q 'speakAndWait' apps/web/src/components/MateWelcome.tsx
           grep -q 'data-render-mode="vector2d"' apps/web/src/components/loommate/MateLive2D.tsx
           grep -q 'acquireExclusive' apps/web/src/voice/VoiceEngine.ts
+          grep -q 'transitionTrace' apps/desktop/electron/main.cjs
+          grep -q 'mouthPeak' apps/desktop/electron/main.cjs
+          ! grep -q '__workloomEnterTeam' apps/web/src/components/WelcomeCeremony.tsx
           pnpm product:verify
           pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
           pnpm -C apps/web build

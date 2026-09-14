@@ -45,6 +45,13 @@ if (fs.existsSync(envExample)) {
   for (const seed of (match?.[1] ?? "").split(",").map((item) => item.trim()).filter(Boolean)) {
     if (!fs.existsSync(path.join(root, seed))) errors.push(`桌面种子脚本不存在：${seed}`);
   }
+  const primarySeed = (match?.[1] ?? "").split(",")[0]?.trim();
+  if (primarySeed && fs.existsSync(path.join(root, primarySeed))) {
+    const seedSource = fs.readFileSync(path.join(root, primarySeed), "utf8");
+    if (!seedSource.includes("bundle_id") || !seedSource.includes("is_example")) {
+      errors.push(`桌面主种子必须同时写入 bundle_id 与 is_example：${primarySeed}`);
+    }
+  }
 }
 
 if (errors.length) {

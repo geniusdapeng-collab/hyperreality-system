@@ -35,6 +35,21 @@ export interface Live2DHandle {
   speakWithAudio: (url: string) => void;
 }
 
+export interface MateAvatarTelemetry {
+  backend: "live2d-webgl" | "vector2d";
+  modelUrl: string;
+  mouthParameter: string;
+  mouthPeak: number;
+  lipStarts: number;
+  lipBoundaries: number;
+  syntheticLipFrames: number;
+  blinkCount: number;
+  gestureCount: number;
+  lastMotionGroup: string | null;
+  parameterWrites: number;
+  parameterWriteFailures: number;
+}
+
 declare global {
   interface Window {
     Live2D?: unknown;
@@ -42,7 +57,25 @@ declare global {
     __loommateLive2D?: Live2DHandle;
     __loommateLive2DReady?: () => boolean;
     __loommateStep?: (dt: number) => void;
+    __loommateTelemetry?: MateAvatarTelemetry;
+    /** 打包验收专用：仍走正式参数驱动与动作组，只替代不可预测的系统 TTS boundary。 */
+    __loommateExercise?: () => void;
   }
+}
+
+interface ModelProfile {
+  mouth: string;
+  mouthForm: string;
+  eyes: [string, string];
+  idleMotion: string;
+  gestureMotion: string;
+}
+
+function profileOf(modelUrl: string): ModelProfile {
+  const cubism4 = modelUrl.toLowerCase().includes("model3") || modelUrl.toLowerCase().includes("/mao/");
+  return cubism4
+    ? { mouth: "ParamA", mouthForm: "ParamMouthForm", eyes: ["ParamEyeLOpen", "ParamEyeROpen"], idleMotion: "Idle", gestureMotion: "TapBody" }
+    : { mouth: "PARAM_MOUTH_OPEN_Y", mouthForm: "PARAM_MOUTH_FORM", eyes: ["PARAM_EYE_L_OPEN", "PARAM_EYE_R_OPEN"], idleMotion: "idle", gestureMotion: "tap_body" };
 }
 
 /** 表情映射按模型登记（残留教训：曾硬编码 shizuku 表情 ID，换 Mao 后情绪静默失效）
@@ -117,35 +150,89 @@ function canUseWebGL(): boolean {
 function MateVector2D({ size, mood = "neutral", gesture = null, frame = "bust", onReady }: MateRenderProps) {
   const [mouthOpen, setMouthOpen] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [commandGesture, setCommandGesture] = useState<MateGesture>(null);
   const handleRef = useRef<Live2DHandle | null>(null);
+  const telemetryRef = useRef<MateAvatarTelemetry>({
+    backend: "vector2d", modelUrl: "vector2d", mouthParameter: "svg-mouth",
+    mouthPeak: 0, lipStarts: 0, lipBoundaries: 0, syntheticLipFrames: 0,
+    blinkCount: 0, gestureCount: 0, lastMotionGroup: null,
+    parameterWrites: 0, parameterWriteFailures: 0,
+  });
 
   useEffect(() => VoiceEngine.onLipSync((event) => {
-    if (event.type === "start") { setSpeaking(true); setMouthOpen(true); }
-    else if (event.type === "boundary") setMouthOpen((open) => !open);
+    const telemetry = telemetryRef.current;
+    if (event.type === "start") {
+      telemetry.lipStarts += 1; telemetry.mouthPeak = 1;
+      setSpeaking(true); setMouthOpen(true);
+    }
+    else if (event.type === "boundary") {
+      telemetry.lipBoundaries += 1;
+      setMouthOpen((open) => !open);
+    }
     else { setSpeaking(false); setMouthOpen(false); }
   }), []);
 
   useEffect(() => {
+    const telemetry = telemetryRef.current;
+    window.__loommateTelemetry = telemetry;
+    // CSS 眨眼每 5.2 秒一次；计数用于整包验收确认动画时钟确实在推进。
+    const blinkTimer = window.setInterval(() => { telemetry.blinkCount += 1; }, 5200);
+    return () => {
+      window.clearInterval(blinkTimer);
+      if (window.__loommateTelemetry === telemetry) window.__loommateTelemetry = undefined;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!gesture) return;
+    telemetryRef.current.gestureCount += 1;
+    telemetryRef.current.lastMotionGroup = gesture;
+  }, [gesture]);
+
+  useEffect(() => {
+    let gestureTimer = 0;
     const handle: Live2DHandle = {
       setMood: () => undefined,
-      gesture: () => undefined,
+      gesture: (g) => {
+        telemetryRef.current.gestureCount += 1;
+        telemetryRef.current.lastMotionGroup = g;
+        setCommandGesture(g);
+        window.clearTimeout(gestureTimer);
+        gestureTimer = window.setTimeout(() => setCommandGesture(null), 1400);
+      },
       speakWithAudio: () => undefined,
     };
     handleRef.current = handle;
+    window.__loommateExercise = () => {
+      const telemetry = telemetryRef.current;
+      telemetry.lipStarts += 1;
+      telemetry.syntheticLipFrames += 1;
+      telemetry.mouthPeak = 1;
+      telemetry.blinkCount += 1;
+      setSpeaking(true); setMouthOpen(true);
+      handle.gesture("handup");
+      window.setTimeout(() => { setSpeaking(false); setMouthOpen(false); }, 650);
+    };
     onReady?.(handle);
-    return () => { handleRef.current = null; };
+    return () => {
+      window.clearTimeout(gestureTimer);
+      window.__loommateExercise = undefined;
+      handleRef.current = null;
+    };
   }, [onReady]);
 
   const happy = mood === "happy" || mood === "love";
   const afraid = mood === "fear";
-  const handUp = gesture === "handup";
-  const thumbUp = gesture === "thumbup";
+  const activeGesture = commandGesture ?? gesture;
+  const handUp = activeGesture === "handup";
+  const thumbUp = activeGesture === "thumbup";
   const cropScale = frame === "full" ? 1 : 1.58;
 
   return (
     <div
       data-render-mode="vector2d"
       data-avatar-ready="true"
+      data-avatar-motion="dynamic"
       aria-label="织伴数字人（动态矢量后端）"
       style={{ position: "relative", width: size, height: size, overflow: "hidden", pointerEvents: "none" }}
     >
@@ -228,6 +315,8 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
   const appRef = useRef<PIXI.Application | null>(null);
   const moodRef = useRef<MateMood>(mood);
   moodRef.current = mood;
+  const gestureRef = useRef<MateGesture>(gesture);
+  gestureRef.current = gesture;
   const lipTimer = useRef<number | null>(null);
   const [renderReady, setRenderReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -238,6 +327,7 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
     let disposed = false;
     let offLip: (() => void) | null = null;
     let offMouse: (() => void) | null = null;
+    let offModelOverride: (() => void) | null = null;
     let raf = 0;
     let last = performance.now();
 
@@ -287,8 +377,17 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
       }
       app.stage.addChild(model);
 
-      // 常态 idle 呼吸循环 + 初始表情
-      void model.motion("idle");
+      const profile = profileOf(modelUrl);
+      const telemetry: MateAvatarTelemetry = {
+        backend: "live2d-webgl", modelUrl, mouthParameter: profile.mouth,
+        mouthPeak: 0, lipStarts: 0, lipBoundaries: 0, syntheticLipFrames: 0,
+        blinkCount: 0, gestureCount: 0, lastMotionGroup: null,
+        parameterWrites: 0, parameterWriteFailures: 0,
+      };
+      window.__loommateTelemetry = telemetry;
+
+      // MotionManager 会用 IDLE 优先级自动启动 profile.idleMotion；这里不能手动以默认
+      // NORMAL 优先级启动，否则同为 NORMAL 的首个 TapBody 手势会被拒绝（实机验收已复现）。
       const expr = moodExprOf(modelUrl, moodRef.current);
       if (expr) await model.expression(expr).catch(() => undefined);
 
@@ -300,25 +399,56 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
       let openUntil = 0;              // 开口保持截止（按字时值自动回落）
       let lastBoundaryAt = 0;
       let boundaryGap = 140;          // 逐字间隔估计（随 boundary 流自适应）
-      const setParam = (k: string, v: number) => {
-        try {
-          (model.internalModel.coreModel as unknown as { setParamFloat: (p: string, x: number) => void })
-            .setParamFloat(k, v);
-        } catch { /* 静默 */ }
+      let speakingActive = false;
+      let speechText = "";
+      let syntheticChar = 0;
+      let nextSyntheticAt = 0;
+      let nextBlinkAt = performance.now() + 900;
+      let blinkStartedAt = -1;
+      const core = model.internalModel.coreModel as unknown as {
+        getModel?: () => { parameters?: { ids?: ArrayLike<string> } };
+        setParameterValueByIndex?: (index: number, value: number) => void;
+        getParameterValueByIndex?: (index: number) => number;
+        setParamFloat?: (id: string, value: number) => void;
+        getParamFloat?: (id: string) => number;
       };
-      const setMouth = (v: number) => setParam("PARAM_MOUTH_OPEN_Y", v);
-      // 嘴形参数探测（Cubism 3+ 才有 PARAM_MOUTH_FORM；shizuku 这类老模型没有则自动弃用）
-      let formOK: boolean | null = null;
-      const setMouthForm = (v: number) => {
-        if (formOK === false) return;
-        setParam("PARAM_MOUTH_FORM", v);
-        if (formOK === null) {
-          try {
-            const got = (model.internalModel.coreModel as unknown as { getParamFloat?: (p: string) => number })
-              .getParamFloat?.("PARAM_MOUTH_FORM");
-            formOK = typeof got === "number" && Math.abs(got - v) < 0.02;
-          } catch { formOK = false; }
+      const parameterIndexes = new Map<string, number>();
+      const indexOfParam = (id: string): number => {
+        const cached = parameterIndexes.get(id);
+        if (cached !== undefined) return cached;
+        const ids = core.getModel?.()?.parameters?.ids;
+        if (!ids) return -1;
+        for (let i = 0; i < ids.length; i++) {
+          if (ids[i] === id) { parameterIndexes.set(id, i); return i; }
         }
+        return -1;
+      };
+      const setParam = (id: string, value: number): boolean => {
+        try {
+          if (core.setParameterValueByIndex) {
+            const index = indexOfParam(id);
+            if (index < 0) throw new Error(`模型缺少参数 ${id}`);
+            core.setParameterValueByIndex(index, value);
+          } else if (core.setParamFloat) {
+            core.setParamFloat(id, value);
+          } else {
+            throw new Error("不支持的 Cubism 参数接口");
+          }
+          telemetry.parameterWrites += 1;
+          return true;
+        } catch {
+          telemetry.parameterWriteFailures += 1;
+          return false;
+        }
+      };
+      const setMouth = (v: number) => {
+        if (setParam(profile.mouth, v)) telemetry.mouthPeak = Math.max(telemetry.mouthPeak, v);
+      };
+      // 嘴形参数存在时驱动；不存在则只使用开口度，不再把错误静默当成功。
+      let formOK = indexOfParam(profile.mouthForm) >= 0 || !core.setParameterValueByIndex;
+      const setMouthForm = (v: number) => {
+        if (!formOK) return;
+        formOK = setParam(profile.mouthForm, v);
       };
 
       /* ================= 活跃信号 → 按需渲染 =================
@@ -370,10 +500,18 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
       };
 
       /* ---------- 口型驱动①：VoiceEngine 逐字 boundary → 开口度目标 ---------- */
-      offLip = VoiceEngine.onLipSync((ev) => {
+      const driveLip = (ev: { type: "start" | "boundary" | "end"; charIndex?: number; text?: string }) => {
         if (ev.type === "start") {
           if (lipTimer.current) window.clearInterval(lipTimer.current);
+          speakingActive = true;
+          speechText = ev.text ?? "";
+          syntheticChar = 0;
           lastBoundaryAt = 0;
+          // macOS 中文语音经常不派发 boundary；先给一个可见开口，再由下方合成字节律接管。
+          mouthTarget = 0.46;
+          openUntil = performance.now() + 220;
+          nextSyntheticAt = performance.now() + 180;
+          telemetry.lipStarts += 1;
           poke();
         } else if (ev.type === "boundary") {
           const now = performance.now();
@@ -382,14 +520,43 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
           const ch = ev.text && typeof ev.charIndex === "number" ? ev.text.charAt(ev.charIndex) : "";
           mouthTarget = ch ? OPEN_OF_CHAR(ch) : 0.3 + Math.random() * 0.5;
           openUntil = now + boundaryGap * 0.85;   // 字时值 85% 后向底噪回落（连贯语流感）
+          telemetry.lipBoundaries += 1;
           poke();
         } else {
+          speakingActive = false;
+          speechText = "";
           mouthTarget = 0;
           openUntil = 0;
           if (lipTimer.current) { window.clearInterval(lipTimer.current); lipTimer.current = null; }
           poke();
         }
-      });
+      };
+      offLip = VoiceEngine.onLipSync(driveLip);
+
+      /* 参数覆写必须发生在 pixi-live2d 的 beforeModelUpdate：Cubism 的 motion/expression/eyeBlink
+       * 会在 app.render() 内更新并覆盖更早的参数写入。原实现写在 model.update() 之前，哪怕参数名
+       * 正确也可能在同一帧被动作曲线抹掉。 */
+      const applyDrivenParameters = () => {
+        const now = performance.now();
+        setMouth(mouthCur);
+        if (blinkStartedAt >= 0) {
+          const elapsed = now - blinkStartedAt;
+          const eyeOpen = elapsed < 80 ? 1 - elapsed / 80 : elapsed < 170 ? (elapsed - 80) / 90 : 1;
+          setParam(profile.eyes[0], Math.max(0.02, Math.min(1, eyeOpen)));
+          setParam(profile.eyes[1], Math.max(0.02, Math.min(1, eyeOpen)));
+          if (elapsed >= 170) {
+            blinkStartedAt = -1;
+            nextBlinkAt = now + 2700 + Math.random() * 2200;
+            telemetry.blinkCount += 1;
+          }
+        }
+      };
+      const internalModel = model.internalModel as unknown as {
+        on?: (event: string, callback: () => void) => void;
+        off?: (event: string, callback: () => void) => void;
+      };
+      internalModel.on?.("beforeModelUpdate", applyDrivenParameters);
+      offModelOverride = () => internalModel.off?.("beforeModelUpdate", applyDrivenParameters);
 
       /* ---------- 对外句柄（调试探针 + 验收驱动） ---------- */
       const handle: Live2DHandle = {
@@ -401,7 +568,14 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
           poke();
         },
         gesture: (g) => {
-          if (g === "handup" || g === "thumbup") void model.motion("tap_body").catch(() => undefined);
+          if (g === "handup" || g === "thumbup") {
+            void model.motion(profile.gestureMotion).then((started) => {
+              if (started) {
+                telemetry.gestureCount += 1;
+                telemetry.lastMotionGroup = profile.gestureMotion;
+              }
+            }).catch(() => false);
+          }
           poke();
         },
         speakWithAudio: (url) => {
@@ -456,6 +630,15 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
       };
       window.__loommateLive2D = handle;
       window.__loommateLive2DReady = () => true;
+      window.__loommateExercise = () => {
+        driveLip({ type: "start", text: "数字人动作验收" });
+        driveLip({ type: "boundary", text: "数字人动作验收", charIndex: 1 });
+        handle.gesture("handup");
+        blinkStartedAt = performance.now();
+        window.setTimeout(() => driveLip({ type: "end" }), 700);
+      };
+      // 首屏 handup 在模型异步加载前已经成为 props；加载完成时必须补执行一次。
+      if (gestureRef.current) handle.gesture(gestureRef.current);
       onReady?.(handle);
 
       /* ---------- 时钟：capture=虚拟步进；常态=rAF（按需渲染+生态降帧） ---------- */
@@ -471,9 +654,9 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
           if (virtualT < speakUntil) {
             // 说话节律：双频叠加近似自然开合（非机械正弦）
             const v = Math.abs(Math.sin(virtualT * 8.3)) * 0.45 + Math.abs(Math.sin(virtualT * 13.7)) * 0.2 + 0.1;
-            setMouth(Math.min(1, v));
+            mouthCur = Math.min(1, v);
           } else {
-            setMouth(0);
+            mouthCur = 0;
           }
           model.update(dt * 1000);
           app.render();
@@ -485,12 +668,21 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
           if (disposed) return;
           const dt = Math.min(100, now - last);
           last = now;
+          // 系统 TTS 没有 boundary 时，用文本逐字节律补全口型；有 boundary 时自动让位给真实事件。
+          if (speakingActive && now >= nextSyntheticAt && (!lastBoundaryAt || now - lastBoundaryAt > 260)) {
+            const ch = speechText.charAt(syntheticChar++ % Math.max(1, speechText.length));
+            mouthTarget = ch ? OPEN_OF_CHAR(ch) : 0.42;
+            openUntil = now + 105;
+            nextSyntheticAt = now + 125 + (syntheticChar % 3) * 18;
+            telemetry.syntheticLipFrames += 1;
+            poke();
+          }
           // 口型平滑：快开慢收指数趋近
           if (now > openUntil && mouthTarget > 0.06) mouthTarget = 0.06;
           const k = mouthTarget > mouthCur ? 0.55 : 0.18;
           mouthCur += (mouthTarget - mouthCur) * k;
           if (Math.abs(mouthCur - mouthTarget) < 0.004) mouthCur = mouthTarget;
-          setMouth(mouthCur);
+          if (blinkStartedAt < 0 && now >= nextBlinkAt) { blinkStartedAt = now; poke(); }
           // 视线（含自主游移）
           applyFocus(now);
           // 按需渲染：活跃满帧；生态模式 5 帧走 1 帧（≈12fps）
@@ -522,9 +714,12 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
       cancelAnimationFrame(raf);
       offLip?.();
       offMouse?.();
+      offModelOverride?.();
       if (lipTimer.current) window.clearInterval(lipTimer.current);
       window.__loommateLive2DReady = undefined;
       window.__loommateStep = undefined;
+      window.__loommateExercise = undefined;
+      window.__loommateTelemetry = undefined;
       try { appRef.current?.destroy(true, { children: true }); } catch { /* 静默 */ }
       appRef.current = null;
       modelRef.current = null;
@@ -542,14 +737,22 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
   // 手势联动
   useEffect(() => {
     if (!gesture || !modelRef.current) return;
-    void modelRef.current.motion("tap_body").catch(() => undefined);
-  }, [gesture]);
+    const profile = profileOf(modelUrl);
+    void modelRef.current.motion(profile.gestureMotion).then((started) => {
+      const telemetry = window.__loommateTelemetry;
+      if (started && telemetry) {
+        telemetry.gestureCount += 1;
+        telemetry.lastMotionGroup = profile.gestureMotion;
+      }
+    }).catch(() => false);
+  }, [gesture, modelUrl]);
 
   return (
     <div
       ref={hostRef}
       data-render-mode={renderReady ? "live2d-webgl" : loadError ? "live2d-error" : "live2d-loading"}
       data-avatar-ready={renderReady ? "true" : "false"}
+      data-avatar-motion="dynamic"
       style={{
         position: "relative", width: size, height: size, borderRadius: 16,
         overflow: "hidden", pointerEvents: "none",

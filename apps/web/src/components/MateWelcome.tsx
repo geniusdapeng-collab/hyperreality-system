@@ -88,12 +88,21 @@ export function MateWelcome({ industry, onBridge, onSkipAll }: {
     setIdx((i) => {
       if (i >= segs.length - 1) {
         setExiting(true);
-        timers.current.push(window.setTimeout(onBridge, 1150));
         return i;
       }
       return i + 1;
     });
-  }, [segs.length, onBridge]);
+  }, [segs.length]);
+
+  /* 退场完成后再进入团队仪式。
+   * 这个计时器必须独立于分段计时器：exiting 变化会触发上方分段 effect 的 cleanup，
+   * 如果把 onBridge 也放进 timers.current，它会在创建后的同一轮更新里被清掉，页面就会
+   * 永久停在 opacity:0 的黑色退场层。 */
+  useEffect(() => {
+    if (!exiting) return;
+    const timer = window.setTimeout(onBridge, 1150);
+    return () => window.clearTimeout(timer);
+  }, [exiting, onBridge]);
 
   /* 分段驱动：语音播报（整段一次，口型全局同步）+ 字幕按行比例逐行揭示。
    * 有 TTS 时必须等真实 onend 才推进；只有无语音降级时才使用估算时长。 */
