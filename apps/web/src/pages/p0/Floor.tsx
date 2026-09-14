@@ -278,6 +278,8 @@ export function FloorView({
       onClick={onClick}
       className="h-[380px] w-full cursor-pointer sm:h-[440px]"
       data-scene={floor.scene.id}
+      data-product-scene="workplace-2d"
+      data-product-scene-actors={String(floor.agents.length)}
     />
   );
 }

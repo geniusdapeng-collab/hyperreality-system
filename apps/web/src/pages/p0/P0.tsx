@@ -478,10 +478,10 @@ export default function P0() {
                 ceremony={showCeremony && ceremony >= 2}
               />
             ) : (
-              <>
+              <div data-product-scene="report-stage-2d" data-product-scene-actors={String(data.satellites.length + 1)}>
                 <Hologram tone={tone} active={!showCeremony || ceremony >= 3} />
                 <Satellites agents={data.satellites} onPick={setPick} />
-              </>
+              </div>
             ))}
           </div>
         )}

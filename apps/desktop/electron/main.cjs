@@ -359,7 +359,7 @@ async function runRenderSmoke() {
     const scenePixels = pixelHealth(sceneShot);
     const sceneReport = { ...sceneProbe, pixels: scenePixels, screenshotPath: sceneScreenshotPath };
     if (!sceneProbe?.ready) throw new Error(`${sceneName} 未就绪：${JSON.stringify(sceneReport)}`);
-    if (report.bundle === "ai-pm" && Number(sceneProbe.actors) !== Number(report.actorCount) + (sceneName === "report-stage-3d" ? 1 : 0)) {
+    if (report.bundle === "ai-pm" && Number(sceneProbe.actors) !== Number(report.actorCount) + (sceneName.startsWith("report-stage-") ? 1 : 0)) {
       throw new Error(`${sceneName} 团队人数不完整：${JSON.stringify(sceneReport)}`);
     }
     if (scenePixels.variance < 35 || scenePixels.visibleRatio < 0.015) throw new Error(`${sceneName} 画面疑似纯黑/纯色：${JSON.stringify(sceneReport)}`);
@@ -374,14 +374,16 @@ async function runRenderSmoke() {
     return sceneReport;
   }
 
-  report.workplace = await captureProductScene("workplace-3d", "workplace");
+  const workplaceScene = SAFE_RENDERING ? "workplace-2d" : "workplace-3d";
+  const reportStageScene = SAFE_RENDERING ? "report-stage-2d" : "report-stage-3d";
+  report.workplace = await captureProductScene(workplaceScene, "workplace");
   const switchedStage = await win.webContents.executeJavaScript(`(() => {
     const button = [...document.querySelectorAll('button')].find((node) => node.textContent?.trim() === '舞台');
     button?.click();
     return !!button;
   })()`, true);
   if (!switchedStage) throw new Error(`无法切换到舞台视图：${JSON.stringify(report)}`);
-  report.reportStage = await captureProductScene("report-stage-3d", "stage");
+  report.reportStage = await captureProductScene(reportStageScene, "stage");
   saveReport();
   console.log(`WorkLoom 渲染冒烟通过：${JSON.stringify(report)}`);
 }
