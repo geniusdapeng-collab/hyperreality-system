@@ -22,6 +22,7 @@ import {
 import { gatewayAppend, gatewayAppendOnClient, MockEmbedder, upsertMemoryInTx } from "@workloom/base/workdata";
 import { makeReadableId } from "@workloom/shared";
 import { capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, writeProcedure } from "./context.js";
+import { accountsRouter } from "./accounts-router.js";
 import {
   ApprovalError,
   batchApprove,
@@ -3061,6 +3062,7 @@ export const appRouter = router({
   system: systemRouter,
   onboarding: onboardingRouter,
   auth: authRouter,
+  accounts: accountsRouter,
   members: membersRouter,
   threads: threadsRouter,
   approvals: approvalsRouter,
