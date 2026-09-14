@@ -1,14 +1,14 @@
 /**
  * SubtitleBar · 新闻台字幕条（语音的字幕等价物 + 降级兜底）
  *
- *  - 底部横条：左侧台标「WL-TV · 云栖晨会」，右侧字幕区逐条播报；
+ *  - 底部横条：左侧显示当前工作区晨会台标，右侧字幕区逐条播报；
  *  - 消费 VoiceEngine 字幕事件；fuse（熔断）字幕红色高亮并置顶打断；
  *  - 无字幕时自动隐藏（不占视觉）；进出 translateY 动画。
  */
 import { useEffect, useRef, useState } from "react";
 import { VoiceEngine, type Caption } from "./VoiceEngine";
 
-export function SubtitleBar() {
+export function SubtitleBar({ channelName = "经营晨会" }: { channelName?: string }) {
   const [current, setCurrent] = useState<Caption | null>(null);
   const [visible, setVisible] = useState(false);
   const queueRef = useRef<Caption[]>([]);
@@ -67,7 +67,7 @@ export function SubtitleBar() {
         borderRight: "1px solid rgba(214,220,228,.15)", whiteSpace: "nowrap",
       }}>
         <span style={{ width: 6, height: 6, borderRadius: 3, background: fuse ? "#fff" : "#e05a6b", boxShadow: "0 0 6px #e05a6b" }} />
-        WL-TV · 云栖晨会
+        WL-TV · {channelName}
       </div>
       <div style={{ padding: "8px 14px", fontSize: 12, color: "#eef4ff", lineHeight: 1.5, display: "flex", alignItems: "center" }}>
         {current && (

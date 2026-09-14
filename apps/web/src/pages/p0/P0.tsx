@@ -596,7 +596,7 @@ export default function P0() {
         />
       )}
       {/* 新闻台字幕条（语音字幕等价物 + 降级兜底） */}
-      <SubtitleBar />
+      <SubtitleBar channelName={`${wsName} · 晨会`} />
       <RejectDialog
         open={rejectTarget !== null}
         mode="reject"
