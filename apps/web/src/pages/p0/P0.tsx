@@ -49,6 +49,19 @@ const MODE_TEXT: Record<string, string> = {
   disabled: "未授权", shadow: "影子模式", trial: "试用期", suspended: "仅汇报", active: "正式受托",
 };
 
+/** 不同产品包的首屏快捷任务，避免行业子仓继续显示酒店文案。 */
+const TASK_CARDS_BY_BUNDLE: Record<string, string[]> = {
+  hotel: ["盘点今日订单", "抓竞对价格", "回复新差评", "写今日主推内容"],
+  ecommerce: ["检查投放效率", "追踪竞品价格", "处理渠道差评", "生成新品内容"],
+  trading: ["复盘当前持仓", "扫描市场异动", "检查风险敞口", "生成交易晨报"],
+  platform: ["查看平台健康度", "排查异常告警", "跟进客户工单", "生成运营周报"],
+  consulting: ["梳理客户问题", "核对经营数据", "准备访谈提纲", "起草诊断报告"],
+  "geo-growth": ["扫描品牌提及", "检查引用来源", "生成选题清单", "复盘能见度"],
+  "ai-video": ["拆解视频需求", "核对品牌素材", "生成分镜脚本", "检查成片质量"],
+  "ai-pm": ["梳理本周需求", "扫描竞品动态", "复盘评测结果", "起草版本说明"],
+};
+const DEFAULT_TASK_CARDS = ["梳理本周需求", "扫描竞品动态", "复盘评测结果", "起草版本说明"];
+
 /* ================= 星野画布 ================= */
 function Starfield({ density = 110 }: { density?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -177,6 +190,7 @@ export default function P0() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [isExample, setIsExample] = useState(false);
   const [bundleId, setBundleId] = useState<string | null>(null);
+  const taskCards = TASK_CARDS_BY_BUNDLE[bundleId ?? ""] ?? DEFAULT_TASK_CARDS;
   useEffect(() => {
     void ensureDemoLogin().then(() =>
       trpc.onboarding.status.query()
@@ -408,7 +422,7 @@ export default function P0() {
             {/* 可拖任务卡（拖拽派活：拖到 3D 员工身上即下达） */}
             <div className="mb-1 flex items-center gap-1.5 px-1">
               <span className="text-[10px] text-ink3">任务卡 →</span>
-              {["盘点今日订单", "抓竞对价格", "回复新差评", "写今日主推内容"].map((task) => (
+              {taskCards.map((task) => (
                 <div
                   key={task}
                   draggable

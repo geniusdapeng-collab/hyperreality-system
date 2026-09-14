@@ -63,8 +63,8 @@ export const trpc: ReturnType<typeof createTRPCClient<AppRouter>> = createTRPCCl
  * F-GUEST1 语义升级：无参调用 = 游客进场（readonly 只读体验，各页面挂载点沿用）；
  * 仅显式传 memberNo 时才走旧的种子成员真身份登录（开发后门专用，生产不出现）。
  */
-const DEMO_WORKSPACE = (import.meta.env.VITE_DEMO_WORKSPACE as string | undefined) ?? "yunqi-hotel";
-const DEMO_MEMBER = (import.meta.env.VITE_DEMO_MEMBER as string | undefined) ?? "MEM-001";
+const DEMO_WORKSPACE = (import.meta.env.VITE_DEMO_WORKSPACE as string | undefined) ?? "video-studio";
+const DEMO_MEMBER = (import.meta.env.VITE_DEMO_MEMBER as string | undefined) ?? "MEM-V01";
 export const DEV_DEMO_MEMBER = DEMO_MEMBER;
 export async function ensureDemoLogin(memberNo?: string): Promise<void> {
   if (memberNo) {

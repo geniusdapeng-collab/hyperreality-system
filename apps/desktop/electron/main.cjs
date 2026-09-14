@@ -12,15 +12,38 @@
  *   ⑤ 首启 Splash：初始化期间展示进度（首启约 1 分钟，之后秒开）。
  *
  * 环境变量（调试覆盖，正常分发无需设置）：
- *   WORKLOOM_RESOURCES   载荷目录（默认打包内 resources/payload）
+ *   WORKLOOM_RESOURCES   Resources 根目录（默认 process.resourcesPath）
+ *   WORKLOOM_SUPPORT_DIR 支持目录（默认当前应用独立 userData）
+ *   WORKLOOM_APP_SMOKE   设为 1 时执行真实应用首启冒烟后退出
  *   WORKLOOM_WEB_PORT    Web 端口（默认 5173）
  *   WORKLOOM_SERVER_PORT 后端端口（默认 8787）
+ *   WORKLOOM_PG_PORT     PostgreSQL 端口（默认 5432）
+ *   WORKLOOM_NATS_PORT   NATS 端口（默认 4222）
  */
 const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, shell, dialog } = require("electron");
 const path = require("node:path");
+
+// 各产品使用独立端口，避免同一台机器上多个行业版互相连接到错误的
+// PostgreSQL / server / web / NATS。打包时 extraMetadata.name 提供稳定产品键。
+const PRODUCT_PORT_OFFSET = {
+  "workloom-im": 0,
+  "panda-cineforge": 10,
+  "workroom-tiger": 20,
+  "workroom-andromeda": 30,
+  "workroom-eagle": 40,
+  "workloom-geo": 50,
+  "workroom-fox": 60,
+  "hyperreality-system": 70,
+  "workloom-hotel": 80,
+}[app.getName()] ?? 0;
+process.env.WORKLOOM_SERVER_PORT ??= String(8787 + PRODUCT_PORT_OFFSET);
+process.env.WORKLOOM_WEB_PORT ??= String(5173 + PRODUCT_PORT_OFFSET);
+process.env.WORKLOOM_PG_PORT ??= String(5432 + PRODUCT_PORT_OFFSET);
+process.env.WORKLOOM_NATS_PORT ??= String(4222 + PRODUCT_PORT_OFFSET);
 const { bootstrap } = require("./bootstrap.cjs");
 
-const TITLE = process.env.WORKLOOM_APP_TITLE ?? "WorkLoom 织元";
+const TITLE = process.env.WORKLOOM_APP_TITLE ?? app.getName();
+const APP_SMOKE = process.env.WORKLOOM_APP_SMOKE === "1";
 const WEB_PORT = Number(process.env.WORKLOOM_WEB_PORT || 5173);
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
 
@@ -157,20 +180,30 @@ function createTray() {
 app.whenReady().then(async () => {
   const resourcesDir = process.env.WORKLOOM_RESOURCES
     ? path.resolve(process.env.WORKLOOM_RESOURCES)
-    : path.join(process.resourcesPath, "payload");
-  const supportDir = app.getPath("userData");
+    : process.resourcesPath;
+  const supportDir = process.env.WORKLOOM_SUPPORT_DIR
+    ? path.resolve(process.env.WORKLOOM_SUPPORT_DIR)
+    : app.getPath("userData");
 
-  showSplash("正在准备运行环境…");
+  if (!APP_SMOKE) showSplash("正在准备运行环境…");
   try {
     handle = await bootstrap({
       resourcesDir,
       supportDir,
+      smoke: APP_SMOKE,
       onStatus: (msg) => { if (splash) showSplash(msg); },
     });
   } catch (e) {
     closeSplash();
-    dialog.showErrorBox("WorkLoom 启动失败", `${e.message}\n\n日志目录：${path.join(supportDir, "logs")}`);
+    if (APP_SMOKE) console.error(`WorkLoom 启动失败：${e.message}\n日志目录：${path.join(supportDir, "logs")}`);
+    else dialog.showErrorBox("WorkLoom 启动失败", `${e.message}\n\n日志目录：${path.join(supportDir, "logs")}`);
     app.exit(1);
+    return;
+  }
+  if (APP_SMOKE) {
+    await handle.stop();
+    handle = null;
+    app.exit(0);
     return;
   }
   createTray();

@@ -2,7 +2,7 @@
  * WorkLoom 桌面客户端 · 首启引导（bootstrap）
  *
  * 职责（与 D16 启动器同口径的 JS 移植版，Mac/Windows 统一）：
- *   ① 载荷装配：resourcesDir(payload) → supportDir（版本变化才覆盖，并重置 .bootstrapped）
+ *   ① 载荷装配：resourcesDir(Resources 根目录) → supportDir（版本变化才覆盖，并重置 .bootstrapped）
  *   ② PostgreSQL：initdb（首启）→ pg_ctl 起服 → 角色/建库/vector（desktop-bootstrap-db.mjs）
  *   ③ NATS JetStream：内嵌 nats-server 用户态拉起（缺失降级 memory，不阻断）
  *   ④ 配置：.env.defaults → .env（首启），JWT_SECRET 随机化
@@ -30,7 +30,7 @@ const IS_WIN = process.platform === "win32";
 const SERVER_PORT = Number(process.env.WORKLOOM_SERVER_PORT || 8787);
 const WEB_PORT = Number(process.env.WORKLOOM_WEB_PORT || 5173);
 const PG_PORT = Number(process.env.WORKLOOM_PG_PORT || 5432);
-const NATS_PORT = 4222;
+const NATS_PORT = Number(process.env.WORKLOOM_NATS_PORT || 4222);
 
 /* ---------------- 日志 ---------------- */
 function makeLogger(logDir) {
@@ -95,7 +95,7 @@ async function httpOk(url) {
 /* ---------------- 主流程 ---------------- */
 /**
  * @param {object} opts
- * @param {string} opts.resourcesDir  载荷根目录（含 runtime/node/pg/nats）
+ * @param {string} opts.resourcesDir  应用 Resources 根目录（含 payload.tar.gz）
  * @param {string} opts.supportDir    可写支持目录（userData）
  * @param {(msg:string)=>void} [opts.onStatus] 状态回调（splash 展示）
  * @param {boolean} [opts.smoke]      冒烟模式：健康检查通过即返回（调用方随后 stop）
@@ -122,10 +122,21 @@ async function bootstrap(opts) {
   // 载荷以单文件归档随包（electron-builder extraResources 对 **/node_modules/** 有硬排除、
   // filter 无效——v2.2.0/v2.2.1 三轮实证）：Resources 内为 payload.tar.gz；
   // 按需解压到 supportDir/.payload-cache（PAYLOAD_VERSION 变化才重解），再按老逻辑装配。
-  const archiveFile = path.join(resourcesDir, "payload.tar.gz");
-  let effResources = resourcesDir;
-  const payloadVer = readIf(path.join(resourcesDir, "payload", "PAYLOAD_VERSION"))
-    || readIf(path.join(resourcesDir, "runtime", "VERSION")) || "unknown";
+  // main.cjs 与 CI 必须传同一个 Resources 根目录。为兼容曾经错误传入
+  // Resources/payload 的旧调试脚本，仅在父目录确有归档时回退一级。
+  let resourceRoot = resourcesDir;
+  if (!fs.existsSync(path.join(resourceRoot, "payload.tar.gz"))
+      && fs.existsSync(path.join(path.dirname(resourceRoot), "payload.tar.gz"))) {
+    resourceRoot = path.dirname(resourceRoot);
+  }
+  const archiveFile = path.join(resourceRoot, "payload.tar.gz");
+  let effResources = resourceRoot;
+  const payloadVer = readIf(path.join(resourceRoot, "payload", "PAYLOAD_VERSION"))
+    || readIf(path.join(resourceRoot, "PAYLOAD_VERSION"))
+    || readIf(path.join(resourceRoot, "runtime", "VERSION"));
+  if (!payloadVer || payloadVer === "unknown") {
+    throw new Error(`载荷版本标记缺失（resources=${resourceRoot}）`);
+  }
   if (fs.existsSync(archiveFile)) {
     const cacheDir = path.join(supportDir, ".payload-cache");
     const cacheVer = readIf(path.join(cacheDir, "PAYLOAD_VERSION")) || "none";
@@ -137,7 +148,7 @@ async function bootstrap(opts) {
       // 注意：必须以 cwd + 相对文件名调用——GNU tar（CI 的 Git Bash）会把
       // "D:\..." 盘符误判为远程主机（host:path 语法，报 Cannot connect to D:，v2.2.1 实证）；
       // host:path 解析只作用于 -f 参数，-C 绝对路径不受影响
-      const r = run("tar", ["-xzf", path.basename(archiveFile), "-C", cacheDir], { cwd: resourcesDir });
+      const r = run("tar", ["-xzf", path.basename(archiveFile), "-C", cacheDir], { cwd: resourceRoot });
       if (r.code !== 0) throw new Error(`载荷解压失败：${(r.err || r.out).slice(-300)}`);
       status("✅ 载荷解压完成");
     }
@@ -164,6 +175,10 @@ async function bootstrap(opts) {
     fs.writeFileSync(path.join(supportDir, "VERSION"), payloadVer);
     fs.rmSync(path.join(supportDir, ".bootstrapped"), { force: true });
     status("✅ 载荷装配完成");
+  }
+  const assembledVer = readIf(path.join(RUNTIME, "VERSION"));
+  if (assembledVer !== payloadVer) {
+    throw new Error(`载荷版本不一致：期望 ${payloadVer}，实际 ${assembledVer || "缺失"}`);
   }
 
   const TSX_CLI = fs.existsSync(path.join(RUNTIME, "node_modules", "tsx", "dist", "cli.mjs"))
@@ -255,13 +270,20 @@ async function bootstrap(opts) {
     if (mig.code !== 0) throw new Error(`数据库迁移失败：${(mig.err || mig.out).slice(-400)}`);
     // 种子脚本按仓配置（.env.defaults DESKTOP_SEED_SCRIPT；不在 base-sync 同步范围）——
     // 基座出厂 AI 产品经理包；行业版子仓配自己行业种子（672cf7b 硬编码 hotel 根因）
-    let seedScript = "scripts/seed-aipm.ts";
+    let seedScriptSpec = "scripts/seed-aipm.ts";
     try {
       const m = fs.readFileSync(path.join(RUNTIME, ".env.defaults"), "utf-8").match(/^DESKTOP_SEED_SCRIPT=(.+)$/m);
-      if (m) seedScript = m[1].trim();
+      if (m) seedScriptSpec = m[1].trim();
     } catch { /* 缺省即可 */ }
-    const seed = run(NODE_BIN, [TSX_CLI, "--env-file=.env", seedScript], { cwd: RUNTIME });
-    if (seed.code !== 0) throw new Error(`演示数据种子失败（${seedScript}）：${(seed.err || seed.out).slice(-400)}`);
+    const seedScripts = seedScriptSpec.split(",").map((s) => s.trim()).filter(Boolean);
+    if (seedScripts.length === 0) throw new Error("演示数据种子配置为空");
+    for (const seedScript of seedScripts) {
+      if (!fs.existsSync(path.join(RUNTIME, seedScript))) {
+        throw new Error(`演示数据种子缺失（${seedScript}）`);
+      }
+      const seed = run(NODE_BIN, [TSX_CLI, "--env-file=.env", seedScript], { cwd: RUNTIME });
+      if (seed.code !== 0) throw new Error(`演示数据种子失败（${seedScript}）：${(seed.err || seed.out).slice(-400)}`);
+    }
     fs.writeFileSync(bootFlag, "done");
     status("✅ 首航引导完成（示例团队已装配）");
   }

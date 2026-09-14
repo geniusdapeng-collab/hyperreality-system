@@ -4,8 +4,8 @@
 #       (+pgvector) + nats-server + 产品载荷，用户机零依赖；首启由
 #       apps/desktop/electron/bootstrap.cjs 自动完成装配→initdb→迁移→种子→起服务，
 #       客户端窗口即产品（不再打开外部浏览器）。
-appId: com.workloom.im
-productName: WorkLoom 织元
+appId: com.geniusdapeng.hyperreality
+productName: HyperReality System
 copyright: Copyright © 2026 WorkLoom
 directories:
   output: release
@@ -27,6 +27,8 @@ extraResources:
     to: payload/PAYLOAD_VERSION
 extraMetadata:
   main: apps/desktop/electron/main.cjs
+  name: hyperreality-system
+  productName: HyperReality System
 asar: true
 # 产物名带平台与架构、**不带版本号**——文件名恒定才能支撑
 # https://github.com/<org>/<repo>/releases/latest/download/<文件名> 永久直链
@@ -43,7 +45,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: WorkLoom 织元
+  shortcutName: HyperReality System
 
 # macOS：DMG（按架构分包：arm64 / x64——载荷内 Node 为架构专属，不打 universal）
 mac:

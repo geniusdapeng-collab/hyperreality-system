@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { trpc, setToken, setRefreshToken, ensureDemoLogin, DEV_DEMO_MEMBER, clearGuestFlag } from "../../lib/trpc";
 
-const WS = (import.meta.env.VITE_DEMO_WORKSPACE as string | undefined) ?? "yunqi-hotel";
+const WS = (import.meta.env.VITE_DEMO_WORKSPACE as string | undefined) ?? "video-studio";
 
 type Tab = "code" | "password";
 
