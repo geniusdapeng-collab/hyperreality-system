@@ -1,73 +1,268 @@
 # ============================================================
 # WorkLoom IM · 基座能力心跳对齐（base-sync heartbeat · 子仓侧）
 #
-# 这是子仓模板——由 workloom-im/sync/adopt.sh 注入，不要手工改本文件逻辑；
-# 引擎与范围声明始终从基座仓 main 拉取最新版（防副本漂移），本文件只是触发器。
+# 这是子仓模板——由 workloom-im base-sync 作为根级必备资产持续更新。
+# 基座 main 通过一次 git fetch 固定为不可变提交；本次运行只执行该提交中的
+# 引擎、范围声明和密钥扫描器，不从 mutable raw URL 执行脚本。
 #
-# 触发：每日定时（错峰）+ 手动 + push 后自检
-# 行为：
-#   ① 检测基座落后 → 配置了 SYNC_TOKEN → 自动拉齐并推送（全自动）
-#   ② 检测基座落后 → 未配置 → CI 标红 + Summary 输出待对齐清单（半自动提醒）
+# 写入仅发生在当前子仓：使用最小权限 GITHUB_TOKEN 推同步分支并创建 PR，
+# 不配置长期 PAT，不把任何 token 拼入 URL、命令参数或日志。
 # ============================================================
 name: base-sync-heartbeat
+run-name: base-sync-heartbeat source-${{ github.event.client_payload.source_run_id || github.run_id }}
 
 on:
   schedule:
-    - cron: "37 4 * * *"          # adopt.sh 按仓名哈希错峰生成，避免 7+ 仓同时打 API
+    - cron: "41 4 * * *"        # 中央 fan-out 之外的固定兜底；模板保持无仓别占位符
+  repository_dispatch:
+    types: [workloom-base-sync]
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
-  contents: read
-  issues: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: base-sync-heartbeat-${{ github.repository }}
+  cancel-in-progress: false
 
 env:
   BASE_REPO: geniusdapeng-collab/workloom-im
+  GIT_TERMINAL_PROMPT: "0"
 
 jobs:
   heartbeat:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # 同步引擎执行期间不得接触当前仓写令牌；仅最终发布步骤临时认证。
+          persist-credentials: false
 
       - name: Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      - name: 拉取最新 base-sync 引擎（始终基座 main 版）
+      - name: 固定本次基座提交（公开只读，无凭据）
+        id: base
+        shell: bash
+        env:
+          DISPATCH_BASE_SHA: ${{ github.event.client_payload.base_sha }}
+          DISPATCH_SOURCE_RUN_ID: ${{ github.event.client_payload.source_run_id }}
         run: |
-          mkdir -p /tmp/base-sync/sync
-          curl -fsSL "https://raw.githubusercontent.com/${BASE_REPO}/main/sync/base-sync.mjs" -o /tmp/base-sync/sync/base-sync.mjs
-          echo "引擎就绪：$(wc -l < /tmp/base-sync/sync/base-sync.mjs) 行"
+          set -euo pipefail
+          BASE_URL="https://github.com/${BASE_REPO}.git"
+          BASE_DIR="$RUNNER_TEMP/workloom-base"
+          git init --quiet "$BASE_DIR"
+          git -C "$BASE_DIR" remote add origin "$BASE_URL"
+          case "$GITHUB_EVENT_NAME" in
+            repository_dispatch)
+              if [[ ! "$DISPATCH_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                echo "dispatch base_sha 必须是 40 位小写十六进制提交"
+                exit 1
+              fi
+              if [[ ! "$DISPATCH_SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+                echo "dispatch source_run_id 必须是十进制 GitHub Actions run id"
+                exit 1
+              fi
+              git -C "$BASE_DIR" fetch --quiet origin refs/heads/main:refs/remotes/origin/main
+              git -C "$BASE_DIR" cat-file -e "$DISPATCH_BASE_SHA^{commit}"
+              if ! git -C "$BASE_DIR" merge-base --is-ancestor "$DISPATCH_BASE_SHA" refs/remotes/origin/main; then
+                echo "dispatch base_sha 不属于当前 origin/main 历史；拒绝同步"
+                exit 1
+              fi
+              BASE_SHA="$(git -C "$BASE_DIR" rev-parse "$DISPATCH_BASE_SHA^{commit}")"
+              ;;
+            schedule|workflow_dispatch)
+              git -C "$BASE_DIR" fetch --quiet --depth=1 origin refs/heads/main:refs/remotes/origin/main
+              BASE_SHA="$(git -C "$BASE_DIR" rev-parse refs/remotes/origin/main)"
+              ;;
+            *) echo "不支持的 heartbeat 触发事件：$GITHUB_EVENT_NAME"; exit 1 ;;
+          esac
+          test "$(git -C "$BASE_DIR" rev-parse --verify "$BASE_SHA^{commit}")" = "$BASE_SHA"
+          git -C "$BASE_DIR" checkout --quiet --detach "$BASE_SHA"
+          echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "基座已固定：${BASE_SHA:0:12}"
 
-      - name: pnpm 就绪（锚点合并后 lockfile 刷新依赖）
+      - name: 基座认知文档与 Agent 指令密钥闸门
+        shell: bash
+        run: |
+          node "${{ steps.base.outputs.dir }}/scripts/secret-scan.mjs" --files \
+            "${{ steps.base.outputs.dir }}/AGENTS.md" \
+            "${{ steps.base.outputs.dir }}/WORKLOOM_PRODUCT_CONTEXT.md"
+
+      - name: pnpm 就绪（锚点合并后刷新 lockfile）
         run: corepack enable && corepack prepare pnpm@10.14.0 --activate
 
-      - name: 心跳检测 + 自动对齐
+      - name: 在本地同步分支对齐基座
         id: sync
+        shell: bash
         env:
-          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+          BASE_DIR: ${{ steps.base.outputs.dir }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          DISPATCH_MODE: ${{ github.event.client_payload.mode }}
         run: |
-          set +e
-          node /tmp/base-sync/sync/base-sync.mjs detect --repo . 2>&1 | tee /tmp/detect.log
-          CODE=$?
-          set -e
-          if [ "$CODE" = "0" ]; then
-            echo "result=aligned" >> $GITHUB_OUTPUT
-          elif [ -n "$SYNC_TOKEN" ]; then
-            echo "result=auto-sync" >> $GITHUB_OUTPUT
-            cd . && node /tmp/base-sync/sync/base-sync.mjs pull --repo . --push
-          else
-            echo "result=behind-no-token" >> $GITHUB_OUTPUT
-            echo "## ⚠️ 基座能力落后" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat /tmp/detect.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "修复：① 配置 SYNC_TOKEN secret 后重跑本工作流（自动对齐）；② 或本地执行 \`node sync/base-sync.mjs pull --repo . --push\`" >> $GITHUB_STEP_SUMMARY
-            exit 2
+          set -euo pipefail
+          test -z "${GH_TOKEN:-}"
+          if git config --local --get-regexp '^http\..*extraheader$' >/dev/null 2>&1; then
+            echo "同步阶段检测到残留 Git HTTP 凭据；拒绝执行基座代码"
+            exit 1
           fi
+          REPO_ROOT="$(git rev-parse --show-toplevel)"
+          PATH_PREFIX="$(node -e '
+            const state = JSON.parse(require("fs").readFileSync(".workloom-base-sync.json", "utf8"));
+            const raw = state.pathPrefix ?? "";
+            if (typeof raw !== "string" || raw.includes("\\") || raw.startsWith("/")) throw new Error("invalid pathPrefix in root sync state");
+            if (raw === "" || raw === "." || raw === "./") process.stdout.write(".");
+            else {
+              const parts = raw.split("/").filter(Boolean);
+              if (parts.length === 0 || parts.some((part) => part === "." || part === ".." || !/^[-A-Za-z0-9_.]+$/.test(part))) throw new Error("unsafe pathPrefix in root sync state");
+              process.stdout.write(parts.join("/"));
+            }
+          ')"
+          if [ "$PATH_PREFIX" = "." ]; then
+            TARGET_REPO="$REPO_ROOT"
+          else
+            TARGET_REPO="$REPO_ROOT/$PATH_PREFIX"
+          fi
+          test -d "$TARGET_REPO"
+
+          case "$GITHUB_EVENT_NAME" in
+            repository_dispatch) SYNC_MODE="$DISPATCH_MODE" ;;
+            schedule|workflow_dispatch) SYNC_MODE=full ;;
+            *) echo "不支持的 heartbeat 触发事件：$GITHUB_EVENT_NAME"; exit 1 ;;
+          esac
+          case "$SYNC_MODE" in
+            required-only|full) ;;
+            *) echo "非法或缺失的同步范围：$SYNC_MODE"; exit 1 ;;
+          esac
+
+          START_SHA="$(git rev-parse HEAD)"
+          SHORT_SHA="${BASE_SHA:0:12}"
+          BRANCH="workloom-base-sync/${SYNC_MODE}-${SHORT_SHA}-${GITHUB_RUN_ID}"
+          git switch --quiet --create "$BRANCH"
+          PULL_ARGS=(pull --repo "$TARGET_REPO" --base-dir "$BASE_DIR")
+          if [ "$SYNC_MODE" = "required-only" ]; then
+            PULL_ARGS+=(--required-only)
+          fi
+          node "$BASE_DIR/sync/base-sync.mjs" "${PULL_ARGS[@]}"
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "base-sync 返回后工作树仍有未提交内容；拒绝推送不完整同步"
+            exit 1
+          fi
+
+          node "$BASE_DIR/scripts/secret-scan.mjs" --files \
+            "$REPO_ROOT/AGENTS.md" \
+            "$REPO_ROOT/WORKLOOM_PRODUCT_CONTEXT.md"
+
+          END_SHA="$(git rev-parse HEAD)"
+          node "$BASE_DIR/scripts/secret-scan.mjs" --range "$START_SHA" "$END_SHA"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "base-short=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "sync-mode=$SYNC_MODE" >> "$GITHUB_OUTPUT"
+          echo "target-repo=$TARGET_REPO" >> "$GITHUB_OUTPUT"
+          if [ "$END_SHA" = "$START_SHA" ]; then
+            echo "result=aligned" >> "$GITHUB_OUTPUT"
+            echo "✅ 已对齐基座 ${SHORT_SHA}"
+          else
+            echo "result=changed" >> "$GITHUB_OUTPUT"
+            echo "📦 已生成基座对齐提交 ${END_SHA:0:12}"
+          fi
+
+      - name: 安装依赖并验证同步提交
+        if: steps.sync.outputs.result == 'changed'
+        id: verify
+        shell: bash
+        env:
+          TARGET_REPO: ${{ steps.sync.outputs.target-repo }}
+        run: |
+          set -euo pipefail
+          test -z "${GH_TOKEN:-}"
+          test -f "$TARGET_REPO/package.json"
+          cd "$TARGET_REPO"
+
+          CI=true pnpm install --frozen-lockfile --ignore-scripts
+          CHECKS="pnpm install --frozen-lockfile --ignore-scripts"
+          if node -e 'const p=JSON.parse(require("fs").readFileSync("package.json", "utf8")); process.exit(p.scripts?.typecheck ? 0 : 1)'; then
+            pnpm run typecheck
+            CHECKS="$CHECKS, pnpm run typecheck"
+          else
+            CHECKS="$CHECKS, typecheck script absent"
+          fi
+          if node -e 'const p=JSON.parse(require("fs").readFileSync("package.json", "utf8")); process.exit(p.scripts?.test ? 0 : 1)'; then
+            pnpm run test
+            CHECKS="$CHECKS, pnpm run test"
+          else
+            CHECKS="$CHECKS, test script absent"
+          fi
+
+          REPO_ROOT="$(git rev-parse --show-toplevel)"
+          if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
+            echo "验证命令改变了同步提交后的工作树；拒绝推送未审计内容"
+            exit 1
+          fi
+          echo "checks=$CHECKS" >> "$GITHUB_OUTPUT"
+          echo "验证通过：$CHECKS"
+
+      - name: 推送同仓分支并创建 PR
+        if: steps.sync.outputs.result == 'changed'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.sync.outputs.branch }}
+          BASE_SHORT: ${{ steps.sync.outputs.base-short }}
+          SYNC_MODE: ${{ steps.sync.outputs.sync-mode }}
+          VERIFICATION: ${{ steps.verify.outputs.checks }}
+          BASH_ENV: /dev/null
+          ENV: /dev/null
+        run: |
+          set -euo pipefail
+          PUBLISH_CONFIG_DIR="$(mktemp -d "$RUNNER_TEMP/workloom-publish.XXXXXX")"
+          cleanup_publish_config() {
+            case "$PUBLISH_CONFIG_DIR" in
+              "$RUNNER_TEMP"/workloom-publish.*) rm -rf -- "$PUBLISH_CONFIG_DIR" ;;
+              *) echo "拒绝清理非预期发布认证目录"; return 1 ;;
+            esac
+          }
+          trap cleanup_publish_config EXIT
+          export GIT_CONFIG_GLOBAL="$PUBLISH_CONFIG_DIR/gitconfig"
+          export GIT_CONFIG_NOSYSTEM=1
+          export GH_CONFIG_DIR="$PUBLISH_CONFIG_DIR/gh"
+          mkdir -m 700 "$GH_CONFIG_DIR"
+          touch "$GIT_CONFIG_GLOBAL"
+          chmod 600 "$GIT_CONFIG_GLOBAL"
+
+          EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
+          git config --local --unset-all remote.origin.pushurl || true
+          git remote set-url origin "$EXPECTED_ORIGIN"
+          FETCH_ORIGIN="$(git remote get-url origin)"
+          PUSH_ORIGIN="$(git remote get-url --push origin)"
+          test "$FETCH_ORIGIN" = "$EXPECTED_ORIGIN"
+          test "$PUSH_ORIGIN" = "$EXPECTED_ORIGIN"
+          case "$FETCH_ORIGIN $PUSH_ORIGIN" in
+            *"@"*) echo "origin URL 含凭据，拒绝推送"; exit 1 ;;
+          esac
+          if git config --local --name-only --get-regexp '^(credential|http|url)\.' >/dev/null 2>&1; then
+            echo "检测到同步阶段遗留的本地认证或 URL 重写配置；拒绝注入写令牌"
+            exit 1
+          fi
+          gh auth setup-git
+
+          TITLE="chore(base-sync): 对齐 WorkLoom IM 基座 ${BASE_SHORT} (${SYNC_MODE})"
+          EXISTING="$(gh pr list --state open --limit 100 --json title,url --jq ".[] | select(.title == \"$TITLE\") | .url" | head -n 1)"
+          if [ -n "$EXISTING" ]; then
+            echo "已有同一基座版本的待审 PR：$EXISTING"
+            exit 0
+          fi
+
+          git -c core.hooksPath=/dev/null push --set-upstream origin "HEAD:refs/heads/$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$TITLE" \
+            --body "由 base-sync heartbeat 生成。同步范围：${SYNC_MODE}；基座内容固定到提交 ${BASE_SHORT}；同步前 staged diff 与提交后完整 diff、认知文档和 AGENTS.md 均已通过严格密钥扫描。验证：${VERIFICATION}。请人工评审后合并。"

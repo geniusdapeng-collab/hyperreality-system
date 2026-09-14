@@ -1,6 +1,14 @@
 {
   "baseRepo": "geniusdapeng-collab/workloom-im",
   "lastSyncedBaseSha": "c69914d38ec45bde3e2a8df2f391a0a9003a37f6",
-  "lastSyncAt": "2026-09-05T12:56:14.047Z",
-  "filesTouched": 0
+  "lastSyncAt": "2026-09-14T15:26:49.429Z",
+  "filesTouched": 3,
+  "lastRequiredAssetsBaseSha": "fc0f825808adea2a1edb4144a3eb9cf6360be531",
+  "lastSyncMode": "required-only",
+  "pathPrefix": ".",
+  "requiredRootAssetsSha256": {
+    "WORKLOOM_PRODUCT_CONTEXT.md": "0868b38de30424cfbfbb7fc7a872c54051d2a71f6adee44e1abc690c2508a099",
+    ".github/workflows/base-sync-heartbeat.yml": "b08f921a4021bc9b2523022c4cdb36546b315d42ab7190f897cf1068e874ac52",
+    "AGENTS.md#managed-section": "d63adfbd349ac87c8af33b96cd13aad1a2ed29909f226e8fbb97ee9d4a1ecacf"
+  }
 }
