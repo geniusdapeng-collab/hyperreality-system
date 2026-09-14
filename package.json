@@ -53,7 +53,8 @@
     "app:pack": "electron-builder --dir",
     "app:dist": "electron-builder",
     "setup:lite": "tsx scripts/setup-lite.mts",
-    "db:seed:aipm": "tsx --env-file=.env scripts/seed-aipm.ts"
+    "db:seed:aipm": "tsx --env-file=.env scripts/seed-aipm.ts",
+    "product:verify": "node scripts/verify-product-content.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

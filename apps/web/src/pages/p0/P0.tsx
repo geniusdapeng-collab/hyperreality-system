@@ -190,6 +190,10 @@ export default function P0() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [isExample, setIsExample] = useState(false);
   const [bundleId, setBundleId] = useState<string | null>(null);
+  const setWelcomeVisible = (visible: boolean) => {
+    window.dispatchEvent(new CustomEvent<boolean>("workloom:welcome", { detail: visible }));
+    setShowWelcome(visible);
+  };
   const taskCards = TASK_CARDS_BY_BUNDLE[bundleId ?? ""] ?? DEFAULT_TASK_CARDS;
   useEffect(() => {
     void ensureDemoLogin().then(() =>
@@ -203,7 +207,7 @@ export default function P0() {
           if (wsId) setWorkspaceId(wsId);
           if (rr.bundle?.isExample) {
             setIsExample(true);
-            if (wsId && shouldShowWelcome(wsId)) setShowWelcome(true);
+            if (wsId && shouldShowWelcome(wsId)) setWelcomeVisible(true);
           }
         })
         .catch(() => undefined),
@@ -239,16 +243,17 @@ export default function P0() {
   useEffect(() => { (window as unknown as { __wlVoice?: typeof VoiceEngine }).__wlVoice = VoiceEngine; }, []);
   // 熔断事件 → 语音强制打断（运镜与警报声由 CineDirector 处理）
   useEffect(() => {
+    if (showWelcome) return;
     if (directorEvent?.kind === "fuse") {
       VoiceEngine.speak({ role: "company-ceo", persona: "顾云峥", text: directorEvent.text, priority: "fuse" });
     }
-  }, [directorEvent]);
+  }, [directorEvent, showWelcome]);
   // 晨间仪式语音播报（F-REPORT1）：CEO 先晨报 → 有事汇报/关键岗位依次报到
   // 遴选纪律：七八十名员工不全上——有事的（评级异常）+ 部门经理级必报，上限 8 名；
   // 命名纪律：设了别名报「岗位名·别名」，未设只报岗位名，绝不报系统默认人名。
   const ceremonyVoiced = useRef(false);
   useEffect(() => {
-    if (ceremony >= 5 || ceremony < 2 || ceremonyVoiced.current || !data) return;
+    if (showWelcome || ceremony >= 5 || ceremony < 2 || ceremonyVoiced.current || !data) return;
     ceremonyVoiced.current = true;
     AudioEngine.play("fanfare");
     // ① CEO 先汇报（晨报主体）
@@ -270,7 +275,7 @@ export default function P0() {
       }, 2400 + i * 1600);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ceremony, data]);
+  }, [ceremony, data, showWelcome]);
 
   const load = async () => {
     await ensureDemoLogin();
@@ -379,7 +384,13 @@ export default function P0() {
 
   const showCeremony = ceremony < 5;
   return (
-    <div style={{ paddingRight: railW }} className="relative flex h-screen flex-col overflow-hidden bg-bg950">
+    <div
+      data-product-ready={data ? "true" : "false"}
+      data-product-bundle={bundleId ?? ""}
+      data-product-actors={data ? String(data.satellites.length) : "0"}
+      style={{ paddingRight: railW }}
+      className="relative flex h-screen flex-col overflow-hidden bg-bg950"
+    >
       <Starfield density={typeof window !== "undefined" && window.innerWidth < 768 ? 60 : 110} />
 
       {/* 顶栏（极简） */}
@@ -437,7 +448,7 @@ export default function P0() {
                 </div>
               ))}
             </div>
-            {webglOk ? (
+            {!showWelcome && webglOk ? (
               <Floor3D
                 directorEvent={directorEvent}
                 floor={data.floor}
@@ -459,7 +470,7 @@ export default function P0() {
           </div>
         ) : (
           <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-90 opacity-0" : "opacity-100"}`}>
-            {data && (webglOk ? (
+            {data && (!showWelcome && webglOk ? (
               <Stage3D
                 agents={data.satellites}
                 active={!showCeremony || ceremony >= 3}
@@ -591,7 +602,7 @@ export default function P0() {
           industry={bundleId}
           onDone={() => {
             if (workspaceId) markWelcomed(workspaceId);
-            setShowWelcome(false);
+            setWelcomeVisible(false);
           }}
         />
       )}

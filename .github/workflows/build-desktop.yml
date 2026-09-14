@@ -39,8 +39,15 @@ jobs:
           VITE_DEMO_MEMBER: MEM-V01
         run: |
           pnpm install --frozen-lockfile
-          grep -q 'app.disableHardwareAcceleration()' apps/desktop/electron/main.cjs
-          grep -q 'disable-gpu-compositing' apps/desktop/electron/main.cjs
+          grep -q 'WORKLOOM_SAFE_RENDERING' apps/desktop/electron/main.cjs
+          grep -q 'WORKLOOM_RENDER_SMOKE' apps/desktop/electron/main.cjs
+          grep -q 'previousEnvFile' apps/desktop/electron/bootstrap.cjs
+          grep -q 'validateStoredSession' apps/web/src/lib/trpc.ts
+          grep -q 'speakAndWait' apps/web/src/components/MateWelcome.tsx
+          grep -q 'data-render-mode="vector2d"' apps/web/src/components/loommate/MateLive2D.tsx
+          grep -q 'acquireExclusive' apps/web/src/voice/VoiceEngine.ts
+          pnpm product:verify
+          pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
           pnpm -C apps/web build
 
       - name: 装配自包含载荷（darwin-arm64）
@@ -66,8 +73,22 @@ jobs:
           test -n "$BIN" || { echo "❌ arm64 应用主程序未生成"; exit 1; }
           WORKLOOM_APP_SMOKE=1 WORKLOOM_SUPPORT_DIR=/tmp/wl-app-smoke "$BIN"
           test -f /tmp/wl-app-smoke/.bootstrapped || { echo "❌ 真实应用首启未完成"; exit 1; }
-          echo "✅ 真实 .app 首启冒烟通过"
-        timeout-minutes: 12
+          WORKLOOM_RENDER_SMOKE=1 WORKLOOM_SUPPORT_DIR=/tmp/wl-render-default "$BIN"
+          test -f /tmp/wl-render-default/logs/render-default.json || { echo "❌ 默认渲染探针缺失"; exit 1; }
+          WORKLOOM_RENDER_SMOKE=1 WORKLOOM_SAFE_RENDERING=1 WORKLOOM_SUPPORT_DIR=/tmp/wl-render-safe "$BIN"
+          test -f /tmp/wl-render-safe/logs/render-safe.json || { echo "❌ 安全渲染探针缺失"; exit 1; }
+          echo "✅ 真实 .app 后端 + Live2D + 动态矢量双渲染冒烟通过"
+        timeout-minutes: 20
+
+      - name: 上传渲染验收证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-render-evidence
+          if-no-files-found: warn
+          path: |
+            /tmp/wl-render-default/logs/render-default.*
+            /tmp/wl-render-safe/logs/render-safe.*
       - name: 装配自包含载荷（darwin-x64）
         run: bash scripts/pack-electron-payload.sh --platform mac --arch x64 --version "$VERSION"
 
@@ -132,6 +153,8 @@ jobs:
           VITE_DEMO_MEMBER: MEM-V01
         run: |
           pnpm install --frozen-lockfile
+          pnpm product:verify
+          pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
           pnpm -C apps/web build
 
       - name: 装配自包含载荷（win-x64）
@@ -157,8 +180,10 @@ jobs:
           test -n "$EXE" || { echo "❌ Windows 应用主程序未生成"; exit 1; }
           node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_APP_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "${TEMP}/wl-app-smoke"
           test -f "${TEMP}/wl-app-smoke/.bootstrapped" || { echo "❌ 真实应用首启未完成"; exit 1; }
-          echo "✅ 真实 Windows 应用首启冒烟通过"
-        timeout-minutes: 15
+          node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_RENDER_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "${TEMP}/wl-render-default"
+          test -f "${TEMP}/wl-render-default/logs/render-default.json" || { echo "❌ Windows 渲染探针缺失"; exit 1; }
+          echo "✅ 真实 Windows 应用后端 + 页面渲染冒烟通过"
+        timeout-minutes: 20
       - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
         if: failure()
         shell: pwsh

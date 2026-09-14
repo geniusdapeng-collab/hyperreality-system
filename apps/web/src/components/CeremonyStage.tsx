@@ -11,10 +11,11 @@
  * 触发类型（occasion）：first-install 首次装机欢迎 / morning 每日晨迎 / milestone 里程碑庆祝。
  * 离线渲染契约：?capture 模式由 window.__ceremonyStep 驱动虚拟时钟（录屏技能路线 B）。
  */
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Avatar3D, roleSkinOf } from "./Avatar3D";
+import { AgentAvatarOf } from "./AgentAvatar";
 import { CineFloor, SpotBeam, CinePost } from "./cinematic";
 
 export interface CeremonyActor {
@@ -165,24 +166,86 @@ function CeremonyScene({ actors, occasion, dancing, onReady }: {
 }
 
 /* ---------------- 主组件 ---------------- */
-export function CeremonyStage({ actors, occasion = "first-install", dancing = true, height = 460, onReady }: {
+interface CeremonyStageProps {
   actors: CeremonyActor[];
   occasion?: CeremonyOccasion;
   dancing?: boolean;
-  height?: number;
+  height?: number | string;
   onReady?: () => void;
-}) {
+}
+
+function WebGLCeremonyStage({ actors, occasion = "first-install", dancing = true, height = 460, onReady }: CeremonyStageProps) {
+  const [ready, setReady] = useState(false);
   return (
-    <div style={{ width: "100%", height, borderRadius: 12, overflow: "hidden", background: "#0b0d10", position: "relative" }}>
+    <div data-ceremony-render-mode="webgl-3d" data-ceremony-ready={ready ? "true" : "false"} style={{ width: "100%", height, borderRadius: 12, overflow: "hidden", background: "#0b0d10", position: "relative" }}>
       <Canvas
         dpr={typeof window !== "undefined" ? window.devicePixelRatio : 1}
         camera={{ position: [0, 3.0, 13.5], fov: 38 }}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
       >
         <Suspense fallback={null}>
-          <CeremonyScene actors={actors} occasion={occasion} dancing={dancing} onReady={() => onReady?.()} />
+          <CeremonyScene actors={actors} occasion={occasion} dancing={dancing} onReady={() => { setReady(true); onReady?.(); }} />
         </Suspense>
       </Canvas>
     </div>
   );
+}
+
+function hasWebGL(): boolean {
+  if (typeof window === "undefined") return false;
+  if (new URLSearchParams(window.location.search).get("render") === "vector2d") return false;
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
+  } catch { return false; }
+}
+
+/** WebGL 不可用时的动态团队舞台：人物、岗位、队形、舞蹈和聚光均保留。 */
+function VectorCeremonyStage({ actors, occasion = "first-install", dancing = true, height = 460, onReady }: CeremonyStageProps) {
+  const choreo = useMemo(() => choreographyOf(actors.length, occasion), [actors.length, occasion]);
+  useEffect(() => {
+    const id = window.setTimeout(() => onReady?.(), 80);
+    return () => window.clearTimeout(id);
+  }, [onReady]);
+
+  const staff = actors.slice(1);
+  return (
+    <div data-ceremony-render-mode="vector2d" data-ceremony-ready="true" data-ceremony-actors={String(actors.length)} style={{ width: "100%", height, borderRadius: 12, overflow: "hidden", background: "radial-gradient(ellipse at 50% 70%,#222b39 0,#0b0d10 58%)", position: "relative" }}>
+      <style>{`
+        @keyframes ceremony-v2-dance { 0%,100% { transform:translateY(0) rotate(-2deg); } 35% { transform:translateY(-20px) rotate(3deg); } 70% { transform:translateY(-7px) rotate(-3deg); } }
+        @keyframes ceremony-v2-arrive { from { opacity:0; transform:translateY(70px) scale(.7); } to { opacity:1; transform:none; } }
+        @keyframes ceremony-v2-beam { 0%,100% { opacity:.18; } 50% { opacity:.42; } }
+      `}</style>
+      <div style={{ position: "absolute", left: "8%", right: "8%", bottom: "8%", height: "18%", borderRadius: "50%", border: "1px solid rgba(255,217,138,.22)", background: "radial-gradient(ellipse,rgba(255,217,138,.11),transparent 70%)", transform: "perspective(500px) rotateX(64deg)" }} />
+      {[18, 34, 50, 66, 82].map((left, i) => <div key={left} style={{ position: "absolute", left: `${left}%`, top: 0, width: "14%", height: "82%", transform: "translateX(-50%)", clipPath: "polygon(42% 0,58% 0,100% 100%,0 100%)", background: i === 2 ? "linear-gradient(rgba(255,217,138,.22),transparent)" : "linear-gradient(rgba(174,202,235,.12),transparent)", animation: `ceremony-v2-beam ${2.4 + i * .17}s ease-in-out infinite` }} />)}
+      {actors.map((actor, index) => {
+        const isCeo = index === 0;
+        const staffIndex = index - 1;
+        const row = staff.length > 7 && staffIndex >= Math.ceil(staff.length / 2) ? 1 : 0;
+        const rowActors = staff.length > 7 ? (row === 0 ? Math.ceil(staff.length / 2) : Math.floor(staff.length / 2)) : staff.length;
+        const rowIndex = row === 0 ? staffIndex : staffIndex - Math.ceil(staff.length / 2);
+        const left = isCeo ? 50 : 13 + ((rowIndex + 1) / (rowActors + 1)) * 74;
+        const bottom = isCeo ? 25 : row === 0 ? 17 : 8;
+        const avatarSize = isCeo ? 138 : row === 0 ? 92 : 76;
+        const slow = !isCeo && choreo.slowDancers.includes(staffIndex);
+        return (
+          <div key={`${actor.presetKey}-${index}`} style={{ position: "absolute", left: `${left}%`, bottom: `${bottom}%`, zIndex: isCeo ? 5 : row === 0 ? 4 : 3, width: avatarSize + 74, marginLeft: -(avatarSize + 74) / 2, textAlign: "center", animation: dancing ? `ceremony-v2-dance ${slow ? 1.42 : .94}s ease-in-out ${index * .08}s infinite` : `ceremony-v2-arrive .65s ease ${index * .08}s both`, transformOrigin: "50% 100%" }}>
+            <AgentAvatarOf name={actor.name} presetKey={actor.presetKey} size={avatarSize} />
+            <div style={{ marginTop: 4, color: isCeo ? "#ffd98a" : "#d6dce4", fontWeight: isCeo ? 750 : 550, fontSize: isCeo ? 16 : 12, whiteSpace: "nowrap", textShadow: "0 2px 12px #000" }}>{actor.name}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 团队仪式渲染后端选择器；安全模式仍是动态人物，不显示空舞台。 */
+export function CeremonyStage(props: CeremonyStageProps) {
+  // Live2D 与 R3F 同页切换时，部分 Chromium/ANGLE 组合会把前一上下文的纹理对象
+  // 误带入新上下文（INVALID_OPERATION: object does not belong to this context），形成黑舞台。
+  // 团队仪式因此以独立的动态矢量后端为正式路径；3D 仅保留给开发者显式验收。
+  const experimental3D = typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("team3d") === "1"
+    && hasWebGL();
+  return experimental3D ? <WebGLCeremonyStage {...props} /> : <VectorCeremonyStage {...props} />;
 }

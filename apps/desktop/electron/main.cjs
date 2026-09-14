@@ -14,15 +14,22 @@
  * 环境变量（调试覆盖，正常分发无需设置）：
  *   WORKLOOM_RESOURCES   Resources 根目录（默认 process.resourcesPath）
  *   WORKLOOM_SUPPORT_DIR 支持目录（默认当前应用独立 userData）
- *   WORKLOOM_APP_SMOKE   设为 1 时执行真实应用首启冒烟后退出
- *   WORKLOOM_ENABLE_GPU  macOS 上设为 1 时重新启用硬件加速（默认软件合成，避免黑屏）
+ *   WORKLOOM_APP_SMOKE   设为 1 时执行后端首启冒烟后退出
+ *   WORKLOOM_RENDER_SMOKE 设为 1 时创建真实窗口并验证页面/数字人/像素后退出
+ *   WORKLOOM_SAFE_RENDERING 设为 1 时禁用硬件加速并使用动态矢量渲染后端
  *   WORKLOOM_WEB_PORT    Web 端口（默认 5173）
  *   WORKLOOM_SERVER_PORT 后端端口（默认 8787）
  *   WORKLOOM_PG_PORT     PostgreSQL 端口（默认 5432）
  *   WORKLOOM_NATS_PORT   NATS 端口（默认 4222）
  */
 const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, shell, dialog } = require("electron");
+const fs = require("node:fs");
 const path = require("node:path");
+
+// 测试/多产品实例的浏览器存储必须与运行时支持目录一致，避免 Local Storage 串包。
+if (process.env.WORKLOOM_SUPPORT_DIR) {
+  app.setPath("userData", path.resolve(process.env.WORKLOOM_SUPPORT_DIR));
+}
 
 // 各产品使用独立端口，避免同一台机器上多个行业版互相连接到错误的
 // PostgreSQL / server / web / NATS。打包时 extraMetadata.name 提供稳定产品键。
@@ -45,19 +52,17 @@ const { bootstrap } = require("./bootstrap.cjs");
 
 const TITLE = process.env.WORKLOOM_APP_TITLE ?? app.getName();
 const APP_SMOKE = process.env.WORKLOOM_APP_SMOKE === "1";
+const RENDER_SMOKE = process.env.WORKLOOM_RENDER_SMOKE === "1";
+const SAFE_RENDERING = process.env.WORKLOOM_SAFE_RENDERING === "1" || process.argv.includes("--safe-rendering");
 const WEB_PORT = Number(process.env.WORKLOOM_WEB_PORT || 5173);
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
 
-// Electron/Chromium 在部分 macOS + Apple Silicon 组合上会出现：DOM 已完整渲染，
-// 但 GPU 合成后整个 BrowserWindow 只有黑色像素。为保证分发包稳定，macOS
-// 默认使用 Chromium 软件合成；已确认 GPU 兼容的机器可用环境变量显式开启。
-if (process.platform === "darwin" && process.env.WORKLOOM_ENABLE_GPU !== "1") {
+// Live2D/Pixi 和团队 Three.js 舞台以 WebGL 为正式渲染后端，硬件加速必须默认开启。
+// 只有显式安全模式才关闭 GPU；renderer 会通过 ?render=vector2d 选择完整动态 SVG 后端。
+if (SAFE_RENDERING) {
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
-
-// 软件渲染时保留 SwiftShader WebGL，让 3D 舞台（Stage3D）仍可用。
-app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 
 /** 设计稿逻辑分辨率——所有页面按此比例设计，窗口只做等比缩放 */
 const BASE_W = 1440;
@@ -68,6 +73,7 @@ let splash = null;
 let tray = null;
 let handle = null; // bootstrap 返回的 { stop, webUrl }
 let quitting = false;
+let supportDirResolved = null;
 
 /* ---------- 单实例锁：重复启动唤出已有窗口 ---------- */
 const gotLock = app.requestSingleInstanceLock();
@@ -151,6 +157,13 @@ function createWindow() {
 
   win.on("resize", applyFixedZoom);
   win.webContents.on("did-finish-load", applyFixedZoom);
+  win.webContents.on("render-process-gone", (_event, details) => {
+    const logDir = path.join(supportDirResolved ?? app.getPath("userData"), "logs");
+    try {
+      fs.mkdirSync(logDir, { recursive: true });
+      fs.appendFileSync(path.join(logDir, "renderer-health.log"), `${new Date().toISOString()} renderer gone: ${JSON.stringify(details)}\n`);
+    } catch { /* 日志失败不影响退出流程 */ }
+  });
   win.once("ready-to-show", () => { applyFixedZoom(); closeSplash(); win.show(); });
 
   // 关窗 = 最小化到托盘（夜班/自动任务持续运行）；托盘「退出」才是真退出
@@ -168,7 +181,93 @@ function createWindow() {
   });
   win.on("closed", () => { win = null; });
 
-  void win.loadURL(WEB_URL);
+  const renderUrl = SAFE_RENDERING ? `${WEB_URL}?render=vector2d` : WEB_URL;
+  void win.loadURL(renderUrl);
+}
+
+function pixelHealth(image) {
+  const bitmap = image.toBitmap(); // Electron BGRA
+  const pixelCount = Math.floor(bitmap.length / 4);
+  const step = Math.max(1, Math.floor(pixelCount / 45000));
+  let n = 0, sum = 0, sumSq = 0, visible = 0;
+  for (let i = 0; i < pixelCount; i += step) {
+    const p = i * 4;
+    const lum = (bitmap[p] + bitmap[p + 1] + bitmap[p + 2]) / 3;
+    n++; sum += lum; sumSq += lum * lum;
+    if (lum > 18) visible++;
+  }
+  const mean = sum / Math.max(1, n);
+  const variance = sumSq / Math.max(1, n) - mean * mean;
+  return { mean: Number(mean.toFixed(2)), variance: Number(variance.toFixed(2)), visibleRatio: Number((visible / Math.max(1, n)).toFixed(4)) };
+}
+
+async function runRenderSmoke() {
+  const logDir = path.join(supportDirResolved, "logs");
+  fs.mkdirSync(logDir, { recursive: true });
+  const deadline = Date.now() + 60000;
+  let probe = null;
+  while (Date.now() < deadline && win && !win.isDestroyed()) {
+    probe = await win.webContents.executeJavaScript(`(() => {
+      const root = document.querySelector('[data-product-ready="true"]');
+      const welcome = document.querySelector('[aria-label^="织伴开场介绍"]');
+      const avatar = welcome?.querySelector('[data-avatar-ready="true"]') || null;
+      const canvas = document.createElement('canvas');
+      const webgl = !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+      return {
+        productReady: !!root,
+        welcomeReady: !!welcome,
+        bundle: root?.getAttribute('data-product-bundle') || null,
+        actorCount: Number(root?.getAttribute('data-product-actors') || 0),
+        avatarReady: !!avatar,
+        renderMode: avatar?.getAttribute('data-render-mode') || null,
+        ceremonyMode: document.querySelector('[data-ceremony-render-mode]')?.getAttribute('data-ceremony-render-mode') || null,
+        webgl,
+        title: document.title,
+        bodyText: document.body.innerText.slice(0, 1200)
+      };
+    })()`, true).catch((error) => ({ error: String(error) }));
+    if (probe?.productReady && probe?.avatarReady) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  if (!win || win.isDestroyed()) throw new Error("渲染窗口提前退出");
+  const shot = await win.webContents.capturePage();
+  const screenshotPath = path.join(logDir, SAFE_RENDERING ? "render-safe.png" : "render-default.png");
+  fs.writeFileSync(screenshotPath, shot.toPNG());
+  const pixels = pixelHealth(shot);
+  const report = { ...probe, pixels, safeRendering: SAFE_RENDERING, screenshotPath, checkedAt: new Date().toISOString() };
+  const expectedMode = SAFE_RENDERING ? "vector2d" : "live2d-webgl";
+  if (!report.productReady) throw new Error(`产品页面未就绪：${JSON.stringify(report)}`);
+  if (!report.avatarReady || report.renderMode !== expectedMode) throw new Error(`数字人后端不符合契约（期望 ${expectedMode}）：${JSON.stringify(report)}`);
+  if (Number(report.actorCount) < 2) throw new Error(`团队编制未加载：${JSON.stringify(report)}`);
+  if (report.bundle === "ai-pm" && Number(report.actorCount) !== 14) throw new Error(`AI 产品经理 Bundle 编制应为 14 人：${JSON.stringify(report)}`);
+  if (pixels.variance < 35 || pixels.visibleRatio < 0.015) throw new Error(`画面疑似纯黑/纯色：${JSON.stringify(report)}`);
+
+  // 通过产品内的确定性测试钩子进入团队态，避免模型加载速度影响模拟点击次数。
+  const enteredTeam = await win.webContents.executeJavaScript(`typeof window.__workloomEnterTeam === 'function' && (window.__workloomEnterTeam(), true)`, true);
+  if (!enteredTeam) throw new Error("团队仪式测试钩子不可用");
+  const teamDeadline = Date.now() + 20000;
+  let teamProbe = null;
+  while (Date.now() < teamDeadline) {
+    teamProbe = await win.webContents.executeJavaScript(`(() => {
+      const stage = document.querySelector('[data-ceremony-ready="true"]');
+      return { ready: !!stage, mode: stage?.getAttribute('data-ceremony-render-mode') || null, actors: Number(stage?.getAttribute('data-ceremony-actors') || 0), text: document.body.innerText.slice(-500) };
+    })()`, true);
+    if (teamProbe?.ready) break;
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+  // 等待 CSS 动画与 Chromium 合成至少提交一帧，截图不能沿用上一阶段的纹理。
+  if (teamProbe?.ready) await new Promise((resolve) => setTimeout(resolve, 700));
+  const teamShot = await win.webContents.capturePage();
+  const teamScreenshotPath = path.join(logDir, SAFE_RENDERING ? "team-safe.png" : "team-default.png");
+  fs.writeFileSync(teamScreenshotPath, teamShot.toPNG());
+  const teamPixels = pixelHealth(teamShot);
+  const expectedTeamMode = "vector2d";
+  Object.assign(report, { team: { ...teamProbe, pixels: teamPixels, screenshotPath: teamScreenshotPath } });
+  fs.writeFileSync(path.join(logDir, SAFE_RENDERING ? "render-safe.json" : "render-default.json"), JSON.stringify(report, null, 2));
+  if (!teamProbe?.ready || teamProbe.mode !== expectedTeamMode) throw new Error(`团队仪式后端不符合契约（期望 ${expectedTeamMode}）：${JSON.stringify(report)}`);
+  if (report.bundle === "ai-pm" && teamProbe.actors !== Number(report.actorCount) + 1) throw new Error(`AI 产品经理团队仪式名单不完整：${JSON.stringify(report)}`);
+  if (teamPixels.variance < 35 || teamPixels.visibleRatio < 0.015) throw new Error(`团队仪式画面疑似纯黑/纯色：${JSON.stringify(report)}`);
+  console.log(`WorkLoom 渲染冒烟通过：${JSON.stringify(report)}`);
 }
 
 /* ---------- 系统托盘 ---------- */
@@ -192,6 +291,7 @@ app.whenReady().then(async () => {
   const supportDir = process.env.WORKLOOM_SUPPORT_DIR
     ? path.resolve(process.env.WORKLOOM_SUPPORT_DIR)
     : app.getPath("userData");
+  supportDirResolved = supportDir;
 
   if (!APP_SMOKE) showSplash("正在准备运行环境…");
   try {
@@ -214,8 +314,24 @@ app.whenReady().then(async () => {
     app.exit(0);
     return;
   }
-  createTray();
+  if (!RENDER_SMOKE) createTray();
   createWindow();
+  if (RENDER_SMOKE) {
+    try {
+      await runRenderSmoke();
+      quitting = true;
+      await handle.stop();
+      handle = null;
+      app.exit(0);
+    } catch (error) {
+      console.error(`WorkLoom 渲染冒烟失败：${error instanceof Error ? error.stack : String(error)}`);
+      quitting = true;
+      if (handle) await handle.stop().catch(() => undefined);
+      handle = null;
+      app.exit(1);
+    }
+    return;
+  }
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 

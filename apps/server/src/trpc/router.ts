@@ -2840,7 +2840,8 @@ const captainRouter = router({
         [scope.workspaceId],
       );
       const agents = await client.query<{ id: string; preset_key: string; name: string; alias: string | null }>(
-        `SELECT id, preset_key, name, alias FROM agents WHERE workspace_id=$1 AND status='ready' ORDER BY id LIMIT 12`,
+        // 欢迎仪式必须拿到完整编制；固定 12 会静默裁掉大型 Bundle 的成员。
+        `SELECT id, preset_key, name, alias FROM agents WHERE workspace_id=$1 AND status='ready' ORDER BY id LIMIT 64`,
         [scope.workspaceId],
       );
       const grades = await client.query<{ agent_id: string; grade: string }>(

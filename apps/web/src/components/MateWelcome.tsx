@@ -13,8 +13,8 @@ import { MateLive2D, type MateMood, type MateGesture } from "./loommate/MateLive
 import { VoiceEngine } from "../voice/VoiceEngine";
 import { mateScriptOf, type MateScript } from "./welcomeScripts";
 
-/** 织伴仪式音色（甜妹，略快于日常挂件以契合仪式节奏） */
-const CEREMONY_VOICE = { pitch: 1.25, rate: 1.15, female: true };
+/** 织伴仪式音色（清晰优先；段间由真实 TTS 完成事件衔接） */
+const CEREMONY_VOICE = { pitch: 1.2, rate: 1.0, female: true };
 /** 字幕/语音节奏：约 5.8 字/秒 + 段尾缓冲 */
 const segDuration = (text: string) =>
   Math.max(3600, Math.min(40000, Math.round((text.length / 5.8) * 1000) + 900));
@@ -61,12 +61,18 @@ export function MateWelcome({ industry, onBridge, onSkipAll }: {
   const [shown, setShown] = useState(0);          // 当前段已揭示字幕行数
   const [exiting, setExiting] = useState(false);  // S4 结束：缩小飞入右下角
   const timers = useRef<number[]>([]);
+  const releaseExclusive = useRef<(() => void) | null>(null);
   const seg = segs[Math.min(idx, segs.length - 1)]!;
 
   /* 舞台尺寸：全身像占视口高 ~76%，宽度不超车（正方形画布，模型 92% 适配） */
   const computeSize = () =>
     Math.round(Math.min(window.innerHeight * 0.76, window.innerWidth * 0.52));
   const [mateSize, setMateSize] = useState(computeSize);
+  useEffect(() => {
+    releaseExclusive.current = VoiceEngine.acquireExclusive("loommate");
+    return () => { releaseExclusive.current?.(); releaseExclusive.current = null; };
+  }, []);
+
   useEffect(() => {
     const onResize = () => setMateSize(computeSize());
     window.addEventListener("resize", onResize);
@@ -89,15 +95,23 @@ export function MateWelcome({ industry, onBridge, onSkipAll }: {
     });
   }, [segs.length, onBridge]);
 
-  /* 分段驱动：语音播报（整段一次，口型全局同步）+ 字幕按行比例逐行揭示 + 定时推进 */
+  /* 分段驱动：语音播报（整段一次，口型全局同步）+ 字幕按行比例逐行揭示。
+   * 有 TTS 时必须等真实 onend 才推进；只有无语音降级时才使用估算时长。 */
   useEffect(() => {
     if (exiting) return;
+    let cancelled = false;
     setShown(seg.lines.length === 0 ? 0 : 1);
     if (seg.lines.length > 0) {
-      VoiceEngine.speak({
+      void VoiceEngine.speakAndWait({
         role: "loommate", persona: "织伴", text: seg.lines.join(""),
         priority: "ceremony", voiceOverride: CEREMONY_VOICE,
+      }).then((result) => {
+        if (cancelled || result === "cancelled") return;
+        const pause = result === "skipped" ? seg.dur : 650;
+        timers.current.push(window.setTimeout(() => { if (!cancelled) advance(); }, pause));
       });
+    } else {
+      timers.current.push(window.setTimeout(advance, seg.dur));
     }
     // 逐行揭示：按行字数占比分布在本段时长内（首行立即）
     const total = seg.lines.join("").length || 1;
@@ -108,19 +122,20 @@ export function MateWelcome({ industry, onBridge, onSkipAll }: {
       cum += line.length;
       timers.current.push(window.setTimeout(() => setShown(i + 1), at));
     });
-    timers.current.push(window.setTimeout(advance, seg.dur));
-    return clearTimers;
+    return () => { cancelled = true; clearTimers(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, exiting]);
 
   /* 卸载兜底：停语音清计时 */
-  useEffect(() => () => { VoiceEngine.stopAll(); clearTimers(); }, []);
+  useEffect(() => () => { VoiceEngine.stopAll(); releaseExclusive.current?.(); clearTimers(); }, []);
 
   const talkSegIdx = segs.findIndex((s) => s.key === "intro"); // 进度点从 S1 起计
   const progressIdx = Math.max(0, idx - talkSegIdx);
 
   return (
     <div
+      data-welcome-segment={seg.key}
+      data-welcome-exiting={exiting ? "true" : "false"}
       onClick={exiting ? undefined : advance}
       style={{
         position: "absolute", inset: 0, zIndex: 30, overflow: "hidden",

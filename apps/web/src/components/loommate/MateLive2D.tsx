@@ -20,7 +20,7 @@
  *  capture 模式挂 window.__loommateStep(dt)：model.update(dt*1000) + render，
  *  与墙钟解耦，逐帧 30fps 丝滑捕获。window.__loommateLive2DReady() 标记就绪。
  */
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import type { Live2DModel } from "pixi-live2d-display";
 import { VoiceEngine } from "../../voice/VoiceEngine";
@@ -90,7 +90,7 @@ if (typeof window !== "undefined") {
   window.setTimeout(() => { void ensureCore().catch(() => undefined); }, 1500);
 }
 
-export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = "/live2d/mao/Mao.model3.json", frame = "bust", onReady }: {
+interface MateRenderProps {
   size: number;
   mood?: MateMood;
   gesture?: MateGesture;
@@ -99,15 +99,142 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
   /** 取景：bust 头肩胸（挂件默认）；full 全身像完整入镜（首装欢迎仪式舞台位） */
   frame?: "bust" | "full";
   onReady?: (h: Live2DHandle) => void;
-}) {
+}
+
+function canUseWebGL(): boolean {
+  if (typeof window === "undefined") return false;
+  if (new URLSearchParams(window.location.search).get("render") === "vector2d") return false;
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
+  } catch { return false; }
+}
+
+/**
+ * 无 WebGL 时的完整动态数字人后端。它不是静态海报：呼吸、眨眼、视线、手势、
+ * 情绪和 VoiceEngine 口型全部持续驱动，确保安全渲染模式也具备可交付的人物表现。
+ */
+function MateVector2D({ size, mood = "neutral", gesture = null, frame = "bust", onReady }: MateRenderProps) {
+  const [mouthOpen, setMouthOpen] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const handleRef = useRef<Live2DHandle | null>(null);
+
+  useEffect(() => VoiceEngine.onLipSync((event) => {
+    if (event.type === "start") { setSpeaking(true); setMouthOpen(true); }
+    else if (event.type === "boundary") setMouthOpen((open) => !open);
+    else { setSpeaking(false); setMouthOpen(false); }
+  }), []);
+
+  useEffect(() => {
+    const handle: Live2DHandle = {
+      setMood: () => undefined,
+      gesture: () => undefined,
+      speakWithAudio: () => undefined,
+    };
+    handleRef.current = handle;
+    onReady?.(handle);
+    return () => { handleRef.current = null; };
+  }, [onReady]);
+
+  const happy = mood === "happy" || mood === "love";
+  const afraid = mood === "fear";
+  const handUp = gesture === "handup";
+  const thumbUp = gesture === "thumbup";
+  const cropScale = frame === "full" ? 1 : 1.58;
+
+  return (
+    <div
+      data-render-mode="vector2d"
+      data-avatar-ready="true"
+      aria-label="织伴数字人（动态矢量后端）"
+      style={{ position: "relative", width: size, height: size, overflow: "hidden", pointerEvents: "none" }}
+    >
+      <style>{`
+        @keyframes mate-v2-breathe { 0%,100% { transform: translateY(0) rotate(-.4deg); } 50% { transform: translateY(-5px) rotate(.4deg); } }
+        @keyframes mate-v2-blink { 0%,44%,48%,100% { transform: scaleY(1); } 46% { transform: scaleY(.08); } }
+        @keyframes mate-v2-hair { 0%,100% { transform: rotate(-1.4deg); } 50% { transform: rotate(1.7deg); } }
+        @keyframes mate-v2-wave { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(14deg); } }
+        @keyframes mate-v2-talk { 0%,100% { transform: scaleY(.55); } 50% { transform: scaleY(1.12); } }
+        @keyframes mate-v2-glow { 0%,100% { opacity:.38; transform:scale(.96); } 50% { opacity:.75; transform:scale(1.05); } }
+      `}</style>
+      <div style={{ position: "absolute", inset: 0, transform: `scale(${cropScale})`, transformOrigin: frame === "full" ? "50% 100%" : "50% 34%" }}>
+        <div style={{ position: "absolute", left: "12%", right: "12%", bottom: "1%", height: "9%", borderRadius: "50%", background: "radial-gradient(ellipse,rgba(255,217,138,.32),transparent 72%)", animation: "mate-v2-glow 2.8s ease-in-out infinite" }} />
+        <svg viewBox="0 0 420 620" width="100%" height="100%" style={{ overflow: "visible" }}>
+          <defs>
+            <linearGradient id="mateHair" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#ffcc69"/><stop offset=".55" stopColor="#f08d46"/><stop offset="1" stopColor="#b95136"/></linearGradient>
+            <linearGradient id="mateDress" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#23314a"/><stop offset="1" stopColor="#101827"/></linearGradient>
+            <linearGradient id="mateCoat" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f5ead9"/><stop offset="1" stopColor="#c8d4e4"/></linearGradient>
+            <filter id="mateShadow"><feDropShadow dx="0" dy="16" stdDeviation="14" floodColor="#000" floodOpacity=".42"/></filter>
+          </defs>
+          <g style={{ transformOrigin: "210px 580px", animation: "mate-v2-breathe 3.8s ease-in-out infinite" }} filter="url(#mateShadow)">
+            {/* legs and shoes */}
+            <path d="M166 488 L191 488 L190 570 Q184 590 154 582 Z" fill="#f2e4d2"/>
+            <path d="M229 488 L254 488 L266 579 Q235 591 226 571 Z" fill="#f2e4d2"/>
+            <path d="M153 574 Q176 568 193 579 Q194 597 151 595 Q143 587 153 574Z" fill="#27334a"/>
+            <path d="M226 579 Q249 568 269 579 Q278 594 229 596 Q221 591 226 579Z" fill="#27334a"/>
+            {/* body */}
+            <path d="M152 291 Q210 263 268 291 L286 468 Q250 500 210 499 Q168 500 134 468 Z" fill="url(#mateDress)"/>
+            <path d="M151 292 Q121 307 116 368 L139 386 L165 326 Z" fill="url(#mateCoat)"/>
+            <path d="M269 292 Q300 307 305 368 L281 386 L255 326 Z" fill="url(#mateCoat)"/>
+            <path d="M174 284 L210 326 L246 284 L260 448 Q210 468 160 448 Z" fill="#263653" opacity=".92"/>
+            <path d="M191 291 L210 322 L229 291" fill="none" stroke="#ffd98a" strokeWidth="7" strokeLinecap="round"/>
+            <circle cx="210" cy="357" r="8" fill="#ffd98a"/><path d="M210 365 V414" stroke="#ffd98a" strokeWidth="3" opacity=".5"/>
+            {/* left arm / wave */}
+            <g style={{ transformOrigin: "139px 315px", transform: handUp ? "rotate(-70deg)" : "rotate(4deg)", animation: handUp ? "mate-v2-wave 1.15s ease-in-out infinite" : undefined, transition: "transform .45s ease" }}>
+              <path d="M143 315 Q121 342 112 407" stroke="#d7e0ec" strokeWidth="31" strokeLinecap="round"/>
+              <path d="M111 403 Q102 423 111 440 Q126 440 132 416 Z" fill="#f4c7ae"/>
+              {handUp && <path d="M107 430 l-9 -20 M113 430 l-2 -23 M120 430 l5 -20" stroke="#f4c7ae" strokeWidth="5" strokeLinecap="round"/>}
+            </g>
+            {/* right arm / thumb */}
+            <g style={{ transformOrigin: "280px 315px", transform: thumbUp ? "rotate(63deg)" : "rotate(-4deg)", transition: "transform .45s ease" }}>
+              <path d="M277 315 Q299 344 306 407" stroke="#d7e0ec" strokeWidth="31" strokeLinecap="round"/>
+              <path d="M305 402 Q316 421 307 440 Q291 440 287 415 Z" fill="#f4c7ae"/>
+              {thumbUp && <path d="M302 426 q13 -5 13 -18 q-8 -7 -14 2" fill="#f4c7ae"/>}
+            </g>
+            {/* neck */}<path d="M190 266 L190 304 Q210 318 230 304 L230 266Z" fill="#f4c7ae"/>
+            {/* hair behind face */}
+            <g style={{ transformOrigin: "210px 214px", animation: "mate-v2-hair 4.5s ease-in-out infinite" }}>
+              <path d="M139 220 Q137 121 210 109 Q288 118 281 226 L265 292 Q239 275 235 244 L183 244 Q179 278 151 294Z" fill="url(#mateHair)"/>
+              <path d="M151 180 Q145 136 179 116 Q132 111 119 151 Q137 150 151 180Z" fill="#27334a"/>
+              <path d="M269 179 Q275 137 244 117 Q291 111 302 153 Q283 151 269 179Z" fill="#27334a"/>
+              <path d="M167 128 Q210 86 253 128" stroke="#27334a" strokeWidth="16" strokeLinecap="round" fill="none"/>
+            </g>
+            {/* face */}
+            <path d="M159 181 Q160 128 210 125 Q261 128 261 181 L253 238 Q239 271 210 278 Q180 271 166 238Z" fill="#f6ccb4"/>
+            <path d="M157 180 Q165 119 213 119 Q252 121 266 165 Q231 159 199 139 Q186 168 157 180Z" fill="url(#mateHair)"/>
+            {/* eyes */}
+            <g style={{ transformOrigin: "184px 203px", animation: "mate-v2-blink 5.2s infinite" }}><ellipse cx="184" cy="203" rx="10" ry="7" fill="#293247"/><circle cx="188" cy="200" r="2.5" fill="white"/></g>
+            <g style={{ transformOrigin: "236px 203px", animation: "mate-v2-blink 5.2s .05s infinite" }}><ellipse cx="236" cy="203" rx="10" ry="7" fill="#293247"/><circle cx="240" cy="200" r="2.5" fill="white"/></g>
+            {afraid ? <path d="M172 184 l20 -7 M228 177 l20 7" stroke="#7b514a" strokeWidth="4" strokeLinecap="round"/> : <path d="M172 184 q12 -7 23 0 M225 184 q12 -7 23 0" stroke="#7b514a" strokeWidth="4" fill="none" strokeLinecap="round"/>}
+            {/* cheeks */}{happy && <><ellipse cx="170" cy="227" rx="13" ry="6" fill="#ef8f91" opacity=".35"/><ellipse cx="250" cy="227" rx="13" ry="6" fill="#ef8f91" opacity=".35"/></>}
+            {/* animated mouth */}
+            <g style={{ transformOrigin: "210px 238px", animation: speaking ? "mate-v2-talk .24s ease-in-out infinite" : undefined }}>
+              {mouthOpen || speaking
+                ? <ellipse cx="210" cy="239" rx={happy ? 11 : 8} ry={mouthOpen ? 9 : 5} fill="#7f3d4b"><ellipse cx="210" cy="244" rx="6" ry="3" fill="#ee91a3"/></ellipse>
+                : <path d={happy ? "M198 237 Q210 248 222 237" : afraid ? "M202 243 Q210 234 218 243" : "M202 240 Q210 244 218 240"} fill="none" stroke="#9a5360" strokeWidth="4" strokeLinecap="round"/>}
+            </g>
+            {/* headset */}<path d="M156 194 Q145 196 149 224" stroke="#27334a" strokeWidth="9" strokeLinecap="round"/><path d="M264 194 Q276 196 271 224" stroke="#27334a" strokeWidth="9" strokeLinecap="round"/><path d="M270 219 Q282 229 261 238" stroke="#ffd98a" strokeWidth="3" fill="none"/>
+            {mood === "love" && <g fill="#ff8ea3" opacity=".9"><path d="M286 177 c-11-13-28 3 0 23 c28-20 11-36 0-23Z"/><path d="M126 207 c-8-10-20 2 0 17 c20-15 8-27 0-17Z"/></g>}
+          </g>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/live2d/mao/Mao.model3.json", frame = "bust", onReady, onFailure }: MateRenderProps & { onFailure: (reason: string) => void }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const moodRef = useRef<MateMood>(mood);
   moodRef.current = mood;
   const lipTimer = useRef<number | null>(null);
+  const [renderReady, setRenderReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    setRenderReady(false);
+    setLoadError(null);
     let disposed = false;
     let offLip: (() => void) | null = null;
     let offMouse: (() => void) | null = null;
@@ -132,9 +259,13 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
         autoStart: false,                 // 自控时钟（虚拟时钟契约前提）
       });
       appRef.current = app;
-      hostRef.current.appendChild(app.view as HTMLCanvasElement);
-      (app.view as HTMLCanvasElement).style.width = "100%";
-      (app.view as HTMLCanvasElement).style.height = "100%";
+      const canvas = app.view as HTMLCanvasElement;
+      hostRef.current.appendChild(canvas);
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.position = "relative";
+      canvas.style.zIndex = "2";
+      canvas.addEventListener("webglcontextlost", () => setRenderReady(false), { once: true });
 
       const model = await Live2DModel.from(modelUrl, { autoUpdate: false });
       if (disposed) return;
@@ -348,6 +479,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
           app.render();
         };
         app.render();
+        setRenderReady(true);
       } else {
         const tick = (now: number) => {
           if (disposed) return;
@@ -371,11 +503,18 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
           app.render();
           raf = requestAnimationFrame(tick);
         };
+        app.render();
+        setRenderReady(true);
         raf = requestAnimationFrame(tick);
       }
     })().catch((e) => {
       // 加载失败留证（SVG 兜底由 LoomMate 侧接管）
-      (window as unknown as { __loommateL2DErr?: string }).__loommateL2DErr = String(e?.stack ?? e).slice(0, 500);
+      const message = String(e?.stack ?? e).slice(0, 500);
+      (window as unknown as { __loommateL2DErr?: string }).__loommateL2DErr = message;
+      if (!disposed) {
+        setLoadError(message);
+        onFailure(message);
+      }
     });
 
     return () => {
@@ -390,7 +529,7 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
       appRef.current = null;
       modelRef.current = null;
     };
-  }, [size, modelUrl, frame, onReady]);
+  }, [size, modelUrl, frame, onReady, onFailure]);
 
   // mood 联动
   useEffect(() => {
@@ -409,8 +548,23 @@ export function MateLive2D({ size, mood = "neutral", gesture = null, modelUrl = 
   return (
     <div
       ref={hostRef}
-      style={{ width: size, height: size, borderRadius: 16, overflow: "hidden", pointerEvents: "none" }}
+      data-render-mode={renderReady ? "live2d-webgl" : loadError ? "live2d-error" : "live2d-loading"}
+      data-avatar-ready={renderReady ? "true" : "false"}
+      style={{
+        position: "relative", width: size, height: size, borderRadius: 16,
+        overflow: "hidden", pointerEvents: "none",
+      }}
       aria-label="织伴数字人（Live2D）"
-    />
+    >
+      {!renderReady && !loadError && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#68707a", fontSize: 12 }}>数字人正在登台…</div>}
+    </div>
   );
+}
+
+/** 自动选择完整 Live2D 或完整动态矢量后端。 */
+export function MateLive2D(props: MateRenderProps) {
+  const [vectorFallback, setVectorFallback] = useState(() => !canUseWebGL());
+  const onFailure = useCallback(() => setVectorFallback(true), []);
+  if (vectorFallback) return <MateVector2D {...props} />;
+  return <Live2DBackend {...props} onFailure={onFailure} />;
 }

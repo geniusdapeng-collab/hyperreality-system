@@ -33,14 +33,38 @@ const GUEST_KEY = "workloom.guest";
 export function isGuest(): boolean { return localStorage.getItem(GUEST_KEY) === "1"; }
 export function clearGuestFlag(): void { localStorage.removeItem(GUEST_KEY); }
 
+let validatedToken: string | null = null;
+let guestSessionPromise: Promise<void> | null = null;
+
+/** 桌面升级可能轮换本机 JWT 密钥；不能只凭 localStorage 中“有字符串”判断会话有效。 */
+async function validateStoredSession(): Promise<boolean> {
+  const token = getToken();
+  if (!token) return false;
+  if (validatedToken === token) return true;
+  try {
+    await trpc.onboarding.status.query();
+    validatedToken = token;
+    return true;
+  } catch {
+    clearToken();
+    validatedToken = null;
+    return false;
+  }
+}
+
 /** 无令牌时静默进场游客会话（幂等；正式登录后不再触发） */
 export async function ensureGuestSession(): Promise<void> {
-  if (getToken()) return;
-  const r = await (trpc.accounts.auth as unknown as {
-    guestEnter: { mutate: (i: Record<string, never>) => Promise<{ token: string }> };
-  }).guestEnter.mutate({});
-  setToken(r.token);
-  localStorage.setItem(GUEST_KEY, "1");
+  if (guestSessionPromise) return guestSessionPromise;
+  guestSessionPromise = (async () => {
+    if (await validateStoredSession()) return;
+    const r = await (trpc.accounts.auth as unknown as {
+      guestEnter: { mutate: (i: Record<string, never>) => Promise<{ token: string }> };
+    }).guestEnter.mutate({});
+    setToken(r.token);
+    validatedToken = r.token;
+    localStorage.setItem(GUEST_KEY, "1");
+  })();
+  try { await guestSessionPromise; } finally { guestSessionPromise = null; }
 }
 
 export const trpc: ReturnType<typeof createTRPCClient<AppRouter>> = createTRPCClient<AppRouter>({
@@ -68,9 +92,10 @@ const DEMO_MEMBER = (import.meta.env.VITE_DEMO_MEMBER as string | undefined) ?? 
 export const DEV_DEMO_MEMBER = DEMO_MEMBER;
 export async function ensureDemoLogin(memberNo?: string): Promise<void> {
   if (memberNo) {
-    if (getToken()) return;
+    if (await validateStoredSession()) return;
     const r = await trpc.auth.loginAs.mutate({ workspaceSlug: DEMO_WORKSPACE, memberNo });
     setToken(r.token);
+    validatedToken = r.token;
     return;
   }
   return ensureGuestSession();

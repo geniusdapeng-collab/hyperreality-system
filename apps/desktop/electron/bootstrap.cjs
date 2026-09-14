@@ -158,6 +158,10 @@ async function bootstrap(opts) {
   if (payloadVer !== installedVer) {
     status(`→ 装配运行时载荷（${payloadVer}）…（首次约 1 分钟）`);
     fs.mkdirSync(supportDir, { recursive: true });
+    // runtime 会在升级时整体替换；先保留用户配置，避免 JWT/API Key/模型设置被新版覆盖。
+    const previousEnvFile = path.join(supportDir, "runtime", ".env");
+    let previousEnv = null;
+    try { previousEnv = fs.readFileSync(previousEnvFile); } catch { /* 首装没有旧配置 */ }
     for (const part of ["runtime", "node", "pg", "nats"]) {
       const src = path.join(effResources, part);
       if (!fs.existsSync(src)) continue;
@@ -165,6 +169,10 @@ async function bootstrap(opts) {
       fs.rmSync(dst, { recursive: true, force: true });
       // dereference:true —— 摊平符号链接，Windows/macOS 通吃
       fs.cpSync(src, dst, { recursive: true, dereference: true });
+    }
+    if (previousEnv && previousEnv.length > 0) {
+      fs.writeFileSync(path.join(supportDir, "runtime", ".env"), previousEnv, { mode: 0o600 });
+      say("✓ 已保留上一版本地配置（JWT/API Key/模型设置）");
     }
     if (!IS_WIN) {
       // zip/dmg 往返后确保可执行位

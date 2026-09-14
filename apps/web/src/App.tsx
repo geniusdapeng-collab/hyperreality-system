@@ -32,16 +32,24 @@ import { SideNav } from "./shell/SideNav";
 import { useLocation } from "react-router";
 import { StarRing } from "./components/star-ring/StarRing";
 import { LoomMate } from "./components/loommate/LoomMate";
+import { useEffect, useState } from "react";
 
 /** 阶段三路由：页面自包 Bridge（注入真实左右栏）；/dev 矩阵保持壳内平铺 */
 function Shell() {
   const { pathname } = useLocation();
+  const [welcomeActive, setWelcomeActive] = useState(false);
+  useEffect(() => {
+    const onWelcome = (event: Event) => setWelcomeActive(Boolean((event as CustomEvent<boolean>).detail));
+    window.addEventListener("workloom:welcome", onWelcome);
+    return () => window.removeEventListener("workloom:welcome", onWelcome);
+  }, []);
   // 非产品路由（开发矩阵/落地向导）不带常驻导航；其余全部页面左侧导航常驻
   const bare = pathname === "/dev" || pathname.startsWith("/onboarding") || pathname === "/login" || pathname === "/activate" || pathname === "/invite";
   return (
     <div className="flex min-h-screen">
       {!bare && <SideNav />}
-      {!bare && <LoomMate />}
+      {/* 首装舞台独占 WebGL 数字人，避免多个渲染上下文互相污染。 */}
+      {!bare && !welcomeActive && <LoomMate />}
       <div className="min-w-0 flex-1">
 
         <StarRing />

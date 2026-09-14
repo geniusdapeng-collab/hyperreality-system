@@ -29,6 +29,14 @@ export interface Caption {
   priority: VoicePriority;
 }
 
+export type VoicePlaybackResult = "spoken" | "skipped" | "cancelled";
+
+interface QueuedUtterance {
+  utterance: Utterance;
+  resolve?: (result: VoicePlaybackResult) => void;
+  settled?: boolean;
+}
+
 /** 角色音色预设：pitch 0.6~1.4，rate 0.75~1.2 */
 export const VOICE_PRESETS: Record<string, { pitch: number; rate: number; female?: boolean }> = {
   "company-ceo": { pitch: 0.75, rate: 0.85 },
@@ -62,11 +70,15 @@ const DEFAULT_PRESET: { pitch: number; rate: number; female?: boolean } = { pitc
 
 type CaptionListener = (c: Caption) => void;
 
-class VoiceEngineImpl {
-  private queue: Utterance[] = [];
+export class VoiceEngineImpl {
+  private queue: QueuedUtterance[] = [];
   private speaking = false;
+  private active: QueuedUtterance | null = null;
+  private activeFinish: (() => void) | null = null;
+  private generation = 0;
   private captionListeners = new Set<CaptionListener>();
   private captionSeq = 0;
+  private exclusiveRole: string | null = null;
   gate: VoiceGate = (typeof localStorage !== "undefined" && (localStorage.getItem("wl-voice-gate") as VoiceGate)) || "ritual-only";
 
   get tts(): SpeechSynthesis | null {
@@ -106,20 +118,56 @@ class VoiceEngineImpl {
     return pool[0] ?? zh[0] ?? null;
   }
 
-  /** 播报（同时发字幕；语音按档位决定是否真出声） */
-  speak(u: Utterance): void {
+  private settle(item: QueuedUtterance, result: VoicePlaybackResult): void {
+    if (item.settled) return;
+    item.settled = true;
+    item.resolve?.(result);
+  }
+
+  private enqueue(u: Utterance, resolve?: QueuedUtterance["resolve"]): void {
     // 字幕永远发（字幕条是降级与可及性保底）
     this.emitCaption(u);
-    if (!this.available) return;
+    const item: QueuedUtterance = { utterance: u, resolve };
+    // 首装开场等独占叙事期间，后台晨报/环境事件只保留字幕，不能进入音频队列抢话。
+    // fuse 仍保留安全语义，可明确中断任何播报。
+    if (this.exclusiveRole && u.role !== this.exclusiveRole && u.priority !== "fuse") {
+      this.settle(item, "skipped");
+      return;
+    }
+    if (!this.available) { this.settle(item, "skipped"); return; }
     // 档位过滤：ritual-only 只放 fuse/ceremony
-    if (this.gate === "ritual-only" && (u.priority === "ask" || u.priority === "ambient")) return;
+    if (this.gate === "ritual-only" && (u.priority === "ask" || u.priority === "ambient")) {
+      this.settle(item, "skipped");
+      return;
+    }
     if (u.priority === "fuse") {
       this.stopAll();
-      this.queue.unshift(u);
+      this.queue.unshift(item);
     } else {
-      this.queue.push(u);
+      this.queue.push(item);
     }
     void this.pump();
+  }
+
+  /** 播报（同时发字幕；语音按档位决定是否真出声） */
+  speak(u: Utterance): void {
+    this.enqueue(u);
+  }
+
+  /** 播报并等待真实结束；仪式编排用它避免按估算时长切段而抢话。 */
+  speakAndWait(u: Utterance): Promise<VoicePlaybackResult> {
+    return new Promise((resolve) => this.enqueue(u, resolve));
+  }
+
+  /** 获取独占播报会话；返回幂等释放函数。 */
+  acquireExclusive(role: string): () => void {
+    this.exclusiveRole = role;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (this.exclusiveRole === role) this.exclusiveRole = null;
+    };
   }
 
   /* ---- 口型同步钩子（数字人驱动）：boundary/start/end 三事件 ---- */
@@ -133,18 +181,28 @@ class VoiceEngineImpl {
   }
 
   stopAll(): void {
-    this.queue = [];
+    this.generation += 1;
+    const queued = this.queue.splice(0);
+    for (const item of queued) this.settle(item, "cancelled");
+    if (this.active) this.settle(this.active, "cancelled");
+    this.active = null;
     this.speaking = false;
+    const finish = this.activeFinish;
+    this.activeFinish = null;
     try { this.tts?.cancel(); } catch { /* 静默 */ }
+    finish?.();
   }
 
   private async pump(): Promise<void> {
     if (this.speaking) return;
     const tts = this.tts;
     if (!tts) return;
-    const next = this.queue.shift();
-    if (!next) return;
+    const item = this.queue.shift();
+    if (!item) return;
+    const next = item.utterance;
+    const generation = this.generation;
     this.speaking = true;
+    this.active = item;
     try {
       const preset = next.voiceOverride ?? VOICE_PRESETS[next.role] ?? DEFAULT_PRESET;
       const utt = new SpeechSynthesisUtterance(next.text);
@@ -154,18 +212,31 @@ class VoiceEngineImpl {
       const v = this.pickVoice(preset.female);
       if (v) utt.voice = v;
       await new Promise<void>((resolve) => {
+        let done = false;
+        let timeout = 0;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          if (timeout) window.clearTimeout(timeout);
+          if (this.activeFinish === finish) this.activeFinish = null;
+          resolve();
+        };
+        this.activeFinish = finish;
         utt.onstart = () => this.emitLip({ type: "start", role: next.role, text: next.text });
         utt.onboundary = (e: SpeechSynthesisEvent) => {
           this.emitLip({ type: "boundary", charIndex: e.charIndex ?? 0, role: next.role, text: next.text });
         };
-        utt.onend = () => { this.emitLip({ type: "end", role: next.role }); resolve(); };
-        utt.onerror = () => { this.emitLip({ type: "end", role: next.role }); resolve(); };
+        utt.onend = () => { this.emitLip({ type: "end", role: next.role }); finish(); };
+        utt.onerror = () => { this.emitLip({ type: "end", role: next.role }); finish(); };
         // 超时兜底（部分平台 onend 不触发）
-        window.setTimeout(() => { this.emitLip({ type: "end", role: next.role }); resolve(); },
-          Math.max(4000, next.text.length * 350));
+        timeout = window.setTimeout(() => { this.emitLip({ type: "end", role: next.role }); finish(); },
+          Math.max(8000, next.text.length * 650));
         tts.speak(utt);
       });
     } catch { /* 静默 */ }
+    if (generation !== this.generation) return;
+    this.settle(item, "spoken");
+    this.active = null;
     this.speaking = false;
     if (this.queue.length > 0) void this.pump();
   }
