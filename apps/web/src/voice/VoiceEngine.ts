@@ -1,11 +1,12 @@
 /**
  * VoiceEngine · 语音播报（端侧 speechSynthesis，零网络零密钥）
  *
- *  - 角色音色参数表（pitch/rate + 中文 voice 启发式匹配）；
+ *  - 角色音色参数表（确定性中文 voice + 温和 pitch/rate）；
  *  - 优先级队列：fuse（熔断，立即打断）> ask（请示）> ceremony（仪式）> ambient；
  *  - 降级：speechSynthesis 不可用/无语音 → available=false，仅走字幕（SubBus）。
  *  - 字幕事件总线（SubBus）：所有播报（含仅字幕模式）同步发字幕，新闻台字幕条消费。
  */
+import { AudioEngine } from "../audio/AudioEngine";
 
 export type VoicePriority = "fuse" | "ask" | "ceremony" | "ambient";
 export type VoiceGate = "ritual-only" | "all" | "captions";
@@ -16,7 +17,15 @@ export interface Utterance {
   text: string;
   priority: VoicePriority;
   /** 音色覆盖（织伴等自定义音色场景；缺省走 role 预设） */
-  voiceOverride?: { pitch: number; rate: number; female?: boolean };
+  voiceOverride?: VoiceProfile;
+}
+
+export interface VoiceProfile {
+  pitch: number;
+  rate: number;
+  female?: boolean;
+  /** 按顺序锁定系统音色；用于固定人物声线，禁止段落间换人。 */
+  preferredNames?: string[];
 }
 
 export interface Caption {
@@ -38,7 +47,7 @@ interface QueuedUtterance {
 }
 
 /** 角色音色预设：pitch 0.6~1.4，rate 0.75~1.2 */
-export const VOICE_PRESETS: Record<string, { pitch: number; rate: number; female?: boolean }> = {
+export const VOICE_PRESETS: Record<string, VoiceProfile> = {
   "company-ceo": { pitch: 0.75, rate: 0.85 },
   "competitor-agent": { pitch: 1.15, rate: 1.08, female: true },
   "content-agent": { pitch: 1.1, rate: 0.95, female: true },
@@ -66,7 +75,12 @@ export const VOICE_PRESETS: Record<string, { pitch: number; rate: number; female
   "phone-agent": { pitch: 1.15, rate: 1.05, female: true },
   "owner-cockpit": { pitch: 0.8, rate: 0.9 },
 };
-const DEFAULT_PRESET: { pitch: number; rate: number; female?: boolean } = { pitch: 1.0, rate: 1.0 };
+const DEFAULT_PRESET: VoiceProfile = { pitch: 1.0, rate: 0.96 };
+
+// macOS / Windows 常见中文系统音色。这里只用于性别与稳定性排序，不依赖某台机器
+// 必须安装其中某一个；匹配不到时仍固定回落到同一个中文 voice。
+const FEMALE_VOICE_RE = /female|flo|sandy|shelley|ting[- ]?ting|tingting|mei[- ]?jia|sin[- ]?ji|xiaoxiao|xiaoyi|yunxia|huihui|yaoyao|lily|xiaobei|晓晓|晓伊|婷婷|美佳|善怡/i;
+const MALE_VOICE_RE = /male|eddy|reed|rocko|li[- ]?mu|yunxi|yunjian|yunyang|xiaoyu|云希|云健|云扬|晓宇|李沐/i;
 
 type CaptionListener = (c: Caption) => void;
 
@@ -79,6 +93,7 @@ export class VoiceEngineImpl {
   private captionListeners = new Set<CaptionListener>();
   private captionSeq = 0;
   private exclusiveRole: string | null = null;
+  private voiceCache = new Map<string, SpeechSynthesisVoice | null>();
   gate: VoiceGate = (typeof localStorage !== "undefined" && (localStorage.getItem("wl-voice-gate") as VoiceGate)) || "ritual-only";
 
   get tts(): SpeechSynthesis | null {
@@ -87,6 +102,10 @@ export class VoiceEngineImpl {
   }
   get available(): boolean {
     return this.tts !== null && this.gate !== "captions";
+  }
+
+  get voiceDiagnostics(): Record<string, string> {
+    return Object.fromEntries([...this.voiceCache].map(([role, voice]) => [role, voice ? `${voice.name} (${voice.lang})` : "system-default-locked"]));
   }
 
   setGate(gate: VoiceGate): void {
@@ -106,16 +125,25 @@ export class VoiceEngineImpl {
     for (const fn of this.captionListeners) { try { fn(cap); } catch { /* 静默 */ } }
   }
 
-  private pickVoice(female?: boolean): SpeechSynthesisVoice | null {
-    const tts = this.tts;
-    if (!tts) return null;
-    const voices = tts.getVoices();
-    const zh = voices.filter((v) => /zh|cmn|Chinese/i.test(v.lang + v.name));
-    if (zh.length === 0) return null;
-    // 启发式：名字含 Female/Xiaoxiao/Yun 等判女，否则判男
-    const isF = (v: SpeechSynthesisVoice) => /female|xiaoxiao|xiaoyi|yunxia|huihui|yaoyao|ting|mei|lily/i.test(v.name);
-    const pool = zh.filter((v) => (female ? isF(v) : !isF(v)));
-    return pool[0] ?? zh[0] ?? null;
+  private pickVoice(profile: VoiceProfile, role: string): SpeechSynthesisVoice | null {
+    if (this.voiceCache.has(role)) return this.voiceCache.get(role) ?? null;
+    const voices = this.tts?.getVoices() ?? [];
+    const zh = voices
+      .filter((v) => /zh|cmn|chinese/i.test(`${v.lang} ${v.name}`))
+      .sort((a, b) => Number(!/^zh[-_]cn/i.test(a.lang)) - Number(!/^zh[-_]cn/i.test(b.lang)) || a.name.localeCompare(b.name));
+    // 首次 voice 列表未就绪时也缓存 null：同一人物整场都使用系统默认声，
+    // 不允许第二段突然换成另一位说话人。织伴在 2.4s 入场后才开口，正常机器
+    // 此时列表已经可用；极端情况下宁可全程同一默认声，也不段落间变声。
+    if (zh.length === 0) { this.voiceCache.set(role, null); return null; }
+    const preferred = profile.preferredNames
+      ?.map((name) => zh.find((v) => v.name.toLowerCase().includes(name.toLowerCase())))
+      .find(Boolean);
+    const gendered = profile.female
+      ? zh.find((v) => FEMALE_VOICE_RE.test(v.name))
+      : zh.find((v) => MALE_VOICE_RE.test(v.name));
+    const chosen = preferred ?? gendered ?? zh[0] ?? null;
+    if (chosen) this.voiceCache.set(role, chosen);
+    return chosen;
   }
 
   private settle(item: QueuedUtterance, result: VoicePlaybackResult): void {
@@ -190,6 +218,7 @@ export class VoiceEngineImpl {
     const finish = this.activeFinish;
     this.activeFinish = null;
     try { this.tts?.cancel(); } catch { /* 静默 */ }
+    AudioEngine.setSpeechActive(false);
     finish?.();
   }
 
@@ -209,7 +238,7 @@ export class VoiceEngineImpl {
       utt.lang = "zh-CN";
       utt.pitch = preset.pitch;
       utt.rate = preset.rate;
-      const v = this.pickVoice(preset.female);
+      const v = this.pickVoice(preset, next.role);
       if (v) utt.voice = v;
       await new Promise<void>((resolve) => {
         let done = false;
@@ -219,6 +248,7 @@ export class VoiceEngineImpl {
           done = true;
           if (timeout) window.clearTimeout(timeout);
           if (this.activeFinish === finish) this.activeFinish = null;
+          AudioEngine.setSpeechActive(false);
           resolve();
         };
         this.activeFinish = finish;
@@ -231,6 +261,7 @@ export class VoiceEngineImpl {
         // 超时兜底（部分平台 onend 不触发）
         timeout = window.setTimeout(() => { this.emitLip({ type: "end", role: next.role }); finish(); },
           Math.max(8000, next.text.length * 650));
+        AudioEngine.setSpeechActive(true);
         tts.speak(utt);
       });
     } catch { /* 静默 */ }

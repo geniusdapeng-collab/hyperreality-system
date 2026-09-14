@@ -25,7 +25,7 @@ import { useAmbience } from "../../audio/ambience";
 import { AudioSettings } from "../../components/AudioSettings";
 import { ValueCounters } from "../../components/ValueCounters";
 import { useTheaterDiff } from "../../lib/theaterDiff";
-import { hydrateAliases, reportTitleOf, selectReporters } from "../../lib/naming";
+import { displayNameOf, hydrateAliases, reportTitleOf, selectReporters } from "../../lib/naming";
 
 /* ================= 类型 ================= */
 interface Satellite { id: string; presetKey: string; name: string; alias?: string | null; grade: string }
@@ -428,7 +428,7 @@ export default function P0() {
               <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-600" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
               <span>·</span><span>{data.floor.agents.filter((a) => a.state === "idle").length} 待命</span>
               <span className="flex-1" />
-              <span className="text-ink2">点员工派活 · 点举手者原地审批 · 拖任务卡到员工身上</span>
+              <span className="text-ink2">悬停看岗位 · 点员工派活 · 点举手者审批 · 拖任务卡到员工身上</span>
             </div>
             {/* 可拖任务卡（拖拽派活：拖到 3D 员工身上即下达） */}
             <div className="mb-1 flex items-center gap-1.5 px-1">
@@ -595,8 +595,8 @@ export default function P0() {
       {showWelcome && data && (
         <WelcomeCeremony
           actors={[
-            { presetKey: "company-ceo", name: data.ceoName } satisfies CeremonyActor,
-            ...data.satellites.map((a): CeremonyActor => ({ presetKey: a.presetKey, name: a.name })),
+            { presetKey: "company-ceo", name: displayNameOf({ presetKey: "company-ceo", roleName: data.ceoName }) } satisfies CeremonyActor,
+            ...data.satellites.map((a): CeremonyActor => ({ presetKey: a.presetKey, name: displayNameOf({ presetKey: a.presetKey, roleName: a.name }) })),
           ]}
           bundleName={wsName}
           industry={bundleId}

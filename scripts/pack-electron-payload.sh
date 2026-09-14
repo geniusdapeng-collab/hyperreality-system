@@ -42,7 +42,12 @@ fetch() { # fetch <out> <url...>：按序回退
   local out="$1"; shift
   for u in "$@"; do
     echo "  ↓ $u"
-    if curl -sfL --retry 3 -o "$out" "$u"; then return 0; fi
+    # GitHub/npm 大文件偶发 5xx、HTTP/2 RESET 或半途断流。发行流水线必须在单一
+    # 镜像上充分重试，再走备用源，不能因为一次公网抖动产出“本项目失败”的假象。
+    if curl --http1.1 -fsSL \
+      --retry 10 --retry-all-errors --retry-delay 4 \
+      --connect-timeout 30 --max-time 1800 \
+      -o "$out" "$u"; then return 0; fi
     echo "  ⚠️  失败，回退下一源"
   done
   echo "❌ 全部下载源失败：$out"; return 1

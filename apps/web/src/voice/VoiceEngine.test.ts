@@ -21,13 +21,16 @@ describe("VoiceEngine single-consumer orchestration", () => {
   let active = 0;
   let maxActive = 0;
   let starts: string[] = [];
+  let usedVoices: unknown[] = [];
+  let voiceList: Array<{ name: string; lang: string }> = [];
   const synth = {
-    getVoices: () => [],
+    getVoices: () => voiceList,
     cancel: vi.fn(),
     speak: (utterance: FakeUtterance) => {
       active += 1;
       maxActive = Math.max(maxActive, active);
       starts.push(utterance.text);
+      usedVoices.push(utterance.voice);
       utterance.onstart?.();
       setTimeout(() => {
         active -= 1;
@@ -38,7 +41,7 @@ describe("VoiceEngine single-consumer orchestration", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    active = 0; maxActive = 0; starts = [];
+    active = 0; maxActive = 0; starts = []; usedVoices = []; voiceList = [];
     synth.cancel.mockClear();
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -81,5 +84,31 @@ describe("VoiceEngine single-consumer orchestration", () => {
     const welcome = engine.speakAndWait(line("织伴开场"));
     await vi.advanceTimersByTimeAsync(100);
     await expect(welcome).resolves.toBe("spoken");
+  });
+
+  it("pins loomMate to the same preferred Chinese female voice for every segment", async () => {
+    const male = { name: "Li-mu", lang: "zh-CN" };
+    const female = { name: "Ting-Ting", lang: "zh-CN" };
+    voiceList = [male, female];
+    const engine = new VoiceEngineImpl();
+    const voiceOverride = { pitch: 1.04, rate: .94, female: true, preferredNames: ["Ting-Ting"] };
+    const one = engine.speakAndWait({ ...line("第一段"), voiceOverride });
+    const two = engine.speakAndWait({ ...line("第二段"), voiceOverride });
+    await vi.advanceTimersByTimeAsync(200);
+    await Promise.all([one, two]);
+    expect(usedVoices).toEqual([female, female]);
+  });
+
+  it("does not change speaker mid-session when the browser voice list arrives late", async () => {
+    const engine = new VoiceEngineImpl();
+    const one = engine.speakAndWait(line("列表未就绪"));
+    await vi.advanceTimersByTimeAsync(100);
+    await one;
+    voiceList = [{ name: "Tingting", lang: "zh-CN" }];
+    const two = engine.speakAndWait(line("列表已就绪"));
+    await vi.advanceTimersByTimeAsync(100);
+    await two;
+    expect(usedVoices).toEqual([null, null]);
+    expect(engine.voiceDiagnostics.loommate).toBe("system-default-locked");
   });
 });

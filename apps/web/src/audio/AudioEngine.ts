@@ -18,7 +18,9 @@ class AudioEngineImpl {
   private master: GainNode | null = null;
   private buses: Record<"ambience" | "sfx" | "ritual", GainNode | null> = { ambience: null, sfx: null, ritual: null };
   private noiseBuf: AudioBuffer | null = null;
-  mode: AudioMode = (typeof localStorage !== "undefined" && (localStorage.getItem(MODE_KEY) as AudioMode)) || "full";
+  // 首次安装默认关闭连续环境底噪。连续白噪在笔记本扬声器上很容易被听成
+  // “电流声”，而且会显著降低 TTS 清晰度；用户仍可在声音设置里主动开启。
+  mode: AudioMode = (typeof localStorage !== "undefined" && (localStorage.getItem(MODE_KEY) as AudioMode)) || "hints";
   private gestureBound = false;
 
   /** 首次用户手势后调用（组件挂载时绑定一次即可） */
@@ -45,7 +47,7 @@ class AudioEngineImpl {
           sfx: this.ctx.createGain(),
           ritual: this.ctx.createGain(),
         };
-        this.buses.ambience!.gain.value = 0.35;
+        this.buses.ambience!.gain.value = 0.12;
         this.buses.sfx!.gain.value = 0.7;
         this.buses.ritual!.gain.value = 0.85;
         for (const b of Object.values(this.buses)) b!.connect(this.master);
@@ -71,7 +73,7 @@ class AudioEngineImpl {
       this.ensureCtx();
       void this.ctx?.resume();
       // ambience 总线随档位开关
-      if (this.buses.ambience) this.buses.ambience.gain.value = mode === "full" ? 0.35 : 0;
+      if (this.buses.ambience) this.buses.ambience.gain.value = mode === "full" ? 0.12 : 0;
     }
   }
 
@@ -136,6 +138,20 @@ class AudioEngineImpl {
   }
   get sharedNoise(): AudioBuffer | null {
     return this.noiseBuf;
+  }
+
+  /** TTS 播报时自动 duck 环境声，避免白噪与人声叠加形成“沙沙电流声”。 */
+  setSpeechActive(active: boolean): void {
+    const bus = this.buses.ambience;
+    const ctx = this.ctx;
+    if (!bus || !ctx) return;
+    const target = !active && this.mode === "full" ? 0.12 : 0;
+    try {
+      bus.gain.cancelScheduledValues(ctx.currentTime);
+      bus.gain.setTargetAtTime(target, ctx.currentTime, active ? 0.025 : 0.22);
+    } catch {
+      bus.gain.value = target;
+    }
   }
 }
 

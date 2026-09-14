@@ -7,7 +7,7 @@
  *  3. CineRig     —— 电影运镜（开场低机位推轨入场 → 缓慢环绕 + 呼吸浮动）
  *  4. CinePost    —— 后期管线（Bloom 辉光 + Vignette 暗角 + 胶片颗粒 + 色差 + SMAA）
  *  5. SkyDome     —— 穹顶渐变天幕 + 地平线城市光带剪影（空间纵深感）
- *  6. NamePlate   —— 电影字幕感名牌（人名为主、官衔为辅、状态呼吸灯）
+ *  6. NamePlate   —— 游戏式悬浮名牌（角色名/用户别名为主，状态按需显示）
  */
 import { useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -189,7 +189,7 @@ export function Skyline({ radius = 16, count = 42, night = false }: { radius?: n
 export function NamePlate({
   persona, role, color = "#8ad8ff", sub, spotlight = false, spotText, position = [0, 1.6, 0], distanceFactor = 9,
 }: {
-  /** 人名（主标题， naming.ts personaOf） */
+  /** 唯一主标题：默认岗位/角色名，用户设置别名后显示别名。 */
   persona: string;
   /** 官衔（副标题） */
   role: string;
@@ -200,26 +200,29 @@ export function NamePlate({
 }) {
   return (
     <Html center distanceFactor={distanceFactor > 0 ? distanceFactor : undefined} position={position} style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
-      <div style={{
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+      <div data-product-nameplate style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
         transform: spotlight ? "scale(1.18)" : "scale(1)", transition: "transform .25s",
         filter: spotlight ? `drop-shadow(0 0 10px ${color})` : "none",
       }}>
         <div style={{
-          whiteSpace: "nowrap", fontSize: spotlight ? 14 : 12, fontWeight: 700, letterSpacing: 1.5,
+          whiteSpace: "nowrap", fontSize: spotlight ? 13 : 11, fontWeight: 700, letterSpacing: .7,
           color: spotlight ? "#fff8e8" : "#eef4ff",
-          textShadow: `0 0 8px ${color}88, 0 1px 3px rgba(0,0,0,.85)`,
+          textShadow: "0 1px 3px rgba(0,0,0,.9)",
+          padding: "4px 9px", borderRadius: 999,
+          border: `1px solid ${color}55`, background: "rgba(7,12,22,.82)",
+          boxShadow: `0 5px 18px rgba(0,0,0,.38), 0 0 10px ${color}18`,
         }}>
           {persona}{spotlight && spotText ? ` · ${spotText}` : ""}
         </div>
-        <div style={{
+        {(role || sub) && <div style={{
           whiteSpace: "nowrap", fontSize: 9, fontWeight: 500, letterSpacing: 2.5,
           color, textShadow: "0 1px 2px rgba(0,0,0,.8)", opacity: 0.95,
         }}>
           {role}{sub ? ` · ${sub}` : ""}
-        </div>
+        </div>}
         <div style={{
-          width: spotlight ? 56 : 40, height: 1.5, borderRadius: 1,
+          width: spotlight ? 44 : 28, height: 1, borderRadius: 1,
           background: `linear-gradient(90deg, transparent, ${color}, transparent)`,
           boxShadow: `0 0 6px ${color}`,
         }} />

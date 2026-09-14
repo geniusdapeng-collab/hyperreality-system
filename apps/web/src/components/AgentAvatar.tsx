@@ -1,11 +1,11 @@
 /**
- * AgentAvatar · 数字人统一形象资产（2D SVG 版）
+ * AgentAvatar · 数字员工统一形象资产（现代职场 SVG 版）
  *
  * 与 3D 角色（Avatar3D / KayKit）同源设计语义：同一套岗位→形象映射，
  * 让"世界里的他"在产品任何角落都被认出来——审批卡、成员页、Ask 栏、通栏、空状态。
  *
- * 五角色剪影特征：Knight=金盔面甲（CEO）/ Mage=尖帽（内容·调价）/
- * Rogue=圆兜帽（评价·前台）/ Rogue_Hooded=尖兜帽露目缝（竞对）/ Barbarian=角盔壮汉（对账·巡检）。
+ * 历史枚举名为兼容旧数据继续保留，但画面不再使用骑士、法师和武器等游戏职业：
+ * 五种外观全部是现代商务装数字员工，岗位通过配色、发型和胸前识别光区分。
  */
 
 export type AvatarKind = "Knight" | "Mage" | "Rogue" | "Rogue_Hooded" | "Barbarian";
@@ -17,62 +17,52 @@ export function avatarKindOf(name: string, presetKey = ""): AvatarKind {
   if (k.includes("竞对") || k.includes("scout") || k.includes("competitor")) return "Rogue_Hooded";
   if (k.includes("内容") || k.includes("content") || k.includes("调价") || k.includes("pricing") || k.includes("收益")) return "Mage";
   if (k.includes("对账") || k.includes("账") || k.includes("finance") || k.includes("巡检") || k.includes("inspect")) return "Barbarian";
-  return "Rogue";
+  const pool: AvatarKind[] = ["Rogue", "Mage", "Rogue_Hooded", "Barbarian"];
+  let h = 0;
+  for (const ch of k) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return pool[Math.abs(h) % pool.length]!;
 }
 
 const KIND_COLOR: Record<AvatarKind, { main: string; accent: string }> = {
-  Knight: { main: "#c8a24a", accent: "#ffd98a" },
-  Mage: { main: "#7a5fc0", accent: "#b9a2f0" },
-  Rogue: { main: "#6b7a90", accent: "#a8bcd8" },
-  Rogue_Hooded: { main: "#4a5a70", accent: "#8ad8ff" },
-  Barbarian: { main: "#8a6a50", accent: "#e0b890" },
+  Knight: { main: "#c2943f", accent: "#ffd98a" },
+  Mage: { main: "#665ca8", accent: "#b9aaff" },
+  Rogue: { main: "#385f86", accent: "#8ad8ff" },
+  Rogue_Hooded: { main: "#2d756f", accent: "#84eadb" },
+  Barbarian: { main: "#8a554a", accent: "#ffb29e" },
 };
 
-/** 角色剪影路径（48×48 viewBox，头+肩） */
+/** 现代职场全身人物（48×48 viewBox）：西装/针织衫/胸牌，不出现盔甲与武器。 */
 function KindFigure({ kind, accent }: { kind: AvatarKind; accent: string }) {
-  switch (kind) {
-    case "Knight":
-      return (<>
-        {/* 金盔：圆顶 + 面甲横缝 + 盔缨 */}
-        <path d="M14 22 a10 10 0 0 1 20 0 v6 h-20 z" fill="currentColor" />
-        <rect x="14" y="26" width="20" height="4" rx="1.5" fill="currentColor" />
-        <rect x="17" y="27.4" width="14" height="1.4" rx="0.7" fill="#0d1526" />
-        <path d="M24 8 q3 3 0 7" stroke={accent} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-        <path d="M12 34 q12 -5 24 0 v10 h-24 z" fill="currentColor" opacity="0.85" />
-      </>);
-    case "Mage":
-      return (<>
-        {/* 尖帽法师：尖顶帽 + 帽檐 + 肩 */}
-        <path d="M24 4 l8 16 h-16 z" fill="currentColor" />
-        <ellipse cx="24" cy="21" rx="13" ry="3.4" fill="currentColor" />
-        <circle cx="24" cy="26" r="7" fill={accent} opacity="0.9" />
-        <rect x="20" y="26" width="8" height="1.6" rx="0.8" fill="#0d1526" />
-        <path d="M12 36 q12 -5 24 0 v8 h-24 z" fill="currentColor" opacity="0.85" />
-      </>);
-    case "Rogue_Hooded":
-      return (<>
-        {/* 尖兜帽：深罩 + 目缝发光 */}
-        <path d="M24 6 q12 6 10 22 h-20 q-2 -16 10 -22 z" fill="currentColor" />
-        <rect x="18" y="23" width="12" height="2" rx="1" fill={accent} />
-        <path d="M12 34 q12 -5 24 0 v10 h-24 z" fill="currentColor" opacity="0.85" />
-      </>);
-    case "Barbarian":
-      return (<>
-        {/* 角盔壮汉：双角 + 宽肩 + 胡须 */}
-        <path d="M12 12 q-4 6 2 9 M36 12 q4 6 -2 9" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
-        <circle cx="24" cy="21" r="9" fill="currentColor" />
-        <path d="M17 25 q7 6 14 0 v5 q-7 5 -14 0 z" fill={accent} opacity="0.85" />
-        <path d="M8 38 q16 -7 32 0 v6 h-32 z" fill="currentColor" opacity="0.9" />
-      </>);
-    default: // Rogue
-      return (<>
-        {/* 圆兜帽游侠 */}
-        <path d="M14 24 a10 10 0 0 1 20 0 v4 h-20 z" fill="currentColor" />
-        <circle cx="24" cy="24" r="6" fill={accent} opacity="0.9" />
-        <rect x="20" y="23.4" width="8" height="1.4" rx="0.7" fill="#0d1526" />
-        <path d="M12 35 q12 -5 24 0 v9 h-24 z" fill="currentColor" opacity="0.85" />
-      </>);
-  }
+  const skin = kind === "Barbarian" ? "#9a6249" : kind === "Rogue_Hooded" ? "#d59a72" : "#efc29e";
+  const longHair = kind === "Mage" || kind === "Rogue_Hooded";
+  const glasses = kind === "Rogue" || kind === "Knight";
+  return (<>
+    {/* 柔和地面光，强化“站立的人”而不是头像图标 */}
+    <ellipse cx="24" cy="45" rx="10" ry="2" fill={accent} opacity=".18" />
+    {/* 双腿与鞋 */}
+    <path d="M18.8 34.5h4.3l-.5 8.2h-5.1zM24.9 34.5h4.3l1.3 8.2h-5.1z" fill="#17243a" />
+    <path d="M16.5 42h7v2.2h-7.8zM25 42h6.8l.7 2.2H25z" fill="#09111f" />
+    {/* 手臂 */}
+    <path d="M15.2 24.3c-2 3.3-2.5 7.2-1.5 10.8l3.2-.7.9-8.9zM32.8 24.3c2 3.3 2.5 7.2 1.5 10.8l-3.2-.7-.9-8.9z" fill="currentColor" opacity=".9" />
+    <circle cx="14.4" cy="35" r="1.7" fill={skin} /><circle cx="33.6" cy="35" r="1.7" fill={skin} />
+    {/* 商务上装 */}
+    <path d="M17 22.5c4-1.8 10-1.8 14 0l1.5 13.7h-17z" fill="currentColor" />
+    <path d="M21 22l3 4 3-4-1.2 13h-3.6z" fill="#eef5ff" opacity=".95" />
+    <path d="M23.2 26h1.6l.8 6-1.6 1.8-1.6-1.8z" fill={accent} />
+    <rect x="27.8" y="27" width="2.6" height="2" rx=".5" fill={accent} opacity=".9" />
+    {/* 颈部与脸 */}
+    <rect x="21.8" y="18.3" width="4.4" height="4.6" rx="1.6" fill={skin} />
+    {longHair && <path d="M17.3 10.7c1.2-6.5 12.2-7.1 14.1-.1l-.3 9.8-3.8-1.5-7.6.1-2.8 1.7z" fill="#18243a" />}
+    <circle cx="24" cy="13.4" r="7" fill={skin} />
+    {/* 发型 */}
+    {longHair
+      ? <path d="M17.3 12.6c.1-8.3 12.7-9.8 14-.9-2.8-3-7.7-3.8-13.8 1.8z" fill="#202b42" />
+      : <path d="M17.8 11.7c1-7.4 11.7-7.8 12.8-1.3-3-1.5-7.4-2.5-12.8 1.3z" fill="#202b42" />}
+    {/* 表情与眼镜 */}
+    <circle cx="21.5" cy="13.8" r=".65" fill="#172033" /><circle cx="26.5" cy="13.8" r=".65" fill="#172033" />
+    {glasses && <><rect x="19.5" y="12.5" width="4" height="2.7" rx="1" fill="none" stroke={accent} strokeWidth=".55" /><rect x="24.5" y="12.5" width="4" height="2.7" rx="1" fill="none" stroke={accent} strokeWidth=".55" /><path d="M23.5 13.6h1" stroke={accent} strokeWidth=".55" /></>}
+    <path d="M22 17c1.3 1 2.7 1 4 0" fill="none" stroke="#8d5545" strokeWidth=".65" strokeLinecap="round" />
+  </>);
 }
 
 export function AgentAvatar({

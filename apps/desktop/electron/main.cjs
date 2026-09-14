@@ -318,6 +318,71 @@ async function runRenderSmoke() {
   if (!teamProbe?.ready || teamProbe.mode !== expectedTeamMode) throw new Error(`团队仪式后端不符合契约（期望 ${expectedTeamMode}）：${JSON.stringify(report)}`);
   if (report.bundle === "ai-pm" && teamProbe.actors !== Number(report.actorCount) + 1) throw new Error(`AI 产品经理团队仪式名单不完整：${JSON.stringify(report)}`);
   if (teamPixels.variance < 35 || teamPixels.visibleRatio < 0.015) throw new Error(`团队仪式画面疑似纯黑/纯色：${JSON.stringify(report)}`);
+
+  // 仪式通过并不代表正式产品页可交付。必须真正退出仪式，依次验收职场与舞台 3D：
+  // 画面非黑、团队完整、默认标签只含岗位名（系统内置人名不能泄漏到 HUD）。
+  const enteredSystem = await win.webContents.executeJavaScript(`(() => {
+    const buttons = [...document.querySelectorAll('button')];
+    const skip = buttons.find((button) => button.textContent?.includes('跳过仪式'));
+    skip?.click();
+    return !!skip;
+  })()`, true);
+  if (!enteredSystem) throw new Error(`无法退出团队仪式：${JSON.stringify(report)}`);
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  const confirmedSystem = await win.webContents.executeJavaScript(`(() => {
+    const buttons = [...document.querySelectorAll('button')];
+    const enter = buttons.find((button) => button.textContent?.includes('进入系统'));
+    enter?.click();
+    return !!enter;
+  })()`, true);
+  if (!confirmedSystem) throw new Error(`无法确认进入系统：${JSON.stringify(report)}`);
+
+  async function captureProductScene(sceneName, fileStem) {
+    const sceneDeadline = Date.now() + 15000;
+    let sceneProbe = null;
+    while (Date.now() < sceneDeadline) {
+      sceneProbe = await win.webContents.executeJavaScript(`(() => {
+        const scene = document.querySelector('[data-product-scene="${sceneName}"]');
+        return {
+          ready: !!scene,
+          actors: Number(scene?.getAttribute('data-product-scene-actors') || 0),
+          labels: scene ? [...document.querySelectorAll('[data-product-nameplate]')].map((node) => node.textContent?.trim() || '').filter(Boolean) : [],
+        };
+      })()`, true);
+      if (sceneProbe?.ready) break;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3600));
+    const sceneShot = await win.webContents.capturePage();
+    const sceneScreenshotPath = path.join(logDir, `${fileStem}-${SAFE_RENDERING ? "safe" : "default"}.png`);
+    fs.writeFileSync(sceneScreenshotPath, sceneShot.toPNG());
+    const scenePixels = pixelHealth(sceneShot);
+    const sceneReport = { ...sceneProbe, pixels: scenePixels, screenshotPath: sceneScreenshotPath };
+    if (!sceneProbe?.ready) throw new Error(`${sceneName} 未就绪：${JSON.stringify(sceneReport)}`);
+    if (report.bundle === "ai-pm" && Number(sceneProbe.actors) !== Number(report.actorCount) + (sceneName === "report-stage-3d" ? 1 : 0)) {
+      throw new Error(`${sceneName} 团队人数不完整：${JSON.stringify(sceneReport)}`);
+    }
+    if (scenePixels.variance < 35 || scenePixels.visibleRatio < 0.015) throw new Error(`${sceneName} 画面疑似纯黑/纯色：${JSON.stringify(sceneReport)}`);
+    const builtInNames = ['顾云峥', '高明珏', '程既明', '任知遥', '叶言之', '唐亦舟', '万见庭', '陆闻秋', '祁含章', '祁清晏', '许诠宁'];
+    if ((sceneProbe.labels || []).some((label) => builtInNames.some((name) => label.includes(name)))) {
+      throw new Error(`${sceneName} 默认 HUD 泄漏系统内置人名：${JSON.stringify(sceneReport)}`);
+    }
+    const maxIdleLabels = sceneName === "workplace-3d" ? 4 : 1;
+    if ((sceneProbe.labels || []).length > maxIdleLabels) {
+      throw new Error(`${sceneName} 空闲态名牌过密：${JSON.stringify(sceneReport)}`);
+    }
+    return sceneReport;
+  }
+
+  report.workplace = await captureProductScene("workplace-3d", "workplace");
+  const switchedStage = await win.webContents.executeJavaScript(`(() => {
+    const button = [...document.querySelectorAll('button')].find((node) => node.textContent?.trim() === '舞台');
+    button?.click();
+    return !!button;
+  })()`, true);
+  if (!switchedStage) throw new Error(`无法切换到舞台视图：${JSON.stringify(report)}`);
+  report.reportStage = await captureProductScene("report-stage-3d", "stage");
+  saveReport();
   console.log(`WorkLoom 渲染冒烟通过：${JSON.stringify(report)}`);
 }
 

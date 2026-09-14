@@ -8,20 +8,21 @@
  *  - 交互同义：点击员工 → asking 且有 approvalId 走 onPickApproval（审批卡），
  *    否则 onPickAgent（绩效卡）——与 Canvas 版点击分派一字不差；
  *  - 视觉（cinematic 工具包）：镜面反射地板 / 体积光柱 / 开场推轨运镜 /
- *    穹顶天幕 + 城市光带 / 电影字幕名牌（人名·官衔）/ 辉光 + 暗角 + 胶片颗粒。
+ *    穹顶天幕 + 城市光带 / 游戏式角色名牌 / 辉光 + 暗角 + 胶片颗粒。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
-import { Avatar3D, roleSkinOf, type AvatarHandle } from "./Avatar3D";
+import type { AvatarHandle } from "./Avatar3D";
+import { BusinessAvatar3D } from "./BusinessAvatar3D";
 import { GazeSystem, GazeRegistry } from "./GazeSystem";
 import { HoverBubble } from "./HoverBubble";
 import { CineDirector, FuseVignette } from "./CineDirector";
 import type { DirectorEvent } from "../lib/theaterDiff";
 import { AudioEngine } from "../audio/AudioEngine";
 import { useNightTime } from "../lib/useNightTime";
-import { personaOf } from "../lib/naming";
+import { displayNameOf } from "../lib/naming";
 import { CineFloor, SpotBeam, CineRig, CinePost, SkyDome, Skyline, NamePlate, DustMotes } from "./cinematic";
 import type { FloorAgent, FloorScene, FloorPayload } from "../pages/p0/Floor";
 
@@ -29,15 +30,22 @@ import type { FloorAgent, FloorScene, FloorPayload } from "../pages/p0/Floor";
 function hash(s: string): number { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
 
 /** 走位目标（与 Floor.tsx targetOf 逐分支一致） */
-function targetOf(a: FloorAgent, scene: FloorScene): { x: number; y: number } {
+interface CrowdSlot { index: number; total: number }
+
+function targetOf(a: FloorAgent, scene: FloorScene, slot: CrowdSlot = { index: 0, total: 1 }): { x: number; y: number } {
   const st = scene.stations.find((s) => s.id === a.stationId);
-  const jx = ((hash(a.id) % 5) - 2) * 0.16, jy = ((hash(a.id) % 3) - 1) * 0.18;
+  // 同一目的地采用确定性的环形占位，而不是 id 随机微偏移。随机微偏移会发生碰撞，
+  // 角色与 HTML 名牌就会叠成一团；环形槽位保证同工位/指挥台前每人位置唯一。
+  const angle = slot.total <= 1 ? -Math.PI / 2 : (slot.index / slot.total) * Math.PI * 2 - Math.PI / 2;
+  const radius = slot.total <= 1 ? 0 : 0.48 + Math.floor(slot.index / 8) * 0.24;
+  const jx = Math.cos(angle) * radius;
+  const jy = Math.sin(angle) * radius * 0.72;
   switch (a.state) {
     case "asking": {
-      const slot = hash(a.id) % 6;
-      const ang = -0.95 + slot * 0.38;
+      const span = Math.min(1.75, 0.42 * Math.max(1, slot.total - 1));
+      const ang = slot.total <= 1 ? 0 : -span / 2 + (slot.index / (slot.total - 1)) * span;
       return {
-        x: scene.ceoDesk.x + Math.sin(ang) * 2.3,
+        x: scene.ceoDesk.x + Math.sin(ang) * 2.8,
         y: scene.ceoDesk.y + 1.0 + (1 - Math.cos(ang)) * 1.6,
       };
     }
@@ -72,9 +80,10 @@ const STATE_TEXT: Record<string, string> = {
 
 /* ---------------- 单个数字员工 ---------------- */
 function Worker({
-  agent, scene, tile, onPick, onDropTask, night,
+  agent, scene, tile, crowdSlot, onPick, onDropTask, night,
 }: {
   agent: FloorAgent; scene: FloorScene; tile: number;
+  crowdSlot: CrowdSlot;
   onPick: (a: FloorAgent) => void;
   onDropTask?: (a: FloorAgent, task: string) => void;
   night: boolean;
@@ -83,8 +92,9 @@ function Worker({
   const ring = useRef<THREE.Mesh>(null);
   const avatarRef = useRef<AvatarHandle>(null);
   const [bubble, setBubble] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const hoverTimer = useRef<number | null>(null);
-  const target = useMemo(() => targetOf(agent, scene), [agent, scene]);
+  const target = useMemo(() => targetOf(agent, scene, crowdSlot), [agent, scene, crowdSlot]);
   const color = STATE_COLOR[agent.state] ?? "#8ad8ff";
   const toWorld = (lx: number, ly: number) => ({
     x: (lx - scene.grid.w / 2) * tile,
@@ -132,7 +142,6 @@ function Worker({
   }, [agent.id]);
 
   const dimmed = agent.state === "disabled";
-  const skin = roleSkinOf(agent.name, agent.presetKey);
   const asking = agent.state === "asking";
   return (
     <group ref={group} position={[init.x, 0, init.z]}>
@@ -142,8 +151,8 @@ function Worker({
         <meshBasicMaterial color={color} transparent opacity={dimmed ? 0.15 : 0.55} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
       {/* 真人风数字员工（KayKit 骨骼动画；ref 供注视点头） */}
-      <group scale={dimmed ? 0.52 : 0.64}>
-        <Avatar3D ref={avatarRef} skin={skin} state={agent.state} moving={movingRef.current} />
+      <group scale={dimmed ? 0.62 : 0.78}>
+        <BusinessAvatar3D ref={avatarRef} identity={agent.presetKey} state={agent.state} moving={movingRef.current} />
       </group>
       {/* 一句话状态气泡（hover 0.5s / 注视触发） */}
       <HoverBubble text={agent.statusLine} visible={bubble} position={[0, 1.0, 0]} />
@@ -159,10 +168,12 @@ function Worker({
         onClick={(e) => { e.stopPropagation(); onPick(agent); }}
         onPointerOver={(e) => {
           e.stopPropagation();
+          setHovered(true);
           document.body.style.cursor = "pointer";
           hoverTimer.current = window.setTimeout(() => setBubble(true), 500);
         }}
         onPointerOut={() => {
+          setHovered(false);
           document.body.style.cursor = "default";
           if (hoverTimer.current) { window.clearTimeout(hoverTimer.current); hoverTimer.current = null; }
           window.setTimeout(() => setBubble(false), 1600);
@@ -170,15 +181,15 @@ function Worker({
       >
         <sphereGeometry args={[0.4, 8, 8]} />
       </mesh>
-      {/* 电影字幕名牌（人名 · 官衔 · 状态） */}
-      {!dimmed && (
+      {/* 游戏式名牌：只显示岗位名；用户设置别名后只显示别名。状态仅在请示时出现。 */}
+      {!dimmed && hovered && (
         <NamePlate
-          persona={personaOf(agent.presetKey)}
-          role={asking ? `${agent.name} · 请您定` : ""}
+          persona={displayNameOf({ presetKey: agent.presetKey, roleName: agent.name })}
+          role={asking ? "请您定" : ""}
           color={color}
           spotlight={asking}
           position={[0, 1.22 + (hash(agent.id) % 4) * 0.24, 0]}
-          distanceFactor={0}
+          distanceFactor={8}
         />
       )}
       {/* 拖拽接收锚点 */}
@@ -334,11 +345,11 @@ function OfficeScene({ scene, tile, ceoName, night }: { scene: FloorScene; tile:
               <meshBasicMaterial color="#ffd98a" transparent opacity={0.85} blending={THREE.AdditiveBlending} depthWrite={false} />
             </mesh>
             <group position={[0, 0.28, 0]}>
-              <Avatar3D skin={{ model: "Knight", cape: true, tint: "#ffd98a", workAction: "Idle" }} state="working" scale={0.66} />
+              <BusinessAvatar3D identity="company-ceo" state="working" scale={0.66} />
             </group>
             <SpotBeam color="#ffd98a" height={4.6} topR={0.24} bottomR={1.0} opacity={night ? 0.07 : 0.1} />
             <pointLight color="#ffcf7a" intensity={night ? 7 : 5} distance={7} decay={2} position={[0, 1.5, 0]} />
-            <NamePlate persona={personaOf("company-ceo")} role={ceoName} color="#ffd98a" position={[0, 1.62, 0]} distanceFactor={0} />
+            <NamePlate persona={displayNameOf({ presetKey: "company-ceo", roleName: ceoName })} role="" color="#ffd98a" position={[0, 1.62, 0]} distanceFactor={0} />
           </group>
         );
       })()}
@@ -414,8 +425,26 @@ export function Floor3D({
   const night = useNightTime();
   const camY = Math.max(scene.grid.w, scene.grid.h) * tile * 0.95;
   const controlsRef = useRef<any>(null);
+  const crowdSlots = useMemo(() => {
+    const groups = new Map<string, FloorAgent[]>();
+    for (const agent of floor.agents) {
+      const key = agent.state === "asking" ? "asking" : agent.state === "disabled" ? "entrance" : agent.stationId ? `station:${agent.stationId}` : "lounge";
+      const list = groups.get(key) ?? [];
+      list.push(agent);
+      groups.set(key, list);
+    }
+    const slots = new Map<string, CrowdSlot>();
+    for (const list of groups.values()) {
+      list.sort((a, b) => a.id.localeCompare(b.id)).forEach((agent, index) => slots.set(agent.id, { index, total: list.length }));
+    }
+    return slots;
+  }, [floor.agents]);
   return (
-    <div style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10", position: "relative" }}>
+    <div
+      data-product-scene="workplace-3d"
+      data-product-scene-actors={String(floor.agents.length)}
+      style={{ width: "100%", height: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10", position: "relative" }}
+    >
       <FuseVignette event={directorEvent} />
       <Canvas
         camera={{ position: [camY * 1.5, camY * 0.5, camY * 1.5], fov: 40 }}
@@ -425,15 +454,15 @@ export function Floor3D({
         <SkyDome night={night} />
         <Skyline radius={Math.max(scene.grid.w, scene.grid.h) * tile * 2.2} night={night} />
         {/* 三点布光：主光（暖）+ 补光（冷）+ 轮廓逆光 */}
-        <ambientLight intensity={night ? 0.2 : 0.58} color={night ? "#8ea8d8" : "#c4d6ff"} />
-        <directionalLight position={[5, 8, 4]} intensity={night ? 0.28 : 0.95} color={night ? "#7a98c8" : "#a8c8ff"} />
+        <ambientLight intensity={night ? 0.38 : 0.72} color={night ? "#a7bce5" : "#d9e5ff"} />
+        <directionalLight position={[5, 8, 4]} intensity={night ? 0.52 : 1.05} color={night ? "#9bb8e8" : "#bcd5ff"} />
         <directionalLight position={[-4, 5, -6]} intensity={night ? 0.45 : 0.8} color="#6fb2ff" />
         <pointLight position={[-5, 3, -2]} intensity={night ? 3 : 5} color="#5aa2ff" distance={12} decay={2} />
         <fog attach="fog" args={[night ? "#030509" : "#080f20", 11, 26]} />
 
         <OfficeScene scene={scene} tile={tile} ceoName={ceoName} night={night} />
         {floor.agents.map((a) => (
-          <Worker key={a.id} agent={a} scene={scene} tile={tile} onPick={onPick} onDropTask={onDropTask} night={night} />
+          <Worker key={a.id} agent={a} scene={scene} tile={tile} crowdSlot={crowdSlots.get(a.id) ?? { index: 0, total: 1 }} onPick={onPick} onDropTask={onDropTask} night={night} />
         ))}
         <DustMotes count={46} area={[9, 2.8, 7]} color={night ? "#8aa8d8" : "#bcd6ff"} size={1.2} position={[0, 1.5, 0]} speed={0.18} />
 

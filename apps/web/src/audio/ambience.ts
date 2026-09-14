@@ -53,9 +53,9 @@ class AmbiencePlayer {
     const filter = ctx.createBiquadFilter();
     const gain = ctx.createGain();
     if (scene === "office") {
-      filter.type = "lowpass"; filter.frequency.value = 380; gain.gain.value = 0.5;
+      filter.type = "lowpass"; filter.frequency.value = 280; gain.gain.value = 0.08;
     } else if (scene === "rain") {
-      filter.type = "bandpass"; filter.frequency.value = 1400; filter.Q.value = 0.6; gain.gain.value = 0.65;
+      filter.type = "bandpass"; filter.frequency.value = 1100; filter.Q.value = 0.5; gain.gain.value = 0.12;
     } else {
       filter.type = "highpass"; filter.frequency.value = 1800; gain.gain.value = 0.12;
     }

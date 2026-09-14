@@ -14,7 +14,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Avatar3D, roleSkinOf } from "./Avatar3D";
+import { BusinessAvatar3D } from "./BusinessAvatar3D";
 import { AgentAvatarOf } from "./AgentAvatar";
 import { CineFloor, SpotBeam, CinePost } from "./cinematic";
 
@@ -97,12 +97,7 @@ function Actor({ actor, pos, isCeo, slow, cheerScale, dancing }: {
   return (
     <group position={[pos[0], 0, pos[1]]}>
       <group ref={group} scale={isCeo ? 0.82 : 0.62}>
-        <Avatar3D
-          skin={isCeo
-            ? { model: "Knight", cape: true, tint: "#ffd98a", workAction: "Idle" }
-            : roleSkinOf(actor.name, actor.presetKey)}
-          state={dancing ? "celebrating" : "idle"}
-        />
+        <BusinessAvatar3D identity={actor.presetKey} state={dancing ? "celebrating" : "idle"} />
       </group>
       {/* 主光柱：CEO 金色常驻，员工仅里程碑场 */}
       {isCeo && <SpotBeam color="#ffd98a" height={4.6} topR={0.22} bottomR={0.95} opacity={0.1} />}
@@ -203,16 +198,19 @@ function hasWebGL(): boolean {
 /** WebGL 不可用时的动态团队舞台：人物、岗位、队形、舞蹈和聚光均保留。 */
 function VectorCeremonyStage({ actors, occasion = "first-install", dancing = true, height = 460, onReady }: CeremonyStageProps) {
   const choreo = useMemo(() => choreographyOf(actors.length, occasion), [actors.length, occasion]);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    const id = window.setTimeout(() => onReady?.(), 80);
+    // data-ready 代表全员（含最后一个错峰入场的人）已经完成首帧，不再把“容器已挂载”
+    // 误报为“团队画面已就绪”。
+    const id = window.setTimeout(() => { setReady(true); onReady?.(); }, 1050);
     return () => window.clearTimeout(id);
   }, [onReady]);
 
   const staff = actors.slice(1);
   return (
-    <div data-ceremony-render-mode="vector2d" data-ceremony-ready="true" data-ceremony-actors={String(actors.length)} style={{ width: "100%", height, borderRadius: 12, overflow: "hidden", background: "radial-gradient(ellipse at 50% 70%,#222b39 0,#0b0d10 58%)", position: "relative" }}>
+    <div data-ceremony-render-mode="vector2d" data-ceremony-ready={ready ? "true" : "false"} data-ceremony-actors={String(actors.length)} style={{ width: "100%", height, borderRadius: 12, overflow: "hidden", background: "radial-gradient(ellipse at 50% 70%,#222b39 0,#0b0d10 58%)", position: "relative" }}>
       <style>{`
-        @keyframes ceremony-v2-dance { 0%,100% { transform:translateY(0) rotate(-2deg); } 35% { transform:translateY(-20px) rotate(3deg); } 70% { transform:translateY(-7px) rotate(-3deg); } }
+        @keyframes ceremony-v2-dance { 0%,100% { transform:translateY(0) rotate(-1deg); } 35% { transform:translateY(-12px) rotate(1.5deg); } 70% { transform:translateY(-4px) rotate(-1.2deg); } }
         @keyframes ceremony-v2-arrive { from { opacity:0; transform:translateY(70px) scale(.7); } to { opacity:1; transform:none; } }
         @keyframes ceremony-v2-beam { 0%,100% { opacity:.18; } 50% { opacity:.42; } }
       `}</style>
@@ -224,14 +222,18 @@ function VectorCeremonyStage({ actors, occasion = "first-install", dancing = tru
         const row = staff.length > 7 && staffIndex >= Math.ceil(staff.length / 2) ? 1 : 0;
         const rowActors = staff.length > 7 ? (row === 0 ? Math.ceil(staff.length / 2) : Math.floor(staff.length / 2)) : staff.length;
         const rowIndex = row === 0 ? staffIndex : staffIndex - Math.ceil(staff.length / 2);
-        const left = isCeo ? 50 : 13 + ((rowIndex + 1) / (rowActors + 1)) * 74;
-        const bottom = isCeo ? 25 : row === 0 ? 17 : 8;
-        const avatarSize = isCeo ? 138 : row === 0 ? 92 : 76;
+        const leftCount = Math.ceil(rowActors / 2);
+        const rightCount = rowActors - leftCount;
+        const left = isCeo ? 50 : rowIndex < leftCount
+          ? 13 + (leftCount <= 1 ? 15 : (rowIndex / (leftCount - 1)) * 30)
+          : 57 + (rightCount <= 1 ? 15 : ((rowIndex - leftCount) / (rightCount - 1)) * 30);
+        const bottom = isCeo ? 28 : row === 0 ? 18 : 6;
+        const avatarSize = isCeo ? 158 : row === 0 ? 106 : 88;
         const slow = !isCeo && choreo.slowDancers.includes(staffIndex);
         return (
-          <div key={`${actor.presetKey}-${index}`} style={{ position: "absolute", left: `${left}%`, bottom: `${bottom}%`, zIndex: isCeo ? 5 : row === 0 ? 4 : 3, width: avatarSize + 74, marginLeft: -(avatarSize + 74) / 2, textAlign: "center", animation: dancing ? `ceremony-v2-dance ${slow ? 1.42 : .94}s ease-in-out ${index * .08}s infinite` : `ceremony-v2-arrive .65s ease ${index * .08}s both`, transformOrigin: "50% 100%" }}>
+          <div key={`${actor.presetKey}-${index}`} style={{ position: "absolute", left: `${left}%`, bottom: `${bottom}%`, zIndex: isCeo ? 5 : row === 0 ? 4 : 3, width: avatarSize + 74, marginLeft: -(avatarSize + 74) / 2, textAlign: "center", animation: dancing ? `ceremony-v2-dance ${slow ? 1.42 : .94}s ease-in-out ${index * .05}s infinite` : `ceremony-v2-arrive .58s ease ${index * .025}s both`, transformOrigin: "50% 100%" }}>
             <AgentAvatarOf name={actor.name} presetKey={actor.presetKey} size={avatarSize} />
-            <div style={{ marginTop: 4, color: isCeo ? "#ffd98a" : "#d6dce4", fontWeight: isCeo ? 750 : 550, fontSize: isCeo ? 16 : 12, whiteSpace: "nowrap", textShadow: "0 2px 12px #000" }}>{actor.name}</div>
+            <div style={{ display: "inline-block", marginTop: 3, padding: "3px 9px", borderRadius: 99, color: isCeo ? "#ffd98a" : "#e7eef8", fontWeight: isCeo ? 750 : 600, fontSize: isCeo ? 15 : 11, whiteSpace: "nowrap", textShadow: "0 2px 10px #000", background: "rgba(7,12,22,.78)", border: `1px solid ${isCeo ? "rgba(255,217,138,.34)" : "rgba(138,216,255,.18)"}`, boxShadow: "0 6px 18px rgba(0,0,0,.28)" }}>{actor.name}</div>
           </div>
         );
       })}

@@ -9,19 +9,18 @@
  *  - 镜面反射舞台地面（倒影=大制作质感核心）；
  *  - CEO 金色主光柱 + 团队成员评级色光柱（体积光）；
  *  - 开场低机位推轨运镜 → 缓慢环绕；胶片颗粒 + 暗角 + 辉光后期；
- *  - 名牌电影字幕化：人名为主（naming.ts 命名规范）、官衔为辅。
+ *  - 名牌游戏 HUD 化：默认只显示岗位名，用户设置别名后只显示别名。
  */
 import { useMemo, useRef, useState } from "react";
-import { Avatar3D, roleSkinOf } from "./Avatar3D";
+import { BusinessAvatar3D } from "./BusinessAvatar3D";
 import { useNightTime } from "../lib/useNightTime";
-import { personaOf } from "../lib/naming";
-import { actorText } from "../lib/display";
+import { displayNameOf } from "../lib/naming";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { CineFloor, SpotBeam, CineRig, CinePost, SkyDome, Skyline, NamePlate, DustMotes } from "./cinematic";
 
-export interface StageAgent { id: string; name: string; grade: string }
+export interface StageAgent { id: string; presetKey?: string; name: string; alias?: string | null; grade: string }
 
 const GRADE_COLOR: Record<string, string> = {
   表扬: "#6adf8a",
@@ -33,8 +32,6 @@ const colorOf = (g: string) => GRADE_COLOR[g] ?? "#8ad8ff";
 
 /** id → preset_key（agt-competitor-agent → competitor-agent） */
 const keyOf = (id: string) => id.replace(/^agt-/, "");
-/** 官衔展示：name 已是官衔直接用；万一还是原始 id 则过展示层 */
-const roleOf = (a: StageAgent) => (a.name.startsWith("agt-") ? actorText(keyOf(a.name)) : a.name);
 
 /* ---------------- 底座脉冲环 ---------------- */
 function PulseRing({ color, phase }: { color: string; phase: number }) {
@@ -83,12 +80,12 @@ function CeoFigure({ active, night }: { active: boolean; night: boolean }) {
       </mesh>
       {/* CEO：Knight 金甲披风 */}
       <group ref={group}>
-        <Avatar3D skin={{ model: "Knight", cape: true, tint: active ? "#ffd98a" : "#9a8a6a", workAction: "Idle" }} state="working" scale={1.35} />
+        <BusinessAvatar3D identity="company-ceo" state="working" scale={1.35} />
       </group>
       {/* 金色主光柱（体积光） */}
       <SpotBeam color="#ffd98a" height={6.2} topR={0.3} bottomR={1.35} opacity={night ? 0.06 : 0.09} position={[0, 0.3, 0]} />
       <pointLight color="#ffcf7a" intensity={active ? 6 : 3.5} distance={10} decay={2} position={[0, 2.1, 0.4]} />
-      <NamePlate persona="顾云峥" role="公司CEO" color="#ffd98a" position={[0, 2.55, 0]} />
+      <NamePlate persona={displayNameOf({ presetKey: "company-ceo", roleName: "公司CEO" })} role="" color="#ffd98a" position={[0, 2.55, 0]} />
     </group>
   );
 }
@@ -105,9 +102,8 @@ function Member({
   const [hovered, setHovered] = useState(false);
   const [spotlight, setSpotlight] = useState(false);
   const color = colorOf(agent.grade);
-  const pkey = keyOf(agent.id);
-  const persona = personaOf(pkey);
-  const role = roleOf(agent);
+  const pkey = agent.presetKey ?? keyOf(agent.id);
+  const label = displayNameOf({ presetKey: pkey, roleName: agent.name });
   // 弧形列队（与上一版同语义：前排 60% / 后排 40%，全员面向董事长 +Z）
   const slot = useMemo(() => {
     const front = Math.ceil(total * 0.6);
@@ -152,11 +148,7 @@ function Member({
       </mesh>
       <PulseRing color={color} phase={slot.phase} />
       <group ref={group}>
-        <Avatar3D
-          skin={{ ...roleSkinOf(agent.name, agent.id), tint: color }}
-          state="working"
-          scale={hovered ? 0.92 : 0.82}
-        />
+        <BusinessAvatar3D identity={pkey} state="working" scale={hovered ? 1.16 : 1.02} />
       </group>
       {/* 报到/点名的评级色光柱 */}
       {(spotlight || hovered) && (
@@ -171,14 +163,16 @@ function Member({
       >
         <sphereGeometry args={[0.42, 8, 8]} />
       </mesh>
-      {/* 电影字幕名牌：人名为主 · 官衔+评级为辅 */}
-      <NamePlate
-        persona={persona} role={role} color={color}
-        sub={hovered ? agent.grade : undefined}
-        spotlight={spotlight}
-        spotText="向您报到"
-        position={[0, index < Math.ceil(total * 0.6) ? 1.55 : 2.0, 0]}
-      />
+      {/* 游戏式名牌：岗位/别名为主，评级只在交互时出现。 */}
+      {(hovered || spotlight) && (
+        <NamePlate
+          persona={label} role="" color={color}
+          sub={hovered ? agent.grade : undefined}
+          spotlight={spotlight}
+          spotText="向您报到"
+          position={[0, index < Math.ceil(total * 0.6) ? 1.78 : 2.14, 0]}
+        />
+      )}
     </group>
   );
 }
@@ -234,13 +228,17 @@ export function Stage3D({
   const night = useNightTime();
   const controlsRef = useRef<any>(null);
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10" }}>
+    <div
+      data-product-scene="report-stage-3d"
+      data-product-scene-actors={String(agents.length + 1)}
+      style={{ width: "100%", height: "100%", minHeight: 440, borderRadius: 12, overflow: "hidden", background: "#0b0d10" }}
+    >
       <Canvas camera={{ position: [8.6, 0.9, 11.2], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: false }}>
         <SkyDome night={night} />
         <Skyline radius={17} night={night} />
         {/* 舱室光环境：夜班整体压暗、金光更突出 */}
-        <ambientLight intensity={night ? 0.2 : 0.42} color={night ? "#8ea8d8" : "#bcd2ff"} />
-        <directionalLight position={[4, 6, 5]} intensity={night ? 0.28 : 0.65} color={night ? "#7a98c8" : "#9fc4ff"} />
+        <ambientLight intensity={night ? 0.4 : 0.62} color={night ? "#a8bee8" : "#d5e3ff"} />
+        <directionalLight position={[4, 6, 5]} intensity={night ? 0.55 : 0.82} color={night ? "#a1bee8" : "#bdd7ff"} />
         {/* 轮廓光（逆光勾勒人物边缘=电影感关键） */}
         <directionalLight position={[-3, 4, -6]} intensity={night ? 0.5 : 0.9} color="#6fb2ff" />
         <pointLight position={[-4, 2.5, 2]} intensity={6} color="#5aa2ff" distance={10} decay={2} />

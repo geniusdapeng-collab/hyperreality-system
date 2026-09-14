@@ -7,6 +7,7 @@
  * 交互：点员工 → 回调父级（绩效卡）；点请示员工 → 弹出审批卡（原地三手势）。
  */
 import { useEffect, useRef } from "react";
+import { displayNameOf } from "../../lib/naming";
 
 /* ================= 类型（与 base/captain/floor.ts 对齐） ================= */
 export interface FloorAgent {
@@ -228,7 +229,7 @@ export function FloorView({
         /* 名牌 + 气泡 */
         ctx.font = "8.5px sans-serif"; ctx.textAlign = "center";
         ctx.fillStyle = "rgba(255,255,255,.88)";
-        const label = a.name.replace(/^agt-/, "");
+        const label = displayNameOf({ presetKey: a.presetKey, roleName: a.name });
         const lw = ctx.measureText(label).width + 10;
         roundRect(ctx, sx - lw / 2, sy + 6, lw, 12, 6); ctx.fill();
         ctx.strokeStyle = "rgba(51,38,43,.18)"; ctx.lineWidth = 1;

@@ -14,7 +14,13 @@ import { VoiceEngine } from "../voice/VoiceEngine";
 import { mateScriptOf, type MateScript } from "./welcomeScripts";
 
 /** 织伴仪式音色（清晰优先；段间由真实 TTS 完成事件衔接） */
-const CEREMONY_VOICE = { pitch: 1.2, rate: 1.0, female: true };
+const CEREMONY_VOICE = {
+  // 音高只做轻微修饰；1.2 会让系统 TTS 出现金属感和齿音。
+  pitch: 1.04,
+  rate: 0.94,
+  female: true,
+  preferredNames: ["Flo", "Tingting", "Xiaoxiao", "Xiaoyi", "Meijia", "Sinji"],
+};
 /** 字幕/语音节奏：约 5.8 字/秒 + 段尾缓冲 */
 const segDuration = (text: string) =>
   Math.max(3600, Math.min(40000, Math.round((text.length / 5.8) * 1000) + 900));
