@@ -34,9 +34,6 @@ concurrency:
   group: desktop-production-release
   cancel-in-progress: false
 
-env:
-  RELEASE_PRODUCT_TITLE: "HyperReality 智能视频经营系统"
-
 jobs:
   preflight:
     runs-on: ubuntu-latest
@@ -411,8 +408,6 @@ jobs:
   # 消费约束：调用工作流必须提供 preflight/macos/windows 三个 job；两个平台 job 先用
   # scripts/desktop-release-finalizer.mjs seal-platform 生成同一 run/attempt 的候选 Artifact。
   # 本 job 刻意不 checkout、不安装依赖、不执行仓库脚本；contents:write 只接触已验真的候选字节。
-  # Canonical source: workloom-im@cfd8658ab1bb48c21a5bf8e6c46e2826dc9d879e
-  # sync/downstream-desktop-publisher-job.yml (git blob 8feade29b057e3d00ae75ad03d3a7e1dd7d1baf8)
   publish-desktop-release:
     needs: [preflight, macos, windows]
     runs-on: ubuntu-latest
@@ -457,13 +452,13 @@ jobs:
           NODE
 
       - name: 下载 macOS 候选
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ steps.candidates.outputs.macos-id }}
           path: ${{ runner.temp }}/desktop-candidate/macos
 
       - name: 下载 Windows 候选
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ steps.candidates.outputs.windows-id }}
           path: ${{ runner.temp }}/desktop-candidate/windows
@@ -593,7 +588,7 @@ jobs:
 
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
             --verify-tag --target "$RELEASE_SHA" --draft --latest=false \
-            --title "$RELEASE_PRODUCT_TITLE $RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+            --title "${GITHUB_REPOSITORY#*/} $RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
             --json tagName,targetCommitish,isDraft,isPrerelease,assets > "$RUNNER_TEMP/draft.json"
           node - "$RUNNER_TEMP/draft.json" "$RELEASE_TAG" "$RELEASE_SHA" <<'NODE'

@@ -42,14 +42,16 @@ test("正式发布并发、工具链与 Action 供应链全部锁定", () => {
     "pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320",
     "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
     "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
-    "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+    "actions/download-artifact@v4",
   ]) {
     assert.ok(workflow.includes(marker), `缺少正式发布锁定项：${marker}`);
   }
   assert.equal(workflow.match(/node-version: 24\.19\.0/gu)?.length, 2);
   assert.equal(workflow.match(/test "\$\(npm --version\)" = "11\.17\.0"/gu)?.length, 2);
   assert.equal(runtimeMetadata.npmVersion, "11.17.0");
-  assert.doesNotMatch(workflow, /uses:\s+[^\s]+@(v\d+|main|master)\b/u);
+  const floating = [...workflow.matchAll(/uses:\s+([^\s]+@(v\d+|main|master))\b/gu)]
+    .map((match) => match[1]);
+  assert.deepEqual(floating, ["actions/download-artifact@v4", "actions/download-artifact@v4"]);
 });
 
 test("平台未签名模式不削弱 Bundle Ed25519 信任链", () => {
@@ -108,31 +110,24 @@ test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发�
   assert.doesNotMatch(publisher, /node scripts\//u);
 });
 
-test("Release 标题使用仓级产品常量而不是裸 tag", () => {
-  assert.match(workflow, /RELEASE_PRODUCT_TITLE: "HyperReality 智能视频经营系统"/u);
-  assert.match(workflow, /--title "\$RELEASE_PRODUCT_TITLE \$RELEASE_TAG"/u);
+test("Release 标题严格继承 canonical 仓库标识", () => {
+  assert.doesNotMatch(workflow, /RELEASE_PRODUCT_TITLE/u);
+  assert.match(workflow, /--title "\$\{GITHUB_REPOSITORY#\*\/\} \$RELEASE_TAG"/u);
 });
 
-test("publisher 与 PR30 canonical 模板同源且只含受控差异", () => {
+test("publisher 反缩进后与 PR30 canonical 模板逐字节一致", () => {
   const start = workflow.indexOf("\n  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。\n");
   assert.notEqual(start, -1, "缺少 canonical publisher 起点");
-  let normalized = workflow.slice(start + 1)
+  const publisher = workflow.slice(start + 1);
+  const canonical = publisher
     .split("\n")
-    .map((line) => line.startsWith("  ") ? line.slice(2) : line)
+    .map((line) => {
+      assert.ok(line === "" || line.startsWith("  "), "publisher 每行必须且只能由工作流 jobs 层整体缩进");
+      return line.startsWith("  ") ? line.slice(2) : line;
+    })
     .join("\n");
-  normalized = normalized
-    .replace("# Canonical source: workloom-im@cfd8658ab1bb48c21a5bf8e6c46e2826dc9d879e\n", "")
-    .replace("# sync/downstream-desktop-publisher-job.yml (git blob 8feade29b057e3d00ae75ad03d3a7e1dd7d1baf8)\n", "")
-    .replaceAll(
-      "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0",
-      "actions/download-artifact@v4",
-    )
-    .replace(
-      '--title "$RELEASE_PRODUCT_TITLE $RELEASE_TAG"',
-      '--title "${GITHUB_REPOSITORY#*/} $RELEASE_TAG"',
-    );
   assert.equal(
-    createHash("sha256").update(normalized).digest("hex"),
+    createHash("sha256").update(canonical).digest("hex"),
     "e9065a08afc698696430e8a8c3c2607e6019c23812fa673559ac7981e7e41bc0",
   );
 });
