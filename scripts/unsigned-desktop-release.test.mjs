@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -8,11 +9,49 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workflow = fs.readFileSync(path.join(root, ".github/workflows/build-desktop.yml"), "utf8");
 const builder = fs.readFileSync(path.join(root, "electron-builder.yml"), "utf8");
 const product = JSON.parse(fs.readFileSync(path.join(root, "product.manifest.json"), "utf8"));
+const runtimeMetadata = JSON.parse(fs.readFileSync(path.join(root, ".workloom-runtime-deps/metadata.json"), "utf8"));
 
-test("tag 发布明确选择平台未签名，手动发布默认保留 signed 路径", () => {
-  assert.match(workflow, /platform_signing:[\s\S]*type: choice[\s\S]*signed[\s\S]*unsigned[\s\S]*default: signed/u);
-  assert.match(workflow, /PLATFORM_SIGNING:.*workflow_dispatch.*inputs\.platform_signing.*unsigned/u);
+test("正式发布只允许手动派发并默认显式选择 unsigned", () => {
+  assert.doesNotMatch(workflow, /push:\s*[\s\S]{0,80}tags:/u);
+  assert.match(workflow, /workflow_dispatch:[\s\S]*release_sha:[\s\S]*platform_signing:/u);
+  assert.match(workflow, /platform_signing:[\s\S]*type: choice[\s\S]*unsigned[\s\S]*signed[\s\S]*default: unsigned/u);
+  assert.match(workflow, /VERSION: \$\{\{ needs\.preflight\.outputs\.release-tag \}\}/u);
+  assert.match(workflow, /PLATFORM_SIGNING: \$\{\{ needs\.preflight\.outputs\.platform-signing \}\}/u);
   assert.match(workflow, /if \[ "\$PLATFORM_SIGNING" = "signed" \]; then/u);
+});
+
+test("预检把稳定 tag、release_sha、dispatch SHA 与当前 main 精确绑定", () => {
+  for (const marker of [
+    'test "$DISPATCH_REF" = "refs/heads/main"',
+    'test "$DISPATCH_SHA" = "$RELEASE_SHA"',
+    '/commits/main',
+    '/git/ref/tags/$RELEASE_TAG',
+    'test "$MAIN_SHA" = "$RELEASE_SHA"',
+    'test "$OBJECT_SHA" = "$RELEASE_SHA"',
+    'ref: ${{ needs.preflight.outputs.release-sha }}',
+  ]) {
+    assert.ok(workflow.includes(marker), `缺少发布身份绑定：${marker}`);
+  }
+});
+
+test("正式发布并发、工具链与 Action 供应链全部锁定", () => {
+  for (const marker of [
+    "group: desktop-production-release",
+    "cancel-in-progress: false",
+    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320",
+    "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+    "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "actions/download-artifact@v4",
+  ]) {
+    assert.ok(workflow.includes(marker), `缺少正式发布锁定项：${marker}`);
+  }
+  assert.equal(workflow.match(/node-version: 24\.19\.0/gu)?.length, 2);
+  assert.equal(workflow.match(/test "\$\(npm --version\)" = "11\.17\.0"/gu)?.length, 2);
+  assert.equal(runtimeMetadata.npmVersion, "11.17.0");
+  const floating = [...workflow.matchAll(/uses:\s+([^\s]+@(v\d+|main|master))\b/gu)]
+    .map((match) => match[1]);
+  assert.deepEqual(floating, ["actions/download-artifact@v4", "actions/download-artifact@v4"]);
 });
 
 test("平台未签名模式不削弱 Bundle Ed25519 信任链", () => {
@@ -36,15 +75,61 @@ test("signed 与 unsigned 平台校验边界清晰", () => {
   assert.match(workflow, /-c\.mac\.notarize=false/u);
 });
 
-test("Release 同时交付三个固定命名平台制品并披露安装风险", () => {
-  assert.match(builder, /artifactName: "\$\{productName\}-\$\{os\}-\$\{arch\}\.\$\{ext\}"/u);
+test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发布五资产", () => {
+  assert.match(builder, /^artifactName: "HyperReality\.System-\$\{os\}-\$\{arch\}\.\$\{ext\}"$/mu);
   assert.match(workflow, /--mac dmg --arm64/u);
   assert.match(workflow, /--mac dmg --x64/u);
   assert.match(workflow, /--win nsis --x64/u);
-  assert.match(workflow, /未做 Apple\/Windows 平台代码签名/u);
-  assert.match(workflow, /xattr -cr/u);
-  assert.match(workflow, /SmartScreen/u);
-  assert.match(workflow, /body_path: release-notes\.md/u);
+  assert.equal(workflow.match(/node scripts\/desktop-release-finalizer\.mjs seal-platform/gu)?.length, 2);
+  for (const marker of [
+    'desktop-macos-candidate-${{ github.run_id }}-${{ github.run_attempt }}',
+    'desktop-windows-candidate-${{ github.run_id }}-${{ github.run_attempt }}',
+    'WorkLoom-SHA512SUMS.txt',
+    'WorkLoom-release-manifest.json',
+    "gh api --paginate --slurp",
+    "artifact-ids: ${{ steps.candidates.outputs.macos-id }}",
+    "artifact-ids: ${{ steps.candidates.outputs.windows-id }}",
+    'gh release create "$RELEASE_TAG"',
+    "--verify-tag --target \"$RELEASE_SHA\" --draft --latest=false",
+    'gh release upload "$RELEASE_TAG"',
+    'cmp -s "$asset" "$REMOTE_DIR/$name"',
+    'gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=true',
+    "for attempt in $(seq 1 12)",
+    "isLatest,isImmutable,assets",
+    '未做 Apple/Windows 平台代码签名',
+    'SmartScreen',
+  ]) {
+    assert.ok(workflow.includes(marker), `缺少原子发布契约：${marker}`);
+  }
+  assert.equal(workflow.match(/contents: write/gu)?.length, 1, "只能有一个 contents:write publisher");
+  assert.equal(workflow.match(/compression-level: 0/gu)?.length, 2, "双平台候选都必须禁用重复压缩");
+  assert.doesNotMatch(workflow, /issues: write|gh issue create/u);
+  assert.doesNotMatch(workflow, /softprops\/action-gh-release/u);
+  const publisher = workflow.slice(workflow.indexOf("\n  publish-desktop-release:"));
+  assert.doesNotMatch(publisher, /actions\/checkout/u);
+  assert.doesNotMatch(publisher, /node scripts\//u);
+});
+
+test("Release 标题严格继承 canonical 仓库标识", () => {
+  assert.doesNotMatch(workflow, /RELEASE_PRODUCT_TITLE/u);
+  assert.match(workflow, /--title "\$\{GITHUB_REPOSITORY#\*\/\} \$RELEASE_TAG"/u);
+});
+
+test("publisher 反缩进后与 PR30 canonical 模板逐字节一致", () => {
+  const start = workflow.indexOf("\n  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。\n");
+  assert.notEqual(start, -1, "缺少 canonical publisher 起点");
+  const publisher = workflow.slice(start + 1);
+  const canonical = publisher
+    .split("\n")
+    .map((line) => {
+      assert.ok(line === "" || line.startsWith("  "), "publisher 每行必须且只能由工作流 jobs 层整体缩进");
+      return line.startsWith("  ") ? line.slice(2) : line;
+    })
+    .join("\n");
+  assert.equal(
+    createHash("sha256").update(canonical).digest("hex"),
+    "e9065a08afc698696430e8a8c3c2607e6019c23812fa673559ac7981e7e41bc0",
+  );
 });
 
 test("桌面产品身份、端口和签名配置与产品清单一致", () => {
@@ -77,7 +162,6 @@ test("Windows 候选冒烟隔离端口、支持目录并完整留存三段诊断
     'SMOKE_ROOT="$RUNNER_TEMP/wl-smoke"',
     'APP_SMOKE_ROOT="$RUNNER_TEMP/wl-app-smoke"',
     'RENDER_SMOKE_ROOT="$RUNNER_TEMP/wl-render-default"',
-    '$env:RUNNER_TEMP',
     '${{ runner.temp }}/wl-smoke/logs/*',
     '${{ runner.temp }}/wl-smoke/install-state.json',
     '${{ runner.temp }}/wl-app-smoke/logs/*',
