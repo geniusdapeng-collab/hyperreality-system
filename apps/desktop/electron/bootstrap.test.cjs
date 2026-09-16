@@ -61,12 +61,12 @@ function transientDirectories(supportDir) {
 }
 
 describe("桌面载荷原子装配", () => {
-  it("Windows 同盘符只向 tar 传相对路径，跨盘符使用目标目录暂存归档", () => {
+  it("解析物理路径后向 tar 传相对路径，并为 Windows 跨盘符暂存归档", () => {
     const destination = "D:\\a\\_temp\\wl-smoke\\.payload-cache";
     const sameDrive = tarExtractionPlan(
       "D:\\a\\workloom-im\\release\\resources\\payload.tar.gz",
       destination,
-      path.win32,
+      { pathApi: path.win32, realpath: (value) => value },
     );
     assert.equal(sameDrive.cwd, destination);
     assert.equal(sameDrive.stagedArchive, null);
@@ -76,11 +76,22 @@ describe("桌面载荷原子装配", () => {
     const crossDrive = tarExtractionPlan(
       "C:\\Program Files\\WorkLoom\\resources\\payload.tar.gz",
       destination,
-      path.win32,
+      { pathApi: path.win32, realpath: (value) => value },
     );
     assert.equal(crossDrive.cwd, destination);
     assert.equal(crossDrive.archiveArg, ".workloom-payload.tar.gz");
     assert.equal(crossDrive.stagedArchive, path.win32.join(destination, ".workloom-payload.tar.gz"));
+
+    const macSymlink = tarExtractionPlan(
+      "/Users/runner/work/workloom-im/resources/payload.tar.gz",
+      "/tmp/wl-smoke/.payload-cache",
+      {
+        pathApi: path.posix,
+        realpath: (value) => value.startsWith("/tmp/") ? `/private${value}` : value,
+      },
+    );
+    assert.equal(macSymlink.cwd, "/private/tmp/wl-smoke/.payload-cache");
+    assert.equal(macSymlink.archiveArg, "../../../../Users/runner/work/workloom-im/resources/payload.tar.gz");
   });
 
   it("正式打包入口缺少载荷时在启动任何服务前失败关闭", async () => {
