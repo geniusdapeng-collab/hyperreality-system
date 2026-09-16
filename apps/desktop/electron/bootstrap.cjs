@@ -560,7 +560,10 @@ function enforceStrictPgHba({
       if (result.code !== 0) throw new Error("PostgreSQL SCRAM 配置 reload 失败");
     }
     const verified = verifyCommand();
-    if (verified.code !== 0) throw new Error("PostgreSQL SCRAM 新凭据复验失败");
+    if (verified.code !== 0) {
+      const detail = String(verified.err || verified.out || "未知原因").trim().slice(-300);
+      throw new Error(`PostgreSQL SCRAM 新凭据复验失败：${detail}`);
+    }
     return { changed };
   } catch (error) {
     if (changed && rollbackOnFailure) {

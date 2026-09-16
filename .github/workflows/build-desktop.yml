@@ -16,6 +16,14 @@ on:
         description: "版本号（如 v2.1.0）"
         required: true
         default: "v2.1.0"
+      platform_signing:
+        description: "平台代码签名（tag 推送固定使用 unsigned；Bundle 始终 Ed25519 签名）"
+        required: true
+        type: choice
+        options:
+          - signed
+          - unsigned
+        default: signed
 
 permissions:
   contents: write
@@ -23,6 +31,9 @@ permissions:
 
 env:
   VERSION: ${{ github.event.inputs.version || github.ref_name }}
+  # 手动发布默认走完整平台签名；tag 推送在没有 Apple/Windows 证书时明确走 unsigned。
+  # 两种模式都必须完成行业 Bundle Ed25519 签名并把公钥环打进安装包。
+  PLATFORM_SIGNING: ${{ github.event_name == 'workflow_dispatch' && inputs.platform_signing || 'unsigned' }}
 
 jobs:
   macos:
@@ -47,11 +58,16 @@ jobs:
           BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
         run: |
           pnpm install --frozen-lockfile
-          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ 缺少 macOS Developer ID 签名证书，拒绝对外发行"; exit 1; }
-          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ 缺少 Apple 公证凭据，拒绝对外发行"; exit 1; }
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ signed 模式缺少 macOS Developer ID 签名证书"; exit 1; }
+            test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ signed 模式缺少 Apple 公证凭据"; exit 1; }
+          else
+            echo "⚠️ unsigned 模式：跳过 Apple Developer ID 签名与公证；Release 必须披露安装风险"
+          fi
           test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
           pnpm bundle:release
           test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
+          pnpm projections:generate
           grep -q 'WORKLOOM_SAFE_RENDERING' apps/desktop/electron/main.cjs
           grep -q 'WORKLOOM_RENDER_SMOKE' apps/desktop/electron/main.cjs
           grep -q 'previousEnvFile' apps/desktop/electron/bootstrap.cjs
@@ -63,23 +79,33 @@ jobs:
           grep -q 'mouthPeak' apps/desktop/electron/main.cjs
           ! grep -q '__workloomEnterTeam' apps/web/src/components/WelcomeCeremony.tsx
           pnpm product:verify
+          pnpm projections:check
           pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
+          pnpm -C packages/industry-contract build
           pnpm -C apps/web build
 
       - name: 装配自包含载荷（darwin-arm64）
         run: bash scripts/pack-electron-payload.sh --platform mac --arch arm64 --version "$VERSION"
 
       - name: 打包 DMG（arm64）
-        run: pnpm exec electron-builder --mac dmg --arm64 --publish never -c.extraMetadata.version="${VERSION#v}"
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            pnpm exec electron-builder --mac dmg --arm64 --publish never -c.extraMetadata.version="${VERSION#v}"
+          else
+            CSC_IDENTITY_AUTO_DISCOVERY=false CSC_LINK= CSC_KEY_PASSWORD= APPLE_ID= APPLE_APP_SPECIFIC_PASSWORD= APPLE_TEAM_ID= pnpm exec electron-builder --mac dmg --arm64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
+          fi
 
       - name: 拆包验收 + 冒烟（对 .app 内载荷归档跑首启全流程——验证用户拿到的内容）
         run: |
           APP="$(find release/mac-arm64 -maxdepth 1 -name '*.app' -print -quit)"
           test -n "$APP" || { echo "❌ arm64 .app 未生成"; exit 1; }
-          codesign --verify --deep --strict --verbose=2 "$APP"
-          xcrun stapler validate "$APP"
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            xcrun stapler validate "$APP"
+          else
+            ! codesign -dvv "$APP" 2>&1 | grep -q '^Authority=' || { echo "❌ unsigned 模式意外发现平台签名"; exit 1; }
+            echo "✅ 已确认 arm64 应用未携带 Apple Developer ID 签名/公证票据"
+          fi
           RES="$APP/Contents/Resources"
           test -s "$RES/bundle-trust.json" || { echo "❌ 独立 Bundle 公钥环未进包"; exit 1; }
           test -f "$RES/payload.tar.gz" || { echo "❌ 拆包验收失败：payload.tar.gz 未进包"; exit 1; }
@@ -115,15 +141,25 @@ jobs:
         run: bash scripts/pack-electron-payload.sh --platform mac --arch x64 --version "$VERSION"
 
       - name: 打包 DMG（x64）
-        run: pnpm exec electron-builder --mac dmg --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            pnpm exec electron-builder --mac dmg --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+          else
+            CSC_IDENTITY_AUTO_DISCOVERY=false CSC_LINK= CSC_KEY_PASSWORD= APPLE_ID= APPLE_APP_SPECIFIC_PASSWORD= APPLE_TEAM_ID= pnpm exec electron-builder --mac dmg --x64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
+          fi
 
       - name: 拆包验收（x64 .app 载荷归档完整性；arm64 runner 无法跑 x64 二进制，文件级核验）
         run: |
           APP="$(find release/mac -maxdepth 1 -name '*.app' -print -quit)"
           test -n "$APP" || { echo "❌ x64 .app 未生成"; exit 1; }
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            xcrun stapler validate "$APP"
+          else
+            ! codesign -dvv "$APP" 2>&1 | grep -q '^Authority=' || { echo "❌ unsigned 模式意外发现平台签名"; exit 1; }
+          fi
           RES="$APP/Contents/Resources"
+          test -s "$RES/bundle-trust.json" || { echo "❌ x64 Bundle 公钥环未进包"; exit 1; }
           test -f "$RES/payload.tar.gz" || { echo "❌ x64 载荷归档未进包"; exit 1; }
           tar -tzf "$RES/payload.tar.gz" > /tmp/wl-pkg-list-x64.txt && grep -q "runtime/node_modules/tsx/package.json" /tmp/wl-pkg-list-x64.txt || { echo "❌ x64 归档内缺 tsx"; exit 1; }
           echo "✅ x64 拆包验收通过"
@@ -143,22 +179,42 @@ jobs:
           } > smoke-report.md
           gh issue create --title "build-desktop macOS 冒烟失败留证（${{ env.VERSION }} run ${{ github.run_id }}）" --body-file smoke-report.md || true
 
+      - name: 生成平台签名披露与安装说明
+        shell: bash
+        run: |
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            STATUS="✅ 本版本已完成 Apple Developer ID/公证与 Windows Authenticode 签名。"
+            MAC_GUIDE="下载对应芯片的 DMG，拖入「应用程序」后直接打开。"
+            WIN_GUIDE="下载 EXE 后双击安装。"
+          else
+            STATUS="⚠️ 本版本未做 Apple/Windows 平台代码签名，未做 Apple 公证；行业 Bundle 仍已完成 Ed25519 签名与信任环校验。"
+            MAC_GUIDE='下载对应芯片的 DMG 并拖入「应用程序」，首次打开前在「终端」执行 `xattr -cr "/Applications/HyperReality 智能视频经营系统.app"`，再双击打开。'
+            WIN_GUIDE='下载 EXE 后双击安装；SmartScreen 提示时选择「更多信息」→「仍要运行」。'
+          fi
+          cat > release-notes.md <<EOF
+          ## 安装说明
+          $STATUS
+
+          **固定下载入口**：本 Release 页的 `/releases/latest` 永远指向最新版；按 `mac-arm64.dmg`、`mac-x64.dmg` 或 `win-x64.exe` 后缀选择。
+
+          **macOS**：$MAC_GUIDE
+
+          **Windows**：$WIN_GUIDE
+
+          > 客户端完全自包含；平台未签名不等于 Bundle 未校验。安装包内行业 Bundle 始终经过 Ed25519 签名，公钥信任环随应用封装并在运行时校验。
+          EOF
+
       - name: 上传产物（macOS 双架构 DMG + 安装说明）
         uses: softprops/action-gh-release@v2
         with:
           files: release/*.dmg
           name: ${{ env.VERSION }}
           generate_release_notes: true
-          body: |
-            ## 安装说明
-            **固定下载入口（永不过期）**：本页地址 `https://github.com/<org>/<repo>/releases/latest` 永远指向最新版；在 Assets 中按 `mac-arm64.dmg`（M 系列芯片）、`mac-x64.dmg`（Intel）或 `win-x64.exe`（Windows）后缀选择。
-            **macOS**：下载对应芯片的 dmg → 拖入「应用程序」→ **首次打开前在「终端」执行一次** `xattr -cr "/Applications/HyperReality System.app"`（清除下载隔离属性——当前安装包未做 Apple 公证，因此首次需要）→ 双击打开 → 首启自动初始化约 1 分钟 → 客户端窗口自动出现。
-            **Windows**：下载 exe → 双击安装 → SmartScreen 点「更多信息 → 仍要运行」（仅首次需要）→ 桌面双击「HyperReality System」→ 首启自动初始化约 1 分钟。
-            > 开箱即「体验模式」：默认游客身份，无需登录即可完整体验（数字人/汇报/各页面）；进入「配置引导」正式开通时才登录注册。体验完可一键清理，填入模型 Key 即可真实使用。
-            > 客户端完全自包含（内嵌 Node 24 + PostgreSQL 17 + pgvector + 事件总线），无需安装任何依赖、不打开外部浏览器。
+          body_path: release-notes.md
 
   windows:
-    runs-on: windows-latest
+    # 固定到不预装 PG17 的镜像，随后只从 release-assets.json 锁定源安装 17.11.0。
+    runs-on: windows-2022
     env:
       WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
       WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
@@ -180,12 +236,19 @@ jobs:
           BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
         run: |
           pnpm install --frozen-lockfile
-          test -n "$WIN_CSC_LINK" && test -n "$WIN_CSC_KEY_PASSWORD" || { echo "❌ 缺少 Windows 代码签名证书，拒绝对外发行"; exit 1; }
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            test -n "$WIN_CSC_LINK" && test -n "$WIN_CSC_KEY_PASSWORD" || { echo "❌ signed 模式缺少 Windows 代码签名证书"; exit 1; }
+          else
+            echo "⚠️ unsigned 模式：跳过 Windows Authenticode；Release 必须披露 SmartScreen 提示"
+          fi
           test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
           pnpm bundle:release
           test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
+          pnpm projections:generate
           pnpm product:verify
+          pnpm projections:check
           pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
+          pnpm -C packages/industry-contract build
           pnpm -C apps/web build
 
       - name: 装配自包含载荷（win-x64）
@@ -194,26 +257,45 @@ jobs:
 
       - name: 打包 NSIS 安装包
         shell: bash  # pwsh 会把 -c.extraMetadata.version="x" 的 -c 吞掉（ENOENT 实证），统一 bash
-        run: pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+        run: |
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+          else
+            CSC_IDENTITY_AUTO_DISCOVERY=false WIN_CSC_LINK= WIN_CSC_KEY_PASSWORD= CSC_LINK= CSC_KEY_PASSWORD= pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+          fi
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
           ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
 
       - name: 拆包验收 + 冒烟（对 win-unpacked 载荷归档跑首启全流程——验证用户拿到的内容）
         shell: bash
+        env:
+          # pgvector 编译底座会在 Windows runner 上安装 PostgreSQL 服务并占用 5432。
+          # 候选包验收改用隔离端口，避免构建工具链污染安装包首启结果。
+          WORKLOOM_PG_PORT: "55432"
+          WORKLOOM_SERVER_PORT: "58787"
+          WORKLOOM_WEB_PORT: "55173"
+          WORKLOOM_NATS_PORT: "54222"
         run: |
+          SMOKE_ROOT="$RUNNER_TEMP/wl-smoke"
+          APP_SMOKE_ROOT="$RUNNER_TEMP/wl-app-smoke"
+          RENDER_SMOKE_ROOT="$RUNNER_TEMP/wl-render-default"
           RES="release/win-unpacked/resources"
+          test -s "$RES/bundle-trust.json" || { echo "❌ Windows Bundle 公钥环未进包"; exit 1; }
           test -f "$RES/payload.tar.gz" || { echo "❌ 拆包验收失败：payload.tar.gz 未进包"; exit 1; }
           test -f "$RES/payload/PAYLOAD_VERSION" || { echo "❌ 拆包验收失败：PAYLOAD_VERSION 未进包（缺失将致每次启动重解压）"; exit 1; }
           tar -tzf "$RES/payload.tar.gz" > /tmp/wl-pkg-list.txt && grep -q "runtime/node_modules/tsx/package.json" /tmp/wl-pkg-list.txt || { echo "❌ 拆包验收失败：归档内缺 tsx"; exit 1; }
-          node apps/desktop/electron/bootstrap.cjs --smoke --resources "$RES" --support "${TEMP}/wl-smoke"
+          node apps/desktop/electron/bootstrap.cjs --smoke --resources "$RES" --support "$SMOKE_ROOT"
           EXE="$(find release/win-unpacked -maxdepth 1 -type f -name '*.exe' ! -iname '*uninstall*' -print -quit)"
           test -n "$EXE" || { echo "❌ Windows 应用主程序未生成"; exit 1; }
-          powershell -NoProfile -Command '$s = Get-AuthenticodeSignature -FilePath $args[0]; if ($s.Status -ne "Valid") { Write-Error "应用签名无效：$($s.Status)"; exit 1 }' "$EXE"
-          node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_APP_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "${TEMP}/wl-app-smoke"
-          test -f "${TEMP}/wl-app-smoke/.bootstrapped" || { echo "❌ 真实应用首启未完成"; exit 1; }
-          node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_RENDER_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "${TEMP}/wl-render-default"
-          test -f "${TEMP}/wl-render-default/logs/render-default.json" || { echo "❌ Windows 渲染探针缺失"; exit 1; }
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            powershell -NoProfile -Command '$s = Get-AuthenticodeSignature -FilePath $args[0]; if ($s.Status -ne "Valid") { Write-Error "应用签名无效：$($s.Status)"; exit 1 }' "$EXE"
+          else
+            powershell -NoProfile -Command '$s = Get-AuthenticodeSignature -FilePath $args[0]; if ($s.Status -eq "Valid") { Write-Error "unsigned 模式意外发现有效 Authenticode 签名"; exit 1 }; Write-Host "已确认 Windows 客户端为平台未签名制品：$($s.Status)"' "$EXE"
+          fi
+          node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_APP_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "$APP_SMOKE_ROOT"
+          test -f "$APP_SMOKE_ROOT/.bootstrapped" || { echo "❌ 真实应用首启未完成"; exit 1; }
+          node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_RENDER_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "$RENDER_SMOKE_ROOT"
+          test -f "$RENDER_SMOKE_ROOT/logs/render-default.json" || { echo "❌ Windows 渲染探针缺失"; exit 1; }
           echo "✅ 真实 Windows 应用后端 + 页面渲染冒烟通过"
         timeout-minutes: 20
       - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
@@ -224,12 +306,61 @@ jobs:
         run: |
           $fence = [string][char]96 + [string][char]96 + [string][char]96
           $report = "## build-desktop windows 失败留证（run ${{ github.run_id }}）`n"
-          Get-ChildItem "$env:TEMP\wl-smoke\logs\*.log" -ErrorAction SilentlyContinue | ForEach-Object {
-            $report += "`n### $($_.Name)（尾部 120 行）`n$fence`n" + (Get-Content $_.FullName -Tail 120 | Out-String) + "$fence`n"
+          $roots = @("wl-smoke", "wl-app-smoke", "wl-render-default")
+          foreach ($name in $roots) {
+            $root = Join-Path $env:RUNNER_TEMP $name
+            Get-ChildItem (Join-Path $root "logs\*") -File -ErrorAction SilentlyContinue | ForEach-Object {
+              $report += "`n### $name/$($_.Name)（尾部 120 行）`n$fence`n" + (Get-Content $_.FullName -Tail 120 | Out-String) + "$fence`n"
+            }
+            $installState = Join-Path $root "install-state.json"
+            if (Test-Path $installState) {
+              $report += "`n### $name/install-state.json`n$fence`n" + (Get-Content $installState -Raw | Out-String) + "$fence`n"
+            }
           }
           $report | Out-File -Encoding utf8 smoke-report.md
           gh issue create --title "build-desktop Windows 冒烟失败留证（${{ env.VERSION }} run ${{ github.run_id }}）" --body-file smoke-report.md
           if ($LASTEXITCODE -ne 0) { Write-Host "issue 创建失败（忽略）" }
+
+      - name: 留存 Windows 首启失败诊断（Actions Artifact）
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: desktop-windows-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/wl-smoke/logs/*
+            ${{ runner.temp }}/wl-smoke/install-state.json
+            ${{ runner.temp }}/wl-app-smoke/logs/*
+            ${{ runner.temp }}/wl-app-smoke/install-state.json
+            ${{ runner.temp }}/wl-render-default/logs/*
+            ${{ runner.temp }}/wl-render-default/install-state.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: 生成平台签名披露与安装说明
+        shell: bash
+        run: |
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            STATUS="✅ 本版本已完成 Apple Developer ID/公证与 Windows Authenticode 签名。"
+            MAC_GUIDE="下载对应芯片的 DMG，拖入「应用程序」后直接打开。"
+            WIN_GUIDE="下载 EXE 后双击安装。"
+          else
+            STATUS="⚠️ 本版本未做 Apple/Windows 平台代码签名，未做 Apple 公证；行业 Bundle 仍已完成 Ed25519 签名与信任环校验。"
+            MAC_GUIDE='下载对应芯片的 DMG 并拖入「应用程序」，首次打开前在「终端」执行 `xattr -cr "/Applications/HyperReality 智能视频经营系统.app"`，再双击打开。'
+            WIN_GUIDE='下载 EXE 后双击安装；SmartScreen 提示时选择「更多信息」→「仍要运行」。'
+          fi
+          cat > release-notes.md <<EOF
+          ## 安装说明
+          $STATUS
+
+          **固定下载入口**：本 Release 页的 `/releases/latest` 永远指向最新版；按 `mac-arm64.dmg`、`mac-x64.dmg` 或 `win-x64.exe` 后缀选择。
+
+          **macOS**：$MAC_GUIDE
+
+          **Windows**：$WIN_GUIDE
+
+          > 客户端完全自包含；平台未签名不等于 Bundle 未校验。安装包内行业 Bundle 始终经过 Ed25519 签名，公钥信任环随应用封装并在运行时校验。
+          EOF
 
       - name: 上传产物（Windows NSIS）
         uses: softprops/action-gh-release@v2
@@ -237,3 +368,4 @@ jobs:
           files: release/*.exe
           name: ${{ env.VERSION }}
           generate_release_notes: true
+          body_path: release-notes.md

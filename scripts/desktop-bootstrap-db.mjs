@@ -30,6 +30,11 @@ export function normalizeDataDirectory(directory, platform = process.platform) {
   return platform === "win32" ? normalized.replaceAll("\\", "/").toLowerCase() : normalized;
 }
 
+export function isDirectExecution(entryPath, modulePath = fileURLToPath(import.meta.url)) {
+  if (!entryPath) return false;
+  return normalizeDataDirectory(entryPath) === normalizeDataDirectory(modulePath);
+}
+
 export function readDesktopDatabaseConfig(env = process.env) {
   const mode = requiredEnv(env, "WORKLOOM_PG_BOOTSTRAP_MODE");
   if (!new Set(["inspect", "prepare", "verify"]).has(mode)) {
@@ -71,7 +76,8 @@ export async function assertOwnedDatabase(client, config, { includeClusterIdenti
       ? `SELECT current_setting('data_directory') AS data_directory,
                 current_setting('port') AS port,
                 current_setting('hba_file') AS hba_file,
-                (SELECT system_identifier::text FROM pg_control_system()) AS system_identifier`
+                (SELECT system_identifier::text FROM pg_control_system()) AS system_identifier,
+                pg_postmaster_start_time()::text AS postmaster_start_time`
       : "SELECT current_setting('data_directory') AS data_directory, current_setting('port') AS port",
   );
   const row = result.rows?.[0];
@@ -94,11 +100,16 @@ export async function assertOwnedDatabase(client, config, { includeClusterIdenti
   if (config.expectedSystemIdentifier && systemIdentifier !== config.expectedSystemIdentifier) {
     throw new Error("数据库实例归属校验失败：system_identifier 与持久状态不一致");
   }
+  const postmasterStartTime = String(row.postmaster_start_time ?? "");
+  if (!postmasterStartTime || Number.isNaN(Date.parse(postmasterStartTime))) {
+    throw new Error("数据库实例归属校验失败：postmaster_start_time 无效");
+  }
   return {
     dataDirectory: normalizeDataDirectory(String(row.data_directory)),
     port: Number(row.port),
     hbaFile: normalizeDataDirectory(hbaFile),
     systemIdentifier,
+    postmasterStartTime,
   };
 }
 
@@ -133,6 +144,52 @@ async function connectOwnedClient({ Client, config, database, passwords, include
     }
   }
   throw new Error(`数据库认证失败：无法连接本机 ${database} 数据库`);
+}
+
+async function connectVerifiedRoleClient({ Client, config, database, password, user, postmasterStartTime }) {
+  const client = new Client({
+    host: config.host,
+    port: config.port,
+    user,
+    password,
+    database,
+    connectionTimeoutMillis: 10_000,
+  });
+  try {
+    await client.connect();
+    // data_directory、hba_file 与 pg_control_system 只允许高权限角色读取。应用角色
+    // 通过刚刚轮换的随机凭据登录后，改用公开的只读实例指纹确认仍连接同一 postmaster。
+    const result = await client.query(
+      `SELECT current_user AS current_user,
+              current_database() AS database_name,
+              inet_server_addr()::text AS server_address,
+              inet_server_port() AS server_port,
+              pg_postmaster_start_time()::text AS postmaster_start_time`,
+    );
+    const row = result.rows?.[0];
+    const serverAddress = String(row?.server_address ?? "")
+      .replace(/^::ffff:/u, "")
+      .replace(/\/\d{1,3}$/u, "");
+    const expectedStartTime = Date.parse(postmasterStartTime);
+    const actualStartTime = Date.parse(String(row?.postmaster_start_time ?? ""));
+    if (!row
+        || row.current_user !== user
+        || row.database_name !== database
+        || serverAddress !== config.host
+        || Number(row.server_port) !== config.port
+        || !Number.isFinite(expectedStartTime)
+        || actualStartTime !== expectedStartTime) {
+      throw new Error(
+        `数据库角色会话校验失败：${user} 未连接当前产品实例`
+        + `（角色=${String(row?.current_user ?? "未知")}，数据库=${String(row?.database_name ?? "未知")}`
+        + `，地址=${serverAddress || "未知"}，端口=${String(row?.server_port ?? "未知")}）`,
+      );
+    }
+    return client;
+  } catch (error) {
+    await client.end().catch(() => undefined);
+    throw error;
+  }
 }
 
 async function assertScramVerifier(client) {
@@ -245,10 +302,15 @@ export async function bootstrapDatabase({ Client, env = process.env }) {
       ["workloom_app", config.appPassword],
       ["workloom_gateway", config.gatewayPassword],
     ]) {
-      const roleConnection = await connectOwnedClient({
-        Client, config, database: "workloom", passwords: [password], user,
+      const roleClient = await connectVerifiedRoleClient({
+        Client,
+        config,
+        database: "workloom",
+        password,
+        user,
+        postmasterStartTime: identity.postmasterStartTime,
       });
-      await roleConnection.client.end().catch(() => undefined);
+      await roleClient.end().catch(() => undefined);
     }
     await assertInvalidPasswordRejected({ Client, config, user: "postgres", database: "postgres" });
     await assertInvalidPasswordRejected({ Client, config, user: "workloom_app", database: "workloom" });
@@ -265,7 +327,9 @@ async function main() {
   await bootstrapDatabase({ Client });
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// macOS 的 /tmp 实际指向 /private/tmp；安装包冒烟和普通启动都可能经符号链接路径
+// 执行 helper。必须按 realpath 比较，否则模块会被加载后静默退出，启动器拿不到实例身份。
+if (isDirectExecution(process.argv[1])) {
   main().catch((error) => {
     console.error(`bootstrap-db 失败: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);

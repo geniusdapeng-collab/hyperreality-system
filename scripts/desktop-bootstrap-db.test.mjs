@@ -1,11 +1,30 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import { describe, it } from "node:test";
-import { bootstrapDatabase, readDesktopDatabaseConfig } from "./desktop-bootstrap-db.mjs";
+import {
+  bootstrapDatabase,
+  isDirectExecution,
+  readDesktopDatabaseConfig,
+} from "./desktop-bootstrap-db.mjs";
+import { isStrictPathWithin } from "./path-containment.mjs";
 
 const SYSTEM_IDENTIFIER = "7654321098765432109";
+const POSTMASTER_START_TIME = "2026-09-16 16:52:18.418+00";
+
+describe("客户端投影路径围栏", () => {
+  it("同时接受 POSIX 与 Windows 的目录分隔符", () => {
+    assert.equal(isStrictPathWithin("/repo/bundles/ai-pm", "/repo/bundles/ai-pm/service-front/client.json", posix), true);
+    assert.equal(isStrictPathWithin("D:\\repo\\bundles\\ai-pm", "D:\\repo\\bundles\\ai-pm\\service-front\\client.json", win32), true);
+  });
+
+  it("拒绝同目录、父目录逃逸和 Windows 跨盘路径", () => {
+    assert.equal(isStrictPathWithin("/repo/bundles/ai-pm", "/repo/bundles/ai-pm", posix), false);
+    assert.equal(isStrictPathWithin("/repo/bundles/ai-pm", "/repo/bundles/other/client.json", posix), false);
+    assert.equal(isStrictPathWithin("D:\\repo\\bundles\\ai-pm", "E:\\outside\\client.json", win32), false);
+  });
+});
 
 function fixtureEnvironment(expectedDataDirectory, mode = "prepare", port = "55432") {
   return {
@@ -66,7 +85,23 @@ function fakeClientFactory({
             ...(sql.includes("pg_control_system") ? {
               hba_file: hbaFile,
               system_identifier: systemIdentifier,
+              postmaster_start_time: POSTMASTER_START_TIME,
             } : {}),
+          }],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("pg_postmaster_start_time()") && sql.includes("current_user")) {
+        if (this.config.user !== "postgres" && sql.includes("data_directory")) {
+          throw Object.assign(new Error("permission denied to examine data_directory"), { code: "42501" });
+        }
+        return {
+          rows: [{
+            current_user: this.config.user,
+            database_name: this.config.database,
+            server_address: "127.0.0.1/32",
+            server_port: port,
+            postmaster_start_time: "2026-09-16 17:52:18.418+01",
           }],
           rowCount: 1,
         };
@@ -112,6 +147,20 @@ function writeQueries(clients) {
 }
 
 describe("桌面数据库安全引导", () => {
+  it("经符号链接路径执行 helper 时仍识别为 CLI 入口", () => {
+    const root = mkdtempSync(join(tmpdir(), "workloom-helper-entry-"));
+    try {
+      const real = join(root, "desktop-bootstrap-db.mjs");
+      const linked = join(root, "helper-link.mjs");
+      writeFileSync(real, "// test-only\n");
+      symlinkSync(real, linked);
+      assert.equal(isDirectExecution(linked, real), true);
+      assert.equal(isDirectExecution(join(root, "other.mjs"), real), false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("要求三模式、端口、PGDATA、HBA 与三角色凭据全部由启动器显式注入", () => {
     const complete = fixtureEnvironment("/tmp/test-only-pgdata");
     assert.equal(readDesktopDatabaseConfig(complete).port, 55432);
@@ -145,6 +194,7 @@ describe("桌面数据库安全引导", () => {
     try {
       const identity = await bootstrapDatabase({ Client: fake.Client, env });
       assert.equal(identity.systemIdentifier, SYSTEM_IDENTIFIER);
+      assert.equal(identity.postmasterStartTime, POSTMASTER_START_TIME);
       assert.equal(fake.clients.length, 2);
       assert.equal(fake.clients[0].queries.length, 0);
       assert.match(fake.clients[1].queries[0].sql, /current_setting\('data_directory'\)/u);
@@ -196,6 +246,10 @@ describe("桌面数据库安全引导", () => {
       for (const user of ["postgres", "workloom_app", "workloom_gateway"]) {
         assert.ok(fake.clients.some((client) => client.config.user === user && client.connected));
         assert.ok(fake.clients.some((client) => client.config.user === user && !client.connected));
+      }
+      for (const role of fake.clients.filter((client) => client.connected && client.config.user !== "postgres")) {
+        assert.doesNotMatch(role.queries[0].sql, /data_directory/u);
+        assert.match(role.queries[0].sql, /pg_postmaster_start_time/u);
       }
     } finally {
       rmSync(root, { recursive: true, force: true });

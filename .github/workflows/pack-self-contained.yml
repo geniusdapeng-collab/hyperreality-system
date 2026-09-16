@@ -48,7 +48,7 @@ jobs:
             > 开箱即「体验模式」（演示数据+离线可用）；体验完可一键清理，按「配置引导」定制自己行业版，填入模型 Key 即可真实使用。
 
   windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -33,9 +33,9 @@ export function loadReleaseAssets() {
   const windowsPg = manifest.sourcePins?.windowsPostgresqlBuild;
   if (
     windowsPg?.chocolateyPackage !== "postgresql17" ||
-    !/^17\.2\.0$/.test(windowsPg?.chocolateyVersion ?? "") ||
+    windowsPg?.chocolateyVersion !== "17.11.0" ||
     windowsPg?.chocolateySource !== "https://community.chocolatey.org/api/v2" ||
-    windowsPg?.pgConfigVersion !== "PostgreSQL 17.2" ||
+    windowsPg?.pgConfigVersion !== "PostgreSQL 17.11" ||
     windowsPg?.requireChecksums !== true
   ) {
     throw new Error("Windows PostgreSQL build pin is invalid");

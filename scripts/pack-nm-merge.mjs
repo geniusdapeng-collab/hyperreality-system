@@ -103,8 +103,18 @@ function nestedRange(lines, entry, parentEnd, indent) {
 }
 
 export function parsePnpmRuntimeLock(source) {
-  if (typeof source !== "string" || !source.endsWith("\n") || source.includes("\r") || source.includes("\t")) {
-    throw new Error("pnpm-lock.yaml 必须是 LF/空格缩进并以换行结尾");
+  if (typeof source !== "string" || source.includes("\t")) {
+    throw new Error("pnpm-lock.yaml 必须使用空格缩进");
+  }
+  // Git for Windows 在 runner 上可能按 core.autocrlf 把受审锁文件检出为 CRLF。
+  // 只规范化完整 CRLF；孤立 CR 仍视为损坏，避免静默接受含混行边界。
+  const withoutCrLf = source.replaceAll("\r\n", "");
+  if (withoutCrLf.includes("\r")) {
+    throw new Error("pnpm-lock.yaml 含孤立 CR 换行符");
+  }
+  source = source.replaceAll("\r\n", "\n");
+  if (!source.endsWith("\n")) {
+    throw new Error("pnpm-lock.yaml 必须以换行结尾");
   }
   if (source.trimStart().startsWith("{")) {
     let parsed;
