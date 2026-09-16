@@ -21,7 +21,7 @@ import {
 } from "@workloom/base/tenancy";
 import { gatewayAppend, gatewayAppendOnClient, MockEmbedder, upsertMemoryInTx } from "@workloom/base/workdata";
 import { makeReadableId } from "@workloom/shared";
-import { capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, writeProcedure } from "./context.js";
+import { capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, sessionProcedure, writeProcedure } from "./context.js";
 import { accountsRouter } from "./accounts-router.js";
 import {
   ApprovalError,
@@ -129,6 +129,16 @@ import { listSegments, resolveSegment } from "@workloom/base/bundles";
 import YAML from "yaml";
 import { videoRouter } from "../video/router.js";
 import { serviceRouter } from "../service/router.js";
+import {
+  AccessAuthorityError,
+  resolveAuthoritativeClientAccess,
+} from "../service/access-authority.js";
+import {
+  replayWelcome,
+  saveWelcomeProgress,
+  welcomeProgress,
+  WELCOME_STEPS,
+} from "../service/onboarding-continuity.js";
 import {
   buildEvolutionScorecard,
   decayMemories,
@@ -240,6 +250,33 @@ async function probeLlm(cfg: { baseUrl: string; apiKey?: string; model: string }
 }
 
 const onboardingRouter = router({
+  /** 首次欢迎按账号/角色/工作区持久化；只读成员也只能写自己的欢迎进度。 */
+  welcomeStatus: protectedProcedure.query(async ({ ctx }) => ({
+    ...(await welcomeProgress(ctx.identity.workspaceId, {
+      memberId: ctx.identity.memberId,
+      memberNo: ctx.identity.memberNo,
+      role: ctx.identity.role,
+    })),
+    role: ctx.identity.role,
+  })),
+
+  saveWelcomeProgress: protectedProcedure
+    .input(z.object({
+      status: z.enum(["in_progress", "paused", "completed"]),
+      currentStep: z.enum(WELCOME_STEPS),
+    }))
+    .mutation(async ({ ctx, input }) => saveWelcomeProgress(ctx.identity.workspaceId, {
+      memberId: ctx.identity.memberId,
+      memberNo: ctx.identity.memberNo,
+      role: ctx.identity.role,
+    }, input)),
+
+  replayWelcome: protectedProcedure.mutation(async ({ ctx }) => replayWelcome(ctx.identity.workspaceId, {
+    memberId: ctx.identity.memberId,
+    memberNo: ctx.identity.memberNo,
+    role: ctx.identity.role,
+  })),
+
   /** 运行态总览（P0 横幅/落地向导同一事实源）：数据模式 + LLM 装配 + 工作区规模 */
   status: protectedProcedure.query(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
@@ -736,6 +773,34 @@ const authRouter = router({
       }
       const identity: Identity = { ...ctx.identity, plan: input.plan };
       return { token: await signDemoToken(identity), plan: input.plan };
+    }),
+});
+
+function accessRethrow(error: unknown): never {
+  if (error instanceof AccessAuthorityError) {
+    throw new TRPCError({
+      code: error.code === "SESSION_INVALID" ? "UNAUTHORIZED"
+        : error.code === "TARGET_REQUIRED" ? "BAD_REQUEST"
+          : "FORBIDDEN",
+      message: error.message,
+    });
+  }
+  throw error;
+}
+
+/**
+ * 三端访问权威接口：导航、深链与动作均消费服务端实时身份和已验 Bundle 投影。
+ * 此入口必须与 NavigationAccessProvider 同步挂载；缺失时游客首屏会失败关闭。
+ */
+const accessRouter = router({
+  me: sessionProcedure
+    .input(z.object({ tenantId: z.string().min(1), workspaceId: z.string().min(1) }).optional())
+    .query(async ({ ctx, input }) => {
+      try {
+        return await resolveAuthoritativeClientAccess(ctx.session, input);
+      } catch (error) {
+        accessRethrow(error);
+      }
     }),
 });
 
@@ -3060,6 +3125,7 @@ const evolutionRouter = router({
 
 export const appRouter = router({
   system: systemRouter,
+  access: accessRouter,
   onboarding: onboardingRouter,
   auth: authRouter,
   accounts: accountsRouter,
