@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -14,8 +15,8 @@ test("正式发布只允许手动派发并默认显式选择 unsigned", () => {
   assert.doesNotMatch(workflow, /push:\s*[\s\S]{0,80}tags:/u);
   assert.match(workflow, /workflow_dispatch:[\s\S]*release_sha:[\s\S]*platform_signing:/u);
   assert.match(workflow, /platform_signing:[\s\S]*type: choice[\s\S]*unsigned[\s\S]*signed[\s\S]*default: unsigned/u);
-  assert.match(workflow, /VERSION: \$\{\{ needs\.preflight\.outputs\.tag \}\}/u);
-  assert.match(workflow, /PLATFORM_SIGNING: \$\{\{ needs\.preflight\.outputs\.platform_signing \}\}/u);
+  assert.match(workflow, /VERSION: \$\{\{ needs\.preflight\.outputs\.release-tag \}\}/u);
+  assert.match(workflow, /PLATFORM_SIGNING: \$\{\{ needs\.preflight\.outputs\.platform-signing \}\}/u);
   assert.match(workflow, /if \[ "\$PLATFORM_SIGNING" = "signed" \]; then/u);
 });
 
@@ -27,7 +28,7 @@ test("预检把稳定 tag、release_sha、dispatch SHA 与当前 main 精确绑�
     '/git/ref/tags/$RELEASE_TAG',
     'test "$MAIN_SHA" = "$RELEASE_SHA"',
     'test "$OBJECT_SHA" = "$RELEASE_SHA"',
-    'ref: ${{ needs.preflight.outputs.release_sha }}',
+    'ref: ${{ needs.preflight.outputs.release-sha }}',
   ]) {
     assert.ok(workflow.includes(marker), `缺少发布身份绑定：${marker}`);
   }
@@ -77,43 +78,63 @@ test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发�
   assert.match(workflow, /--mac dmg --arm64/u);
   assert.match(workflow, /--mac dmg --x64/u);
   assert.match(workflow, /--win nsis --x64/u);
-  assert.equal(workflow.match(/desktop-release-finalizer\.mjs seal-platform/gu)?.length, 2);
+  assert.equal(workflow.match(/node scripts\/desktop-release-finalizer\.mjs seal-platform/gu)?.length, 2);
   for (const marker of [
     'desktop-macos-candidate-${{ github.run_id }}-${{ github.run_attempt }}',
     'desktop-windows-candidate-${{ github.run_id }}-${{ github.run_attempt }}',
     'WorkLoom-SHA512SUMS.txt',
     'WorkLoom-release-manifest.json',
-    '"draft": True',
-    '"make_latest": "false"',
-    'verify_remote_assets(release_id, final_dir, expected_names)',
-    '"make_latest": "true"',
-    "PUBLISH_CONVERGENCE_DELAYS = (0, 2, 4, 8, 16, 30)",
-    "time.sleep(delay)",
-    'sealed.get("immutable") is not True',
-    'remote != local',
-    "class NoRedirect(urllib.request.HTTPRedirectHandler)",
-    "跨域请求不得携带 GitHub token",
+    "gh api --paginate --slurp",
+    "artifact-ids: ${{ steps.candidates.outputs.macos-id }}",
+    "artifact-ids: ${{ steps.candidates.outputs.windows-id }}",
+    'gh release create "$RELEASE_TAG"',
+    "--verify-tag --target \"$RELEASE_SHA\" --draft --latest=false",
+    'gh release upload "$RELEASE_TAG"',
+    'cmp -s "$asset" "$REMOTE_DIR/$name"',
+    'gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=true',
+    "for attempt in $(seq 1 12)",
+    "isLatest,isImmutable,assets",
     '未做 Apple/Windows 平台代码签名',
-    'xattr -cr',
     'SmartScreen',
   ]) {
     assert.ok(workflow.includes(marker), `缺少原子发布契约：${marker}`);
   }
-  assert.equal(workflow.match(/verify_remote_assets\(release_id, final_dir, expected_names\)/gu)?.length, 2);
   assert.equal(workflow.match(/contents: write/gu)?.length, 1, "只能有一个 contents:write publisher");
   assert.equal(workflow.match(/compression-level: 0/gu)?.length, 2, "双平台候选都必须禁用重复压缩");
   assert.doesNotMatch(workflow, /issues: write|gh issue create/u);
   assert.doesNotMatch(workflow, /softprops\/action-gh-release/u);
-  const publisher = workflow.slice(workflow.indexOf("\n  publisher:"));
+  const publisher = workflow.slice(workflow.indexOf("\n  publish-desktop-release:"));
   assert.doesNotMatch(publisher, /actions\/checkout/u);
   assert.doesNotMatch(publisher, /node scripts\//u);
 });
 
 test("Release 标题使用仓级产品常量而不是裸 tag", () => {
   assert.match(workflow, /RELEASE_PRODUCT_TITLE: "HyperReality 智能视频经营系统"/u);
-  assert.match(workflow, /PRODUCT_TITLE = os\.environ\["RELEASE_PRODUCT_TITLE"\]/u);
-  assert.match(workflow, /EXPECTED_TITLE = f"\{PRODUCT_TITLE\} \{TAG\}"/u);
-  assert.match(workflow, /"name": EXPECTED_TITLE/u);
+  assert.match(workflow, /--title "\$RELEASE_PRODUCT_TITLE \$RELEASE_TAG"/u);
+});
+
+test("publisher 与 PR30 canonical 模板同源且只含受控差异", () => {
+  const start = workflow.indexOf("\n  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。\n");
+  assert.notEqual(start, -1, "缺少 canonical publisher 起点");
+  let normalized = workflow.slice(start + 1)
+    .split("\n")
+    .map((line) => line.startsWith("  ") ? line.slice(2) : line)
+    .join("\n");
+  normalized = normalized
+    .replace("# Canonical source: workloom-im@cfd8658ab1bb48c21a5bf8e6c46e2826dc9d879e\n", "")
+    .replace("# sync/downstream-desktop-publisher-job.yml (git blob 8feade29b057e3d00ae75ad03d3a7e1dd7d1baf8)\n", "")
+    .replaceAll(
+      "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0",
+      "actions/download-artifact@v4",
+    )
+    .replace(
+      '--title "$RELEASE_PRODUCT_TITLE $RELEASE_TAG"',
+      '--title "${GITHUB_REPOSITORY#*/} $RELEASE_TAG"',
+    );
+  assert.equal(
+    createHash("sha256").update(normalized).digest("hex"),
+    "e9065a08afc698696430e8a8c3c2607e6019c23812fa673559ac7981e7e41bc0",
+  );
 });
 
 test("桌面产品身份、端口和签名配置与产品清单一致", () => {
