@@ -23,6 +23,7 @@ const {
   validateDatabaseHelper,
   openExternalUrl,
   acquireBootstrapLock,
+  tarExtractionPlan,
 } = require("./bootstrap.cjs");
 
 function assertPrivateFile(file) {
@@ -60,6 +61,28 @@ function transientDirectories(supportDir) {
 }
 
 describe("桌面载荷原子装配", () => {
+  it("Windows 同盘符只向 tar 传相对路径，跨盘符使用目标目录暂存归档", () => {
+    const destination = "D:\\a\\_temp\\wl-smoke\\.payload-cache";
+    const sameDrive = tarExtractionPlan(
+      "D:\\a\\workloom-im\\release\\resources\\payload.tar.gz",
+      destination,
+      path.win32,
+    );
+    assert.equal(sameDrive.cwd, destination);
+    assert.equal(sameDrive.stagedArchive, null);
+    assert.equal(path.win32.isAbsolute(sameDrive.archiveArg), false);
+    assert.doesNotMatch(sameDrive.archiveArg, /[A-Za-z]:|\\/u);
+
+    const crossDrive = tarExtractionPlan(
+      "C:\\Program Files\\WorkLoom\\resources\\payload.tar.gz",
+      destination,
+      path.win32,
+    );
+    assert.equal(crossDrive.cwd, destination);
+    assert.equal(crossDrive.archiveArg, ".workloom-payload.tar.gz");
+    assert.equal(crossDrive.stagedArchive, path.win32.join(destination, ".workloom-payload.tar.gz"));
+  });
+
   it("正式打包入口缺少载荷时在启动任何服务前失败关闭", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "workloom-packaged-payload-missing-"));
     const resourcesDir = path.join(root, "resources");

@@ -111,6 +111,21 @@ function openExternalUrl(url, {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function tarExtractionPlan(archiveFile, destination, pathApi = path) {
+  const relativeArchive = pathApi.relative(destination, archiveFile);
+  // Windows 跨盘符时 path.relative 会返回另一个绝对路径；GNU tar 会把
+  // X:\\... 误认为 host:path。同盘符使用相对路径，跨盘符则先暂存到目标目录。
+  if (pathApi.isAbsolute(relativeArchive) || /^[A-Za-z]:[\\/]/u.test(relativeArchive)) {
+    const stagedArchive = pathApi.join(destination, ".workloom-payload.tar.gz");
+    return { cwd: destination, archiveArg: pathApi.basename(stagedArchive), stagedArchive };
+  }
+  return {
+    cwd: destination,
+    archiveArg: relativeArchive.replaceAll("\\", "/"),
+    stagedArchive: null,
+  };
+}
+
 function atomicWrite(file, content, mode) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
@@ -784,11 +799,15 @@ async function bootstrap(opts) {
       fs.rmSync(cacheDir, { recursive: true, force: true });
       fs.mkdirSync(cacheDir, { recursive: true });
       // 两平台 tar 均可信：macOS 自带 bsdtar；Win10 1803+ System32 自带 tar.exe（bsdtar）
-      // 注意：必须以 cwd + 相对文件名调用——GNU tar（CI 的 Git Bash）会把
-      // "D:\..." 盘符误判为远程主机（host:path 语法，报 Cannot connect to D:，v2.2.1 实证）；
-      // host:path 解析只作用于 -f 参数，-C 绝对路径不受影响
-      const r = run("tar", ["-xzf", path.basename(archiveFile), "-C", cacheDir], { cwd: resourceRoot });
-      if (r.code !== 0) throw new Error(`载荷解压失败：${(r.err || r.out).slice(-300)}`);
+      // 从目标目录使用相对归档路径，避免 -f 和 -C 接收 Windows 盘符。
+      const extraction = tarExtractionPlan(archiveFile, cacheDir);
+      try {
+        if (extraction.stagedArchive) fs.copyFileSync(archiveFile, extraction.stagedArchive, fs.constants.COPYFILE_EXCL);
+        const r = run("tar", ["-xzf", extraction.archiveArg], { cwd: extraction.cwd });
+        if (r.code !== 0) throw new Error(`载荷解压失败：${(r.err || r.out).slice(-300)}`);
+      } finally {
+        if (extraction.stagedArchive) fs.rmSync(extraction.stagedArchive, { force: true });
+      }
       throwIfAborted();
       status("载荷解压完成", { phase: "payload-unpacked", percent: 18, etaSeconds: 105 });
     }
@@ -1210,4 +1229,5 @@ module.exports = {
   validateDatabaseHelper,
   openExternalUrl,
   acquireBootstrapLock,
+  tarExtractionPlan,
 };
