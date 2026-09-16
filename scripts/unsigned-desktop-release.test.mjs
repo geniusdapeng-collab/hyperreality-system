@@ -76,7 +76,7 @@ test("signed 与 unsigned 平台校验边界清晰", () => {
 });
 
 test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发布五资产", () => {
-  assert.match(builder, /artifactName: "\$\{productName\}-\$\{os\}-\$\{arch\}\.\$\{ext\}"/u);
+  assert.match(builder, /^artifactName: "HyperReality\.System-\$\{os\}-\$\{arch\}\.\$\{ext\}"$/mu);
   assert.match(workflow, /--mac dmg --arm64/u);
   assert.match(workflow, /--mac dmg --x64/u);
   assert.match(workflow, /--win nsis --x64/u);
