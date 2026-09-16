@@ -1,4 +1,3 @@
-// vendored from workloom-im/packages/base/bundles/segment.ts（逐字节复制，本地勿改；改动请回上游后重新 vendor）
 /**
  * bundles/segment —— 客群装配加载器（「先体检，再托管」客户旅程的运行时消费方）
  *

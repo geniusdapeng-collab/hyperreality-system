@@ -21,31 +21,12 @@
  *  2. 人名：2-3 字中文虚构名，无生僻字、无名人同名、无英文与数字；
  *  3. 确定性：同一 preset_key 永远同一人名（本表登记或哈希稳定生成）；
  *  4. 用户新增 / 系统自动生成员工时，由 personaOf() 依 preset_key 稳定分配，
- *     不会随机跳变；行业版可在 PERSONA_MAP 追加登记。
+ *     不会随机跳变；行业岗位名称由 Bundle 投影提供，不登记在基座词表。
  */
+import { clientChineseText } from "@workloom/ui";
 
-/** preset_key → 人名（策划登记册；跨行业基座通用键在此登记） */
+/** preset_key → 人名（只保留基座公共角色；其他员工按稳定哈希生成） */
 export const PERSONA_MAP: Record<string, string> = {
-  // —— 基座通用七员 ——
-  "competitor-agent": "沈听澜",
-  "content-agent": "苏映雪",
-  "desktop-agent": "程亦舟",
-  "inspection-agent": "方既明",
-  "pricing-agent": "陆则明",
-  "reconcile-agent": "秦清晏",
-  "review-agent": "林晚照",
-  // —— 酒店域扩展 ——
-  "frontdesk-agent": "温言之",
-  "housekeeper-agent": "孟疏影",
-  "phone-agent": "季云开",
-  "owner-cockpit": "裴景深",
-  "channel-watcher": "韩青梧",
-  "guest-success": "唐见微",
-  "groupbuy-agent": "宋知遥",
-  "coupon-operator": "高致远",
-  "ai-receptionist": "许知夏",
-  "lead-concierge": "任则明",
-  // —— 组织角色 ——
   "company-ceo": "顾云峥",
   captain: "周叙白",
 };
@@ -126,17 +107,18 @@ export function setAliasLocal(presetKey: string, alias: string | null): void {
 
 /**
  * 岗位名解析（F-NAME2 默认显示名）。
- * 优先 ACTOR_TEXT/数据库 name（岗位名）；未知名称按 key 词表推断；最终兜底旧人名。
+ * 优先数据库/Bundle 投影提供的岗位名；未知名称最终使用稳定人名兜底。
  */
 export function roleTitleOf(roleName: string | null | undefined, presetKey?: string | null): string {
   const role = (roleName ?? "").trim();
-  if (role) return role;
+  // 岗位名来自服务端或行业包，普通客户端只接受可读中文；英文键继续走
+  // 稳定人名兜底，避免把实现字段直接当成岗位名释放。
+  const safeRole = clientChineseText(role, "");
+  if (safeRole) return safeRole;
   if (presetKey) {
     const KEY_TITLE: Record<string, string> = {
-      "competitor-agent": "市场侦察官", "content-agent": "内容主笔官", "desktop-agent": "数字执行官",
-      "inspection-agent": "品质巡检官", "pricing-agent": "收益定价官", "reconcile-agent": "财务司库官",
-      "review-agent": "口碑公关官", "frontdesk-agent": "前台接待官", "housekeeper-agent": "客房管家官",
-      "phone-agent": "语音前台官", "company-ceo": "数字总经理", "captain": "船长",
+      "company-ceo": "数字总经理",
+      captain: "编排官",
     };
     const hit = KEY_TITLE[presetKey];
     if (hit) return hit;

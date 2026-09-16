@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node ../../scripts/verify-production-client-boundary.mjs dist",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:consumer": "playwright test --config playwright.consumer.config.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",
@@ -15,7 +17,10 @@
     "@react-three/postprocessing": "^3.1.1",
     "@tanstack/react-query": "5.102.5",
     "@trpc/client": "11.18.0",
+    "@workloom/industry-contract": "workspace:*",
     "@workloom/server": "workspace:*",
+    "@workloom/shared": "workspace:*",
+    "@workloom/ui": "0.1.1",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
     "react": "19.2.8",
@@ -25,6 +30,7 @@
     "three-stdlib": "^2.36.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

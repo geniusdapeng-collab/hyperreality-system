@@ -2,7 +2,7 @@
  * B9 测试：状态机迁移 / cron 匹配 / 决策包三段投影（纯函数）+
  * PG 集成：候选清单 / 开启夜班（围栏快照）/ 一键暂停（G5 计时+留痕）/ 决策包投递 / 触发器事件化
  */
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assertTransition, NightTransitionError, nightRunId } from "./scheduler.js";
 import { cronMatches } from "./triggers.js";
 import { projectNightPackage } from "./package.js";
@@ -70,7 +70,11 @@ describe("决策包三段投影（F4.4/H-7 纯函数）", () => {
 
 /* ================= PG 集成（RUN_DB_TESTS=1） ================= */
 
-const RUN_DB = process.env.RUN_DB_TESTS === "1" && !!process.env.DATABASE_APP_URL;
+const SOURCE_WORKSPACE_ID = process.env.SERVICE_C_TEST_WORKSPACE_ID?.trim() || null;
+const RUN_DB = process.env.RUN_DB_TESTS === "1"
+  && !!process.env.DATABASE_APP_URL
+  && !!process.env.DATABASE_URL
+  && !!SOURCE_WORKSPACE_ID;
 const d = RUN_DB ? describe : describe.skip;
 
 d("PG 集成夜班闭环（种子库）", async () => {
@@ -81,27 +85,103 @@ d("PG 集成夜班闭环（种子库）", async () => {
   const { upsertTrigger, setTriggerEnabled, tickTriggers } = await import("./triggers.js");
   const app = new pg.Pool({ connectionString: process.env.DATABASE_APP_URL });
   const gw = new pg.Pool({ connectionString: process.env.DATABASE_GATEWAY_URL });
-  const scope = { tenantId: "tenant-demo", workspaceId: "ws-yunqi" };
+  const owner = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  // 固定隔离夹具避免与 Bundle、服务前台等并行用例共同向演示工作区写事件，
+  // 从而让同一决策包两次读取之间的统计发生漂移。账本不可删除，因此复用一个
+  // 专用工作区而不是每次制造新的残留工作区。
+  const scope = { tenantId: "", workspaceId: "ws-night-shift-contract" };
   const runDate = `test-${Date.now().toString(36)}`;
   // 0013 口径：nr-<workspaceId>-<runDate>（PK 已改 (workspace_id, run_date)，id 保留唯一约束兼容旧查询）
   const runId = nightRunId(scope.workspaceId, runDate);
-  expect(runId).toBe(`nr-ws-yunqi-${runDate}`);
+  expect(runId).toBe(`nr-${scope.workspaceId}-${runDate}`);
 
-  it("18:00 候选清单：夜班 preset 覆盖 3 项 + 谷时价 + 围栏摘要", async () => {
-    const list = await buildCandidateList(app, scope);
-    expect(list.length).toBeGreaterThanOrEqual(3);
-    expect(list.every((i) => i.estCredits >= 1 && i.fenceSummary.length > 0)).toBe(true);
-    expect(list.some((i) => i.type === "对账")).toBe(true);
+  beforeAll(async () => {
+    const workspace = await owner.query<{ tenant_id: string }>(
+      `INSERT INTO workspaces
+         (id, tenant_id, name, slug, industry, stage, night_config, bundle_id, is_example)
+       SELECT $1, tenant_id, '夜班契约隔离工作区', 'night-shift-contract', industry,
+              stage, night_config, bundle_id, false
+       FROM workspaces WHERE id=$2
+       ON CONFLICT (id) DO UPDATE SET industry=EXCLUDED.industry, stage=EXCLUDED.stage,
+         night_config=EXCLUDED.night_config, bundle_id=EXCLUDED.bundle_id
+       RETURNING tenant_id`,
+      [scope.workspaceId, SOURCE_WORKSPACE_ID],
+    );
+    if (!workspace.rows[0]) throw new Error(`夜班测试缺少显式来源工作区 ${SOURCE_WORKSPACE_ID}`);
+    scope.tenantId = workspace.rows[0].tenant_id;
+    await owner.query(`DELETE FROM agents WHERE workspace_id=$1`, [scope.workspaceId]);
+    await owner.query(
+      `INSERT INTO agents
+         (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status, invalid_reason, meta, alias)
+       SELECT 'agt-night-contract-' || preset_key, $1, preset_key, name, version, kind,
+              readonly, fence_bindings, skills, status, invalid_reason, meta, alias
+       FROM agents WHERE workspace_id=$2 AND status='ready' AND (meta->>'night_shift')::boolean=true`,
+      [scope.workspaceId, SOURCE_WORKSPACE_ID],
+    );
+    await owner.query(`DELETE FROM fence_rules WHERE workspace_id=$1`, [scope.workspaceId]);
+    await owner.query(
+      `INSERT INTO fence_rules
+         (id, rule_id, version, workspace_id, name, level, match_spec, action,
+          is_baseline, status, created_by, approved_event_id)
+       SELECT 'fr-night-contract-' || md5(rule_id || version), rule_id, version, $1,
+              name, level, match_spec, action, is_baseline, status, created_by, approved_event_id
+       FROM fence_rules WHERE workspace_id=$2 AND status='active' AND is_baseline=true`,
+      [scope.workspaceId, SOURCE_WORKSPACE_ID],
+    );
   });
 
-  it("开启夜班：ready→running + 围栏快照 hotel-baseline/v1（F2.6）+ 留痕", async () => {
+  afterAll(async () => {
+    await Promise.all([app.end(), gw.end(), owner.end()]);
+  });
+
+  it("18:00 候选清单：覆盖活动 Bundle 的夜班员工 + 谷时价 + 围栏摘要", async () => {
+    const list = await buildCandidateList(app, scope);
+    const client = await app.connect();
+    let expectedPresetKeys: string[] = [];
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      const rows = await client.query<{ preset_key: string }>(
+        `SELECT preset_key FROM agents WHERE workspace_id=$1 AND status='ready'
+         AND (meta->>'night_shift')::boolean = true ORDER BY preset_key`,
+        [scope.workspaceId],
+      );
+      expectedPresetKeys = rows.rows.map((row) => row.preset_key);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+    const routinePresetKeys = list
+      .filter((item) => item.type === "例行任务")
+      .map((item) => item.presetKey)
+      .sort();
+    expect(expectedPresetKeys.length).toBeGreaterThanOrEqual(1);
+    expect(routinePresetKeys).toEqual(expectedPresetKeys);
+    expect(list.every((i) => i.estCredits >= 1 && i.fenceSummary.length > 0)).toBe(true);
+    expect(list.every((item) => item.type === "例行任务" || item.type === "审批复核")).toBe(true);
+  });
+
+  it("开启夜班：ready→running + 活动 Bundle 围栏快照（F2.6）+ 留痕", async () => {
     await ensureReady(app, gw, scope, runDate);
     await confirmNight(app, gw, scope, runId, "MEM-001", ["nt-reconcile", "nt-review"]);
     const c = await app.connect();
     try {
       await c.query("SELECT set_config('app.workspace_id', $1, false)", [scope.workspaceId]);
       const r = await c.query(`SELECT status, fence_snapshot_version, candidate_count FROM night_runs WHERE id=$1`, [runId]);
-      expect(r.rows[0]).toMatchObject({ status: "running", fence_snapshot_version: "hotel-baseline/v1", candidate_count: 2 });
+      const expectedFence = await c.query<{ version: string }>(
+        `SELECT version FROM fence_rules
+         WHERE (workspace_id=$1 OR workspace_id='*') AND status='active' AND is_baseline=true
+         ORDER BY version DESC, created_at DESC LIMIT 1`,
+        [scope.workspaceId],
+      );
+      expect(r.rows[0]).toMatchObject({
+        status: "running",
+        fence_snapshot_version: expectedFence.rows[0]?.version,
+        candidate_count: 2,
+      });
     } finally { c.release(); }
   });
 
@@ -133,7 +213,7 @@ d("PG 集成夜班闭环（种子库）", async () => {
 
   it("pauseAll 对不存在班次抛错（拒绝空班次操作）", async () => {
     await expect(
-      pauseAll(app, gw, scope, `nr-ws-yunqi-missing-${Date.now().toString(36)}`, { memberNo: "MEM-001", channel: "mobile" }),
+      pauseAll(app, gw, scope, `nr-${scope.workspaceId}-missing-${Date.now().toString(36)}`, { memberNo: "MEM-001", channel: "mobile" }),
     ).rejects.toThrow(/不存在/);
   });
 

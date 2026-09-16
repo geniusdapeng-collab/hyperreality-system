@@ -6,6 +6,8 @@
  */
 import { useEffect, useState } from "react";
 import { trpc } from "../lib/trpc";
+import { operationFailure } from "../lib/ui-state";
+import { Icon, clientChineseText } from "@workloom/ui";
 
 interface LedgerView {
   pools: Array<{ name: "gift" | "pack" | "principal"; amount: number; expiresAt: string | null }>;
@@ -31,7 +33,13 @@ export function CreditsPanel() {
       trpc.credits.balance.query() as Promise<LedgerView>,
       trpc.credits.packs.query() as Promise<{ packs: Pack[] }>,
     ]);
-    setView(b);
+    setView({
+      ...b,
+      recent: b.recent.map((row) => ({
+        ...row,
+        detail: clientChineseText(row.detail, "积分变动已记录"),
+      })),
+    });
     setPacks(p.packs);
   };
   useEffect(() => { void refresh().catch(() => undefined); }, []);
@@ -44,13 +52,13 @@ export function CreditsPanel() {
       setMsg(`已入账 ${r.amount.toLocaleString()} 积分（加油包池，6 个月有效）`);
       await refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      setMsg(operationFailure(e, "购买积分"));
     } finally {
       setBuying(null);
     }
   };
 
-  if (!view) return <div className="text-caption text-ink3">积分账本加载中…</div>;
+  if (!view) return <div className="text-body text-ink3">积分账本加载中…</div>;
 
   return (
     <div className="space-y-3">
@@ -60,25 +68,25 @@ export function CreditsPanel() {
           const pool = view.pools.find((p) => p.name === name);
           return (
             <div key={name} className="rounded-md border border-line/60 bg-white/[0.03] p-2 text-center">
-              <div className="text-micro text-ink3">{POOL_LABEL[name]}</div>
+              <div className="text-body text-ink3">{POOL_LABEL[name]}</div>
               <div className={`text-lg font-semibold ${POOL_TONE[name]}`}>
                 {(pool?.amount ?? 0).toLocaleString()}
               </div>
-              <div className="text-micro text-ink3">
+              <div className="text-body text-ink3">
                 {name === "gift" ? "30 天有效" : name === "pack" ? "6 个月有效" : "不过期"}
               </div>
             </div>
           );
         })}
       </div>
-      <div className="flex items-center justify-between text-caption text-ink3">
+      <div className="flex items-center justify-between text-body text-ink3">
         <span>可用余额 <b className="text-ink">{view.balance.toLocaleString()}</b> 积分</span>
         <span>累计消耗 {Math.round(view.totals.consumed).toLocaleString()} · 平台补贴 {Math.round(view.totals.platformSubsidy).toLocaleString()}</span>
       </div>
 
       {/* 加油包五档 */}
       <div>
-        <div className="mb-1 text-caption text-ink3">加油包（用得越爽越划算，大客户 77 折起）</div>
+        <div className="mb-1 text-body text-ink3">加油包（用得越爽越划算，大客户 77 折起）</div>
         <div className="grid grid-cols-1 gap-1.5">
           {packs.map((p) => (
             <button
@@ -86,7 +94,7 @@ export function CreditsPanel() {
               type="button"
               disabled={buying !== null}
               onClick={() => void buy(p.id)}
-              className="flex cursor-pointer items-center justify-between rounded-md border border-holo/25 bg-holo/5 px-3 py-1.5 text-caption transition-colors hover:border-holo/60 disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-between rounded-md border border-holo/25 bg-holo/5 px-3 py-1.5 text-body transition-colors hover:border-holo/60 disabled:opacity-50"
             >
               <span className="text-ink">{p.credits.toLocaleString()} 积分</span>
               <span className="text-ink3">{p.unitPrice} 元/积分</span>
@@ -94,17 +102,17 @@ export function CreditsPanel() {
             </button>
           ))}
         </div>
-        {msg && <div className="mt-1 text-micro text-emerald-300">{msg}</div>}
+        {msg && <div className="mt-1 text-body text-emerald-300">{msg}</div>}
       </div>
 
       {/* 流水 */}
       {view.recent.length > 0 && (
         <div>
-          <div className="mb-1 text-caption text-ink3">近期流水</div>
+          <div className="mb-1 text-body text-ink3">近期流水</div>
           <div className="max-h-40 space-y-1 overflow-y-auto">
             {view.recent.map((r, i) => (
-              <div key={i} className="flex justify-between text-micro text-ink3">
-                <span>{r.action === "grant" ? "🎁" : "🛒"} {r.detail}</span>
+              <div key={i} className="flex justify-between text-body text-ink3">
+                <span className="flex min-w-0 items-center gap-1.5"><Icon name={r.action === "grant" ? "gift" : "cart"} label={r.action === "grant" ? "赠送" : "购买"} size={14} /> {clientChineseText(r.detail, "积分变动已记录")}</span>
                 <span className="text-emerald-300/90">+{r.amount.toLocaleString()}</span>
               </div>
             ))}

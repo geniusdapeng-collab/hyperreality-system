@@ -55,7 +55,7 @@ async function waitHealth(deadlineMs = 60_000) {
 
 const server = spawn(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--env-file=.env", "apps/server/src/index.ts"], {
   cwd: ROOT,
-  env: { ...process.env, SERVER_PORT: String(PORT), SERVICE_C_DEMO_AUTH: "true" },
+  env: { ...process.env, SERVER_PORT: String(PORT), SERVICE_C_DEMO_AUTH: "true", SERVICE_C_WORKSPACE_ID: process.env.SERVICE_C_WORKSPACE_ID || "ws-yunqi" },
   stdio: "ignore",
   detached: true, // 独立进程组：finally 按组杀（tsx 会再派生 node 子进程）
 });
@@ -78,12 +78,13 @@ try {
   check("送物产 delivery 草稿", q3.json.ticketDraft?.kind === "delivery" && q3.json.ticket === null);
   const q4 = await c("/chat", { method: "POST", body: { text: "帮我送两瓶矿泉水", confirmTicket: true, idempotencyKey: `${RUN}-t` }, token });
   check("确认建单 assigned/客房部", q4.json.ticket?.status === "assigned" && q4.json.ticket?.dept === "客房部");
+  check("建单保留请求与账本回执", q4.json.receipt?.state === "accepted" && q4.json.receipt?.resourceId === q4.json.ticket?.id && typeof q4.json.receipt?.eventId === "string");
   const ticketId = q4.json.ticket.id;
   const q5 = await c("/chat", { method: "POST", body: { text: "帮我送两瓶矿泉水", confirmTicket: true, idempotencyKey: `${RUN}-t` }, token });
   check("幂等重放同单", q5.json.deduped === true && q5.json.ticket.id === ticketId);
   // 受理通知
   const n1 = await c("/notifications", { token });
-  check("受理通知可达", n1.json.notifications.some((x) => x.kind === "ticket.accepted" && x.payload?.ticketId === ticketId));
+  check("受理通知可达且 mock 如实标演示", n1.json.notifications.some((x) => x.kind === "ticket.accepted" && x.payload?.ticketId === ticketId && x.deliveryState === "demo"));
   // B 端处理
   const login = await trpc("auth.loginAs", { input: { workspaceSlug: "yunqi-hotel", memberNo: "MEM-001" }, method: "mutation" });
   const bToken = login.data?.token;
@@ -96,7 +97,7 @@ try {
   check("完成通知可达", n2.json.notifications.some((x) => x.kind === "ticket.completed" && x.payload?.ticketId === ticketId));
   // 评价
   const rate = await c(`/tickets/${ticketId}/rate`, { method: "POST", body: { score: 5, comment: "快" }, token });
-  check("五星评价成功", rate.status === 200 && rate.json.ticket?.ratingScore === 5);
+  check("五星评价成功且保留账本回执", rate.status === 200 && rate.json.ticket?.ratingScore === 5 && rate.json.receipt?.state === "recorded" && typeof rate.json.receipt?.eventId === "string");
   const rate2 = await c(`/tickets/${ticketId}/rate`, { method: "POST", body: { score: 4 }, token });
   check("重复评价 409", rate2.status === 409);
   // B 端指标

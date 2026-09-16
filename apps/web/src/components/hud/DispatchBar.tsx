@@ -5,12 +5,14 @@
  * 状态：empty 空文本置灰（深空 700 底）/ typing 输入中 / routing 路由识别中（>3s 可取消，F3.2）
  * 铁律：「启航」为全站唯一最高级金色按钮；每页至多 1 个（§5.1）
  */
+import { Icon, clientValueText } from "@workloom/ui";
+
 export type DispatchBarState = "empty" | "typing" | "routing";
 
 export function DispatchBar({
   state = "empty",
   value = "",
-  chips = ["星芒好物 · 当前阶段：量产爬坡"],
+  chips = ["当前工作区 · 正常运行"],
   onCancelRoute,
   onChange,
   onSubmit,
@@ -28,10 +30,10 @@ export function DispatchBar({
     <div className="rounded-msg border border-gline bg-card p-3 shadow-[0_0_30px_rgba(255,160,60,.10)]">
       <div className="flex flex-wrap items-center gap-3">
         {/* 航线图标（金色径向渐变方块） */}
-        <span className="inline-block h-8 w-8 shrink-0 rounded-lg gold-grad shadow-[0_0_16px_rgba(255,160,60,.5)]" />
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg gold-grad text-ongold shadow-[0_0_16px_rgba(255,160,60,.5)]"><Icon name="rocket" size={17} /></span>
         {/* 输入区（受控；≤500 字 F3.1） */}
         <div
-          className={`min-w-40 flex-1 rounded-lg border px-3 py-2 text-body transition-colors ${
+          className={`min-w-0 flex-1 basis-48 rounded-lg border px-3 py-2 text-body transition-colors ${
             state === "empty" ? "border-line bg-bg700 text-ink3" : "border-gline bg-bg800 text-ink"
           }`}
         >
@@ -46,17 +48,17 @@ export function DispatchBar({
               maxLength={500}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) onSubmit?.(); }}
-              placeholder="说出一句话目标…（一句话派遣，≤500 字 · F3.1）"
+              placeholder="说出一句话目标…（最多 500 字）"
               className="w-full bg-transparent text-ink outline-none placeholder:text-ink3"
             />
           ) : (
-            (state === "empty" ? "说出一句话目标…（一句话派遣，≤500 字 · F3.1）" : value)
+            (state === "empty" ? "说出一句话目标…（最多 500 字）" : value)
           )}
         </div>
         {/* 三态 pill（主线 Quest 默认选中·金边发光） */}
-        <div className="flex gap-1.5 text-caption">
+        <div className="flex min-w-0 flex-wrap gap-1.5 text-body">
           <span className="rounded-md border border-gold/70 bg-gold/10 px-2.5 py-1 font-bold text-gold shadow-[0_0_10px_rgba(214,220,228,.25)]">
-            主线 QUEST
+            主线任务
           </span>
           <span className="rounded-md border border-line px-2.5 py-1 text-ink3">闲聊</span>
           <span className="rounded-md border border-line px-2.5 py-1 text-ink3">夜班</span>
@@ -77,7 +79,7 @@ export function DispatchBar({
             onClick={onSubmit}
             className="relative cursor-pointer overflow-hidden rounded-lg gold-grad px-4 py-2 text-body font-black text-ongold shadow-[0_0_18px_rgba(255,160,60,.45)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
-            <span className="relative z-10">启航 ▶</span>
+            <span className="relative z-10 inline-flex items-center gap-1">启航 <Icon name="send" size={14} /></span>
             <span
               className="pointer-events-none absolute inset-y-0 w-1/3 animate-sheen"
               style={{ background: "linear-gradient(105deg,transparent,rgba(255,255,255,.5),transparent)" }}
@@ -86,10 +88,10 @@ export function DispatchBar({
         )}
       </div>
       {/* 上下文 chips（全息青描边 ≥1 项） */}
-      <div className="mt-2 flex gap-1.5 pl-11">
+      <div className="mt-2 flex min-w-0 flex-wrap gap-1.5 pl-0 sm:pl-11">
         {chips.map((c) => (
-          <span key={c} className="rounded-md border border-holo/35 bg-holo/5 px-2 py-0.5 text-caption text-holo">
-            {c}
+          <span key={c} className="max-w-full break-words rounded-md border border-holo/35 bg-holo/5 px-2 py-0.5 text-body text-holo">
+            {clientValueText(c)}
           </span>
         ))}
       </div>

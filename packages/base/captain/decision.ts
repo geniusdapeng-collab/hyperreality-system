@@ -6,59 +6,61 @@
  * 深度管线六步：情报采集 → 案例回忆 → 多方案生成 → 红队对抗 → 影响预估 → 请示/执行（全程留痕）。
  */
 import type pg from "pg";
-import { effectiveAutonomy, defaultCharter, type Charter } from "./charter.js";
+import { effectiveAutonomy, type Charter } from "./charter.js";
 import type { QueueItem } from "./router.js";
 
 /* ================= ① 决策三级分流 ================= */
 
 export type DecisionTier = "micro" | "standard" | "major";
 
-/** 不可逆动作（已拍板：删除/对外发布/围栏变更/宪章变更/退款——钱与承诺出去难收回） */
-const IRREVERSIBLE = [/delete/i, /publish/i, /fence\./i, /charter/i, /refund/i, /撤销|下架/];
+/** 仅保留跨行业一致的系统级不可逆动作；行业动作须由 Bundle 显式标注 irreversible。 */
+const SYSTEM_IRREVERSIBLE = [/(^|\.)delete$/i, /(^|\.)publish$/i, /^fence\./i, /^charter\./i];
 
-/** 对象域归组（影响多域即重大） */
-const DOMAIN_OF: Record<string, string> = {
-  price: "收益", room_price: "收益", price_calendar: "收益",
-  review: "口碑", alert: "口碑", guest: "口碑",
-  order: "订单", channel: "渠道", inventory: "采购", supplier: "采购",
-  staff: "人事", shift: "人事", task: "运营", facility: "运营",
-};
+function amountCap(c: ReturnType<typeof effectiveAutonomy>, item: QueueItem): number | undefined {
+  const key = item.amountCtx?.capKey;
+  return key ? c.caps[key]?.limit : undefined;
+}
 
 export function classifyDecision(c: Charter, item: QueueItem): { tier: DecisionTier; reasons: string[] } {
   const a = effectiveAutonomy(c);
   const reasons: string[] = [];
   // 条件③：不可逆
-  if (IRREVERSIBLE.some((re) => re.test(item.action))) {
+  if (item.irreversible === true || SYSTEM_IRREVERSIBLE.some((re) => re.test(item.action))) {
     reasons.push(`不可逆操作（${item.action}）`);
     return { tier: "major", reasons };
   }
   // 条件①：金额 > 2×上限
   const amt = item.amountCtx?.amount;
   if (amt !== undefined) {
-    const cap = /采购|procurement/i.test(item.action) ? a.procurement_cap : a.campaign_cap;
+    const cap = amountCap(a, item);
+    if (cap === undefined) {
+      reasons.push("金额动作未引用 Bundle 声明的自治上限");
+      return { tier: "major", reasons };
+    }
     if (amt > cap * 2) {
       reasons.push(`金额 ¥${amt} 超自治上限 2 倍（¥${cap * 2}）`);
       return { tier: "major", reasons };
     }
   }
   // 条件②：影响多对象域
-  const domains = new Set<string>();
-  const objType = String((item.params.object_type ?? item.params.objectType ?? "") as string);
-  if (DOMAIN_OF[objType]) domains.add(DOMAIN_OF[objType]);
-  for (const r of item.ruleIds) {
-    const m = /^R(\d+)/.exec(r);
-    if (m) domains.add(`R${m[1]}`);
-  }
-  if (domains.size > 1 && !domains.has("收益")) {
+  const domains = new Set((item.affectedDomains ?? []).filter(Boolean));
+  if (domains.size > 1) {
     reasons.push(`影响多对象域（${[...domains].join("、")}）`);
     return { tier: "major", reasons };
   }
   // 微决策：金额小（<30% 上限）且可逆、单域
   if (amt !== undefined) {
-    const cap = /采购|procurement/i.test(item.action) ? a.procurement_cap : a.campaign_cap;
+    const cap = amountCap(a, item);
+    if (cap === undefined) return { tier: "major", reasons: ["金额动作缺少可验证的自治上限"] };
     if (amt < cap * 0.3) return { tier: "micro", reasons: ["金额小且可逆"] };
   }
-  if (item.priceCtx?.afterPrice !== undefined) return { tier: "micro", reasons: ["价格微调且可逆"] };
+  if (item.rangeCtx?.value !== undefined) {
+    const range = item.rangeCtx.key ? a.ranges[item.rangeCtx.key] : undefined;
+    if (!range || item.rangeCtx.value < range.lower || item.rangeCtx.value > range.upper) {
+      return { tier: "major", reasons: ["区间动作缺少有效自治声明或已越界"] };
+    }
+    return { tier: "micro", reasons: ["声明区间内的可逆微决策"] };
+  }
   return { tier: "standard", reasons: ["默认常规通道"] };
 }
 
@@ -173,22 +175,16 @@ ${o.label} ${JSON.stringify(o.params)}
         o.critic = "红队模型不可用，按保守口径处理";
       }
     } else {
-      o.critic = o.stance === "aggressive" ? "进取方案在行情反转时回撤风险更高" : "保守方案可能牺牲部分峰值收益";
+      o.critic = o.stance === "aggressive" ? "进取方案在外部条件反转时损失风险更高" : "保守方案可能降低目标达成速度";
     }
-    // 围栏语义 dry_run（价格类：破带即 fenceOk=false）
-    if (item.priceCtx?.basePrice !== undefined) {
-      const price = Number(o.params.price ?? item.priceCtx.afterPrice ?? 0);
-      const band = defaultCharter().autonomy.price_band; // 语义底线用标准带（-10%/+20%）
-      const ratio = price / item.priceCtx.basePrice;
-      o.fenceOk = ratio >= band[0] * 0.85 && ratio <= band[1] * 1.15; // 底线宽限（下限≈0.77、上限≈1.38）外即不过
-    }
+    // 行业边界由已安装 Bundle 的围栏 dry_run 负责；基座不内置任何业务阈值。
     // ⑤ 影响预估（历史归因：同类动作近 30 天频次与反馈）
     const similar = await qRows<{ n: string }>(
       app, scope,
       `SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'=$2 AND created_at > now() - interval '30 days'`,
       [scope.workspaceId, item.action],
     );
-    o.impact = `同类动作近 30 天 ×${similar[0]?.n ?? 0}；${o.stance === "aggressive" ? "预期收益弹性更大但波动更高" : "预期波动受控"}`;
+    o.impact = `同类动作近 30 天 ×${similar[0]?.n ?? 0}；${o.stance === "aggressive" ? "预期效果弹性更大但波动更高" : "预期波动受控"}`;
   }
 
   // ⑥ 推荐：红队无硬伤 + 围栏通过 的方案中，balanced 优先、conservative 次之

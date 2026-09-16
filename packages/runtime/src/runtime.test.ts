@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { routeIntent, ruleBasedRoute, LlmIntentClassifier, type IntentClassifier } from "./intent.js";
+import type { QuestPlanner } from "./loop.js";
 // 注意：loop.js（经 tools.js 模块级常量读 TOOL_UNVERIFIED_RATE）禁止静态 import——
 // 否则模块在 env 设置前加载，E3.7 随机扰动无法关闭（#25 flaky 根因）。一律动态 import。
 
@@ -55,48 +56,77 @@ describe("意图路由（F3.2）", () => {
 });
 
 describe("计划模板（演示剧本）", async () => {
-  process.env.TOOL_UNVERIFIED_RATE = "0"; // 见文件头注释：须在 loop.js 首次加载前设置
   const { planQuest } = await import("./loop.js");
-  const fakePreset = { fenceBindings: [], tools: [], essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "pricing-agent", version: "v2.3", prompt: null };
-  it("调价目标 → 3 步（采集/读取/调价）", () => {
-    const steps = planQuest("周五调价 5%", fakePreset);
-    expect(steps.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
+  const fakePreset = {
+    fenceBindings: [],
+    tools: [
+      { name: "report.write", access: "write", desc: "生成复盘报告" },
+      { name: "metrics.read", access: "read", desc: "读取运行指标" },
+    ],
+    essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "team-lead", version: "v1", prompt: null,
+  };
+  it("仅按当前 preset 工具声明拆解，且先读后写", () => {
+    const steps = planQuest("生成本周复盘", fakePreset);
+    expect(steps.map((s) => s.action)).toEqual(["metrics.read", "report.write"]);
   });
 });
 
 describe("LLM 任务规划（B9 planQuestSmart）", async () => {
   const { planQuestSmart } = await import("./loop.js");
-  const fakePreset = { fenceBindings: [], tools: [], essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "pricing-agent", version: "v2.3", prompt: null };
+  const fakePreset = {
+    fenceBindings: [],
+    tools: [
+      { name: "metrics.read", access: "read", desc: "读取运行指标" },
+      { name: "report.write", access: "write", desc: "生成复盘报告" },
+    ],
+    essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "team-lead", version: "v1", prompt: null,
+  };
 
-  it("合法规划被采用，且价格类步骤自动数据水合（before/after/context 防 E2.1 误熔断）", async () => {
+  it("合法规划被采用，白名单完全来自当前 preset", async () => {
     const llm = async () => JSON.stringify([
-      { action: "biz.price.read", objectType: "room_price", tool: "biz.price.read", params: {}, label: "读价" },
-      { action: "price.adjust", objectType: "room_price", tool: "biz.price.write", params: { price: 468 }, label: "调价" },
+      { action: "metrics.read", objectType: "metrics", tool: "metrics.read", params: {}, label: "读取指标" },
+      { action: "report.write", objectType: "report", tool: "report.write", params: {}, label: "生成复盘" },
     ]);
-    const steps = await planQuestSmart("调价", fakePreset as never, llm);
+    const steps = await planQuestSmart("复盘", fakePreset as never, llm);
     expect(steps).toHaveLength(2);
-    expect(steps[1]).toMatchObject({ before: { price: 458 }, after: { price: 468 } });
-    expect(steps[1]?.context).toMatchObject({ night_shift: false });
+    expect(steps.map((step) => step.tool)).toEqual(["metrics.read", "report.write"]);
   });
 
-  it("垃圾 JSON / 越白名单工具 / 步数越界 → 一律回退确定性模板（D4）", async () => {
-    const garbage = await planQuestSmart("周五调价 5%", fakePreset as never, async () => "not json");
-    expect(garbage.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
-    const evil = await planQuestSmart("周五调价 5%", fakePreset as never, async () =>
+  it("垃圾 JSON / 越白名单工具 / 步数越界 → 一律回退装配内确定性计划", async () => {
+    const garbage = await planQuestSmart("生成复盘", fakePreset as never, async () => "not json");
+    expect(garbage.map((s) => s.action)).toEqual(["metrics.read", "report.write"]);
+    const evil = await planQuestSmart("生成复盘", fakePreset as never, async () =>
       JSON.stringify([{ action: "x", objectType: "room", tool: "shell.exec", params: {}, label: "越权" }]));
-    expect(evil.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
-    const tooMany = await planQuestSmart("周五调价 5%", fakePreset as never, async () =>
-      JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ action: "a" + i, objectType: "room", tool: "order.list", params: {}, label: "s" }))));
-    expect(tooMany).toHaveLength(3);
+    expect(evil.map((s) => s.action)).toEqual(["metrics.read", "report.write"]);
+    const tooMany = await planQuestSmart("生成复盘", fakePreset as never, async () =>
+      JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ action: "a" + i, objectType: "report", tool: "metrics.read", params: {}, label: "s" }))));
+    expect(tooMany).toHaveLength(2);
   });
 
-  it("未配置 llmCall → 直接走模板（mock 默认口径）", async () => {
-    const steps = await planQuestSmart("周五调价 5%", fakePreset as never, undefined);
-    expect(steps.map((s) => s.action)).toEqual(["competitor.fetch", "biz.price.read", "price.adjust"]);
+  it("未配置 llmCall → 直接消费装配声明", async () => {
+    const steps = await planQuestSmart("生成复盘", fakePreset as never, undefined);
+    expect(steps.map((s) => s.action)).toEqual(["metrics.read", "report.write"]);
   });
 });
 
 /* ================= PG 集成（RUN_DB_TESTS=1） ================= */
+
+/** 行业场景仅存在于测试夹具；生产基座从不内置这些语义。 */
+const hotelFixturePlanner: QuestPlanner = (goal) => {
+  if (/调价/.test(goal)) return [
+    { stepId: "s1", action: "competitor.fetch", objectType: "channel", tool: "competitor.fetch", params: {}, label: "采集竞对数据" },
+    { stepId: "s2", action: "pms.price.read", objectType: "room_price", tool: "pms.price.read", params: { object_id: "OBJ-DEMO-01" }, label: "读取当前价格" },
+    { stepId: "s3", action: "price.adjust", objectType: "room_price", objectId: "OBJ-DEMO-01", tool: "pms.price.write", params: { object_id: "OBJ-DEMO-01", price: 468 }, before: { price: 458 }, after: { price: 468 }, context: { channel_new: false, night_shift: false }, label: "提交价格调整" },
+  ];
+  if (/差评|回复/.test(goal)) return [
+    { stepId: "s1", action: "review.list", objectType: "review", tool: "review.list", params: {}, label: "读取评价" },
+    { stepId: "s2", action: "review.reply", objectType: "review", objectId: "RV-DEMO-01", tool: "review.reply", params: { review_id: "RV-DEMO-01", rating: 2 }, label: "提交回复" },
+  ];
+  return [
+    { stepId: "s1", action: "order.list", objectType: "order", tool: "order.list", params: {}, label: "读取流水" },
+    { stepId: "s2", action: "order.reconcile", objectType: "order", tool: "order.reconcile", params: { guarantee_anomaly: false }, label: "核验流水" },
+  ];
+};
 
 const RUN_DB = process.env.RUN_DB_TESTS === "1" && !!process.env.DATABASE_APP_URL;
 const d = RUN_DB ? describe : describe.skip;
@@ -147,7 +177,7 @@ d("PG 集成 Quest 循环（种子库）", async () => {
 
   it("调价 Quest 全流程：3 步自动执行 → completed，事件带 step_id+回执", async () => {
     const tid = await newThread("周五雅致大床房调价");
-    const r = await runQuest(app, gw, scope, { threadId: tid, goal: "周五调价 2%", presetKey: "pricing-agent" });
+    const r = await runQuest(app, gw, scope, { threadId: tid, goal: "周五调价 2%", presetKey: "pricing-agent", fallbackPlanner: hotelFixturePlanner });
     expect(r.status).toBe("completed");
     expect(r.stepsDone).toBe(3);
     const evs = await threadEvents(tid);
@@ -159,7 +189,7 @@ d("PG 集成 Quest 循环（种子库）", async () => {
 
   it("差评 Quest：R6 越围栏挂起 → pending_review + 审批行", async () => {
     const tid = await newThread("回复差评");
-    const r = await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent" });
+    const r = await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent", fallbackPlanner: hotelFixturePlanner });
     expect(r.status).toBe("pending_review");
     expect(r.pendingApprovalId).toBeDefined();
     const c = await app.connect();
@@ -173,12 +203,12 @@ d("PG 集成 Quest 循环（种子库）", async () => {
   it("#34 审批通过 → replay 恢复执行：挂起步骤带授权引用完成，Quest 闭环 completed", async () => {
     const { decide } = await import("@workloom/base/review-console");
     const tid = await newThread("回复差评求恢复");
-    const r1 = await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent" });
+    const r1 = await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent", fallbackPlanner: hotelFixturePlanner });
     expect(r1.status).toBe("pending_review");
     const approvalId = r1.pendingApprovalId!;
     // 修复前：审批通过后 replay 会再次挂起（死循环，Quest 永远卡 pending_review）
     await decide(app, gw, scope, { memberNo: "MEM-001", role: "owner" }, approvalId, { type: "approve" });
-    const r2 = await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent" });
+    const r2 = await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent", fallbackPlanner: hotelFixturePlanner });
     expect(r2.status).toBe("completed");
     expect(r2.stepsDone).toBe(2); // s1（已完成跳过）+ s2（批准执行）
     const evs = await threadEvents(tid);
@@ -197,17 +227,17 @@ d("PG 集成 Quest 循环（种子库）", async () => {
     } finally { c.release(); }
     // 再次 replay 幂等：不产生新事件
     const n1 = evs.length;
-    await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent" });
+    await runQuest(app, gw, scope, { threadId: tid, goal: "回复差评", presetKey: "review-agent", fallbackPlanner: hotelFixturePlanner });
     expect((await threadEvents(tid)).length).toBe(n1);
   });
 
   it("H-5 replay 断点续跑幂等：重复运行不产生重复事件", async () => {
     const tid = await newThread("对账任务");
-    const r1 = await runQuest(app, gw, scope, { threadId: tid, goal: "夜间对账", presetKey: "reconcile-agent" });
+    const r1 = await runQuest(app, gw, scope, { threadId: tid, goal: "夜间对账", presetKey: "reconcile-agent", fallbackPlanner: hotelFixturePlanner });
     expect(r1.status).toBe("completed");
     const n1 = (await threadEvents(tid)).length;
     // 模拟 kill -9 后重放：再跑一次同一线程
-    const r2 = await runQuest(app, gw, scope, { threadId: tid, goal: "夜间对账", presetKey: "reconcile-agent" });
+    const r2 = await runQuest(app, gw, scope, { threadId: tid, goal: "夜间对账", presetKey: "reconcile-agent", fallbackPlanner: hotelFixturePlanner });
     const n2 = (await threadEvents(tid)).length;
     expect(n2).toBe(n1); // 幂等：零新增事件
     expect(r2.stepsDone).toBe(r1.stepsDone);

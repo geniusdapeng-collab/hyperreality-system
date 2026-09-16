@@ -54,12 +54,17 @@
     "app:dist": "electron-builder",
     "setup:lite": "tsx scripts/setup-lite.mts",
     "db:seed:aipm": "tsx --env-file=.env scripts/seed-aipm.ts",
-    "product:verify": "node scripts/verify-product-content.mjs"
+    "product:verify": "node scripts/verify-product-content.mjs",
+    "bundle:governance": "tsx scripts/bundle-governance.mts",
+    "bundle:release": "tsx scripts/bundle-governance.mts --refresh-digests --release"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "node-pty"
-    ]
+    ],
+    "overrides": {
+      "@workloom/ui@0.1.1": "https://github.com/geniusdapeng-collab/workloom-im/releases/download/ui-v0.1.1/workloom-ui-0.1.1.tgz"
+    }
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -69,7 +74,9 @@
     "vitest": "^4.1.11",
     "yaml": "2.9.0",
     "electron": "^44.1.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "typescript-governance": "npm:typescript@5.9.3",
+    "yaml-governance": "npm:yaml@2.9.0"
   },
   "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）"
 }

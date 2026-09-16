@@ -1,7 +1,7 @@
 /**
  * VoiceEngine · 语音播报（端侧 speechSynthesis，零网络零密钥）
  *
- *  - 角色音色参数表（确定性中文 voice + 温和 pitch/rate）；
+ *  - Bundle 可显式覆盖音色；缺省按角色标识稳定散列到通用中文音色；
  *  - 优先级队列：fuse（熔断，立即打断）> ask（请示）> ceremony（仪式）> ambient；
  *  - 降级：speechSynthesis 不可用/无语音 → available=false，仅走字幕（SubBus）。
  *  - 字幕事件总线（SubBus）：所有播报（含仅字幕模式）同步发字幕，新闻台字幕条消费。
@@ -46,36 +46,23 @@ interface QueuedUtterance {
   settled?: boolean;
 }
 
-/** 角色音色预设：pitch 0.6~1.4，rate 0.75~1.2 */
-export const VOICE_PRESETS: Record<string, VoiceProfile> = {
-  "company-ceo": { pitch: 0.75, rate: 0.85 },
-  "competitor-agent": { pitch: 1.15, rate: 1.08, female: true },
-  "content-agent": { pitch: 1.1, rate: 0.95, female: true },
-  "pricing-agent": { pitch: 0.9, rate: 0.98 },
-  "reconcile-agent": { pitch: 0.7, rate: 0.88 },
-  "inspection-agent": { pitch: 0.85, rate: 0.92 },
-  "review-agent": { pitch: 1.2, rate: 1.0, female: true },
-  "desktop-agent": { pitch: 1.0, rate: 1.1 },
-  // —— AI 产品经理团队 ——
-  "chief-pm": { pitch: 0.9, rate: 0.92 },
-  "model-scout": { pitch: 1.0, rate: 1.0 },
-  "eval-master": { pitch: 0.95, rate: 0.95 },
-  "prompt-curator": { pitch: 1.0, rate: 1.0 },
-  "red-teamer": { pitch: 0.9, rate: 1.0 },
-  "knowledge-curator": { pitch: 1.05, rate: 0.95, female: true },
-  "requirement-analyst": { pitch: 1.0, rate: 1.0 },
-  "competitor-scout": { pitch: 1.1, rate: 1.05 },
-  "data-insight": { pitch: 0.95, rate: 0.95 },
-  "user-listener": { pitch: 1.1, rate: 1.0, female: true },
-  "doc-writer": { pitch: 1.0, rate: 0.98 },
-  "industry-radar": { pitch: 1.05, rate: 1.02 },
-  "release-guardian": { pitch: 0.9, rate: 0.9 },
-  "frontdesk-agent": { pitch: 1.12, rate: 1.02, female: true },
-  "housekeeper-agent": { pitch: 1.05, rate: 0.96, female: true },
-  "phone-agent": { pitch: 1.15, rate: 1.05, female: true },
-  "owner-cockpit": { pitch: 0.8, rate: 0.9 },
-};
 const DEFAULT_PRESET: VoiceProfile = { pitch: 1.0, rate: 0.96 };
+
+/** 行业无关的稳定音色 fallback；角色专属音色应由 Bundle 投影显式传入 voiceOverride。 */
+export function voiceProfileForRole(role: string): VoiceProfile {
+  if (!role.trim()) return DEFAULT_PRESET;
+  let hash = 2166136261;
+  for (const ch of role) {
+    hash ^= ch.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  const n = hash >>> 0;
+  return {
+    pitch: Number((0.9 + (n % 21) / 100).toFixed(2)),
+    rate: Number((0.92 + ((n >>> 5) % 13) / 100).toFixed(2)),
+    female: ((n >>> 9) & 1) === 1,
+  };
+}
 
 // macOS / Windows 常见中文系统音色。这里只用于性别与稳定性排序，不依赖某台机器
 // 必须安装其中某一个；匹配不到时仍固定回落到同一个中文 voice。
@@ -233,7 +220,7 @@ export class VoiceEngineImpl {
     this.speaking = true;
     this.active = item;
     try {
-      const preset = next.voiceOverride ?? VOICE_PRESETS[next.role] ?? DEFAULT_PRESET;
+      const preset = next.voiceOverride ?? voiceProfileForRole(next.role);
       const utt = new SpeechSynthesisUtterance(next.text);
       utt.lang = "zh-CN";
       utt.pitch = preset.pitch;

@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: true               # 合规闸门，误放有外部后果
 fence_bindings: [G14]         # 平台送审预检必过
+coverage:
+  - { eventPrefix: "compliance.", label: 合规审查 }
 skills: []
 tools:
   - { name: compliance.precheck, access: read,  desc: 三级预检执行（极限词/版权/平台规范） }

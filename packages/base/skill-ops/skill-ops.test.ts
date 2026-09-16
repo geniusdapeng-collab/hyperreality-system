@@ -408,9 +408,12 @@ describe.runIf(RUN_DB)("skill-ops PG 集成（P0 分发闭环）", async () => {
          AND payload->'decision'->'after'->>'skillId'=$2`, [scope.workspaceId, skillId]);
     expect(ev.rows[0]).toMatchObject({ wtype: "system", wid: "night-shift" });
 
-    // ③ 刚同步过 → 未到期不执行
+    // ③ 刚同步过 → 未到期不执行。nightNow 为“下一个上海 03:00”，相对真实
+    // created_at 最多向前 24h；显式 48h 窗口使关系确定，不随测试恰好在凌晨
+    // 03:00 前后运行而翻转。（生产默认 20h 语义不变，纯函数边界另有覆盖。）
     const r3 = await autoSyncWorkspace(app, gw, scope, {
       registryUrl: "u", signingKey: KEY, instance, fetcher: fetcherOf([pkg]), now: nightNow,
+      intervalMs: 48 * 3600_000,
     });
     expect(r3).toMatchObject({ ran: false, reason: "not_due" });
 

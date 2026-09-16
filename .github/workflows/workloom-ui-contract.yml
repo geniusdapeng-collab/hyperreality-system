@@ -1,0 +1,65 @@
+name: workloom-ui-contract
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ui-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      WORKLOOM_DIR: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: corepack enable && corepack prepare pnpm@10.14.0 --activate
+      - run: pnpm -C "$WORKLOOM_DIR" install --frozen-lockfile
+      - name: 禁止 UI 分叉并校验三端版本
+        run: node "$WORKLOOM_DIR/scripts/verify-ui-consumer.mjs" --repo "$WORKLOOM_DIR" --require-governance-state
+      - name: 校验三端应用壳指纹与行业扩展边界
+        run: node "$WORKLOOM_DIR/scripts/verify-client-foundation-consumer.mjs" --repo "$WORKLOOM_DIR"
+      - name: 校验产品身份与全量行业包治理
+        run: |
+          (cd "$WORKLOOM_DIR" && node scripts/verify-product-content.mjs)
+          (cd "$WORKLOOM_DIR" && pnpm exec tsx scripts/bundle-governance.mts)
+      - name: 执行仓库已有测试
+        run: |
+          set -euo pipefail
+          pnpm -C "$WORKLOOM_DIR" test
+          if [ -f requirements.txt ] && [ -d tests ] && find tests -type f -name 'test_*.py' -print -quit | grep -q .; then
+            python -m pip install --disable-pip-version-check -r requirements.txt
+            python -m pytest -q
+          fi
+      - name: 三端逐一类型检查与生产构建
+        run: |
+          set -euo pipefail
+          for CLIENT in web webb webc; do
+            test -f "$WORKLOOM_DIR/apps/$CLIENT/package.json"
+            pnpm -C "$WORKLOOM_DIR/apps/$CLIENT" typecheck
+            pnpm -C "$WORKLOOM_DIR/apps/$CLIENT" build
+          done
+      - name: 安装 Chromium
+        run: pnpm -C "$WORKLOOM_DIR/apps/web" exec playwright install --with-deps chromium
+      - name: 三端生产预览主入口与首帧横向溢出冒烟
+        run: CI=true pnpm -C "$WORKLOOM_DIR/apps/web" test:consumer
+      - name: 留存三端浏览器冒烟证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workloom-ui-consumer-${{ github.run_id }}
+          path: |
+            ./apps/web/playwright-report/consumer
+            ./apps/web/test-results/consumer
+          if-no-files-found: warn
+          retention-days: 30

@@ -44,7 +44,7 @@ export function composeBoardPack(input: {
   const proposals: string[] = [];
   if (sc.hitRate !== null) {
     if (sc.hitRate > 0.85 && sc.outcomeCounts.hit + sc.outcomeCounts.miss + sc.outcomeCounts.fail >= 5) {
-      proposals.push(`决策命中率 ${(sc.hitRate * 100).toFixed(0)}%>85%：建议扩大自治带（价格带 ±15%→±18%），请董事长批示`);
+      proposals.push(`决策命中率 ${(sc.hitRate * 100).toFixed(0)}%>85%：建议适度扩大表现稳定的自治边界，请董事长批示`);
     } else if (sc.hitRate < 0.6) {
       proposals.push(`决策命中率 ${(sc.hitRate * 100).toFixed(0)}%<60%：建议收紧自治带一档并复盘失败模式`);
     }
@@ -80,31 +80,49 @@ export interface OrgHealth {
   overworked: Array<{ agentId: string; outputs: number }>; // 产出过载（>均值 2 倍）
 }
 
+interface CoverageDeclaration {
+  eventPrefix: string;
+  label: string;
+}
+
+/**
+ * 业务域与事件动作的对应关系只能由行业包在员工 meta.coverage 中声明。
+ * 基座不根据 action/preset 命名猜测行业语义，避免把某个行业的岗位表带入其他行业。
+ */
+function coverageDeclarations(meta: unknown): CoverageDeclaration[] {
+  if (!meta || typeof meta !== "object") return [];
+  const coverage = (meta as { coverage?: unknown }).coverage;
+  if (!Array.isArray(coverage)) return [];
+  return coverage.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as { eventPrefix?: unknown; event_prefix?: unknown; label?: unknown };
+    const eventPrefix = typeof row.eventPrefix === "string"
+      ? row.eventPrefix.trim()
+      : typeof row.event_prefix === "string" ? row.event_prefix.trim() : "";
+    const label = typeof row.label === "string" ? row.label.trim() : "";
+    if (!eventPrefix || !label || !/[\u3400-\u9fff]/u.test(label)) return [];
+    return [{ eventPrefix, label }];
+  });
+}
+
 export async function scanOrgHealth(app: pg.Pool, scope: Scope): Promise<OrgHealth> {
   const c = await app.connect();
   try {
     await c.query("BEGIN");
     await c.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
     const agents = await c.query<{ n: string }>(`SELECT count(*)::text AS n FROM agents WHERE workspace_id=$1 AND status='ready'`, [scope.workspaceId]);
     const backlog = await c.query<{ n: string }>(`SELECT count(*)::text AS n FROM approvals WHERE workspace_id=$1 AND status='pending' AND tier='l2_captain'`, [scope.workspaceId]);
-    const domainOwners = await c.query<{ preset_key: string }>(`SELECT preset_key FROM agents WHERE workspace_id=$1 AND status='ready'`, [scope.workspaceId]);
-    const owned = new Set(domainOwners.rows.map((r) => r.preset_key));
-    // 近 7 天出现的事件动作域（粗映射 preset 覆盖）
-    const actions = await c.query<{ action: string; n: string }>(
+    const domainOwners = await c.query<{ status: string; meta: unknown }>(
+      `SELECT status, meta FROM agents WHERE workspace_id=$1`,
+      [scope.workspaceId],
+    );
+    // 近 7 天出现的事件动作；只与行业包显式声明的覆盖前缀匹配。
+    const actions = await c.query<{ action: string | null; n: string }>(
       `SELECT payload->'decision'->>'action' AS action, count(*)::text AS n FROM biz_events
        WHERE workspace_id=$1 AND created_at > now() - interval '7 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 20`,
       [scope.workspaceId],
     );
-    await c.query("COMMIT");
-    const DOMAIN_PRESET: Record<string, string> = {
-      "price.": "pricing-agent", "review.": "customer-service", "order.": "ota-operations",
-      "inventory.": "inventory-procurement", "night.": "night-shift", "content.": "content-marketing",
-    };
-    const uncovered = new Set<string>();
-    for (const a of actions.rows) {
-      const prefix = Object.keys(DOMAIN_PRESET).find((p) => a.action.startsWith(p));
-      if (prefix && !owned.has(DOMAIN_PRESET[prefix]!)) uncovered.add(DOMAIN_PRESET[prefix]!);
-    }
     // 过载：产出 > 均值 2 倍且 > 20
     const perAgent = await c.query<{ who: string; n: string }>(
       `SELECT payload->'who'->>'id' AS who, count(*)::text AS n FROM biz_events
@@ -112,6 +130,20 @@ export async function scanOrgHealth(app: pg.Pool, scope: Scope): Promise<OrgHeal
        GROUP BY 1 ORDER BY 2 DESC`,
       [scope.workspaceId],
     ).catch(() => ({ rows: [] as Array<{ who: string; n: string }> }));
+    await c.query("COMMIT");
+
+    const declared = domainOwners.rows.flatMap((row) => coverageDeclarations(row.meta));
+    const readyPrefixes = new Set(
+      domainOwners.rows
+        .filter((row) => row.status === "ready")
+        .flatMap((row) => coverageDeclarations(row.meta).map((item) => item.eventPrefix)),
+    );
+    const uncovered = new Set<string>();
+    for (const declaration of declared) {
+      const hasActivity = actions.rows.some((row) =>
+        typeof row.action === "string" && row.action.startsWith(declaration.eventPrefix));
+      if (hasActivity && !readyPrefixes.has(declaration.eventPrefix)) uncovered.add(declaration.label);
+    }
     const counts = perAgent.rows.map((r) => Number(r.n));
     const avg = counts.length ? counts.reduce((s, x) => s + x, 0) / counts.length : 0;
     const overworked = perAgent.rows
@@ -140,23 +172,23 @@ export function proposeHiring(h: OrgHealth): HiringProposal | null {
   if (h.uncovered.length > 0) {
     const role = h.uncovered[0]!;
     return {
-      reason: `业务域「${role}」近 7 天有经营活动但无专职数字员工（coverage 缺口）`,
+      reason: `业务域「${role}」近 7 天有经营活动但无专职数字员工（岗位覆盖缺口）`,
       role,
       jd: { duty: `负责 ${role} 域全流程运营`, skills: [role], expected: "该域事件有人承接、异常有人处置" },
     };
   }
   if (h.backlog >= 10) {
     return {
-      reason: `L2 队列积压 ${h.backlog} 件（≥10），裁决产能不足`,
-      role: "operations-associate",
-      jd: { duty: "分担常规裁决与巡检", skills: ["inspection"], expected: "积压清零且常态 <5" },
+      reason: `二级审批队列积压 ${h.backlog} 件（不少于 10 件），裁决产能不足`,
+      role: "运营协作员工",
+      jd: { duty: "分担常规裁决与巡检", skills: ["审批复核", "日常巡检"], expected: "积压清零且日常少于 5 件" },
     };
   }
   if (h.overworked.length > 0) {
     return {
-      reason: `员工 ${h.overworked[0]!.agentId} 产出 ${h.overworked[0]!.outputs} 件（超均值 2 倍），单点过载`,
-      role: `${h.overworked[0]!.agentId}-assistant`,
-      jd: { duty: "分担高频动作", skills: ["same-domain"], expected: "主员工负载降至均值 1.5 倍内" },
+      reason: `一名数字员工产出 ${h.overworked[0]!.outputs} 件（超过均值 2 倍），存在单点过载`,
+      role: "业务协作员工",
+      jd: { duty: "分担同业务域的高频动作", skills: ["同域协作"], expected: "主员工负载降至均值 1.5 倍内" },
     };
   }
   return null;

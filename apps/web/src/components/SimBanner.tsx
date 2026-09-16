@@ -8,12 +8,21 @@
  */
 import { useEffect, useState } from "react";
 import { ensureDemoLogin, trpc } from "../lib/trpc";
+import { Icon } from "@workloom/ui";
 
 export interface OnboardingStatus {
   dataMode: "simulated" | "real";
+  persistedDataMode?: "simulated" | "real";
+  formalActivationRecorded?: boolean;
   llm: { provider: string; model: string; baseUrl: string; real: boolean };
   workspace: { name: string; events: number; members: number; agents: number; memories: number };
+  business?: { name: string; industry: string; note: string; configuredAt: string; source: string } | null;
   bundle?: { id: string | null; isExample: boolean };
+  activationGate?: {
+    canActivate: boolean;
+    blockers: string[];
+    checks: Array<{ key: string; label: string; ok: boolean; detail: string }>;
+  };
 }
 
 export function SimBanner() {
@@ -40,9 +49,9 @@ export function SimBanner() {
   // V4 §2：示例版银带（深空银辉语义——不是警告，是身份说明；与黄色模拟态警示分色）
   if (st.bundle?.isExample) {
     return (
-      <div className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-bg800/90 px-4 py-1.5 text-[12px] text-ink2 backdrop-blur">
-        <span aria-hidden className="text-gold">◈</span>
-        <span className="min-w-0 flex-1">
+      <div className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-bg800/90 px-4 py-1.5 text-body text-ink2 backdrop-blur">
+        <Icon name="star" size={15} className="text-gold" />
+        <span className="min-w-0 flex-1 break-words">
           当前运行：<b className="text-ink">行业示例版</b>（{st.workspace.name}）——这是基座的示例装配，数据与团队可真实操作；
           也可一键清空后按引导定制您的专属行业版。
         </span>
@@ -59,14 +68,17 @@ export function SimBanner() {
   const mockLlm = !st.llm.real;
   if (!simData && !mockLlm) return null;
   return (
-    <div className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-500/50 bg-amber-100/80 px-4 py-2 text-[12px] text-amber-800 backdrop-blur">
-      <span aria-hidden>⚠️</span>
-      <span className="min-w-0 flex-1">
+    <div className="relative z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-500/50 bg-amber-100/80 px-4 py-2 text-body text-amber-800 backdrop-blur">
+      <Icon name="warning" size={16} />
+      <span className="min-w-0 flex-1 break-words">
+        {st.persistedDataMode === "real" && (!st.formalActivationRecorded || (st.activationGate && !st.activationGate.canActivate)) && (
+          <>原“正式”标记缺少当前服务端门禁凭据或已不满足门禁，已按<b>模拟运行态</b>展示。</>
+        )}
         {simData && mockLlm && (
-          <>当前为<b>全模拟运行态</b>：经营数据是演示种子数据，应答由内置确定性模型生成。</>
+          <> 当前为<b>全模拟运行态</b>：经营数据尚未完成正式门禁，应答由内置确定性模型生成。</>
         )}
         {simData && !mockLlm && (
-          <>经营数据仍为<b>演示种子数据</b>（大模型已接真实）。</>
+          <> 经营数据或装配仍未通过正式门禁（大模型已接真实）。</>
         )}
         {!simData && mockLlm && (
           <>大模型仍为<b>内置确定性应答</b>（数据已切真实模式）。</>

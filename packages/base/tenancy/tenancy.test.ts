@@ -1,6 +1,9 @@
 /**
  * B5 测试：版本能力矩阵（F7.2 口径）+ 越版守卫（H-10）+ JWT 往返 + 成员读服务（PG 集成 H-9）
  */
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   getCapabilities,
@@ -9,7 +12,7 @@ import {
   PlanForbidden,
   requireCapability,
 } from "./capabilities.js";
-import { signDemoToken, verifyToken, type Identity } from "./auth.js";
+import { sessionTokenIssuer, signDemoToken, verifySessionToken, verifyToken, type Identity } from "./auth.js";
 
 describe("版本能力矩阵（F7.2 唯一口径）", () => {
   it("社区版：无 Quest preset / 无夜班 / 无巡检，事件保留 7 天", () => {
@@ -47,7 +50,8 @@ describe("越版守卫（H-10：403 + 升级提示）", () => {
       const err = e as PlanForbidden;
       expect(err).toBeInstanceOf(PlanForbidden);
       expect(err.statusCode).toBe(403);
-      expect(err.upgradeHint).toContain("pro");
+      expect(err.upgradeHint).toContain("专业版");
+      expect(err.message).not.toMatch(/community|quest|F7\.2/i);
     }
   });
 
@@ -56,7 +60,7 @@ describe("越版守卫（H-10：403 + 升级提示）", () => {
       requireCapability("teams", "localModel");
       expect.unreachable();
     } catch (e) {
-      expect((e as PlanForbidden).upgradeHint).toContain("vpc");
+      expect((e as PlanForbidden).upgradeHint).toContain("私有部署版");
     }
   });
 
@@ -66,6 +70,24 @@ describe("越版守卫（H-10：403 + 升级提示）", () => {
 });
 
 describe("演示身份 JWT", () => {
+  it("未显式覆盖时从受保护产品清单派生签发方", () => {
+    const previous = process.env.JWT_ISSUER;
+    try {
+      delete process.env.JWT_ISSUER;
+      const repositoryRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      }).trim();
+      const product = JSON.parse(readFileSync(join(repositoryRoot, "product.manifest.json"), "utf8")) as {
+        productId: string;
+      };
+      expect(sessionTokenIssuer()).toBe(product.productId);
+    } finally {
+      if (previous === undefined) delete process.env.JWT_ISSUER;
+      else process.env.JWT_ISSUER = previous;
+    }
+  });
+
   const identity: Identity = {
     memberId: "mem-001-id", memberNo: "MEM-001", name: "王店长", role: "owner",
     tenantId: "tenant-demo", workspaceId: "ws-yunqi", plan: "pro",
@@ -82,6 +104,35 @@ describe("演示身份 JWT", () => {
     const tampered = token.slice(0, -4) + "AAAA";
     expect(await verifyToken(tampered)).toBeNull();
     expect(await verifyToken("not-a-jwt")).toBeNull();
+  });
+
+  it("伙伴令牌不能混入成员保护过程", async () => {
+    const { signPartnerToken } = await import("../accounts/tokens.js");
+    const token = await signPartnerToken({
+      kind: "partner",
+      partnerId: "ptr-1",
+      contactAccountId: "acc-1",
+      name: "交付伙伴",
+      grants: [{ grantId: "grt-1", tenantId: "tenant-demo", workspaces: ["ws-yunqi"], capabilities: ["report.view"] }],
+    });
+    expect(await verifyToken(token)).toBeNull();
+    expect(await verifySessionToken(token)).toMatchObject({ kind: "partner", partnerId: "ptr-1" });
+  });
+
+  it("行业部署可配置独立签发方，其他签发方的令牌失败关闭", async () => {
+    const previous = process.env.JWT_ISSUER;
+    try {
+      process.env.JWT_ISSUER = "workloom-industry-test";
+      const token = await signDemoToken(identity);
+      expect(await verifyToken(token)).toMatchObject(identity);
+      process.env.JWT_ISSUER = "workloom-other-product";
+      expect(await verifyToken(token)).toBeNull();
+      process.env.JWT_ISSUER = "INVALID ISSUER";
+      await expect(signDemoToken(identity)).rejects.toThrow("JWT_ISSUER");
+    } finally {
+      if (previous === undefined) delete process.env.JWT_ISSUER;
+      else process.env.JWT_ISSUER = previous;
+    }
   });
 });
 

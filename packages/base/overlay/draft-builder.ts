@@ -57,14 +57,16 @@ export const L1IntentSchema = z.discriminatedUnion("kind", [
   /* ---- P0-2 扩编（六种 → 九种）：文档/对话录入高频产物 ---- */
   z.object({
     kind: z.literal("service-item"),
-    /** 服务目录条目：例「红糖姜茶，免费，机器人送」 */
+    /** 通用服务目录条目；行业扩展字段统一收在 attributes 中。 */
     name: z.string().min(1).max(100),
     /** 价格（0=免费）；缺省=未定价（意图卡上高亮待客户确认） */
     price: z.number().min(0).max(1_000_000).optional(),
     unit: z.string().max(20).optional(),
     category: z.string().max(50).optional(),
-    /** 机器人/无人配送可达（酒店等行业语义；其他行业忽略） */
-    robot: z.boolean().optional(),
+    attributes: z.record(
+      z.string().min(1).max(50),
+      z.union([z.string().max(500), z.number(), z.boolean(), z.null()]),
+    ).refine((value) => Object.keys(value).length <= 30, "扩展属性最多 30 项").optional(),
     note: z.string().max(500).optional(),
   }),
   z.object({
@@ -117,7 +119,7 @@ export function intentToItems(intent: L1Intent): OverlayItem[] {
         value: {
           q: intent.name, a: intent.note?.trim() || "服务目录条目（L1 配置录入）",
           price: intent.price ?? null, unit: intent.unit ?? null,
-          category: intent.category ?? null, robot: intent.robot ?? null,
+          category: intent.category ?? null, attributes: intent.attributes ?? {},
           source: "l1-intake",
         },
       }];

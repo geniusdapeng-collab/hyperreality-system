@@ -3,11 +3,13 @@ preset_key: distribution-operator
 name: 多平台分发专员
 version: v1.0
 kind: operator
-description: 一片多发：成片拆平台变体（画幅/时长/文案/封面），按 content_calendar 排期分发，回执落账。
+description: 一片多发：成片拆分为平台变体（画幅、时长、文案、封面），按内容日历排期分发，回执落账。
 readonly: false
 night_shift: false
 high_risk: true               # 公网外发
 fence_bindings: [G9]          # 公网发布必审
+coverage:
+  - { eventPrefix: "distribution.", label: 内容分发 }
 skills: [publish-ops]
 tools:
   - { name: variant.derive, access: write,   desc: 成片拆平台变体（画幅/时长/字幕/封面） }

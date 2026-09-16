@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G2, G6]   # 主题确认+提示词审核
+coverage:
+  - { eventPrefix: "script.", label: 剧本创作 }
 skills: []
 tools:
   - { name: script.generate, access: write,  desc: 生成剧本蓝图 }

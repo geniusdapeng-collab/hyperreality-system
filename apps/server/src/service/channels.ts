@@ -2,11 +2,9 @@
  * service · C 端通道（接口对齐 packages/base/service-channels 签名）
  *  - resolveCUser：三渠道 openid → c_user（幂等 upsert）
  *  - issueCToken / verifyCToken：C 端会话 JWT（HS256，密钥 env SERVICE_C_SECRET，缺省开发占位）
- *  - pushMessage：统一推送箱（落 c_notifications；driver=mock 无真实通道时响应带 mock:true，与 LLM/IM 同纪律）
- *  - verifyIdentity：手机号验证占位（演示口径：6 位数字码即过，落 phone_hash 不落明文；真实短信网关进停车场）
+ *  - pushMessage：统一推送箱（落 c_notifications；mock 只标演示待投递，不伪装真实送达）
  * 全部读写经 svcQuery/serviceTx（RLS 事务上下文，L7.1）。
  */
-import { createHash } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { ensureServiceSchema } from "./store.js";
 import { serviceTx, svcQuery } from "./events.js";
@@ -32,9 +30,21 @@ export interface CTokenPayload {
   scope: "c-user";
 }
 
+/**
+ * 正式 H5 入口由租户的受信身份网关签发。workspaceKey 与自然人 subject
+ * 都来自签名声明，客户端提交的同名字段只用于一致性校验，不能决定租户或身份。
+ */
+export interface H5EntryPayload {
+  workspaceKey: string;
+  subject: string;
+  appId: string;
+  scope: "c-entry";
+}
+
 const DEV_C_SECRET = "workloom-c-dev-secret-change-me";
 
 let secretWarned = false;
+let h5SecretWarned = false;
 
 /** C 端 JWT 密钥：生产缺失即抛错（S3）；<32 字符启动告警一次 */
 export function cSecret(): string {
@@ -50,6 +60,20 @@ export function cSecret(): string {
     console.warn("[service-c] SERVICE_C_SECRET 长度不足 32 字符，请更换为高强度随机密钥");
   }
   return s;
+}
+
+/** 正式 H5 入口使用独立密钥；不与 C 会话 JWT 共钥，便于单独轮换和吊销。 */
+export function h5EntrySecret(): string | null {
+  const secret = process.env.SERVICE_C_H5_ENTRY_SECRET?.trim();
+  if (!secret) return null;
+  if (secret.length < 32) {
+    if (process.env.NODE_ENV === "production") return null;
+    if (!h5SecretWarned) {
+      h5SecretWarned = true;
+      console.warn("[service-c] SERVICE_C_H5_ENTRY_SECRET 长度不足 32 字符，仅可用于本地验证");
+    }
+  }
+  return secret;
 }
 
 function key(secret: string): Uint8Array {
@@ -109,7 +133,7 @@ export async function issueCToken(input: {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setIssuer("workloom-c")
-    .setExpirationTime("7d")
+    .setExpirationTime("12h")
     .sign(key(input.secret));
 }
 
@@ -128,33 +152,112 @@ export async function verifyCToken(token: string, secret: string): Promise<CToke
   }
 }
 
-/** 统一推送箱：落 c_notifications 供 C 端拉取；无真实通道驱动 → driver=mock + mock:true */
+/**
+ * 供受信身份网关/部署工具签发短期 H5 入口凭据。生产页面本身不得暴露此能力或密钥。
+ */
+export async function issueH5EntryToken(input: {
+  workspaceKey: string;
+  subject: string;
+  appId: string;
+  secret: string;
+  expiresIn?: string | number;
+}): Promise<string> {
+  if (!input.workspaceKey.trim() || !input.subject.trim() || !input.appId.trim()) {
+    throw new Error("H5 入口签名缺少工作区、身份主体或应用标识");
+  }
+  return new SignJWT({
+    workspaceKey: input.workspaceKey.trim(),
+    subject: input.subject.trim(),
+    appId: input.appId.trim(),
+    scope: "c-entry",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setIssuer("workloom-c-entry")
+    .setAudience("workloom-c-h5")
+    .setExpirationTime(input.expiresIn ?? "15m")
+    .sign(key(input.secret));
+}
+
+export async function verifyH5EntryToken(token: string, secret: string): Promise<H5EntryPayload | null> {
+  try {
+    const { payload } = await jwtVerify(token, key(secret), {
+      issuer: "workloom-c-entry",
+      audience: "workloom-c-h5",
+    });
+    if (payload.scope !== "c-entry") return null;
+    const workspaceKey = typeof payload.workspaceKey === "string" ? payload.workspaceKey.trim() : "";
+    const subject = typeof payload.subject === "string" ? payload.subject.trim() : "";
+    const appId = typeof payload.appId === "string" ? payload.appId.trim() : "";
+    if (!workspaceKey || !subject || !appId || workspaceKey.length > 160 || subject.length > 240 || appId.length > 120) {
+      return null;
+    }
+    return { workspaceKey, subject, appId, scope: "c-entry" };
+  } catch {
+    return null;
+  }
+}
+
+export interface PushReceipt {
+  delivered: boolean;
+  mock: boolean;
+  state: "demo" | "pending" | "sent";
+  notificationId: string;
+}
+
+/** 统一推送箱：无真实通道驱动时落 pending，并明确返回 demo；不得标记 delivered。 */
 export async function pushMessage(input: {
   workspaceId: string; cUserId: string; kind: string; payload: Record<string, unknown>;
-}): Promise<{ delivered: boolean; mock?: boolean }> {
+}): Promise<PushReceipt> {
   await ensureServiceSchema();
   const user = await getCUser(input.workspaceId, input.cUserId);
-  await svcQuery(
+  const rows = await svcQuery<{ id: number }>(
     input.workspaceId,
     `INSERT INTO c_notifications (workspace_id, c_user_id, channel, kind, payload, driver, status)
-     VALUES ($1,$2,$3,$4,$5,'mock','delivered') RETURNING id`,
+     VALUES ($1,$2,$3,$4,$5,'mock','pending') RETURNING id`,
     [input.workspaceId, input.cUserId, user?.channel ?? "h5", input.kind, JSON.stringify(input.payload)],
   );
-  return { delivered: true, mock: true };
+  return { delivered: false, mock: true, state: "demo", notificationId: String(rows[0]?.id ?? "") };
 }
 
 export async function listNotifications(input: {
   workspaceId: string; cUserId: string; limit?: number;
-}): Promise<Array<{ id: string; kind: string; payload: Record<string, unknown>; createdAt: string; read: boolean }>> {
+}): Promise<Array<{
+  id: string;
+  kind: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  read: boolean;
+  deliveryState: "demo" | "pending" | "failed" | "sent";
+}>> {
   await ensureServiceSchema();
-  const rows = await svcQuery<{ id: number; kind: string; payload: Record<string, unknown>; created_at: string }>(
+  const rows = await svcQuery<{
+    id: number; kind: string; payload: Record<string, unknown>; driver: string; status: string; created_at: string;
+  }>(
     input.workspaceId,
-    `SELECT id, kind, payload, created_at FROM c_notifications
+    `SELECT id, kind, payload, driver, status, created_at FROM c_notifications
      WHERE workspace_id=$1 AND c_user_id=$2 ORDER BY id DESC LIMIT $3`,
     [input.workspaceId, input.cUserId, input.limit ?? 50],
   );
   // read 占位（H6 契约：底座表暂无已读列，C 端一律 false 未读样式）
-  return rows.map((x) => ({ id: String(x.id), kind: x.kind, payload: x.payload, createdAt: new Date(x.created_at).toISOString(), read: false }));
+  return rows.map((x) => ({
+    id: String(x.id),
+    kind: x.kind,
+    payload: x.payload,
+    createdAt: new Date(x.created_at).toISOString(),
+    read: false,
+    deliveryState: notificationDeliveryState(x.driver, x.status),
+  }));
+}
+
+export function notificationDeliveryState(
+  driver: string,
+  status: string,
+): "demo" | "pending" | "failed" | "sent" {
+  if (status === "failed") return "failed";
+  if (driver === "mock") return "demo";
+  if (status === "delivered") return "sent";
+  return "pending";
 }
 
 /**
@@ -186,19 +289,13 @@ export async function exchangeCodeForOpenid(
   return { ok: false, reason: `channel ${channel} 不支持 code 交换` };
 }
 
-/** 身份验证占位（演示：6 位数字码即通过；只落 phone_hash 不落明文，L6.2 同纪律） */
+/**
+ * @deprecated 旧占位能力不再接受任意六位码。身份绑定请走网关 /identity/*，
+ * 由渠道验证器确认后再绑定会员；保留此签名只为兼容调用方并始终 fail closed。
+ */
 export async function verifyIdentity(input: {
   workspaceId: string; cUserId: string; phone: string; code?: string;
-}): Promise<{ verified: boolean }> {
-  await ensureServiceSchema();
-  const ok = !!input.code && /^\d{6}$/.test(input.code);
-  if (ok) {
-    const hash = createHash("sha256").update(input.phone).digest("hex");
-    await svcQuery(
-      input.workspaceId,
-      `UPDATE c_users SET phone_hash=$3 WHERE workspace_id=$1 AND id=$2 RETURNING id`,
-      [input.workspaceId, input.cUserId, hash],
-    );
-  }
-  return { verified: ok };
+}): Promise<{ verified: false; reason: string }> {
+  void input;
+  return { verified: false, reason: "请使用已配置的身份验证渠道" };
 }

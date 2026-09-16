@@ -31,14 +31,14 @@ export function KpiGauge({
         className="pointer-events-none absolute inset-0"
         style={{ background: "repeating-linear-gradient(0deg, transparent 0 3px, rgba(77,150,255,.03) 3px 4px)" }}
       />
-      <div className="relative text-micro tracking-[.12em] text-ink2">{name}</div>
+      <div className="relative text-body tracking-[.12em] text-ink2">{name}</div>
       <div className="relative my-1 font-orb text-[22px] font-bold text-ink">{value}</div>
       {delta !== undefined && (
-        <div className={`relative text-caption font-bold ${delta >= 0 ? "text-go" : "text-alert"}`}>
-          {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)}%
+        <div className={`relative text-body font-bold ${delta >= 0 ? "text-go" : "text-alert"}`}>
+          {delta >= 0 ? "上升" : "下降"} {Math.abs(delta)}%
         </div>
       )}
-      <div className="relative mt-1 text-micro text-ink3">
+      <div className="relative mt-1 text-body text-ink3">
         {stale ? `数据延迟 · 最后同步 ${asOf}` : `截至 ${asOf}`}
       </div>
     </div>

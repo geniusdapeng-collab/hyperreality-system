@@ -201,13 +201,37 @@ jobs:
             CHECKS="$CHECKS, test script absent"
           fi
 
+          MISSING_CLIENTS=()
+          for CLIENT_PACKAGE in apps/web/package.json apps/webb/package.json apps/webc/package.json; do
+            [ -f "$CLIENT_PACKAGE" ] || MISSING_CLIENTS+=("$CLIENT_PACKAGE")
+          done
+          if [ "${#MISSING_CLIENTS[@]}" -gt 0 ]; then
+            UI_STATUS="第一阶段结构迁移未完成（缺少：${MISSING_CLIENTS[*]}）；不得认定三端合规"
+            echo "::warning title=三端结构迁移未完成::$UI_STATUS"
+          elif [ ! -f product.manifest.json ]; then
+            UI_STATUS="第一阶段产品身份迁移未完成（缺少 product.manifest.json）；不得继承基座 appId/productName/端口/发布身份"
+            echo "::warning title=产品身份迁移未完成::$UI_STATUS"
+          elif [ ! -f .workloom-ui.json ] || [ ! -f .workloom-client-foundation.json ]; then
+            UI_STATUS="第二阶段稳定 UI/客户端基座升级未完成；三端尚未同时锁定组件与应用壳版本"
+            echo "::warning title=稳定 UI 升级未完成::$UI_STATUS"
+          else
+            test -f scripts/verify-ui-consumer.mjs || { echo "缺少共享 UI 消费门禁脚本"; exit 1; }
+            test -f scripts/verify-client-foundation-consumer.mjs || { echo "缺少三端客户端基座消费门禁脚本"; exit 1; }
+            node scripts/verify-ui-consumer.mjs --repo .
+            node scripts/verify-client-foundation-consumer.mjs --repo .
+            UI_STATUS="共享 UI 与三端客户端基座消费门禁已通过"
+            CHECKS="$CHECKS, scripts/verify-ui-consumer.mjs, scripts/verify-client-foundation-consumer.mjs"
+          fi
+
           REPO_ROOT="$(git rev-parse --show-toplevel)"
           if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
             echo "验证命令改变了同步提交后的工作树；拒绝推送未审计内容"
             exit 1
           fi
           echo "checks=$CHECKS" >> "$GITHUB_OUTPUT"
+          echo "ui-status=$UI_STATUS" >> "$GITHUB_OUTPUT"
           echo "验证通过：$CHECKS"
+          echo "三端迁移状态：$UI_STATUS"
 
       - name: 推送同仓分支并创建 PR
         if: steps.sync.outputs.result == 'changed'
@@ -218,6 +242,7 @@ jobs:
           BASE_SHORT: ${{ steps.sync.outputs.base-short }}
           SYNC_MODE: ${{ steps.sync.outputs.sync-mode }}
           VERIFICATION: ${{ steps.verify.outputs.checks }}
+          UI_STATUS: ${{ steps.verify.outputs.ui-status }}
           BASH_ENV: /dev/null
           ENV: /dev/null
         run: |
@@ -265,4 +290,4 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title "$TITLE" \
-            --body "由 base-sync heartbeat 生成。同步范围：${SYNC_MODE}；基座内容固定到提交 ${BASE_SHORT}；同步前 staged diff 与提交后完整 diff、认知文档和 AGENTS.md 均已通过严格密钥扫描。验证：${VERIFICATION}。请人工评审后合并。"
+            --body "由 base-sync heartbeat 生成。同步范围：${SYNC_MODE}；基座内容固定到提交 ${BASE_SHORT}；同步前 staged diff 与提交后完整 diff、认知文档和 AGENTS.md 均已通过严格密钥扫描。验证：${VERIFICATION}。三端迁移状态：${UI_STATUS}。缺端或未锁定稳定 UI 制品时，本 PR 不代表三端合规；须按两阶段迁移完成后再验收。请人工评审后合并。"

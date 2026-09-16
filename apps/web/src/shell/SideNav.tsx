@@ -1,107 +1,379 @@
-/**
- * SideNav · 客户端左侧常驻导航（WorkBuddy/Codex 桌面端范式）
- *
- * 设计口径：
- *  - 全局常驻（App 级挂载，所有产品页面可见——此前部分页面无导航入口的问题根治）；
- *  - 一级=分组（经营/行业/治理/系统），二级=页面项（图标+文字）；
- *  - 各行业版页面清单不同（各仓 NAV_ENTRIES），分级结构恒定；
- *  - 当前页：金色左指示条 + 高亮底；hover 即反馈；项多时自身滚动。
- */
-import { useLocation } from "react-router";
-import { NAV_ENTRIES, type NavEntry } from "./NavMenu";
+/** WorkLoom PC 左侧主导航：共享基座壳承载全部页面入口，本地仅编排状态与路由。 */
+import {
+  Icon,
+  LayoutControls,
+  NAVIGATION_GROUP_LABELS,
+  SideNavigation as SharedSideNavigation,
+  isNavigationActive,
+  useManagedSurface,
+  clientChineseText,
+  type NavigationEntry,
+  type TextScale,
+} from "@workloom/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { sharedLayoutPixels } from "../lib/useAskRail";
+import { useNavigationAccess } from "./NavigationAccess";
 
-const GROUP_ORDER = ["经营", "行业", "治理", "系统"];
+type NavMode = "expanded" | "collapsed" | "hidden";
+const STORAGE_KEY = "workloom.pc.sidenav.mode";
+const TEXT_SCALE_KEY = "workloom.pc.text-scale";
+const FAVORITES_KEY = "workloom.pc.navigation.favorites";
+const RECENT_KEY = "workloom.pc.navigation.recent";
+const MOBILE_QUERY = "(max-width: 820px)";
 
-/** 页面图标（内联 SVG——任何渲染环境一致，不依赖系统 emoji 字体） */
-function Icon({ d, active }: { d: string; active?: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-      style={{ opacity: active ? 1 : 0.75, flexShrink: 0 }} aria-hidden>
-      <path d={d} />
-    </svg>
-  );
+function initialMode(): NavMode {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved === "collapsed" || saved === "hidden" ? saved : "expanded";
+  } catch {
+    return "expanded";
+  }
 }
-const ICON_PATHS: Record<string, string> = {
-  "/": "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6",                                    // 经营主页·楼宇
-  "/p1": "M4 20V10M10 20V4M16 20v-8M22 20H2",                                       // 工作台·柱状
-  "/p3": "M7 2h10v20H7zM10 18h4",                                                   // 掌上日报·手机
-  "/p22": "M4 18v-6a8 8 0 0116 0v6M2 18h20v3H2z",                                   // 服务前台·铃
-  "/p25": "M12 8.5A3.5 3.5 0 100 15.5 3.5 3.5 0 0012 8.5zM21 13.4v-2.8l-2.3-.5a7 7 0 00-.6-1.5l1.3-2-2-2-2 1.3a7 7 0 00-1.5-.6L13.5 3h-2.8l-.5 2.3a7 7 0 00-1.5.6l-2-1.3-2 2 1.3 2a7 7 0 00-.6 1.5l-2.3.5v2.8l2.3.5c.14.53.34 1.03.6 1.5l-1.3 2 2 2 2-1.3c.47.26.97.46 1.5.6l.5 2.3h2.8l.5-2.3a7 7 0 001.5-.6l2 1.3 2-2-1.3-2c.26-.47.46-.97.6-1.5l2.3-.5z", // 开发场域·齿轮
-  "/p4": "M20 6L9 17l-5-5",                                                         // 审批中心·对勾
-  "/p21": "M3 18l2-10 5 4 2-8 2 8 5-4 2 10zM5 21h14",                               // 董事长视图·冠
-  "/p9": "M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z",                                // 夜班中心·月
-  "/p24": "M12 15a5 5 0 100-10 5 5 0 000 10zM8.5 13.5L7 22l5-3 5 3-1.5-8.5",            // 考试院·徽章
-  "/p5": "M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z",                      // 规则权限·盾
-  "/p6": "M10 4h4v4h4v4h-4v4h-4v-4H6V8h4zM4 20h16",                                 // 技能中心·拼
-  "/p23": "M12 3a7 7 0 017 7c0 3-2 4-2 6H7c0-2-2-3-2-6a7 7 0 017-7zM9 20h6",        // 组织记忆·脑
-  "/p7": "M4 20V8l8-5 8 5v12M4 20h16M12 20v-7",                                     // 装配中心·筑
-  "/p8": "M16 19c0-2.8-1.8-5-4-5s-4 2.2-4 5M12 11a3 3 0 100-6 3 3 0 000 6zM19 19c0-2-1-3.6-2.5-4.2M5 19c0-2 1-3.6 2.5-4.2", // 团队·人
-  "/p11": "M3 17l6-6 4 4 8-8M15 7h6v6",                                             // 价格健康·趋势
-  "/p12": "M12 22a10 10 0 100-20 10 10 0 000 20zM12 16a4 4 0 100-8 4 4 0 000 8z",   // 经营目标·靶
-  "/p13": "M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8",                          // 订单·包裹
-  "/p14": "M5 12a10 10 0 0114 0M8.5 15.5a5 5 0 017 0M12 19h.01",                     // 渠道·信号
-  "/p15": "M12 2l3 6.5 7 .8-5.2 4.7 1.5 7-6.3-3.8L5.7 21l1.5-7L2 9.3l7-.8z",       // 口碑·星
-  "/p16": "M4 5a8 8 0 018 8M4 5v0M6 3c6 0 12 5 12 12M8 21a3 3 0 106 0 3 3 0 00-6 0z", // 语音前台·波
-  "/p17": "M3 18v-6a3 3 0 013-3h12a3 3 0 013 3v6M3 18h18M6 9V6a2 2 0 012-2h8a2 2 0 012 2v3", // 前厅客房·床
-  "/p18": "M3 21h18M6 21V5h12v16M10 9h1M10 13h1M13 9h1M13 13h1M10 17h4",             // 多店·楼群
-  "/p19": "M3 3v18h18M7 15l4-6 3 3 5-8",                                            // 收益·分析
-  "/p20": "M4 4h6l2 3h8v13H4zM4 4v16",                                              // 档案·夹
-};
 
-export function SideNav({ entries = NAV_ENTRIES }: { entries?: NavEntry[] }) {
+function rememberMode(mode: NavMode) {
+  try { localStorage.setItem(STORAGE_KEY, mode); } catch { /* 本机偏好不可写时仍可使用 */ }
+}
+
+function initialTextScale(): TextScale {
+  try {
+    const value = Number(localStorage.getItem(TEXT_SCALE_KEY));
+    return value === 125 || value === 150 || value === 175 || value === 200 ? value : 100;
+  } catch {
+    return 100;
+  }
+}
+
+function emitWidth(width: number) {
+  (window as unknown as { __sideNavW: number }).__sideNavW = width;
+  document.documentElement.style.setProperty("--workloom-side-nav-width", `${width}px`);
+  window.dispatchEvent(new CustomEvent("sidenav-width", { detail: { width } }));
+}
+
+function readIdList(key: string): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeIdList(key: string, value: readonly string[]) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* 当前会话仍可使用 */ }
+}
+
+export function SideNav({ entries: providedEntries }: { entries?: readonly NavigationEntry[] }) {
   const { pathname } = useLocation();
-  const groups = GROUP_ORDER.map((g) => [g, entries.filter((e) => e.group === g)] as const)
-    .filter(([, list]) => list.length > 0);
+  const navigate = useNavigate();
+  const { entries: permittedEntries, identityKey } = useNavigationAccess();
+  const entries = providedEntries ?? permittedEntries;
+  const [mode, setMode] = useState<NavMode>(initialMode);
+  const [mobile, setMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  const [textScale, setTextScale] = useState<TextScale>(initialTextScale);
+  const [fullscreen, setFullscreen] = useState(Boolean(document.fullscreenElement));
+  const [query, setQuery] = useState("");
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  const mobileTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobileSearchRef = useRef<HTMLInputElement | null>(null);
+  const favoriteStorageKey = `${FAVORITES_KEY}:${identityKey}`;
+  const recentStorageKey = `${RECENT_KEY}:${identityKey}`;
+  const mobileSurface = useManagedSurface<HTMLDivElement>({
+    open: mobile && mobileOpen,
+    kind: "navigation-drawer",
+    onDismiss: () => setMobileOpen(false),
+    modal: true,
+    initialFocusRef: mobileSearchRef,
+    returnFocusRef: mobileTriggerRef,
+  });
+
+  const updateMode = (next: NavMode) => {
+    setMode(next);
+    rememberMode(next);
+  };
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_QUERY);
+    const onChange = () => {
+      setMobile(media.matches);
+      if (!media.matches) setMobileOpen(false);
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    setFavoriteIds(readIdList(favoriteStorageKey));
+    setRecentIds(readIdList(recentStorageKey));
+  }, [favoriteStorageKey, recentStorageKey]);
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = textScale === 100 ? "" : `${textScale}%`;
+    try { localStorage.setItem(TEXT_SCALE_KEY, String(textScale)); } catch { /* 当前会话仍可放大 */ }
+  }, [textScale]);
+
+  useEffect(() => {
+    const sync = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  useEffect(() => {
+    const width = mobile || mode === "hidden"
+      ? 0
+      : sharedLayoutPixels(mode === "expanded" ? "--wl-sidebar-expanded" : "--wl-sidebar-compact");
+    emitWidth(width);
+  }, [mobile, mode]);
+
+  useEffect(() => () => emitWidth(0), []);
+
+  useEffect(() => {
+    const reset = () => {
+      setMode("expanded");
+      rememberMode("expanded");
+      setMobileOpen(false);
+      setTextScale(100);
+      setLayoutOpen(false);
+      setQuery("");
+      document.documentElement.style.fontSize = "";
+      try { localStorage.removeItem(TEXT_SCALE_KEY); } catch { /* 当前会话已恢复 */ }
+    };
+    window.addEventListener("workloom:reset-layout", reset);
+    return () => window.removeEventListener("workloom:reset-layout", reset);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.code === "Digit0") {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent("workloom:reset-layout"));
+        return;
+      }
+      if (event.key === "F11") {
+        event.preventDefault();
+        if (document.fullscreenElement) void document.exitFullscreen();
+        else void document.documentElement.requestFullscreen();
+        return;
+      }
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "b") return;
+      event.preventDefault();
+      if (mobile) {
+        setMobileOpen((open) => !open);
+      } else if (event.shiftKey) {
+        updateMode(mode === "hidden" ? "expanded" : "hidden");
+      } else {
+        updateMode(mode === "collapsed" ? "expanded" : "collapsed");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobile, mode]);
+
+  const collapsed = !mobile && mode === "collapsed";
+  const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
+  const visibleEntries = useMemo(() => normalizedQuery
+    ? entries.filter((entry) => `${entry.title} ${NAVIGATION_GROUP_LABELS[entry.group]}`.toLocaleLowerCase("zh-CN").includes(normalizedQuery))
+    : entries, [entries, normalizedQuery]);
+  const favorites = useMemo(() => favoriteIds
+    .map((id) => entries.find((entry) => entry.capabilityId === id))
+    .filter((entry): entry is NavigationEntry => Boolean(entry)), [entries, favoriteIds]);
+  const recent = useMemo(() => recentIds
+    .map((id) => entries.find((entry) => entry.capabilityId === id))
+    .filter((entry): entry is NavigationEntry => entry !== undefined && !favoriteIds.includes(entry.capabilityId))
+    .slice(0, 5), [entries, favoriteIds, recentIds]);
+
+  const markRecent = (entry: NavigationEntry) => {
+    setRecentIds((current) => {
+      const next = [entry.capabilityId, ...current.filter((id) => id !== entry.capabilityId)].slice(0, 8);
+      writeIdList(recentStorageKey, next);
+      return next;
+    });
+  };
+  const toggleFavorite = (entry: NavigationEntry) => {
+    setFavoriteIds((current) => {
+      const next = current.includes(entry.capabilityId)
+        ? current.filter((id) => id !== entry.capabilityId)
+        : [...current, entry.capabilityId];
+      writeIdList(favoriteStorageKey, next);
+      return next;
+    });
+  };
+  const openEntry = (entry: NavigationEntry) => {
+    markRecent(entry);
+    navigate(entry.route);
+    if (mobile) setMobileOpen(false);
+  };
+
+  const showAllPanels = () => {
+    updateMode("expanded");
+    setMobileOpen(false);
+    window.dispatchEvent(new CustomEvent("workloom:assistant-visibility", { detail: "show" }));
+    window.dispatchEvent(new CustomEvent("workloom:loommate-visibility", { detail: "show" }));
+    window.dispatchEvent(new CustomEvent("workloom:workspace-panels", { detail: "show" }));
+  };
+  const focusLayout = () => {
+    updateMode("collapsed");
+    window.dispatchEvent(new CustomEvent("workloom:assistant-visibility", { detail: "hide" }));
+    window.dispatchEvent(new CustomEvent("workloom:loommate-visibility", { detail: "hide" }));
+    window.dispatchEvent(new CustomEvent("workloom:workspace-panels", { detail: "hide" }));
+  };
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen();
+  };
+
+  const renderShortcut = (entry: NavigationEntry) => {
+    const active = isNavigationActive(entry, pathname);
+    const title = clientChineseText(entry.title, "未命名页面");
+    return (
+      <button
+        key={entry.capabilityId}
+        type="button"
+        onClick={() => openEntry(entry)}
+        aria-current={active ? "page" : undefined}
+        className={`flex min-h-9 min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-body ${active ? "bg-card font-semibold text-gold" : "text-ink2 hover:bg-card/60 hover:text-ink"}`}
+      >
+        <Icon name={entry.icon} size={15} className="shrink-0" />
+        <span className="min-w-0 break-words">{title}</span>
+      </button>
+    );
+  };
+
+  if ((mobile && !mobileOpen) || (!mobile && mode === "hidden")) {
+    return (
+      <button
+        ref={mobile ? mobileTriggerRef : undefined}
+        type="button"
+        onClick={() => mobile ? setMobileOpen(true) : updateMode("expanded")}
+        className="fixed left-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-r-xl border border-l-0 border-gline bg-bg900/95 px-2 py-3 text-body font-semibold text-gold shadow-xl backdrop-blur-md"
+        style={{ zIndex: "var(--wl-z-nav)" }}
+        aria-label="展开主导航"
+        title="展开主导航"
+      >
+        <Icon name="menu" size={16} />
+        <span className="[writing-mode:vertical-rl]">主导航</span>
+      </button>
+    );
+  }
+
+  const nav = (
+    <SharedSideNavigation
+      entries={visibleEntries}
+      activeRoute={pathname}
+      onNavigate={openEntry}
+      collapsed={collapsed}
+      onCollapsedChange={mobile ? undefined : (next) => updateMode(next ? "collapsed" : "expanded")}
+      className={`${mobile ? "relative h-dvh shadow-2xl" : "sticky top-0 h-screen shrink-0"} bg-bg950/97 backdrop-blur-md`}
+      header={(
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="inline-block h-4 w-4 shrink-0 rotate-45 rounded gold-grad shadow-[0_0_14px_rgba(255,160,60,.6)]" />
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="bg-gradient-to-r from-gold to-gold2 bg-clip-text text-[14px] font-black tracking-wider text-transparent">WorkLoom</div>
+            <div className="break-words text-body text-ink3">企业数字员工即时协作</div>
+          </div>
+          {mobile && (
+            <button type="button" onClick={() => setMobileOpen(false)} className="min-h-9 min-w-9 rounded p-1 text-ink2 hover:bg-card" aria-label="关闭主导航" title="关闭主导航">
+              <Icon name="close" size={16} />
+            </button>
+          )}
+        </div>
+      )}
+      beforeGroups={(
+        <>
+          <label className="relative block min-w-0">
+            <span className="sr-only">搜索主导航</span>
+            <Icon name="search" size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink3" />
+            <input
+              ref={mobile ? mobileSearchRef : undefined}
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索页面"
+              className="min-h-9 w-full rounded-lg border border-line bg-bg900 py-2 pl-8 pr-2 text-body text-ink placeholder:text-ink3"
+            />
+          </label>
+          {!normalizedQuery && favorites.length > 0 && (
+            <section className="grid min-w-0 gap-1" aria-label="收藏页面">
+              <div className="flex items-center gap-1.5 px-2 text-body font-semibold text-ink3"><Icon name="star" size={13} />收藏</div>
+              {favorites.map(renderShortcut)}
+            </section>
+          )}
+          {!normalizedQuery && recent.length > 0 && (
+            <section className="grid min-w-0 gap-1" aria-label="最近使用页面">
+              <div className="flex items-center gap-1.5 px-2 text-body font-semibold text-ink3"><Icon name="history" size={13} />最近使用</div>
+              {recent.map(renderShortcut)}
+            </section>
+          )}
+          {normalizedQuery && visibleEntries.length === 0 && <p className="px-2 py-6 text-center text-body text-ink3">没有找到匹配页面</p>}
+        </>
+      )}
+      renderItemAction={(entry) => {
+        const favorite = favoriteIds.includes(entry.capabilityId);
+        const title = clientChineseText(entry.title, "未命名页面");
+        return (
+          <button
+            type="button"
+            onClick={() => toggleFavorite(entry)}
+            className={`flex min-h-9 min-w-9 items-center justify-center rounded-md ${favorite ? "text-gold" : "text-ink3 hover:text-gold"}`}
+            aria-label={favorite ? `取消收藏${title}` : `收藏${title}`}
+            aria-pressed={favorite}
+            title={favorite ? "取消收藏" : "收藏"}
+          >
+            <Icon name="star" size={14} />
+          </button>
+        );
+      }}
+      footer={(
+        <div className={`${collapsed ? "flex flex-col" : "grid grid-cols-2"} gap-1.5`}>
+          {!mobile && (
+            <button type="button" onClick={() => updateMode("hidden")} className="min-h-9 rounded border border-line px-2 py-1 text-body text-ink2 hover:border-gline hover:text-gold" aria-label="隐藏主导航" title="隐藏主导航（⌘/Ctrl+Shift+B）">
+              {collapsed ? "×" : "隐藏"}
+            </button>
+          )}
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("workloom:reset-layout"))} className="flex min-h-9 items-center justify-center gap-1 rounded border border-line px-2 py-1 text-body text-ink2 hover:border-gline hover:text-gold" aria-label="恢复默认布局" title="恢复默认布局">
+            <Icon name="reset" size={13} />{!collapsed && "恢复默认"}
+          </button>
+          <button type="button" onClick={() => setLayoutOpen(true)} className="flex min-h-9 items-center justify-center gap-1 rounded border border-line px-2 py-1 text-body text-ink2 hover:border-gline hover:text-gold" aria-label="打开视图与布局" title="视图与布局">
+            <Icon name="configuration" size={13} />{!collapsed && "视图"}
+          </button>
+        </div>
+      )}
+    />
+  );
 
   return (
-    <nav
-      aria-label="主导航"
-      className="flex h-screen w-[208px] shrink-0 flex-col border-r border-line bg-bg950/95 backdrop-blur-md"
-    >
-      {/* 品牌区 */}
-      <div className="flex items-center gap-2.5 border-b border-line px-4 py-3.5">
-        <span className="inline-block h-4 w-4 rotate-45 rounded gold-grad shadow-[0_0_14px_rgba(255,160,60,.6)]" />
-        <div className="leading-tight">
-          <div className="bg-gradient-to-r from-gold to-gold2 bg-clip-text text-[14px] font-black tracking-wider text-transparent">
-            WorkLoom
-          </div>
-          <div className="text-[10px] text-ink3">企业数字员工 IM</div>
+    <>
+      {mobile ? (
+        <div
+          {...mobileSurface}
+          role="dialog"
+          aria-modal="true"
+          aria-label="主导航"
+          className="fixed inset-0"
+          style={{ zIndex: "var(--wl-z-drawer)" }}
+        >
+          <button type="button" tabIndex={-1} aria-label="关闭主导航" className="absolute inset-0 cursor-default bg-black/55" onClick={() => setMobileOpen(false)} />
+          <div className="relative h-full w-fit max-w-full">{nav}</div>
         </div>
-      </div>
-
-      {/* 分级导航（可滚动区） */}
-      <div className="flex-1 overflow-y-auto px-2.5 py-3">
-        {groups.map(([g, list]) => (
-          <div key={g} className="mb-4">
-            <div className="mb-1.5 px-2 text-[10px] font-semibold tracking-[.2em] text-ink3/80">{g}</div>
-            {list.map((e) => {
-              const active = pathname === e.path || (e.path !== "/" && pathname.startsWith(e.path + "/"));
-              return (
-                <a
-                  key={e.path}
-                  href={e.path}
-                  aria-current={active ? "page" : undefined}
-                  className={`group relative mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[12.5px] no-underline transition-colors ${
-                    active ? "bg-card font-semibold text-gold" : "text-ink2 hover:bg-card/60 hover:text-ink"
-                  }`}
-                >
-                  {active && (
-                    <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-gold shadow-[0_0_8px_rgba(255,190,106,.7)]" />
-                  )}
-                  <Icon d={ICON_PATHS[e.path] ?? "M9 5l7 7-7 7"} active={active} />
-                  <span className="truncate">{e.label}</span>
-                </a>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      {/* 底部状态区 */}
-      <div className="border-t border-line px-4 py-2.5 text-[10px] leading-relaxed text-ink3/70">
-        桌面客户端 · 布局比例恒定
-      </div>
-    </nav>
+      ) : nav}
+      <LayoutControls
+        open={layoutOpen}
+        onClose={() => setLayoutOpen(false)}
+        textScale={textScale}
+        onTextScale={setTextScale}
+        fullscreen={fullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        onShowAll={showAllPanels}
+        onFocusMode={focusLayout}
+        onReset={() => window.dispatchEvent(new CustomEvent("workloom:reset-layout"))}
+      />
+    </>
   );
 }

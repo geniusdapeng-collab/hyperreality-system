@@ -4,17 +4,26 @@
  */
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { Button } from "@workloom/ui";
 import { trpc, setToken, setRefreshToken, ensureDemoLogin, DEV_DEMO_MEMBER, clearGuestFlag } from "../../lib/trpc";
-
-const WS = (import.meta.env.VITE_DEMO_WORKSPACE as string | undefined) ?? "video-studio";
+import { DEMO_WORKSPACE, PRODUCT_NAME } from "../../lib/product";
 
 type Tab = "code" | "password";
+
+function safeLoginError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("验证码")) return "验证码不正确、已过期或发送次数已达上限，请重新获取。";
+  if (message.includes("密码") || message.includes("账号") || message.includes("邮箱")) return "账号或密码不正确，请检查后重试。";
+  if (message.includes("工作区")) return "暂时无法进入该工作区，请联系管理员确认成员权限。";
+  if (message.includes("网络") || message.includes("fetch")) return "网络连接异常，请检查网络后重试。";
+  return fallback;
+}
 
 export default function Login() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   // F-GUEST1：游客进配置引导被拦到这里时，登录成功后送回原目的地
-  const next = params.get("next") || "/p28";
+  const next = params.get("next") || "/inbox";
   const [tab, setTab] = useState<Tab>("code");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -36,8 +45,8 @@ export default function Login() {
     try {
       const r = await svc().requestCode.mutate({ channel: "phone", target: phone, purpose: "login" });
       setCodeSent(true);
-      if (r.devCode) setDevCode(r.devCode);
-    } catch (e) { setErr(e instanceof Error ? e.message : "发送失败"); }
+      setDevCode(import.meta.env.DEV && r.devCode ? r.devCode : "");
+    } catch (e) { setErr(safeLoginError(e, "验证码发送失败，请稍后重试。")); }
     finally { setBusy(false); }
   }
 
@@ -45,13 +54,13 @@ export default function Login() {
     setErr(""); setBusy(true);
     try {
       const r = tab === "code"
-        ? await svc().loginWithCode.mutate({ phone, code, workspaceSlug: WS })
-        : await svc().loginWithPassword.mutate({ email, password, workspaceSlug: WS });
+        ? await svc().loginWithCode.mutate({ phone, code, workspaceSlug: DEMO_WORKSPACE })
+        : await svc().loginWithPassword.mutate({ email, password, workspaceSlug: DEMO_WORKSPACE });
       clearGuestFlag(); // 正式身份进场，摘掉游客标记
       setToken(r.accessToken);
       setRefreshToken(r.refreshToken);
       nav(next);
-    } catch (e) { setErr(e instanceof Error ? e.message : "登录失败"); }
+    } catch (e) { setErr(safeLoginError(e, "登录尚未完成，请检查信息后重试。")); }
     finally { setBusy(false); }
   }
 
@@ -62,52 +71,50 @@ export default function Login() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-10">
-      <h1 className="mb-1 text-2xl font-bold">登录 WorkLoom</h1>
-      <p className="mb-6 text-sm text-neutral-400">工作区：<code className="text-emerald-400">{WS}</code>（可在登录后切换）</p>
+    <main className="mx-auto flex min-h-screen w-full max-w-md min-w-0 flex-col justify-center px-4 py-10 sm:px-6">
+      <h1 className="mb-1 break-words text-2xl font-bold">登录 {PRODUCT_NAME}</h1>
+      <p className="mb-6 break-words text-body leading-relaxed text-neutral-300">登录后可查看并切换您有权限访问的工作区。</p>
 
-      <div className="mb-4 flex gap-2 text-sm">
-        <button className={btn(tab === "code")} onClick={() => setTab("code")}>手机验证码</button>
-        <button className={btn(tab === "password")} onClick={() => setTab("password")}>邮箱密码</button>
-        <button className={btn(false)} disabled title="微信开放平台接入后开放">微信扫码（即将开放）</button>
+      <div className="mb-4 flex min-w-0 flex-wrap gap-2" role="group" aria-label="登录方式">
+        <Button aria-pressed={tab === "code"} variant={tab === "code" ? "primary" : "secondary"} onClick={() => setTab("code")}>手机验证码</Button>
+        <Button aria-pressed={tab === "password"} variant={tab === "password" ? "primary" : "secondary"} onClick={() => setTab("password")}>邮箱密码</Button>
+        <Button variant="secondary" disabled title="微信开放平台接入后开放">微信扫码（即将开放）</Button>
       </div>
 
       {tab === "code" ? (
         <div className="space-y-3">
-          <input className={inp} placeholder="手机号" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <div className="flex gap-2">
-            <input className={inp} placeholder="6 位验证码" value={code} onChange={(e) => setCode(e.target.value)} />
-            <button className={btn(true)} disabled={busy || phone.length < 6} onClick={() => void sendCode()}>
+          <input className={inp} inputMode="tel" autoComplete="tel" aria-label="手机号" placeholder="手机号" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <input className={inp} inputMode="numeric" autoComplete="one-time-code" aria-label="验证码" maxLength={6} placeholder="6 位验证码" value={code} onChange={(e) => setCode(e.target.value)} />
+            <Button variant="primary" disabled={busy || phone.length < 6} onClick={() => void sendCode()}>
               {codeSent ? "重发" : "发送验证码"}
-            </button>
+            </Button>
           </div>
-          {devCode && <p className="text-xs text-amber-400">开发通道验证码：{devCode}（生产环境不显示）</p>}
+          {import.meta.env.DEV && devCode && <p className="break-words text-body text-amber-300">本地开发验证码：{devCode}（生产环境不显示）</p>}
         </div>
       ) : (
         <div className="space-y-3">
-          <input className={inp} placeholder="邮箱" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className={inp} type="password" placeholder="密码" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input className={inp} type="email" autoComplete="email" aria-label="邮箱" placeholder="邮箱" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className={inp} type="password" autoComplete="current-password" aria-label="密码" placeholder="密码" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
       )}
 
-      {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
+      {err && <p role="alert" className="mt-3 break-words text-body leading-relaxed text-red-300">{err}</p>}
 
-      <button className={`${btn(true)} mt-5 w-full`} disabled={busy} onClick={() => void doLogin()}>登 录</button>
+      <Button className="mt-5 w-full" variant="primary" busy={busy} busyLabel="正在登录…" onClick={() => void doLogin()}>登录</Button>
 
-      <div className="mt-6 flex justify-between text-sm text-neutral-400">
-        <button className="underline" onClick={() => nav("/activate")}>注册开通（老板首店）</button>
-        <button className="underline" onClick={() => nav("/invite")}>接受成员邀请</button>
+      <div className="mt-4 flex min-w-0 flex-wrap justify-between gap-2 text-neutral-300">
+        <Button variant="quiet" onClick={() => nav("/activate")}>注册开通</Button>
+        <Button variant="quiet" onClick={() => nav("/invite")}>接受成员邀请</Button>
       </div>
 
       {import.meta.env.DEV && (
-        <button className="mt-8 text-xs text-neutral-500 underline" onClick={() => void demoEnter()}>
+        <Button variant="quiet" className="mt-6 text-neutral-300 underline" onClick={() => void demoEnter()}>
           开发演示：直接进入演示身份（不经过账号）
-        </button>
+        </Button>
       )}
-    </div>
+    </main>
   );
 }
 
-const inp = "w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-emerald-500";
-const btn = (active: boolean) =>
-  `rounded-lg px-3 py-2 text-sm ${active ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"} disabled:opacity-40`;
+const inp = "min-h-11 w-full min-w-0 rounded-lg border border-neutral-600 bg-neutral-900 px-3 py-2 text-body text-neutral-100 outline-none placeholder:text-neutral-400 focus:border-blue-400";

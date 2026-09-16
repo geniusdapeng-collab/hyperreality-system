@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G4]       # PRD 确认必审
+coverage:
+  - { eventPrefix: "prd.", label: 制片需求 }
 skills: []
 tools:
   - { name: prd.generate, access: write, desc: 生成 5 段式 PRD }

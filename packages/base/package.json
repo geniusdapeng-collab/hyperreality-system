@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@workloom/db": "workspace:*",
+    "@workloom/industry-contract": "workspace:*",
     "@workloom/shared": "workspace:*",
     "jose": "6.2.10",
     "pg": "8.23.0",

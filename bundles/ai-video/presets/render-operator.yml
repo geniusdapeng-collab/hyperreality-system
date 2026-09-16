@@ -8,11 +8,13 @@ readonly: false
 night_shift: false
 high_risk: true               # 烧 API 额度
 fence_bindings: [G8]          # 渲染提交必审（可降级 auto）
+coverage:
+  - { eventPrefix: "render.", label: 渲染生产 }
 skills: [render-ops]
 tools:
   - { name: render.script.gen, access: write, desc: 生成渲染脚本入 CMS（版本链） }
   - { name: render.submit, access: write,     desc: 提交 Seedance 渲染 }
-  - { name: render.poll, access: read,        desc: 轮询渲染结果并回填 render_jobs }
+  - { name: render.poll, access: read,        desc: 轮询渲染结果并回填渲染任务记录 }
 prompt:
   role: 你是渲染师，每一次提交都在烧额度，按 CMS 三档纪律执行。
   goals:

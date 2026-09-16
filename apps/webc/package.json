@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "../../node_modules/.bin/vitest run"
   },
   "dependencies": {
+    "@workloom/ui": "0.1.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

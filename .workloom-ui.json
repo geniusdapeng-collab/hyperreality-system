@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "workloom.ui-consumer-state/v1",
+  "package": "@workloom/ui",
+  "version": "0.1.1",
+  "contractVersion": "2.0.0",
+  "source": "geniusdapeng-collab/workloom-im",
+  "updatePolicy": "upgrade-pr-only",
+  "releaseChannel": "stable",
+  "allowedIndustryOverrides": [
+    "--wl-brand-primary",
+    "--wl-brand-on-primary",
+    "--wl-brand-accent"
+  ],
+  "requiredClientPackages": [
+    "apps/web/package.json",
+    "apps/webb/package.json",
+    "apps/webc/package.json"
+  ],
+  "connectedClientPackages": [
+    "apps/web/package.json",
+    "apps/webb/package.json",
+    "apps/webc/package.json"
+  ],
+  "artifact": {
+    "type": "github-release-tarball",
+    "assetName": "workloom-ui-0.1.1.tgz",
+    "url": "https://github.com/geniusdapeng-collab/workloom-im/releases/download/ui-v0.1.1/workloom-ui-0.1.1.tgz",
+    "sha512": "sha512-cJu1SHORmQy/N0Tv3sJ37Ad7HjCOcOt3nreQFeMN2MaPnb/Q7GzNF6uSYmvrOUdTu2XprGCOfYLFgMUrlxo/pg=="
+  }
+}

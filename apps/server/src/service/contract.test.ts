@@ -1,7 +1,7 @@
 /**
  * server · C 端网关契约 fixture 单测（H6：以 webc types.ts 为准断言响应形状）
  * 直连 Hono handler（serviceGateway.request），打沙箱活库（需先应用 0011 迁移）。
- * 覆盖：session 形状与渠道门控/限流、cards kind/data、statusText 中文枚举、
+ * 覆盖：session 形状与渠道门控/限流、cards 行业无关展示投影、statusText 中文枚举、
  *      /member /orders /notifications 形状、建单幂等重放、rate 409、404 requestId、低置信拒答 ticketDraft。
  */
 import { beforeAll, describe, expect, it } from "vitest";
@@ -11,6 +11,12 @@ process.env.DATABASE_URL ??= "postgres://postgres:workloom@localhost:5432/worklo
 process.env.DATABASE_APP_URL ??= "postgres://workloom_app:workloom_dev_app@localhost:5432/workloom";
 process.env.DATABASE_GATEWAY_URL ??= "postgres://workloom_gateway:workloom_dev_gateway@localhost:5432/workloom";
 process.env.SERVICE_C_DEMO_AUTH = "true";
+const FIXTURE_WORKSPACE_ID = process.env.SERVICE_C_TEST_WORKSPACE_ID?.trim() || null;
+if (process.env.RUN_DB_TESTS === "1" && !FIXTURE_WORKSPACE_ID) {
+  throw new Error("服务契约测试已启用真库，但未显式配置 SERVICE_C_TEST_WORKSPACE_ID");
+}
+if (FIXTURE_WORKSPACE_ID) process.env.SERVICE_C_WORKSPACE_ID = FIXTURE_WORKSPACE_ID;
+const fixtureDescribe = FIXTURE_WORKSPACE_ID ? describe : describe.skip;
 
 let app: Hono;
 const RUN = `contract-${Date.now().toString(36)}`;
@@ -35,14 +41,15 @@ async function makeSession(openid: string): Promise<{ token: string; user: Recor
 }
 
 beforeAll(async () => {
+  if (!FIXTURE_WORKSPACE_ID) return;
   ({ serviceGateway: app } = await import("./gateway.js"));
 });
 
-describe("契约 · session（S2）", () => {
-  it("h5 演示直登返回 {token, user}", async () => {
+fixtureDescribe("契约 · session（S2）", () => {
+  it("h5 演示直登返回 {token, user} 并明确标注演示认证", async () => {
     const s = await makeSession(`${RUN}-a`);
     expect(typeof s.token).toBe("string");
-    expect(s.user).toMatchObject({ channel: "h5", openid: `${RUN}-a` });
+    expect(s.user).toMatchObject({ channel: "h5", openid: `${RUN}-a`, authMode: "demo" });
     expect(typeof s.user.id).toBe("string");
   });
 
@@ -69,12 +76,14 @@ describe("契约 · session（S2）", () => {
   });
 });
 
-describe("契约 · member / orders / notifications（H6）", () => {
-  it("未绑定会员：/member 返回 {level,points,benefits[],demo,bindRequired}，/orders 空集+bindRequired", async () => {
+fixtureDescribe("契约 · member / orders / notifications（H6）", () => {
+  it("未绑定身份：/member 返回中文展示摘要，/orders 返回空集与绑定引导", async () => {
     const { token } = await makeSession(`${RUN}-guest`);
     const m = (await (await req("/member", {}, token)).json()) as Record<string, unknown>;
-    expect(m).toMatchObject({ level: "游客", points: 0, bindRequired: true });
+    expect(m).toMatchObject({ title: "身份尚未绑定", bindRequired: true });
     expect(Array.isArray(m.benefits)).toBe(true);
+    expect(m).not.toHaveProperty("level");
+    expect(m).not.toHaveProperty("points");
     expect(typeof m.hint).toBe("string");
 
     const o = (await (await req("/orders", {}, token)).json()) as Record<string, unknown>;
@@ -96,20 +105,33 @@ describe("契约 · member / orders / notifications（H6）", () => {
       expect(typeof item.id).toBe("string");
       expect(typeof item.kind).toBe("string");
       expect(typeof item.createdAt).toBe("string");
+      expect(item.deliveryState).toBe("demo");
     }
   });
 });
 
-describe("契约 · 工单（H1/H2/H6/L9/M9）", () => {
+fixtureDescribe("契约 · 工单（H1/H2/H6/L9/M9）", () => {
   it("建单 → {ticket:{id,kind,title,status,statusText}}；同键重放 idempotentReplay 且同 id", async () => {
     const { token } = await makeSession(`${RUN}-t`);
     const body = JSON.stringify({ kind: "repair", title: "契约测试-水龙头漏水", payload: { room: "9999" }, idempotencyKey: `${RUN}-t1` });
-    const r1 = (await (await req("/tickets", { method: "POST", body }, token)).json()) as { ticket: Record<string, unknown> };
+    const r1 = (await (await req("/tickets", { method: "POST", body }, token)).json()) as {
+      ticket: Record<string, unknown>;
+      receipt: { requestId: string; eventId: string; state: string; resourceId: string; delivery?: { state: string } };
+    };
     expect(r1.ticket).toMatchObject({ kind: "repair", title: "契约测试-水龙头漏水", status: "assigned", statusText: "已受理" });
     expect(typeof r1.ticket.id).toBe("string");
+    expect(r1.receipt).toMatchObject({ state: "accepted", resourceId: r1.ticket.id });
+    expect(typeof r1.receipt.requestId).toBe("string");
+    expect(typeof r1.receipt.eventId).toBe("string");
+    expect(r1.receipt.delivery?.state).toBe("demo");
 
-    const r2 = (await (await req("/tickets", { method: "POST", body }, token)).json()) as { ticket: { id: string }; idempotentReplay?: boolean };
+    const r2 = (await (await req("/tickets", { method: "POST", body }, token)).json()) as {
+      ticket: { id: string };
+      idempotentReplay?: boolean;
+      receipt: { idempotentReplay?: boolean; resourceId: string };
+    };
     expect(r2.idempotentReplay).toBe(true);
+    expect(r2.receipt.idempotentReplay).toBe(true);
     expect(r2.ticket.id).toBe(r1.ticket.id);
 
     // 列表项同样带 statusText
@@ -142,7 +164,49 @@ describe("契约 · 工单（H1/H2/H6/L9/M9）", () => {
   });
 });
 
-describe("契约 · chat（H5/H6/M9）", () => {
+fixtureDescribe("契约 · 身份绑定信任链", () => {
+  it("演示验证码明确标 demo，绑定后返回真实会员与请求回执", async () => {
+    const { token } = await makeSession(`${RUN}-identity`);
+    const codeRes = await req("/identity/code", {
+      method: "POST",
+      body: JSON.stringify({ phone: "13800000001" }),
+    }, token);
+    expect(codeRes.status).toBe(200);
+    const code = (await codeRes.json()) as Record<string, unknown>;
+    expect(code).toMatchObject({ state: "demo", demoCode: "123456" });
+    expect(String(code.message)).toContain("不会发送短信");
+
+    const bindRes = await req("/identity/bind", {
+      method: "POST",
+      body: JSON.stringify({ phone: "13800000001", code: "123456" }),
+    }, token);
+    expect(bindRes.status).toBe(200);
+    const bound = (await bindRes.json()) as {
+      user: { memberId: string; verified: boolean; authMode: string; identityMode: string };
+      receipt: { requestId: string; eventId: string; state: string; resourceId: string; demo: boolean };
+    };
+    expect(bound.user).toMatchObject({
+      memberId: "M-1001", verified: true, authMode: "demo", identityMode: "demo",
+    });
+    expect(bound.receipt).toMatchObject({ state: "bound", resourceId: "M-1001", demo: true });
+    expect(typeof bound.receipt.requestId).toBe("string");
+    expect(typeof bound.receipt.eventId).toBe("string");
+  });
+
+  it("验证码错误必须失败且保留请求编号", async () => {
+    const { token } = await makeSession(`${RUN}-identity-fail`);
+    const res = await req("/identity/bind", {
+      method: "POST",
+      body: JSON.stringify({ phone: "13800000001", code: "000000" }),
+    }, token);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).toBe("INVALID_IDENTITY_CODE");
+    expect(typeof body.requestId).toBe("string");
+  });
+});
+
+fixtureDescribe("契约 · chat（H5/H6/M9）", () => {
   it("KB 高置信问答：citations 非空、cards 为 {kind,data} 契约", async () => {
     const { token } = await makeSession(`${RUN}-c`);
     const r = (await (await req("/chat", {

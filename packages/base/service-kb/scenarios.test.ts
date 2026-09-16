@@ -430,7 +430,13 @@ describe("A4 SSRF 守卫 · assertPublicHttpUrl / isPrivateAddress / 读取上�
 
 describe("A5 检索 · 2-gram 切词与确定性打分（纯函数）", () => {
   it("中文按 2-gram 切分（防单字噪声）", () => {
-    expect(tokenizeQuery("退换时间")).toEqual(["退换", "换时", "时间", "售后"]);
+    expect(tokenizeQuery("退换时间")).toEqual(["退换", "换时", "时间"]);
+  });
+
+  it("默认不理解行业同义词，只有显式词表才能扩展", () => {
+    expect(tokenizeQuery("退换时间")).not.toContain("售后");
+    expect(tokenizeQuery("退换时间", { synonyms: [["退换", "售后"]] })).toContain("售后");
+    expect(tokenizeQuery("送两瓶水")).not.toContain("矿泉水");
   });
 
   it("单字中文保留单字", () => {
@@ -450,8 +456,15 @@ describe("A5 检索 · 2-gram 切词与确定性打分（纯函数）", () => {
   });
 
   it("标点与空白剔除", () => {
-    expect(tokenizeQuery("退换，时间？！")).toEqual(["退换", "换时", "时间", "售后"]);
+    expect(tokenizeQuery("退换，时间？！")).toEqual(["退换", "换时", "时间"]);
     expect(tokenizeQuery("！！！")).toEqual([]);
+  });
+
+  it("弱词只能显式注入，不由基座给业务词降权", () => {
+    const chunk = { heading: "订单", content: "订单" };
+    const generic = scoreChunkFallback("订单", chunk);
+    const configured = scoreChunkFallback("订单", chunk, { weakTokens: ["订单"] });
+    expect(generic).toBeGreaterThan(configured);
   });
 
   it("scoreChunkFallback：无命中 0 分", () => {

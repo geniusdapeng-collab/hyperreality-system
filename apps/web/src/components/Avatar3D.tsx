@@ -4,7 +4,7 @@
  * 形象系统 v2（真人风 GLTF 路线，评审决策①）：
  *  - 5 个 KayKit 冒险者角色（Knight/Mage/Rogue/Rogue_Hooded/Barbarian，CC0 可商用），
  *    76 组骨骼动画；贴图内嵌单文件；装备节点（剑/盾/盔/披风）可显隐做外观差异；
- *  - 岗位映射：角色选型 + 材质调色 + 手部道具挂点（handslot.r/l）；
+ *  - 外观投影：Bundle 元数据控制角色选型、材质调色和动作；缺省按稳定标识分配；
  *  - 状态动画机：working=Idle+岗位动作 / asking=Interact 举手 / blocked=Hit_A /
  *    celebrating=Cheer / idle=Sit_Chair_Idle / disabled=Lie_Idle / 走位=Walking_A；
  *    crossFade 平滑过渡，帧率无关。
@@ -16,15 +16,13 @@ import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
+import {
+  avatarPresentationOf,
+  type AvatarPresentation,
+} from "@workloom/ui";
 
-/* ---------------- 岗位形象映射（角色选型 + 调色 + 工作动作） ---------------- */
-export interface RoleSkin {
-  model: "Knight" | "Mage" | "Rogue" | "Rogue_Hooded" | "Barbarian";
-  tint?: string;          // 材质调色（覆盖贴图色；undefined=原贴图）
-  workAction?: string;    // working 状态的岗位演绎动画
-  cape?: boolean;         // Knight 披风（CEO 专属）
-  helmetOff?: boolean;    // 去头盔（员工露脸，CEO 戴冠）
-}
+/* ---------------- 外观投影（角色选型 + 调色 + 工作动作） ---------------- */
+export type RoleSkin = AvatarPresentation;
 
 const MODEL_FILES: Record<RoleSkin["model"], string> = {
   Knight: "/models/kaykit/Knight.glb",
@@ -34,36 +32,13 @@ const MODEL_FILES: Record<RoleSkin["model"], string> = {
   Barbarian: "/models/kaykit/Barbarian.glb",
 };
 
-/** 岗位 → 形象（按名称关键词匹配，未命中按 hash 稳定分配） */
-export function roleSkinOf(name: string, presetKey: string): RoleSkin {
-  const k = `${name}${presetKey}`.toLowerCase();
-  if (k.includes("ceo")) return { model: "Knight", cape: true, tint: "#ffd98a", workAction: "Idle" };
-  // —— AI 产品经理团队（ai-pm 行业包；形象语义与岗位一致） ——
-  if (k.includes("pm-staff") || k.includes("参谋")) return { model: "Knight", cape: true, tint: "#ffd98a", workAction: "Idle" };
-  if (k.includes("requirement") || k.includes("需求")) return { model: "Rogue", workAction: "Use_Item" };
-  if (k.includes("industry") || k.includes("瞭望")) return { model: "Rogue_Hooded", tint: "#8ad8ff", workAction: "1H_Ranged_Aiming" };
-  if (k.includes("data") || k.includes("洞察")) return { model: "Mage", workAction: "Spellcasting" };
-  if (k.includes("listener") || k.includes("倾听")) return { model: "Rogue", tint: "#a8e6ff", workAction: "Use_Item" };
-  if (k.includes("doc-writer") || k.includes("主笔")) return { model: "Mage", workAction: "Spellcasting" };
-  if (k.includes("release") || k.includes("护航")) return { model: "Barbarian", workAction: "PickUp" };
-  if (k.includes("竞对") || k.includes("scout") || k.includes("competitor"))
-    return { model: "Rogue_Hooded", workAction: "1H_Ranged_Aiming" };   // 举镜远眺
-  if (k.includes("内容") || k.includes("content") || k.includes("writer"))
-    return { model: "Mage", workAction: "Spellcasting" };               // 施法书写
-  if (k.includes("评价") || k.includes("review") || k.includes("客服"))
-    return { model: "Rogue", workAction: "Use_Item" };                  // 持平板处理
-  if (k.includes("对账") || k.includes("账") || k.includes("finance"))
-    return { model: "Barbarian", workAction: "PickUp" };                // 盘点核算
-  if (k.includes("巡检") || k.includes("inspect"))
-    return { model: "Barbarian", tint: "#8ad8ff", workAction: "Walking_A" };
-  if (k.includes("前台") || k.includes("语音") || k.includes("voice"))
-    return { model: "Rogue", tint: "#a8e6ff", workAction: "Idle" };
-  if (k.includes("调价") || k.includes("价格") || k.includes("pricing") || k.includes("收益"))
-    return { model: "Mage", tint: "#ffd98a", workAction: "Spellcast_Long" };
-  // 稳定兜底：按 hash 分配四角色之一
-  const pool: RoleSkin["model"][] = ["Knight", "Mage", "Rogue", "Barbarian"];
-  let h = 0; for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0;
-  return { model: pool[Math.abs(h) % pool.length]!, workAction: "Idle" };
+/** Bundle 显式外观优先；缺省只按稳定标识分配，不从岗位或行业词猜测。 */
+export function roleSkinOf(
+  name: string,
+  presetKey = "",
+  explicitSkin?: RoleSkin,
+): RoleSkin {
+  return avatarPresentationOf(presetKey || name, explicitSkin);
 }
 
 /* ---------------- 状态 → 动画（业务六态 + 走位，与 Floor 状态机一致） ---------------- */

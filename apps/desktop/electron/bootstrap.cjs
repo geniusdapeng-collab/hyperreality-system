@@ -82,6 +82,107 @@ function killTree(child) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function atomicWrite(file, content, mode) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = `${file}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
+  fs.writeFileSync(temporary, content, mode ? { mode } : undefined);
+  fs.renameSync(temporary, file);
+}
+
+function writeInstallCheckpoint(supportDir, state) {
+  atomicWrite(path.join(supportDir, "install-state.json"), `${JSON.stringify({
+    schemaVersion: "workloom.install-state/v1",
+    updatedAt: new Date().toISOString(),
+    ...state,
+  }, null, 2)}\n`, 0o600);
+}
+
+/**
+ * 在 supportDir 同一文件系统内完成“先装配、后换入”。任何换入阶段异常都会恢复
+ * 原目录、VERSION 与首航哨兵；调用方须在迁移、种子和健康检查通过后 commit，失败时
+ * rollback。这样 UI 看见的版本永远对应一套完整载荷。
+ */
+function installPayloadAtomically({ sourceRoot, supportDir, payloadVer, previousEnv, failAt = "", onPhase = () => {} }) {
+  const parts = ["runtime", "node", "pg", "nats"].filter((part) => fs.existsSync(path.join(sourceRoot, part)));
+  if (!parts.includes("runtime") || !parts.includes("node") || !parts.includes("pg")) {
+    throw new Error("载荷不完整：runtime、node、pg 必须同时存在");
+  }
+  const nonce = `${process.pid}-${crypto.randomBytes(5).toString("hex")}`;
+  const stagingRoot = path.join(supportDir, `.install-staging-${nonce}`);
+  const backupRoot = path.join(supportDir, `.install-backup-${nonce}`);
+  const versionFile = path.join(supportDir, "VERSION");
+  const bootFlag = path.join(supportDir, ".bootstrapped");
+  const oldVersion = fs.existsSync(versionFile) ? fs.readFileSync(versionFile) : null;
+  const oldBootFlag = fs.existsSync(bootFlag) ? fs.readFileSync(bootFlag) : null;
+  const movedNew = [];
+  const movedOld = [];
+  let closed = false;
+  const fault = (point) => {
+    if (failAt === point) throw new Error(`安装故障注入：${point}`);
+  };
+  const restore = () => {
+    if (closed) return;
+    for (const part of [...movedNew].reverse()) {
+      fs.rmSync(path.join(supportDir, part), { recursive: true, force: true });
+    }
+    for (const part of [...movedOld].reverse()) {
+      const backup = path.join(backupRoot, part);
+      if (fs.existsSync(backup)) fs.renameSync(backup, path.join(supportDir, part));
+    }
+    if (oldVersion === null) fs.rmSync(versionFile, { force: true });
+    else atomicWrite(versionFile, oldVersion);
+    if (oldBootFlag === null) fs.rmSync(bootFlag, { force: true });
+    else atomicWrite(bootFlag, oldBootFlag);
+    fs.rmSync(stagingRoot, { recursive: true, force: true });
+    fs.rmSync(backupRoot, { recursive: true, force: true });
+    closed = true;
+  };
+
+  try {
+    fs.mkdirSync(stagingRoot, { recursive: true });
+    onPhase("staging");
+    for (const part of parts) {
+      fs.cpSync(path.join(sourceRoot, part), path.join(stagingRoot, part), { recursive: true, dereference: true });
+    }
+    if (previousEnv && previousEnv.length > 0) {
+      fs.writeFileSync(path.join(stagingRoot, "runtime", ".env"), previousEnv, { mode: 0o600 });
+    }
+    const assembledVer = fs.readFileSync(path.join(stagingRoot, "runtime", "VERSION"), "utf8").trim();
+    if (assembledVer !== payloadVer) throw new Error(`暂存载荷版本不一致：期望 ${payloadVer}，实际 ${assembledVer || "缺失"}`);
+    fault("after-stage");
+
+    fs.mkdirSync(backupRoot, { recursive: true });
+    onPhase("swapping");
+    for (const [index, part] of parts.entries()) {
+      const current = path.join(supportDir, part);
+      if (fs.existsSync(current)) {
+        fs.renameSync(current, path.join(backupRoot, part));
+        movedOld.push(part);
+      }
+      fs.renameSync(path.join(stagingRoot, part), current);
+      movedNew.push(part);
+      if (index === 0) fault("after-first-swap");
+    }
+    atomicWrite(versionFile, `${payloadVer}\n`);
+    fs.rmSync(bootFlag, { force: true });
+    fault("after-version-swap");
+    onPhase("swapped");
+  } catch (error) {
+    restore();
+    throw error;
+  }
+
+  return {
+    rollback: restore,
+    commit() {
+      if (closed) return;
+      fs.rmSync(stagingRoot, { recursive: true, force: true });
+      fs.rmSync(backupRoot, { recursive: true, force: true });
+      closed = true;
+    },
+  };
+}
+
 async function httpOk(url) {
   try {
     const ctrl = new AbortController();
@@ -97,7 +198,7 @@ async function httpOk(url) {
  * @param {object} opts
  * @param {string} opts.resourcesDir  应用 Resources 根目录（含 payload.tar.gz）
  * @param {string} opts.supportDir    可写支持目录（userData）
- * @param {(msg:string)=>void} [opts.onStatus] 状态回调（splash 展示）
+ * @param {(msg:string, progress:{phase?:string,percent?:number,etaSeconds?:number})=>void} [opts.onStatus] 状态回调（splash 展示）
  * @param {boolean} [opts.smoke]      冒烟模式：健康检查通过即返回（调用方随后 stop）
  * @returns {Promise<{stop:()=>Promise<void>, webUrl:string}>}
  */
@@ -106,7 +207,7 @@ async function bootstrap(opts) {
   const onStatus = opts.onStatus || (() => {});
   const logDir = path.join(supportDir, "logs");
   const say = makeLogger(logDir);
-  const status = (m) => { say(m); onStatus(m); };
+  const status = (m, progress = {}) => { say(m); onStatus(m, progress); };
 
   const RUNTIME = path.join(supportDir, "runtime");
   const PGDATA = path.join(supportDir, "pgdata");
@@ -114,8 +215,18 @@ async function bootstrap(opts) {
   const NODE_BIN = IS_WIN ? path.join(supportDir, "node", "node.exe") : path.join(supportDir, "node", "bin", "node");
   const PGBIN = path.join(supportDir, "pg", "bin");
   const pgBin = (n) => path.join(PGBIN, IS_WIN ? `${n}.exe` : n);
+  const children = [];
+  let pgStartedByBootstrap = false;
+  let payloadTransaction = null;
+  const failAt = opts.failAt || process.env.WORKLOOM_BOOTSTRAP_FAIL_AT || "";
+  const checkpoint = (phase, detail, extra = {}) => writeInstallCheckpoint(supportDir, {
+    status: "running", phase, detail, recoverable: true, ...extra,
+  });
 
+  try {
   say(`== WorkLoom 织元 · 引导启动（resources=${resourcesDir}）==`);
+  checkpoint("inspect", "正在检查本机版本与安装载荷", { percent: 3, etaSeconds: 150 });
+  status("正在检查本机版本与安装载荷…", { phase: "inspect", percent: 3, etaSeconds: 150 });
 
   /* ---------- 0. 载荷装配（版本变化才覆盖） ---------- */
   const readIf = (p) => { try { return fs.readFileSync(p, "utf-8").trim(); } catch { return null; } };
@@ -141,7 +252,7 @@ async function bootstrap(opts) {
     const cacheDir = path.join(supportDir, ".payload-cache");
     const cacheVer = readIf(path.join(cacheDir, "PAYLOAD_VERSION")) || "none";
     if (cacheVer !== payloadVer || !fs.existsSync(path.join(cacheDir, "runtime", "VERSION"))) {
-      status(`→ 解压运行时载荷（${payloadVer}）…（首次约 1 分钟）`);
+      status(`→ 解压运行时载荷（${payloadVer}）…`, { phase: "payload-unpack", percent: 8, etaSeconds: 140 });
       fs.rmSync(cacheDir, { recursive: true, force: true });
       fs.mkdirSync(cacheDir, { recursive: true });
       // 两平台 tar 均可信：macOS 自带 bsdtar；Win10 1803+ System32 自带 tar.exe（bsdtar）
@@ -150,39 +261,43 @@ async function bootstrap(opts) {
       // host:path 解析只作用于 -f 参数，-C 绝对路径不受影响
       const r = run("tar", ["-xzf", path.basename(archiveFile), "-C", cacheDir], { cwd: resourceRoot });
       if (r.code !== 0) throw new Error(`载荷解压失败：${(r.err || r.out).slice(-300)}`);
-      status("✅ 载荷解压完成");
+      status("载荷解压完成", { phase: "payload-unpacked", percent: 18, etaSeconds: 105 });
     }
     effResources = cacheDir;
   }
   const installedVer = readIf(path.join(supportDir, "VERSION")) || "none";
   if (payloadVer !== installedVer) {
-    status(`→ 装配运行时载荷（${payloadVer}）…（首次约 1 分钟）`);
+    status(`→ 装配运行时载荷（${payloadVer}）…`, { phase: "payload-staging", percent: 20, etaSeconds: 100 });
     fs.mkdirSync(supportDir, { recursive: true });
     // runtime 会在升级时整体替换；先保留用户配置，避免 JWT/API Key/模型设置被新版覆盖。
     const previousEnvFile = path.join(supportDir, "runtime", ".env");
     let previousEnv = null;
     try { previousEnv = fs.readFileSync(previousEnvFile); } catch { /* 首装没有旧配置 */ }
-    for (const part of ["runtime", "node", "pg", "nats"]) {
-      const src = path.join(effResources, part);
-      if (!fs.existsSync(src)) continue;
-      const dst = path.join(supportDir, part);
-      fs.rmSync(dst, { recursive: true, force: true });
-      // dereference:true —— 摊平符号链接，Windows/macOS 通吃
-      fs.cpSync(src, dst, { recursive: true, dereference: true });
-    }
-    if (previousEnv && previousEnv.length > 0) {
-      fs.writeFileSync(path.join(supportDir, "runtime", ".env"), previousEnv, { mode: 0o600 });
-      say("✓ 已保留上一版本地配置（JWT/API Key/模型设置）");
-    }
+    payloadTransaction = installPayloadAtomically({
+      sourceRoot: effResources,
+      supportDir,
+      payloadVer,
+      previousEnv,
+      failAt,
+      onPhase: (phase) => {
+        const phaseProgress = { staging: [22, 95], swapping: [29, 85], swapped: [34, 78] }[phase] || [20, 100];
+        checkpoint(`payload-${phase}`, "正在校验并安全换入运行时载荷", {
+          targetVersion: payloadVer, previousVersion: installedVer,
+          percent: phaseProgress[0], etaSeconds: phaseProgress[1],
+        });
+        status("正在校验并安全换入运行时载荷…", {
+          phase: `payload-${phase}`, percent: phaseProgress[0], etaSeconds: phaseProgress[1],
+        });
+      },
+    });
+    if (previousEnv && previousEnv.length > 0) say("✓ 已保留上一版本地配置（JWT/API Key/模型设置）");
     if (!IS_WIN) {
       // zip/dmg 往返后确保可执行位
       for (const p of [NODE_BIN, pgBin("postgres"), pgBin("pg_ctl"), pgBin("initdb")]) {
         try { fs.chmodSync(p, 0o755); } catch { /* 忽略 */ }
       }
     }
-    fs.writeFileSync(path.join(supportDir, "VERSION"), payloadVer);
-    fs.rmSync(path.join(supportDir, ".bootstrapped"), { force: true });
-    status("✅ 载荷装配完成");
+    status("载荷装配完成", { phase: "payload-ready", percent: 36, etaSeconds: 75 });
   }
   const assembledVer = readIf(path.join(RUNTIME, "VERSION"));
   if (assembledVer !== payloadVer) {
@@ -209,17 +324,18 @@ async function bootstrap(opts) {
     say("✓ PostgreSQL 已在运行（复用）");
   } else {
     if (!fs.existsSync(path.join(PGDATA, "PG_VERSION"))) {
-      status("→ 初始化数据库（initdb）…");
+      status("→ 初始化本机数据库…", { phase: "database-init", percent: 42, etaSeconds: 70 });
       fs.mkdirSync(PGDATA, { recursive: true });
       // 超级用户固定 postgres：desktop-bootstrap-db.mjs 以 postgres 角色连接建库（两平台同口径）
       const r = run(pgBin("initdb"), ["-D", PGDATA, "-U", "postgres", "--auth=trust", "-E", "UTF8", "--locale=C"]);
       if (r.code !== 0) throw new Error(`initdb 失败：${r.err.slice(-300)}`);
     }
-    status("→ 启动 PostgreSQL 17 …");
+    status("→ 启动本机数据库服务…", { phase: "database-start", percent: 50, etaSeconds: 60 });
     // pg_ctl 起服（Windows 上由它对管理员会话降权，v2.0.9 实证不能用 postgres.exe 直起；
     // 输出走文件句柄——postmaster 继承管道会假死，v2.1.2 实证）
     const r = runToLog(pgBin("pg_ctl"), pgCtlArgs(["-l", path.join(logDir, "pg.log"), "-o", `-p ${PG_PORT} -c listen_addresses=127.0.0.1`, "-w", "-t", "60", "start"]), path.join(logDir, "pgctl.log"));
     if (r.code !== 0) throw new Error(`PostgreSQL 启动失败（详见 logs/pg.log 与 logs/pgctl.log）`);
+    pgStartedByBootstrap = true;
     let up = false;
     for (let i = 0; i < 40 && !up; i++) { up = pgUp(); if (!up) await sleep(1000); }
     if (!up) throw new Error("PostgreSQL 40s 内未就绪");
@@ -228,7 +344,7 @@ async function bootstrap(opts) {
 
   // 角色/建库/vector（Node 引导，幂等；Windows 内嵌 PG 无 psql，v2.0.12 实证）
   {
-    status("→ 数据库引导（角色/库/vector）…");
+    status("→ 准备数据库角色、业务库和检索能力…", { phase: "database-bootstrap", percent: 57, etaSeconds: 52 });
     const r = run(NODE_BIN, [path.join(RUNTIME, "scripts", "desktop-bootstrap-db.mjs")], {
       env: { ...process.env, WORKLOOM_RUNTIME: RUNTIME },
     });
@@ -236,13 +352,24 @@ async function bootstrap(opts) {
   }
 
   /* ---------- 1.5 NATS JetStream（内嵌事件总线；缺失降级 memory 不阻断） ---------- */
-  const children = [];
-  const serverEnv = { ...process.env };
+  // 自包含桌面包按生产信任模型运行：稳定 Bundle 必须使用独立于 Bundle 载荷的公钥环验签。
+  // 公钥环是 electron extraResource（可受应用签名保护）；私钥只存在于发布 CI，绝不随客户端分发。
+  const serverEnv = { ...process.env, NODE_ENV: "production" };
+  const bundleTrustFile = path.join(resourceRoot, "bundle-trust.json");
+  if (fs.existsSync(bundleTrustFile)) {
+    const trustText = fs.readFileSync(bundleTrustFile, "utf-8");
+    try { JSON.parse(trustText); } catch { throw new Error("Bundle 独立公钥环格式无效，拒绝启动"); }
+    serverEnv.BUNDLE_VERIFICATION_KEYS = trustText;
+    delete serverEnv.BUNDLE_TRUST_PATH;
+    say("✓ Bundle 独立公钥环已装载");
+  } else {
+    say("⚠ Bundle 独立公钥环缺失；任何稳定行业包都将失败关闭");
+  }
   const NATS_BIN = path.join(supportDir, "nats", IS_WIN ? "nats-server.exe" : "nats-server");
   if (fs.existsSync(NATS_BIN)) {
     const listening = await httpOk(`http://127.0.0.1:${NATS_PORT}/`) || run(IS_WIN ? "netstat" : "lsof", IS_WIN ? ["-ano"] : ["-nP", `-iTCP:${NATS_PORT}`, "-sTCP:LISTEN"]).out.includes(String(NATS_PORT));
     if (!listening) {
-      status("→ 启动内嵌 nats-server（JetStream，用户态）…");
+      status("→ 启动本机事件总线…", { phase: "event-bus", percent: 63, etaSeconds: 45 });
       const natsDir = path.join(supportDir, "nats-data");
       fs.mkdirSync(natsDir, { recursive: true });
       const proc = spawnLogged(NATS_BIN, ["-js", "--store_dir", natsDir, "-a", "127.0.0.1", "-p", String(NATS_PORT)], {}, path.join(logDir, "nats.log"));
@@ -273,7 +400,8 @@ async function bootstrap(opts) {
   /* ---------- 3. 首启引导：迁移 + 种子（幂等） ---------- */
   const bootFlag = path.join(supportDir, ".bootstrapped");
   if (!fs.existsSync(bootFlag)) {
-    status("→ 首航引导：数据库迁移 + 演示数据种子（约 30 秒）…");
+    checkpoint("database", "正在执行数据库迁移与示例装配", { targetVersion: payloadVer, percent: 70, etaSeconds: 38 });
+    status("→ 正在升级数据结构…", { phase: "database-migrate", percent: 70, etaSeconds: 38 });
     const mig = run(NODE_BIN, [TSX_CLI, "--env-file=.env", "scripts/migrate.ts"], { cwd: RUNTIME });
     if (mig.code !== 0) throw new Error(`数据库迁移失败：${(mig.err || mig.out).slice(-400)}`);
     // 种子脚本按仓配置（.env.defaults DESKTOP_SEED_SCRIPT；不在 base-sync 同步范围）——
@@ -285,7 +413,12 @@ async function bootstrap(opts) {
     } catch { /* 缺省即可 */ }
     const seedScripts = seedScriptSpec.split(",").map((s) => s.trim()).filter(Boolean);
     if (seedScripts.length === 0) throw new Error("演示数据种子配置为空");
-    for (const seedScript of seedScripts) {
+    for (const [seedIndex, seedScript] of seedScripts.entries()) {
+      status("→ 正在装配示例团队与起步数据…", {
+        phase: "example-seed",
+        percent: 78 + Math.floor((seedIndex / seedScripts.length) * 6),
+        etaSeconds: Math.max(18, 30 - seedIndex * 5),
+      });
       if (!fs.existsSync(path.join(RUNTIME, seedScript))) {
         throw new Error(`演示数据种子缺失（${seedScript}）`);
       }
@@ -293,11 +426,12 @@ async function bootstrap(opts) {
       if (seed.code !== 0) throw new Error(`演示数据种子失败（${seedScript}）：${(seed.err || seed.out).slice(-400)}`);
     }
     fs.writeFileSync(bootFlag, "done");
-    status("✅ 首航引导完成（示例团队已装配）");
+    status("示例团队已装配", { phase: "example-ready", percent: 85, etaSeconds: 15 });
   }
 
   /* ---------- 4. 起服务：server(8787) + web preview(5173) ---------- */
-  status("→ 启动服务…");
+  status("→ 启动 WorkLoom 服务…", { phase: "services-start", percent: 88, etaSeconds: 12 });
+  checkpoint("services", "正在启动本机服务并执行健康检查", { targetVersion: payloadVer, percent: 88, etaSeconds: 12 });
   const serverProc = spawnLogged(NODE_BIN, [TSX_CLI, `--env-file=${envFile}`, "src/index.ts"],
     { cwd: path.join(RUNTIME, "apps", "server"), env: serverEnv }, path.join(logDir, "server.log"));
   children.push(serverProc);
@@ -305,14 +439,24 @@ async function bootstrap(opts) {
     { cwd: path.join(RUNTIME, "apps", "web") }, path.join(logDir, "web.log"));
   children.push(webProc);
 
-  status("→ 等待服务就绪…");
+  status("→ 等待工作台与服务就绪…", { phase: "services-health", percent: 90, etaSeconds: 10 });
   let ok = false;
   for (let i = 0; i < 90 && !ok; i++) {
     ok = (await httpOk(`http://127.0.0.1:${SERVER_PORT}/health`)) && (await httpOk(`http://127.0.0.1:${WEB_PORT}/`));
+    if (!ok && i > 0 && i % 5 === 0) {
+      const percent = Math.min(99, 90 + Math.floor(i / 10));
+      status("→ 正在完成本机服务健康检查…", {
+        phase: "services-health", percent, etaSeconds: Math.max(1, 90 - i),
+      });
+      checkpoint("services", "正在启动本机服务并执行健康检查", { targetVersion: payloadVer, percent, etaSeconds: Math.max(1, 90 - i) });
+    }
     if (!ok) await sleep(1000);
   }
   if (!ok) throw new Error(`服务 90s 内未就绪（server:${SERVER_PORT} / web:${WEB_PORT}，详见 logs/）`);
-  status("✅ 首航检查单全绿：PG ✅ 迁移 ✅ 种子 ✅ server ✅ web ✅");
+  status("启动检查已全部通过", { phase: "ready", percent: 100, etaSeconds: 0 });
+  payloadTransaction?.commit();
+  payloadTransaction = null;
+  writeInstallCheckpoint(supportDir, { status: "complete", phase: "ready", detail: "安装与启动检查已完成", recoverable: true, targetVersion: payloadVer, percent: 100, etaSeconds: 0 });
 
   const webUrl = `http://127.0.0.1:${WEB_PORT}`;
   const stop = async () => {
@@ -324,6 +468,25 @@ async function bootstrap(opts) {
     say("== 已停止 ==");
   };
   return { stop, webUrl };
+  } catch (error) {
+    // 失败重试前必须回收本次派生的服务，避免端口占用导致下一次启动继续失败。
+    for (const child of children) killTree(child);
+    if (pgStartedByBootstrap && fs.existsSync(path.join(PGDATA, "postmaster.pid"))) {
+      runToLog(pgBin("pg_ctl"), ["-D", PGDATA, "stop", "-m", "fast"], path.join(logDir, "pgctl.log"));
+    }
+    const rolledBack = Boolean(payloadTransaction);
+    payloadTransaction?.rollback();
+    payloadTransaction = null;
+    writeInstallCheckpoint(supportDir, {
+      status: "failed",
+      phase: "recovery",
+      detail: "本次安装或启动未完成",
+      recoverable: true,
+      rolledBack,
+      error: String(error instanceof Error ? error.message : error).slice(0, 500),
+    });
+    throw error;
+  }
 }
 
 /* ---------------- CLI（CI 冒烟） ---------------- */
@@ -345,4 +508,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { bootstrap };
+module.exports = { bootstrap, installPayloadAtomically, writeInstallCheckpoint };

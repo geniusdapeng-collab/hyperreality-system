@@ -2,13 +2,99 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
+let repositoryRoot = root;
+try {
+  repositoryRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: root, encoding: "utf8" }).trim();
+} catch {
+  // 非 Git 制品校验继续以当前目录为根；缺失清单会给出明确错误。
+}
 const bundlesRoot = path.join(root, "bundles");
 const errors = [];
 const envExample = path.join(root, ".env.example");
 const envText = fs.existsSync(envExample) ? fs.readFileSync(envExample, "utf8") : "";
 const activeSeedScripts = envText.match(/^DESKTOP_SEED_SCRIPT=(.+)$/m)?.[1] ?? "";
+const productManifestPath = path.join(repositoryRoot, "product.manifest.json");
+
+function requiredJson(file, label) {
+  if (!fs.existsSync(file)) {
+    errors.push(`缺少${label}：${path.relative(root, file)}`);
+    return null;
+  }
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch { errors.push(`${label}不是合法 JSON：${path.relative(root, file)}`); return null; }
+}
+
+const product = requiredJson(productManifestPath, "产品清单");
+if (product) {
+  if (product.schemaVersion !== "workloom.product/v1") errors.push("产品清单 schemaVersion 必须为 workloom.product/v1");
+  if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(product.productId ?? "")) errors.push("产品标识格式不正确");
+  if (!/^[\w.-]+\/[\w.-]+$/.test(product.repository ?? "")) errors.push("产品清单 repository 格式不正确");
+  if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(product.demoWorkspaceSlug ?? "")) errors.push("演示工作区标识格式不正确");
+  if (!/^[A-Z][A-Z0-9-]{1,31}$/.test(product.demoMemberNo ?? "")) errors.push("演示成员编号格式不正确");
+  if (!Number.isInteger(product.desktop?.portOffset) || product.desktop.portOffset < 0 || product.desktop.portOffset > 900) {
+    errors.push("桌面端口偏移必须为 0 到 900 的整数");
+  }
+  for (const [client, spec] of Object.entries(product.clients ?? {})) {
+    if (spec?.enabled !== true) errors.push(`${client} 未启用；正式产品必须明确提供三端`);
+    const clientDir = path.resolve(root, spec?.entry ?? "");
+    if (!spec?.entry || !clientDir.startsWith(`${root}${path.sep}`) || !fs.existsSync(path.join(clientDir, "package.json"))) {
+      errors.push(`${client} 入口不存在或越出仓库：${spec?.entry ?? "未配置"}`);
+    }
+  }
+  for (const requiredClient of ["bPc", "bMobile", "cMobile"]) {
+    if (!product.clients?.[requiredClient]) errors.push(`产品清单缺少三端入口：${requiredClient}`);
+  }
+  const packageJson = requiredJson(path.join(root, "package.json"), "根 package.json");
+  if (packageJson && packageJson.name !== product.packageName) errors.push("产品清单 packageName 与根 package.json 不一致");
+  const defaultBundle = path.join(bundlesRoot, product.defaultBundle ?? "", "bundle.json");
+  if (!fs.existsSync(defaultBundle)) errors.push(`默认行业包不存在：${product.defaultBundle ?? "未配置"}`);
+
+  const builderPath = path.join(root, "electron-builder.yml");
+  const builder = fs.existsSync(builderPath) ? fs.readFileSync(builderPath, "utf8") : "";
+  if (!builder.includes(`appId: ${product.release?.appId}`)) errors.push("electron-builder appId 与产品清单不一致");
+  if (!builder.includes(`productName: ${product.displayName}`)) errors.push("electron-builder productName 与产品清单不一致");
+  if (!builder.includes(`workloomPortOffset: ${product.desktop?.portOffset}`)) errors.push("electron-builder 端口偏移与产品清单不一致");
+  for (const marker of [
+    "notarize: true",
+    "hardenedRuntime: true",
+    "entitlements: build/entitlements.mac.plist",
+    "from: build/bundle-trust.json",
+  ]) {
+    if (!builder.includes(marker)) errors.push(`桌面生产构建缺少安全配置：${marker}`);
+  }
+
+  const desktopWorkflowPath = path.join(root, ".github/workflows/build-desktop.yml");
+  const desktopWorkflow = fs.existsSync(desktopWorkflowPath) ? fs.readFileSync(desktopWorkflowPath, "utf8") : "";
+  for (const marker of [
+    "MAC_CSC_LINK",
+    "APPLE_APP_SPECIFIC_PASSWORD",
+    "codesign --verify --deep --strict",
+    "xcrun stapler validate",
+    "WIN_CSC_LINK",
+    "Get-AuthenticodeSignature",
+    "pnpm bundle:release",
+  ]) {
+    if (!desktopWorkflow.includes(marker)) errors.push(`桌面发布工作流缺少安全门禁：${marker}`);
+  }
+
+  const releaseScript = path.join(root, "scripts/release.sh");
+  if (fs.existsSync(releaseScript)) {
+    const releaseSource = fs.readFileSync(releaseScript, "utf8");
+    if (!releaseSource.includes('REPO="$(node scripts/product-runtime.mjs --field repository)"') || releaseSource.includes('REPO="geniusdapeng-collab/')) {
+      errors.push("release.sh 必须从产品清单动态解析目标仓库");
+    }
+  }
+  const siteRoot = path.resolve(root, product.release?.website ?? "");
+  for (const file of ["index.html", "en.html"]) {
+    const siteFile = path.join(siteRoot, file);
+    if (fs.existsSync(siteFile) && !fs.readFileSync(siteFile, "utf8").includes(`github.com/${product.repository}`)) {
+      errors.push(`${path.relative(root, siteFile)} 下载/仓库地址与产品清单不一致`);
+    }
+  }
+}
 
 function requireSource(relativePath, checks) {
   const absolutePath = path.join(root, relativePath);
@@ -100,4 +186,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log("产品内容完整性检查通过：Bundle 资产、数字员工、技能、桌面种子、语音与场景命名契约一致。 ");
+console.log("产品内容完整性检查通过：产品身份、三端入口、发布目标、Bundle 资产、数字员工、技能、桌面种子、语音与场景命名契约一致。");

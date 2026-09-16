@@ -34,7 +34,7 @@ export class MockPushDriver implements PushDriver {
   async deliver(msg: {
     channel: Channel; openid: string; kind: NotificationKind; payload: Record<string, unknown>;
   }): Promise<void> {
-    this.box.push({ ...msg, deliveredAt: new Date().toISOString() });
+    this.box.push({ ...msg, recordedAt: new Date().toISOString(), deliveryState: "demo" });
   }
 }
 
@@ -66,7 +66,10 @@ export class AlipayNotifyPushDriver implements PushDriver {
 export interface PushResult {
   notificationId: number;
   driver: string;
-  status: string;
+  /** 持久化投递状态；mock 不得伪装 delivered。 */
+  status: "pending" | "delivered";
+  /** 面向产品层的明确语义。 */
+  deliveryState: "demo" | "sent";
   /** true = 走内置 mock 驱动（演示路径，已落库可查） */
   mock: boolean;
 }
@@ -94,17 +97,21 @@ export async function pushMessage(
     channel: user.channel, openid: user.openid, kind: input.kind, payload: input.payload,
   });
 
+  const mock = driver.driverKey === "mock";
+  const status = mock ? "pending" : "delivered";
+
   // mock 投递必落库可查（与真实投递同纪律；driver 字段如实标注链路）
   const ins = await db.query<{ id: number } & Record<string, unknown>>(
     `INSERT INTO c_notifications (workspace_id, c_user_id, channel, kind, payload, driver, status)
-     VALUES ($1,$2,$3,$4,$5,$6,'delivered') RETURNING id`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
     [input.workspaceId, input.cUserId, user.channel, input.kind,
-      JSON.stringify(input.payload), driver.driverKey],
+      JSON.stringify(input.payload), driver.driverKey, status],
   );
   return {
     notificationId: Number(ins.rows[0]!["id"]),
     driver: driver.driverKey,
-    status: "delivered",
-    mock: driver.driverKey === "mock",
+    status,
+    deliveryState: mock ? "demo" : "sent",
+    mock,
   };
 }

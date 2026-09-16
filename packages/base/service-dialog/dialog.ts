@@ -11,7 +11,12 @@
  * 事件：经注入的 gatewayAppend 风格 emitter（签名参照 workdata/gateway.ts；测试注入内存 emitter）。
  */
 import { newId } from "@workloom/shared";
-import { routeIntent, type Intent, type IntentLlm } from "./intents.js";
+import {
+  routeIntent,
+  type Intent,
+  type IntentLlm,
+  type IntentRuleExtension,
+} from "./intents.js";
 import type { Queryable } from "../service-kb/kb.js";
 import { searchKB, type KbSearchHit } from "../service-kb/search.js";
 
@@ -41,7 +46,7 @@ export interface Citation {
   score: number;
 }
 
-export type TicketDraftKind = "delivery" | "repair" | "complaint" | "other";
+export type TicketDraftKind = "complaint" | "other" | (string & {});
 
 export interface TicketDraft {
   kind: TicketDraftKind;
@@ -52,8 +57,22 @@ export interface TicketDraft {
 
 /** biz_query 工具调用契约（server 层执行，dialog 只产出描述不碰业务数据） */
 export interface ToolCallRequest {
-  tool: "biz.query_orders" | "biz.query_bill" | "biz.query_member";
+  /** 由行业扩展登记的稳定能力标识，基座不枚举订单/会员等行业工具。 */
+  tool: `business.${string}`;
   params: Record<string, unknown>;
+}
+
+export interface BusinessToolResolver {
+  resolve(text: string, context: { cUserId: string }): ToolCallRequest | null;
+}
+
+export interface ServiceRequestResolver {
+  resolve(text: string): {
+    kind: string;
+    title?: string;
+    payload?: Record<string, unknown>;
+    priority?: "normal" | "high";
+  } | null;
 }
 
 /** 五元事件 emitter seam（签名参照 workdata gatewayAppend；生产接安全网关，测试注入内存） */
@@ -109,18 +128,21 @@ export interface HandleMessageResult {
 
 /* ================= 确定性辅助（纯函数） ================= */
 
-/** service_request → 工单类型映射（通用口径） */
-export function ticketKindForServiceRequest(text: string): TicketDraftKind {
-  if (/修|坏|漏水|设备|热水|灯|水管|器材/.test(text)) return "repair";
-  if (/送|拿|清洁|换|加一|多要|再来/.test(text)) return "delivery";
-  return "other";
+/** service_request → 工单投影；无行业解析器时只允许中性 other。 */
+export function ticketKindForServiceRequest(
+  text: string,
+  resolver?: ServiceRequestResolver,
+): TicketDraftKind {
+  return resolver?.resolve(text)?.kind ?? "other";
 }
 
-/** biz_query → 工具调用描述（工具契约，由 server 层执行） */
-export function bizToolFor(text: string, cUserId: string): ToolCallRequest {
-  if (/账单|费用|发票/.test(text)) return { tool: "biz.query_bill", params: { cUserId } };
-  if (/积分|会员|余额/.test(text)) return { tool: "biz.query_member", params: { cUserId } };
-  return { tool: "biz.query_orders", params: { cUserId } };
+/** biz_query → 扩展工具调用描述；基座不猜测任何行业业务工具。 */
+export function bizToolFor(
+  text: string,
+  cUserId: string,
+  resolver?: BusinessToolResolver,
+): ToolCallRequest | null {
+  return resolver?.resolve(text, { cUserId }) ?? null;
 }
 
 function toCitation(hit: KbSearchHit): Citation {
@@ -150,6 +172,9 @@ export interface DialogDeps {
   /** 检索（缺省走 service-kb searchKB 关键词兜底） */
   search?: SearchFn;
   intentLlm?: IntentLlm;
+  intentRules?: readonly IntentRuleExtension[];
+  businessTool?: BusinessToolResolver;
+  serviceRequest?: ServiceRequestResolver;
   chatLlm?: ChatLlm;
 }
 
@@ -183,7 +208,7 @@ export async function handleMessage(
   );
 
   // ③ 意图路由（规则先行 + LLM 兜底）
-  const routed = await routeIntent(input.text, deps.intentLlm);
+  const routed = await routeIntent(input.text, deps.intentLlm, deps.intentRules);
   const intent = routed.intent;
 
   let answer = "";
@@ -228,18 +253,24 @@ export async function handleMessage(
     answer = "非常抱歉给您带来不便。您的反馈已记录，客服主管会尽快与您联系处理。";
   } else if (intent === "service_request") {
     confidence = routed.source === "rule" ? 1 : 0.6;
-    const kind = ticketKindForServiceRequest(input.text);
+    const projected = deps.serviceRequest?.resolve(input.text) ?? null;
+    const kind = projected?.kind ?? "other";
     ticketDraft = {
       kind,
-      title: `服务请求：${input.text.slice(0, 30)}`,
-      payload: { text: input.text, channel: input.channel },
-      priority: "normal",
+      title: projected?.title ?? `服务请求：${input.text.slice(0, 30)}`,
+      payload: projected?.payload ?? { text: input.text, channel: input.channel },
+      priority: projected?.priority ?? "normal",
     };
-    answer = "好的，您的需求已收到，我们马上为您安排。";
+    answer = "好的，您的需求已记录，将按服务流程处理。";
   } else if (intent === "biz_query") {
     confidence = routed.source === "rule" ? 1 : 0.6;
-    bizTool = bizToolFor(input.text, input.cUserId);
-    answer = "正在为您查询相关业务数据…";
+    bizTool = bizToolFor(input.text, input.cUserId, deps.businessTool) ?? undefined;
+    if (bizTool) {
+      answer = "正在为您查询相关业务数据…";
+    } else {
+      degraded = true;
+      answer = "当前服务尚未配置这项业务查询能力，请联系服务方处理。";
+    }
   } else {
     // chat：LLM 注入式；无 LLM 确定性 mock 兜底（标注 mock，离线可演示）
     if (deps.chatLlm) {

@@ -174,6 +174,7 @@ export interface MemoryHit {
   kind: MemoryKind;
   content: string;
   confidence: number;
+  status: MemoryStatus;
   source_events: string[];
   /** 作用域归属 id（agent/run 作用域的主体；workspace 作用域为 null，M3/M4） */
   subject_id: string | null;
@@ -205,7 +206,7 @@ export async function searchMemories(
   }
   return withScope(app, scope, async (c) => {
     const r = await c.query<MemoryHit & { dist: number | null }>(
-      `SELECT memory_id, scope, kind, content, confidence, source_events, subject_id,
+      `SELECT memory_id, scope, kind, content, confidence, status, source_events, subject_id,
               ${q.query && embedder ? `embedding <=> $${params.length}::vector` : "NULL"} AS dist
        FROM org_memory WHERE ${clauses.join(" AND ")}
        ORDER BY ${order} LIMIT ${limit}`,
@@ -250,7 +251,7 @@ export async function getMemorySources(
 ): Promise<{ memory: MemoryHit | null; sourceEvents: BusinessEvent[]; usedBy: string[] }> {
   return withScope(app, scope, async (c) => {
     const m = await c.query<MemoryHit>(
-      `SELECT memory_id, scope, kind, content, confidence, source_events, subject_id
+      `SELECT memory_id, scope, kind, content, confidence, status, source_events, subject_id
        FROM org_memory WHERE memory_id = $1 AND tenant_id = $2 AND workspace_id = $3`,
       [memoryId, scope.tenantId, scope.workspaceId],
     );

@@ -12,8 +12,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { COMMON_STATUS_TEXT, THREAD_MODE_TEXT, actionText, actorText, dictText, payloadText, shortId } from "../../lib/display";
+import { COMMON_STATUS_TEXT, MODEL_TIER_TEXT, MODEL_WINDOW_TEXT, RULE_RESULT_TEXT, THREAD_MODE_TEXT, actionText, actorText, approvalGestureText, dictText, payloadText, shortId } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
+import { useNavigationAccess } from "../../shell/NavigationAccess";
 import { RejectDialog } from "../../components/RejectDialog";
 import {
   AgentActionMessage,
@@ -21,13 +22,14 @@ import {
   DispatchBar,
   EmptyState,
   HumanBubble,
-  SkeletonBlock,
+  Skeleton,
   SubCallMessage,
   SystemDivider,
   TriGestureBar,
   XpBar,
   type ReceiptState,
 } from "../../components/hud";
+import { Icon, clientChineseText } from "@workloom/ui";
 
 interface ThreadRow {
   id: string; title: string; mode: string; status: string;
@@ -39,7 +41,7 @@ interface Ev {
   who: { type: "human" | "agent" | "system"; id: string; version?: string };
   context: { time: string };
   object: { type: string; id?: string };
-  decision: { action: string; before?: unknown; after?: unknown; basis?: string[] };
+  decision: { action: string; effect?: "read" | "write"; before?: unknown; after?: unknown; basis?: string[] };
   rule_impact: Array<{ rule_id: string; version: string; result: string }>;
   receipt?: { synced?: boolean; snapshot_uri?: string };
   model_trace?: { model_id: string; tier?: string; window?: string; credits?: number };
@@ -57,17 +59,14 @@ function receiptOf(ev: Ev): ReceiptState {
   return "unverified";
 }
 
-/** 写类动作前缀（完成后态「仅只读分析」判定；与网关同源口径） */
-const WRITE_PREFIX = ["render.submit", "publish.post", "comment.reply", "script.update", "trigger."];
-
 export default function P2() {
+  const { canAction } = useNavigationAccess();
   const { threadId = "" } = useParams();
   const [params] = useSearchParams();
   const demo = params.get("demo");
 
   const [ready, setReady] = useState(false);
   const [offline, setOffline] = useState(false); // 断线重连中（F3.4 不伪造进度）
-  const [role, setRole] = useState<string>("owner");
   const [thread, setThread] = useState<ThreadRow | null>(null);
   const [threads, setThreads] = useState<ThreadRow[]>([]);
   const [events, setEvents] = useState<Ev[]>([]);
@@ -79,13 +78,11 @@ export default function P2() {
   const load = useCallback(async () => {
     try {
       await ensureDemoLogin();
-      const [meR, th, list, ap] = await Promise.all([
-        trpc.members.me.query() as Promise<{ identity: { role: string } }>,
+      const [th, list, ap] = await Promise.all([
         trpc.threads.get.query({ threadId }) as Promise<ThreadRow | null>,
         trpc.threads.list.query() as Promise<ThreadRow[]>,
         trpc.approvals.list.query() as Promise<ApprovalRow[]>,
       ]);
-      setRole(meR.identity.role);
       setThread(th);
       setThreads(list);
       if (th) {
@@ -124,10 +121,11 @@ export default function P2() {
     };
   }, [events]);
 
-  const hasWrite = events.some((e) => WRITE_PREFIX.some((p) => e.decision.action.startsWith(p)));
+  const hasWrite = events.some((e) => e.decision.effect === "write" && e.receipt?.synced === true);
   const isDone = thread?.status === "completed";
   const isFailed = demo === "p2_error" || thread?.status === "failed";
-  const readonly = role === "readonly";
+  const canApprove = canAction("approval.decide");
+  const canDispatch = canAction("task.dispatch");
 
   /* ---------- 手势写回（approvals.decide；驳回原因弹窗在 P4 落地完整枚举，此处驳回走默认原因） ---------- */
   const gesture = useCallback(async (approvalId: string, g: "approve" | "edit" | "reject") => {
@@ -137,7 +135,7 @@ export default function P2() {
       return;
     }
     await trpc.approvals.decide.mutate({ approvalId, gesture: g });
-    setBanner({ level: "info", text: "审批已写回事件库并回流偏好记忆（F5.5/F1.7）" });
+    setBanner({ level: "info", text: "审批结果已写入事件账本，并用于校准协作偏好。" });
     await load();
   }, [load]);
 
@@ -151,17 +149,17 @@ export default function P2() {
       reasonText: r.reasonText,
     });
     setRejectTarget(null);
-    setBanner({ level: "info", text: `已驳回（${r.reasonEnum}）并回流偏好校准（F5.5/F1.7/D24）` });
+    setBanner({ level: "info", text: "已驳回并记录原因，后续会用于校准协作偏好。" });
     await load();
   }, [rejectTarget, load]);
 
   /* ---------- 追问（P2E6：沿用线程上下文；threads.run 续跑，replay 幂等 H-5） ---------- */
   const followUp = useCallback(async () => {
     if (!composer.trim() || !thread) return;
-    setBanner({ level: "info", text: "追问已沿本线程上下文入列（F3.6），执行中…" });
+    setBanner({ level: "info", text: "追问已沿用当前任务上下文并进入队列，正在执行…" });
     setComposer("");
     try {
-      await trpc.threads.run.mutate({ threadId: thread.id, goal: composer, presetKey: thread.agent_id ?? "director" });
+      await trpc.threads.run.mutate({ threadId: thread.id, goal: composer, ...(thread.agent_id ? { presetKey: thread.agent_id } : {}) });
     } finally {
       await load();
     }
@@ -170,18 +168,18 @@ export default function P2() {
   /* ---------- 左栏：会话列表（P2E1 状态点浏览，单击切换） ---------- */
   const left = (
     <>
-      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">会话 · THREADS</div>
+      <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">任务会话</div>
       {threads.map((t) => (
         <a
           key={t.id}
-          href={`/p2/${t.id}`}
+          href={`/tasks/${t.id}`}
           className={`mb-1.5 block rounded-lg border px-3 py-2.5 no-underline ${
             t.id === threadId ? "border-gline bg-gold/6" : "border-line bg-card hover:border-gline"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] text-ink3">{t.id}</span>
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-ink2">
+            <span className="font-mono text-body text-ink3">{shortId(t.id)}</span>
+            <span className="inline-flex items-center gap-1.5 text-body text-ink2">
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${
                 t.status === "running" ? "bg-holo animate-pulse-hud"
                 : t.status === "pending_review" ? "bg-warn animate-pulse-warn"
@@ -200,35 +198,35 @@ export default function P2() {
   /* ---------- 右栏：ThreadInspector（P2E5 只读；成员点击 → P8 后续卡） ---------- */
   const right = (
     <>
-      <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">线程信息 · INSPECTOR</div>
+      <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">任务信息</div>
       {thread && (
         <div className="space-y-3">
           <div className="rounded-lg border border-line bg-card p-3">
-            <div className="mb-1.5 text-caption font-bold text-holo">进度（≤5s 轮询 F3.4）</div>
+            <div className="mb-1.5 text-body font-bold text-holo">实时进度（约每 5 秒更新）</div>
             <XpBar done={thread.progress_done} total={thread.progress_total} />
-            <div className="mt-1.5 text-micro text-ink3">
+            <div className="mt-1.5 text-body text-ink3">
               {offline ? "连接中断 · 重连中（保留最后已知进度）" : `状态 ${dictText(COMMON_STATUS_TEXT, thread.status)} · 预计剩余 —`}
             </div>
           </div>
           <div className="rounded-lg border border-line bg-card p-3">
-            <div className="mb-1.5 text-caption font-bold text-holo">计量（model_trace 投影 L6.3）</div>
-            <div className="font-orb text-h2 font-bold text-ink">{meter.credits} <span className="text-caption text-ink3">积分</span></div>
-            <div className="mt-0.5 font-mono text-micro text-ink3">
-              档 {meter.tiers.join("/")} · 窗口 {meter.window}
+            <div className="mb-1.5 text-body font-bold text-holo">模型调用计量</div>
+            <div className="font-orb text-h2 font-bold text-ink">{meter.credits} <span className="text-body text-ink3">积分</span></div>
+            <div className="mt-0.5 text-body text-ink3">
+              {meter.tiers.map((tier) => dictText(MODEL_TIER_TEXT, tier)).join(" / ")} · {dictText(MODEL_WINDOW_TEXT, meter.window)}
             </div>
           </div>
           <div className="rounded-lg border border-line bg-card p-3">
-            <div className="mb-1.5 text-caption font-bold text-holo">围栏判定（rule_impact 渲染）</div>
-            <div className="flex gap-2.5 font-mono text-caption">
+            <div className="mb-1.5 text-body font-bold text-holo">围栏判定</div>
+            <div className="flex gap-2.5 font-mono text-body">
               <span className="text-go">放行 {meter.pass}</span>
               <span className="text-warn">复核 {meter.review}</span>
               <span className="text-alert">阻断 {meter.blocked}</span>
             </div>
           </div>
           <div className="rounded-lg border border-line bg-card p-3">
-            <div className="mb-1.5 text-caption font-bold text-holo">参与成员</div>
-            <div className="text-body text-ink2">{thread.agent_id ?? "值班 Agent"}</div>
-            <div className="mt-0.5 font-mono text-micro text-ink3">发起 {thread.created_by}</div>
+            <div className="mb-1.5 text-body font-bold text-holo">参与成员</div>
+            <div className="text-body text-ink2">{actorText(thread.agent_id ?? "system")}</div>
+            <div className="mt-0.5 text-body text-ink3">发起人 {actorText(thread.created_by)}</div>
           </div>
         </div>
       )}
@@ -240,24 +238,23 @@ export default function P2() {
     <Bridge left={left} right={right}>
       <div className="flex min-h-full flex-col">
         {/* ThreadHeader（P2-④：mode/路由置信度可见） */}
-        <div className="mb-3 flex items-center gap-2.5">
+        <div className="mb-3 flex flex-wrap items-center gap-2.5">
           <h2 className="text-h1 font-black tracking-wider">任务执行</h2>
-          <span className="text-[11px] tracking-[.2em] text-ink3">P2 · QUEST</span>
           {thread && (
             <>
-              <span className="rounded border border-gold/60 bg-gold/10 px-1.5 py-0.5 text-micro font-black text-gold">
+              <span className="rounded border border-gold/60 bg-gold/10 px-1.5 py-0.5 text-body font-black text-gold">
                 {dictText(THREAD_MODE_TEXT, thread.mode)}
               </span>
-              <span className="font-mono text-micro text-ink3">{thread.id}</span>
+              <span className="font-mono text-body text-ink3">{shortId(thread.id)}</span>
               <span className="text-body text-ink2">{thread.title}</span>
               <span className="flex-1" />
-              {thread.status !== "completed" && thread.status !== "failed" && (
+              {canDispatch && thread.status !== "completed" && thread.status !== "failed" && (
                 <button
                   type="button"
-                  onClick={() => void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, presetKey: thread.agent_id ?? "director" }).then(load)}
-                  className="cursor-pointer rounded-md border border-gline bg-gold/8 px-3 py-1 text-caption font-bold text-gold hover:bg-gold/15"
+                  onClick={() => void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, ...(thread.agent_id ? { presetKey: thread.agent_id } : {}) }).then(load)}
+                  className="cursor-pointer rounded-md border border-gline bg-gold/8 px-3 py-1 text-body font-bold text-gold hover:bg-gold/15"
                 >
-                  ▶ 执行/续跑（replay 幂等 H-5）
+                  <Icon name="play" size={14} className="inline" /> 执行或从中断处继续
                 </button>
               )}
             </>
@@ -265,7 +262,7 @@ export default function P2() {
         </div>
 
         {offline && (
-          <div className="mb-3"><BannerAlert level="warn">连接中断 · 重连中（F3.4：不伪造进度，显示最后已知状态）</BannerAlert></div>
+          <div className="mb-3"><BannerAlert level="warn">连接中断，正在重连；当前显示最后一次成功获取的进度，不会把旧数据当作最新结果。</BannerAlert></div>
         )}
         {banner && (
           <div className="mb-3"><BannerAlert level={banner.level} actionLabel="知道了" onAction={() => setBanner(null)}>{banner.text}</BannerAlert></div>
@@ -274,28 +271,28 @@ export default function P2() {
         {/* p2_error：探针失效停止一切点击 + 三入口（E3.1/L3.3） */}
         {isFailed && (
           <div className="mb-3 rounded-lg border border-alert/55 bg-alert/8 p-3.5">
-            <div className="mb-2 text-body font-bold text-alert">⛔ 渠道适配探针失效 · 已停止一切点击（E3.1/L3.3）</div>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setBanner({ level: "info", text: "已转需介入：人工接管通道开启（E1 联调卡接强制隔离）" })}
-                className="cursor-pointer rounded-md border border-alert/60 bg-alert/10 px-3 py-1.5 text-caption font-bold text-alert">转人工</button>
-              <button type="button" onClick={() => thread && void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, presetKey: thread.agent_id ?? "director" }).then(load)}
-                className="cursor-pointer rounded-md border border-warn/50 bg-warn/10 px-3 py-1.5 text-caption font-bold text-warn">降级重试</button>
-              <button type="button" onClick={() => setBanner({ level: "info", text: "回滚=逆向补偿事件序列（F1.6 append-only），E1 联调卡接线" })}
-                className="cursor-pointer rounded-md border border-holo/40 bg-holo/8 px-3 py-1.5 text-caption font-bold text-holo">回滚</button>
-            </div>
+            <div className="mb-2 flex items-center gap-1.5 text-body font-bold text-alert"><Icon name="brake" size={15} />渠道连接检查失败 · 已暂停所有外部操作</div>
+            {canDispatch && <div className="wl-action-row flex flex-wrap gap-2">
+              <button type="button" onClick={() => setBanner({ level: "info", text: "已标记为需要人工介入，并开启人工接管通道。" })}
+                className="cursor-pointer rounded-md border border-alert/60 bg-alert/10 px-3 py-1.5 text-body font-bold text-alert">转人工</button>
+              <button type="button" onClick={() => thread && void trpc.threads.run.mutate({ threadId: thread.id, goal: thread.title, ...(thread.agent_id ? { presetKey: thread.agent_id } : {}) }).then(load)}
+                className="cursor-pointer rounded-md border border-warn/50 bg-warn/10 px-3 py-1.5 text-body font-bold text-warn">降级重试</button>
+              <button type="button" onClick={() => setBanner({ level: "info", text: "回滚会生成一组反向补偿事件，原始账本记录不会被覆盖。" })}
+                className="cursor-pointer rounded-md border border-holo/40 bg-holo/8 px-3 py-1.5 text-body font-bold text-holo">回滚</button>
+            </div>}
           </div>
         )}
 
         <div className="flex-1 space-y-3">
           {!ready ? (
-            <><SkeletonBlock lines={2} h={44} /><SkeletonBlock lines={4} /></>
+            <><Skeleton count={2} height={44} label="会话摘要正在加载" /><Skeleton count={4} label="会话内容正在加载" /></>
           ) : !thread ? (
-            <EmptyState icon="🧭" title="线程不存在或已越权清空" hint="从左侧会话列表选择一条任务线程" />
+            <EmptyState icon={<Icon name="tasks" size={24} />} title="线程不存在或已越权清空" hint="从左侧会话列表选择一条任务线程" />
           ) : events.length === 0 ? (
-            <EmptyState icon="🌌" title="还没有会话内容" hint="@ 一位 Agent 或说出第一句话（F3.1）" />
+            <EmptyState icon={<Icon name="chat" size={24} />} title="还没有会话内容" hint="选择一位数字员工或说出第一句话" />
           ) : (
             <>
-              <SystemDivider time={new Date(thread.created_at).toTimeString().slice(0, 5)} summary={`线程 ${thread.id} 建立（派遣事件已落库）`} />
+              <SystemDivider time={new Date(thread.created_at).toTimeString().slice(0, 5)} summary={`任务会话 ${shortId(thread.id)} 已建立，派遣事件已写入账本`} />
               {events.map((ev) => {
                 if (ev.who.type === "human") {
                   // 人类消息文案化（§9.1 副官语气；动作码不直接上屏）
@@ -303,26 +300,29 @@ export default function P2() {
                   const text = ev.decision.action === "thread.dispatch"
                     ? (after?.title ?? thread.title)
                     : ev.decision.action === "approval.gesture"
-                      ? `待我审批：${after?.gesture ?? "已处理"}`
+                      ? `待我审批：${approvalGestureText(after?.gesture)}`
                       : actionText(ev.decision.action);
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{text}</HumanBubble>;
                 }
                 if (ev.links && ev.links.length > 0 && ev.who.type === "agent" && ev.decision.action.includes("subcall")) {
                   return (
-                    <SubCallMessage key={ev.event_id} target={ev.object.id ?? ev.object.type} version={ev.who.version ?? ""} receipt={receiptOf(ev)}>
+                    <SubCallMessage key={ev.event_id} target="协作数字员工" version={ev.who.version ?? ""} receipt={receiptOf(ev)}>
                       {actionText(ev.decision.action)}
                     </SubCallMessage>
                   );
                 }
                 if (ev.decision.action === "ask.answer") {
                   // ask 问询应答（B8）：正文上屏（§9.1 动作码不直接上屏同口径）
-                  const ans = (ev.decision.after as { text?: string } | undefined)?.text ?? "";
+                  const ans = clientChineseText(
+                    (ev.decision.after as { text?: string } | undefined)?.text,
+                    "应答内容暂时无法显示，请稍后再试。",
+                  );
                   return (
                     <AgentActionMessage
                       key={ev.event_id}
                       sender={actorText(ev.who.id)}
                       version={ev.who.version ?? ""}
-                      action="创作参谋·应答"
+                      action="经营参谋·应答"
                       eventId={ev.event_id}
                       receipt={receiptOf(ev)}
                       credits={ev.model_trace?.credits}
@@ -339,7 +339,7 @@ export default function P2() {
                     action={actionText(ev.decision.action)}
                     eventId={ev.event_id}
                     receipt={receiptOf(ev)}
-                    rules={(ev.rule_impact ?? []).map((r) => `${r.rule_id} ${r.version}`)}
+                    rules={(ev.rule_impact ?? []).map((r) => `关联围栏 · ${dictText(RULE_RESULT_TEXT, r.result)}`)}
                     credits={ev.model_trace?.credits}
                   >
                     {payloadText(ev.decision.after)}
@@ -351,22 +351,22 @@ export default function P2() {
               {approvals.map((a) => (
                 <div key={a.approval_id} className={`rounded-msg border p-4 ${a.status === "pending" ? "border-warn/40 bg-warn/4" : "border-line bg-card"}`}>
                   <div className="mb-2 flex items-center gap-2">
-                    <span className={`text-h2 font-bold ${a.status === "pending" ? "text-warn" : "text-ink2"}`}>
-                      ◆ 待我审批 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
+                    <span className={`inline-flex items-center gap-1 text-h2 font-bold ${a.status === "pending" ? "text-warn" : "text-ink2"}`}>
+                      <Icon name="approval" size={15} />待我审批 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
                     </span>
-                    <span className="font-mono text-micro text-ink3">{shortId(a.approval_id)}</span>
-                    {a.snapshot.rule_version && <span className="font-mono text-micro text-holo">命中 {a.snapshot.rule_version}</span>}
+                    <span className="font-mono text-body text-ink3">{shortId(a.approval_id)}</span>
+                    {a.snapshot.rule_version && <span className="text-body text-holo">命中关联围栏</span>}
                   </div>
                   {(a.snapshot.before !== undefined || a.snapshot.after !== undefined) && (
-                    <div className="mb-3 grid grid-cols-2 gap-2 font-mono text-caption">
-                      <div className="rounded border border-line bg-bg800/60 p-2 text-ink3">前：{JSON.stringify(a.snapshot.before)}</div>
-                      <div className="rounded border border-holo/30 bg-holo/5 p-2 text-holo">后：{JSON.stringify(a.snapshot.after)}</div>
+                    <div className="mb-3 grid grid-cols-1 gap-2 text-body sm:grid-cols-2">
+                      <div className="rounded border border-line bg-bg800/60 p-2 text-ink3">调整前：{payloadText(a.snapshot.before, 220) || "暂无"}</div>
+                      <div className="rounded border border-holo/30 bg-holo/5 p-2 text-holo">调整后：{payloadText(a.snapshot.after, 220) || "暂无"}</div>
                     </div>
                   )}
                   {a.status === "pending" ? (
-                    <TriGestureBar canApprove={!readonly} onGesture={(g) => void gesture(a.approval_id, g)} />
+                    <TriGestureBar canApprove={canApprove} onGesture={(g) => void gesture(a.approval_id, g)} />
                   ) : (
-                    <div className="text-caption text-ink3">手势已写回事件库并回流偏好记忆（F5.5/F1.7，幂等 L5.3）</div>
+                    <div className="text-body text-ink3">审批动作已写入事件账本，并用于校准协作偏好；重复提交不会重复生效。</div>
                   )}
                 </div>
               ))}
@@ -374,16 +374,20 @@ export default function P2() {
               {/* 完成后态 p2_done：交付卡 + 决策链路时间轴；无对外变更明示「仅只读分析」（E3.7） */}
               {isDone && (
                 <div className="rounded-msg border border-go/40 bg-go/5 p-4">
-                  <div className="mb-1.5 text-h2 font-black text-go">✓ 交付完成 · 变更报告</div>
-                  {!hasWrite && <div className="mb-1.5 text-caption text-warn">⚠ 本线程无对外变更 · 仅只读分析（E3.7）</div>}
-                  <div className="text-caption text-ink2">决策链路时间轴（{events.length} 个事件，点击 #E 编号展开）：</div>
+                  <div className="mb-1.5 flex items-center gap-1.5 text-h2 font-black text-go"><Icon name="check" size={17} />交付完成 · 变更报告</div>
+                  {!hasWrite && <div className="mb-1.5 flex items-center gap-1.5 text-body text-warn"><Icon name="warning" size={14} />本任务没有产生对外变更，仅完成了只读分析。</div>}
+                  <div className="text-body text-ink2">决策链路时间轴（共 {events.length} 条账本事件）：</div>
                   <div className="mt-1.5 space-y-1">
                     {events.map((ev) => (
-                      <div key={ev.event_id} className="flex items-center gap-2 font-mono text-micro text-ink3">
-                        <span className="text-holo">#{ev.event_id}</span>
-                        <span>{ev.who.id} · {actionText(ev.decision.action)}</span>
+                      <div key={ev.event_id} className="flex items-center gap-2 font-mono text-body text-ink3">
+                        <span className="text-holo">账本凭证 {shortId(ev.event_id)}</span>
+                        <span>{actorText(ev.who.id)} · {actionText(ev.decision.action)}</span>
                         <span className={receiptOf(ev) === "synced" ? "text-go" : receiptOf(ev) === "failed" ? "text-alert" : "text-warn"}>
-                          {receiptOf(ev) === "synced" ? "✓" : receiptOf(ev) === "failed" ? "✗" : "⚠"}
+                          <Icon
+                            name={receiptOf(ev) === "synced" ? "check" : receiptOf(ev) === "failed" ? "error" : "warning"}
+                            label={receiptOf(ev) === "synced" ? "已生效" : receiptOf(ev) === "failed" ? "失败" : "未核实"}
+                            size={13}
+                          />
                         </span>
                       </div>
                     ))}
@@ -395,12 +399,12 @@ export default function P2() {
         </div>
 
         {/* P2E6 线程内追问（只读成员不显示输入栏 E2.6；沿用线程上下文 F3.6） */}
-        {!readonly && thread && (
+        {canDispatch && thread && (
           <div className="mt-4">
             <DispatchBar
               state={composer ? "typing" : "empty"}
               value={composer}
-              chips={["本线程上下文", thread.id]}
+              chips={["沿用当前任务上下文"]}
               onChange={setComposer}
               onSubmit={() => void followUp()}
             />

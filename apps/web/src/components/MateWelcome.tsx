@@ -11,7 +11,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MateLive2D, type MateMood, type MateGesture } from "./loommate/MateLive2D";
 import { VoiceEngine } from "../voice/VoiceEngine";
-import { mateScriptOf, type MateScript } from "./welcomeScripts";
+import { mateScriptOf, type BundleWelcomeProjection, type MateScript } from "./welcomeScripts";
+import { Icon } from "@workloom/ui";
 
 /** 织伴仪式音色（清晰优先；段间由真实 TTS 完成事件衔接） */
 const CEREMONY_VOICE = {
@@ -53,15 +54,15 @@ const KW_POS = [
   { left: "84%", top: "42%" }, { left: "11%", top: "66%" }, { left: "79%", top: "64%" },
 ];
 
-export function MateWelcome({ industry, onBridge, onSkipAll }: {
-  /** bundle id（如 hotel / ai-pm），用于切换 S2 行业话术；未知行业自动回落通用版 */
-  industry: string | null;
+export function MateWelcome({ welcome, onBridge, onSkipAll }: {
+  /** 来自已验证 Bundle UI 的行业介绍；缺省时使用基座通用说明。 */
+  welcome?: BundleWelcomeProjection | null;
   /** S4 演完（织伴飞入右下角）→ 接入现有团队仪式 */
   onBridge: () => void;
   /** 右下角「跳过开场，直接进入」→ 直达系统首页 */
   onSkipAll: () => void;
 }) {
-  const script = useMemo(() => mateScriptOf(industry), [industry]);
+  const script = useMemo(() => mateScriptOf(welcome), [welcome]);
   const segs = useMemo(() => buildSegs(script), [script]);
   const [idx, setIdx] = useState(0);
   const [shown, setShown] = useState(0);          // 当前段已揭示字幕行数
@@ -226,7 +227,7 @@ export function MateWelcome({ industry, onBridge, onSkipAll }: {
           position: "absolute", left: "50%", bottom: 34, transform: "translateX(-50%)",
           width: "min(880px, 86vw)", zIndex: 40, textAlign: "center", cursor: "default",
         }} onClick={(e) => e.stopPropagation()}>
-          <div style={{ color: "#8a939e", fontSize: 12, letterSpacing: 3, marginBottom: 10 }}>
+          <div style={{ color: "#8a939e", fontSize: 14, letterSpacing: 3, marginBottom: 10 }}>
             织伴 · {seg.key === "system" ? "系统介绍" : seg.key === "detail" ? "正式自我介绍" : seg.key === "bridge" ? "引出团队" : "开场"}
           </div>
           {seg.lines.slice(Math.max(0, shown - 4), shown).map((line, i, arr) => (
@@ -238,7 +239,7 @@ export function MateWelcome({ industry, onBridge, onSkipAll }: {
               animation: "mw-line-in .5s ease both",
             }}>{line}</div>
           ))}
-          <div style={{ marginTop: 12, color: "#68707a", fontSize: 11, letterSpacing: 2 }}>单击画面快进 ›</div>
+          <div style={{ marginTop: 12, color: "#68707a", fontSize: 14, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>单击画面快进 <Icon name="chevron" size={13} /></div>
         </div>
       )}
 
@@ -248,11 +249,11 @@ export function MateWelcome({ industry, onBridge, onSkipAll }: {
           onClick={(e) => { e.stopPropagation(); VoiceEngine.stopAll(); onSkipAll(); }}
           style={{
             position: "absolute", right: 40, bottom: 38, zIndex: 50, cursor: "pointer",
-            color: "#c3ccd8", fontSize: 13, letterSpacing: 2,
+            color: "#c3ccd8", fontSize: 14, letterSpacing: 2,
             background: "rgba(21,24,28,.72)", border: "1px solid rgba(214,220,228,.28)",
             borderRadius: 10, padding: "10px 20px",
           }}
-        >跳过开场，直接进入 ›</button>
+        >跳过开场，直接进入 <Icon name="chevron" size={13} style={{ display: "inline" }} /></button>
       )}
     </div>
   );

@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: true               # 公网外发
 fence_bindings: [G10a, G10b, G10c, G10d]  # 评论回复四档分流
+coverage:
+  - { eventPrefix: "comment.", label: 评论运营 }
 skills: [comment-ops]
 tools:
   - { name: comment.collect, access: read,  desc: 定时采集评论 }

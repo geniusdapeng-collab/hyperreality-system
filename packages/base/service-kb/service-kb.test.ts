@@ -266,6 +266,11 @@ describe("crawlAndStructure / diffScan", () => {
 /* ================= searchKB 关键词兜底 ================= */
 
 describe("searchKB 混合检索（无 embedder 走关键词兜底）", () => {
+  it("行业同义词默认关闭，显式注入后才参与召回", () => {
+    expect(tokenizeQuery("权益查询")).not.toContain("会员卡");
+    expect(tokenizeQuery("权益查询", { synonyms: [["权益", "会员卡"]] })).toContain("会员卡");
+  });
+
   it("兜底检索命中并按 score 排序；degraded=true", async () => {
     const db = wireKbDb(new FakeDb());
     const collId = await seedCollection(db);

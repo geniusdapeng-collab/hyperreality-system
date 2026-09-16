@@ -5,14 +5,15 @@
  *   ① 完全自包含：应用资源内携带 Node 24 + PostgreSQL 17(+pgvector) + nats + 产品载荷，
  *      首启由 bootstrap.cjs 自动完成装配→initdb→迁移→种子（AI 产品经理示例包）→起服务，
  *      用户侧零依赖、零命令行、零外部浏览器；
- *   ② 固定逻辑画布：1440×900 设计稿分辨率，窗口任意拉伸只做等比缩放（zoomFactor），
- *      所有模块尺寸比例永久固定，绝不重排变形；setAspectRatio 双保险（macOS/Windows）；
+ *   ② 响应式工作区：默认 1440×900，允许用户自由缩放、分屏与全屏；
+ *      布局由共享 Web 壳按真实可用宽度重排，不再用整页 zoomFactor 模拟响应式；
  *   ③ 系统托盘常驻：关窗 = 最小化到托盘（夜班/自动任务持续运行），托盘菜单退出才是真退出；
  *   ④ 单实例锁：重复启动唤出已有窗口，不开第二个客户端；
  *   ⑤ 首启 Splash：初始化期间展示进度（首启约 1 分钟，之后秒开）。
  *
  * 环境变量（调试覆盖，正常分发无需设置）：
  *   WORKLOOM_RESOURCES   Resources 根目录（默认 process.resourcesPath）
+ *   WORKLOOM_SOURCE_MODE 仅由 pnpm app 源码编排器设为 1；复用外部源码 server/web
  *   WORKLOOM_SUPPORT_DIR 支持目录（默认当前应用独立 userData）
  *   WORKLOOM_APP_SMOKE   设为 1 时执行后端首启冒烟后退出
  *   WORKLOOM_RENDER_SMOKE 设为 1 时创建真实窗口并验证页面/数字人/像素后退出
@@ -21,6 +22,7 @@
  *   WORKLOOM_SERVER_PORT 后端端口（默认 8787）
  *   WORKLOOM_PG_PORT     PostgreSQL 端口（默认 5432）
  *   WORKLOOM_NATS_PORT   NATS 端口（默认 4222）
+ *   WORKLOOM_PORT_OFFSET 产品端口偏移（行业包/构建配置提供，默认 0）
  */
 const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, shell, dialog } = require("electron");
 const fs = require("node:fs");
@@ -31,19 +33,23 @@ if (process.env.WORKLOOM_SUPPORT_DIR) {
   app.setPath("userData", path.resolve(process.env.WORKLOOM_SUPPORT_DIR));
 }
 
-// 各产品使用独立端口，避免同一台机器上多个行业版互相连接到错误的
-// PostgreSQL / server / web / NATS。打包时 extraMetadata.name 提供稳定产品键。
-const PRODUCT_PORT_OFFSET = {
-  "workloom-im": 0,
-  "panda-cineforge": 10,
-  "workroom-tiger": 20,
-  "workroom-andromeda": 30,
-  "workroom-eagle": 40,
-  "workloom-geo": 50,
-  "workroom-fox": 60,
-  "hyperreality-system": 70,
-  "workloom-hotel": 80,
-}[app.getName()] ?? 0;
+// 各产品使用独立端口，避免同机多实例串连。基座不得认识任何行业仓名称：
+// 偏移量只能由行业构建配置（extraMetadata.workloomPortOffset）或运行环境注入。
+function readProductPortOffset() {
+  let configured = process.env.WORKLOOM_PORT_OFFSET;
+  if (configured === undefined) {
+    try {
+      const packaged = require(path.join(app.getAppPath(), "package.json"));
+      configured = packaged.workloomPortOffset;
+    } catch { /* 开发态缺失时使用基座默认值 */ }
+  }
+  const parsed = Number(configured ?? 0);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 900) {
+    throw new Error("WORKLOOM_PORT_OFFSET 必须是 0 到 900 的整数");
+  }
+  return parsed;
+}
+const PRODUCT_PORT_OFFSET = readProductPortOffset();
 process.env.WORKLOOM_SERVER_PORT ??= String(8787 + PRODUCT_PORT_OFFSET);
 process.env.WORKLOOM_WEB_PORT ??= String(5173 + PRODUCT_PORT_OFFSET);
 process.env.WORKLOOM_PG_PORT ??= String(5432 + PRODUCT_PORT_OFFSET);
@@ -53,6 +59,7 @@ const { bootstrap } = require("./bootstrap.cjs");
 const TITLE = process.env.WORKLOOM_APP_TITLE ?? app.getName();
 const APP_SMOKE = process.env.WORKLOOM_APP_SMOKE === "1";
 const RENDER_SMOKE = process.env.WORKLOOM_RENDER_SMOKE === "1";
+const SOURCE_MODE = process.env.WORKLOOM_SOURCE_MODE === "1";
 const SAFE_RENDERING = process.env.WORKLOOM_SAFE_RENDERING === "1" || process.argv.includes("--safe-rendering");
 const WEB_PORT = Number(process.env.WORKLOOM_WEB_PORT || 5173);
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
@@ -70,9 +77,11 @@ if (SAFE_RENDERING) {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
-/** 设计稿逻辑分辨率——所有页面按此比例设计，窗口只做等比缩放 */
-const BASE_W = 1440;
-const BASE_H = 900;
+/** 默认窗口尺寸；不是固定逻辑画布，用户可自由调整。 */
+const DEFAULT_W = 1440;
+const DEFAULT_H = 900;
+const MIN_W = 960;
+const MIN_H = 640;
 
 let win = null;
 let splash = null;
@@ -80,6 +89,11 @@ let tray = null;
 let handle = null; // bootstrap 返回的 { stop, webUrl }
 let quitting = false;
 let supportDirResolved = null;
+let bootstrapRunning = false;
+let bootstrapStartedAt = 0;
+let retryBootstrap = null;
+let lastBootstrapError = null;
+let lastBootstrapReference = null;
 
 /* ---------- 单实例锁：重复启动唤出已有窗口 ---------- */
 const gotLock = app.requestSingleInstanceLock();
@@ -92,35 +106,142 @@ if (!gotLock) {
   });
 }
 
-/* ---------- 固定比例缩放（核心：布局永不变形） ---------- */
-function applyFixedZoom() {
-  if (!win) return;
-  const [w, h] = win.getContentSize();
-  const factor = Math.min(w / BASE_W, h / BASE_H);
-  win.webContents.setZoomFactor(Math.max(0.5, Math.min(factor, 2.5)));
+function resetWindowAndLayout() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isFullScreen()) win.setFullScreen(false);
+  win.setSize(DEFAULT_W, DEFAULT_H, true);
+  win.center();
+  win.webContents.setZoomFactor(1);
+  void win.webContents.executeJavaScript(
+    "window.dispatchEvent(new CustomEvent('workloom:reset-layout'))",
+    true,
+  );
 }
 
-/* ---------- 首启 Splash（初始化进度可视） ---------- */
-const SPLASH_HTML = (msg) =>
-  `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><body style="margin:0;background:#0B1220;color:#E2E8F0;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;user-select:none;cursor:default">
-  <div style="font-size:28px;font-weight:700;letter-spacing:2px">WorkLoom <span style="color:#C9A227">织元</span></div>
-  <div style="margin-top:10px;font-size:13px;color:#94A3B8">企业数字员工 IM · 首次启动初始化中</div>
-  <div style="margin-top:28px;width:280px;height:4px;background:#1E293B;border-radius:2px;overflow:hidden"><div style="width:40%;height:100%;background:#C9A227;border-radius:2px;animation:slide 1.2s ease-in-out infinite alternate"></div></div>
-  <div style="margin-top:18px;font-size:12px;color:#64748B;max-width:80%;text-align:center">${msg}</div>
-  <style>@keyframes slide{from{transform:translateX(-60%)}to{transform:translateX(260%)}}</style>
-</body></html>`)}`;
+/* ---------- 首启 Splash（初始化阶段与诊断可视） ---------- */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
 
-function showSplash(msg) {
+function publicStartupError(error) {
+  const value = String(error ?? "");
+  if (/ENOSPC|no space|磁盘/i.test(value)) return "可用磁盘空间不足，运行环境未完成安装。请释放空间后重试。";
+  if (/EACCES|EPERM|permission|权限/i.test(value)) return "应用数据目录不可写，运行环境未完成安装。请检查目录权限后重试。";
+  if (/EADDRINUSE|端口|90s 内未就绪|服务.*未就绪/i.test(value)) return "本机服务未能在限定时间内启动，可能存在端口冲突或服务异常。";
+  if (/数据库|PostgreSQL|initdb|迁移/i.test(value)) return "本地数据库初始化或升级未完成，现有数据没有被标记为可用。";
+  if (/载荷|PAYLOAD|runtime|tsx/i.test(value)) return "安装文件缺失或校验未通过，运行环境未完成装配。";
+  if (/页面加载|render|渲染/i.test(value)) return "工作台页面未能安全加载，后台服务已停止或保持在安全状态。";
+  return "启动未完成。系统已停止本次启动流程，没有把未就绪状态显示为可用。";
+}
+
+const SPLASH_HTML = ({ message, error = "", reference = "", startedAt = Date.now(), progress = {} }) => {
+  const failed = Boolean(error);
+  const safeMessage = escapeHtml(message);
+  const safeError = escapeHtml(error);
+  const percent = Math.max(0, Math.min(100, Number.isFinite(Number(progress.percent)) ? Math.round(Number(progress.percent)) : 0));
+  const etaSeconds = Math.max(0, Number.isFinite(Number(progress.etaSeconds)) ? Math.round(Number(progress.etaSeconds)) : 0);
+  const progressText = etaSeconds > 0 ? `已完成 ${percent}% · 预计还需约 ${etaSeconds} 秒` : `已完成 ${percent}%`;
+  const actions = failed ? `<div class="actions">
+    <a class="primary" href="workloom-action://retry">重试启动</a>
+    <a href="workloom-action://logs">打开日志目录</a>
+    <a href="workloom-action://export">导出诊断</a>
+    <a href="workloom-action://exit">安全退出</a>
+  </div>` : "";
+  return `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkLoom 启动</title></head><body>
+  <main aria-live="polite">
+    <div class="brand">WorkLoom <span>织元</span></div>
+    <div class="subtitle">企业数字员工 IM · ${failed ? "启动需要处理" : "正在准备工作区"}</div>
+    ${failed ? `<div class="failure" role="alert"><strong>本次启动未完成</strong><p>${safeError}</p>${reference ? `<p>支持参考：${escapeHtml(reference)}</p>` : ""}</div>` : `<div role="progressbar" aria-label="正在初始化" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}" aria-valuetext="${escapeHtml(`${progressText}，${message}`)}" class="progress"><i style="width:${percent}%"></i></div>`}
+    <p class="stage">${safeMessage}</p>
+    ${failed ? "" : `<p class="elapsed"><strong>${progressText}</strong><br>已用时 <span id="elapsed">0 秒</span> · 进度按已完成的启动检查点更新</p>`}
+    ${failed ? actions : `<div class="actions"><a href="workloom-action://logs">查看启动日志</a><a href="workloom-action://export">导出诊断</a><a href="workloom-action://exit">安全退出</a></div>`}
+    <p class="hint">${failed ? "重试前可先导出诊断；所有动作都不会清除业务数据。" : "请勿重复启动多个实例；若失败，页面会保留原因、重试和诊断入口。"}</p>
+  </main>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#0B1220;color:#E2E8F0;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;min-height:100vh;display:grid;place-items:center;padding:28px}main{width:min(100%,390px);text-align:center}.brand{font-size:28px;font-weight:700;letter-spacing:2px}.brand span{color:#C9A227}.subtitle{margin-top:10px;font-size:14px;color:#94A3B8}.progress{margin:28px auto 0;width:min(100%,280px);height:6px;background:#1E293B;border-radius:999px;overflow:hidden}.progress i{display:block;height:100%;min-width:2px;background:#C9A227;border-radius:inherit;transition:width .25s ease}.stage,.failure p{overflow-wrap:anywhere;word-break:break-word}.stage{margin:18px auto 0;font-size:14px;line-height:1.6;color:#CBD5E1;max-width:360px}.elapsed,.hint{margin:10px auto 0;font-size:14px;line-height:1.6;color:#94A3B8}.elapsed strong{color:#E2E8F0}.failure{margin-top:24px;padding:14px;border:1px solid #7F1D1D;border-radius:10px;background:#2B1018;text-align:left}.failure strong{color:#FCA5A5}.failure p{margin:8px 0 0;color:#FECACA;font-size:14px;line-height:1.55;max-height:112px;overflow:auto}.actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:18px}.actions a{align-items:center;display:flex;justify-content:center;min-height:44px;min-width:0;padding:9px 10px;border:1px solid #475569;border-radius:8px;color:#E2E8F0;text-decoration:none;font-size:14px;overflow-wrap:anywhere}.actions a:focus-visible{outline:3px solid #FACC15;outline-offset:2px}.actions .primary{background:#C9A227;border-color:#C9A227;color:#111827;font-weight:700}@media(prefers-reduced-motion:reduce){.progress i{transition:none}}
+  </style>
+  ${failed ? "" : `<script>const startedAt=${Number(startedAt)};const tick=()=>{const el=document.getElementById('elapsed');if(el)el.textContent=Math.max(0,Math.floor((Date.now()-startedAt)/1000))+' 秒'};tick();setInterval(tick,1000)</script>`}
+</body></html>`)}`;
+};
+
+function showSplash(message, error = "", reference = lastBootstrapReference ?? "", progress = {}) {
   if (!splash) {
     splash = new BrowserWindow({
-      width: 480, height: 360, resizable: false, frame: false,
+      width: 520, height: 420, minWidth: 440, minHeight: 340, resizable: Boolean(error), frame: false,
       backgroundColor: "#0B1220", show: false,
       webPreferences: { contextIsolation: true, nodeIntegration: false },
     });
     splash.once("ready-to-show", () => splash && splash.show());
     splash.on("closed", () => { splash = null; });
+    splash.webContents.on("will-navigate", (event, url) => {
+      if (!url.startsWith("workloom-action://")) return;
+      event.preventDefault();
+      void handleSplashAction(url.slice("workloom-action://".length).replace(/\/$/, ""));
+    });
   }
-  void splash.loadURL(SPLASH_HTML(msg));
+  splash.setResizable(Boolean(error));
+  void splash.loadURL(SPLASH_HTML({ message, error, reference, startedAt: bootstrapStartedAt || Date.now(), progress }));
+}
+
+function diagnosticText() {
+  const logDir = path.join(supportDirResolved ?? app.getPath("userData"), "logs");
+  const sections = [
+    "WorkLoom 启动诊断",
+    `导出时间：${new Date().toISOString()}`,
+    `应用版本：${app.getVersion()}`,
+    `系统：${process.platform} ${process.arch}`,
+    `支持参考：${lastBootstrapReference ?? "无"}`,
+    `最近错误：${lastBootstrapError ?? "无"}`,
+  ];
+  try {
+    const files = fs.readdirSync(logDir).filter((name) => /\.(?:log|json)$/i.test(name)).sort().slice(-12);
+    for (const name of files) {
+      const file = path.join(logDir, name);
+      const size = fs.statSync(file).size;
+      const start = Math.max(0, size - 200_000);
+      const fd = fs.openSync(file, "r");
+      const buffer = Buffer.alloc(size - start);
+      fs.readSync(fd, buffer, 0, buffer.length, start);
+      fs.closeSync(fd);
+      sections.push(`\n===== ${name}（末尾 ${buffer.length} 字节）=====\n${buffer.toString("utf8")}`);
+    }
+  } catch (error) {
+    sections.push(`\n日志读取失败：${error instanceof Error ? error.message : String(error)}`);
+  }
+  return sections.join("\n")
+    .replace(/(JWT_SECRET|PII_SALT|API[_-]?KEY|ACCESS[_-]?TOKEN|REFRESH[_-]?TOKEN)\s*[:=]\s*[^\s,}\]]+/gi, "$1=[已脱敏]")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [已脱敏]");
+}
+
+async function handleSplashAction(action) {
+  if (action === "retry") {
+    if (!bootstrapRunning && retryBootstrap) await retryBootstrap();
+    return;
+  }
+  if (action === "logs") {
+    await shell.openPath(path.join(supportDirResolved ?? app.getPath("userData"), "logs"));
+    return;
+  }
+  if (action === "export") {
+    const options = {
+      title: "导出 WorkLoom 启动诊断",
+      defaultPath: path.join(app.getPath("documents"), `WorkLoom-启动诊断-${Date.now()}.txt`),
+      filters: [{ name: "文本诊断", extensions: ["txt"] }],
+    };
+    const result = splash
+      ? await dialog.showSaveDialog(splash, options)
+      : await dialog.showSaveDialog(options);
+    if (!result.canceled && result.filePath) fs.writeFileSync(result.filePath, diagnosticText(), { mode: 0o600 });
+    return;
+  }
+  if (action === "exit") {
+    quitting = true;
+    if (handle) await handle.stop().catch(() => undefined);
+    handle = null;
+    app.quit();
+  }
 }
 
 function closeSplash() {
@@ -130,10 +251,10 @@ function closeSplash() {
 /* ---------- 主窗口 ---------- */
 function createWindow() {
   win = new BrowserWindow({
-    width: BASE_W,
-    height: BASE_H,
-    minWidth: 1024,
-    minHeight: 640,
+    width: DEFAULT_W,
+    height: DEFAULT_H,
+    minWidth: MIN_W,
+    minHeight: MIN_H,
     title: TITLE,
     icon: nativeImage.createFromPath(path.join(__dirname, "assets/icon.png")),
     autoHideMenuBar: true,
@@ -142,27 +263,31 @@ function createWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
 
-  try { win.setAspectRatio(BASE_W / BASE_H); } catch { /* 平台不支持则忽略 */ }
-
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost")) return { action: "allow" };
     void shell.openExternal(url);
     return { action: "deny" };
   });
 
-  // 去浏览器化（客户端即产品：无任何浏览器特征交互）
+  // 去浏览器化（客户端即产品），但保留系统缩放与无障碍能力。
   win.webContents.on("context-menu", (e) => e.preventDefault());
   win.webContents.on("before-input-event", (e, input) => {
     if (input.type !== "keyDown") return;
     const key = (input.key ?? "").toLowerCase();
-    if ((input.control || input.meta) && ["=", "-", "0", "+"].includes(key)) e.preventDefault();
+    if (key === "f11") {
+      e.preventDefault();
+      win?.setFullScreen(!win.isFullScreen());
+      return;
+    }
+    if ((input.control || input.meta) && input.shift && key === "0") {
+      e.preventDefault();
+      resetWindowAndLayout();
+      return;
+    }
     if (key === "f12" || ((input.control || input.meta) && input.shift && ["i", "j", "c"].includes(key))) e.preventDefault();
     if (key === "f5" || ((input.control || input.meta) && key === "r")) e.preventDefault();
   });
-  win.webContents.on("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); });
-
-  win.on("resize", applyFixedZoom);
-  win.webContents.on("did-finish-load", applyFixedZoom);
+  void win.webContents.setVisualZoomLevelLimits(1, 3).catch(() => undefined);
   win.webContents.on("render-process-gone", (_event, details) => {
     const logDir = path.join(supportDirResolved ?? app.getPath("userData"), "logs");
     try {
@@ -170,7 +295,15 @@ function createWindow() {
       fs.appendFileSync(path.join(logDir, "renderer-health.log"), `${new Date().toISOString()} renderer gone: ${JSON.stringify(details)}\n`);
     } catch { /* 日志失败不影响退出流程 */ }
   });
-  win.once("ready-to-show", () => { applyFixedZoom(); closeSplash(); win.show(); });
+  win.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return; // -3 = 用户取消导航
+    lastBootstrapError = `工作台页面加载失败（${description || code}）`;
+    lastBootstrapReference = `启动-${Date.now().toString(36).toUpperCase()}`;
+    showSplash("服务仍在安全停止中；可随后重试或导出诊断。", publicStartupError(lastBootstrapError), lastBootstrapReference);
+    if (win && !win.isDestroyed()) win.destroy();
+    win = null;
+  });
+  win.once("ready-to-show", () => { closeSplash(); win.show(); });
 
   // 关窗 = 最小化到托盘（夜班/自动任务持续运行）；托盘「退出」才是真退出
   win.on("close", (e) => {
@@ -395,6 +528,8 @@ function createTray() {
   tray.setToolTip(`${TITLE} · 运行中`);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "显示主窗口", click: () => { if (win) { win.show(); win.focus(); } else createWindow(); } },
+    { label: "全屏 / 退出全屏", click: () => { if (win) { win.show(); win.setFullScreen(!win.isFullScreen()); } } },
+    { label: "恢复默认窗口与布局", click: resetWindowAndLayout },
     { type: "separator" },
     { label: "退出 WorkLoom（停止全部服务）", click: () => { quitting = true; app.quit(); } },
   ]));
@@ -411,46 +546,86 @@ app.whenReady().then(async () => {
     : app.getPath("userData");
   supportDirResolved = supportDir;
 
-  if (!APP_SMOKE) showSplash("正在准备运行环境…");
-  try {
-    handle = await bootstrap({
-      resourcesDir,
-      supportDir,
-      smoke: APP_SMOKE,
-      onStatus: (msg) => { if (splash) showSplash(msg); },
-    });
-  } catch (e) {
-    closeSplash();
-    if (APP_SMOKE) console.error(`WorkLoom 启动失败：${e.message}\n日志目录：${path.join(supportDir, "logs")}`);
-    else dialog.showErrorBox("WorkLoom 启动失败", `${e.message}\n\n日志目录：${path.join(supportDir, "logs")}`);
-    app.exit(1);
-    return;
-  }
-  if (APP_SMOKE) {
-    await handle.stop();
-    handle = null;
-    app.exit(0);
-    return;
-  }
-  if (!RENDER_SMOKE) createTray();
-  createWindow();
-  if (RENDER_SMOKE) {
+  retryBootstrap = async () => {
+    if (bootstrapRunning) return;
+    bootstrapRunning = true;
+    bootstrapStartedAt = Date.now();
+    lastBootstrapError = null;
+    lastBootstrapReference = null;
+    if (!APP_SMOKE) showSplash("正在准备运行环境…", "", "", { phase: "starting", percent: 1, etaSeconds: 150 });
     try {
-      await runRenderSmoke();
-      quitting = true;
+      if (handle) {
+        await handle.stop();
+        handle = null;
+      }
+      if (SOURCE_MODE) {
+        if (app.isPackaged) {
+          throw new Error("正式安装包禁止源码模式，必须从签名 Resources 装配完整载荷");
+        }
+        if (RENDER_SMOKE) {
+          throw new Error("源码模式禁止执行发布渲染冒烟；请对已打包程序运行 WORKLOOM_RENDER_SMOKE=1");
+        }
+        const sourceRoot = process.env.WORKLOOM_SOURCE_ROOT;
+        const sourceNode = process.env.WORKLOOM_SOURCE_NODE;
+        if (!sourceRoot || !sourceNode || !path.isAbsolute(sourceRoot) || !path.isAbsolute(sourceNode)) {
+          throw new Error("源码启动上下文不完整，请通过 pnpm app 启动");
+        }
+        const sourceMain = fs.realpathSync(path.join(sourceRoot, "apps", "desktop", "electron", "main.cjs"));
+        if (sourceMain !== fs.realpathSync(__filename) || !fs.statSync(sourceNode).isFile()) {
+          throw new Error("源码启动上下文与当前主进程不匹配，请重新执行 pnpm app");
+        }
+        // 源码 server/web 由 desktop-app.mts 编排并在拉起 Electron 前完成健康检查。
+        // 这里仍保留 handle 契约，让托盘退出/重试与正式安装包走相同生命周期。
+        handle = { stop: async () => {}, webUrl: WEB_URL };
+      } else {
+        handle = await bootstrap({
+          resourcesDir,
+          supportDir,
+          smoke: APP_SMOKE,
+          onStatus: (msg, progress) => { if (splash) showSplash(msg, "", "", progress); },
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      lastBootstrapError = message;
+      lastBootstrapReference = `启动-${Date.now().toString(36).toUpperCase()}`;
+      if (APP_SMOKE || RENDER_SMOKE) {
+        console.error(`WorkLoom 启动失败：${message}\n日志目录：${path.join(supportDir, "logs")}`);
+        app.exit(1);
+      } else {
+        showSplash("请处理后重试，或导出诊断交给技术支持。", publicStartupError(message), lastBootstrapReference);
+      }
+      return;
+    } finally {
+      bootstrapRunning = false;
+    }
+    if (APP_SMOKE) {
       await handle.stop();
       handle = null;
       app.exit(0);
-    } catch (error) {
-      console.error(`WorkLoom 渲染冒烟失败：${error instanceof Error ? error.stack : String(error)}`);
-      quitting = true;
-      if (handle) await handle.stop().catch(() => undefined);
-      handle = null;
-      app.exit(1);
+      return;
     }
-    return;
-  }
-  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+    if (!RENDER_SMOKE) createTray();
+    createWindow();
+    if (RENDER_SMOKE) {
+      try {
+        await runRenderSmoke();
+        quitting = true;
+        await handle.stop();
+        handle = null;
+        app.exit(0);
+      } catch (error) {
+        console.error(`WorkLoom 渲染冒烟失败：${error instanceof Error ? error.stack : String(error)}`);
+        quitting = true;
+        if (handle) await handle.stop().catch(() => undefined);
+        handle = null;
+        app.exit(1);
+      }
+    }
+  };
+
+  await retryBootstrap();
+  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0 && handle) createWindow(); });
 });
 
 app.on("before-quit", () => { quitting = true; });

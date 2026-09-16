@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G2, G3, G4, G5, G6, G7]   # 主题/对齐/PRD/定妆照/提示词/预生产确认门
+coverage:
+  - { eventPrefix: "project.", label: 制片编排 }
 skills: []
 tools:
   - { name: project.create, access: write,    desc: 创建视频项目 }

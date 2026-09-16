@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G5]       # 定妆照确认（可配 auto）
+coverage:
+  - { eventPrefix: "portrait.", label: 定妆资产 }
 skills: [portrait-studio]
 tools:
   - { name: portrait.plan, access: write,   desc: 定妆照拍摄计划（角度清单） }

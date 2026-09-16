@@ -8,6 +8,8 @@ readonly: false
 night_shift: true             # 夜班巡检员工
 high_risk: false
 fence_bindings: [G13]       # 分账差异告警
+coverage:
+  - { eventPrefix: "metrics.", label: 经营指标监测 }
 skills: []
 tools:
   - { name: metrics.collect, access: read,  desc: 定时采集账号/视频指标 }

@@ -2,12 +2,13 @@
  * welcomeScripts · 首装欢迎仪式话术配置（基座能力）
  *
  * 结构：S1 简短自我介绍 / S3 官方详细自我介绍 / S4 过渡引出团队 —— 全项目通用；
- *       S2 系统介绍 —— 按 bundle industry 切换（default 兜底）。
+ *       S2 系统介绍 —— 由已验证的 Bundle UI 投影提供，缺省使用行业无关说明。
  *
- * 同步机制：基座推送到其他项目后零改动可运行（未知行业自动回落 default）；
- *          新项目按《欢迎仪式升级方案》§3.2-B-④ 强约束补充自己的行业话术：
+ * 同步机制：仪式实现由基座共享；新项目按《欢迎仪式升级方案》§3.2-B-④
+ *          在 Bundle 中补充自己的行业话术：
  *          必须基于该项目真实资产（README/配置/代码）撰写，名词数字逐条可溯源。
  */
+import { clientChineseText } from "@workloom/ui";
 
 export interface MateScript {
   /** S1 简短自我介绍（通用） */
@@ -39,7 +40,7 @@ const BRIDGE: string[] = [
   "接下来，请认识您的 AI 团队。",
 ];
 
-/* ---------------- S2 · 行业版 ---------------- */
+/* ---------------- S2 · Bundle 投影 ---------------- */
 
 /** 通用默认版（基座兜底） */
 const SYSTEM_DEFAULT: string[] = [
@@ -47,49 +48,28 @@ const SYSTEM_DEFAULT: string[] = [
   "小事按规则自动完成；关键决策会带着依据请您拍板。",
   "这里不是演示视频，派活、审批和数据都会真实流转。",
 ];
+const KEYWORDS_DEFAULT = ["全天候在岗", "规则内自动办", "大事您拍板", "过程可追溯"];
 
-/**
- * 酒店版（industry=hotel）· 基于 bundles/hotel 真实资产（v2 大白话版）：
- * 7 个 preset 岗位；围栏：涨幅上限/保底熔断/差评必审/大额退款必审/担保异常/新渠道必审
- * （话术铁律：行业黑话一律翻译成大白话，机制说"规矩"，数字保留）。
- */
-const SYSTEM_HOTEL: string[] = [
-  "这是为酒店准备的 AI 经营团队，房态、房价、评价和流水都有人持续盯守。",
-  "常规工作按规则自动推进；异常订单、大额退款和首次改价一定请您确认。",
-  "每项操作都有记录，您随时可以追溯。",
-];
+export interface BundleWelcomeProjection {
+  system: string[];
+  keywords: string[];
+}
 
-/**
- * AI 产品经理版（industry=ai-pm）· 基于 bundles/ai-pm 真实资产（v2 大白话版）：
- * 产品总监领队 14 数字员工；14 条基线围栏 + 36 道行业考题（含 16 道 AI 专项）。
- */
-const SYSTEM_AIPM: string[] = [
-  "这是您的 AI 产品团队：需求、竞品、数据、文档和发布都有专人负责。",
-  "每次改动全程留痕，发布前自动检查风险。",
-  "团队负责分析和执行；发不发、改不改，由您拍板。",
-];
+function projectedChineseLines(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((line) => clientChineseText(line, ""))
+    .filter((line) => line.length > 0);
+}
 
-/* ---------------- 关键词（S2 背景浮现） ---------------- */
-const KEYWORDS: Record<string, string[]> = {
-  default: ["24h 在岗", "规则内自动办", "大事您拍板", "真实流转"],
-  hotel: ["房价有人盯", "差评不过夜", "对账不熬夜", "内容常更新"],
-  "ai-pm": ["需求不漏", "改动有记录", "上线有人把守", "经验越攒越多"],
-};
-
-const INDUSTRY_SYSTEM: Record<string, string[]> = {
-  hotel: SYSTEM_HOTEL,
-  "ai-pm": SYSTEM_AIPM,
-};
-
-/** 按 bundle id 解析话术（未知行业回落 default，保证基座推送任意项目零改动可跑） */
-export function mateScriptOf(bundleId: string | null | undefined): MateScript {
-  const key = (bundleId ?? "").toLowerCase();
-  const hit = Object.keys(INDUSTRY_SYSTEM).find((k) => key.includes(k));
-  const industry = hit ?? "default";
+/** 合并通用仪式文案与 Bundle 行业投影；基座不识别任何具体行业标识。 */
+export function mateScriptOf(projection?: BundleWelcomeProjection | null): MateScript {
+  const projectedSystem = projectedChineseLines(projection?.system);
+  const projectedKeywords = projectedChineseLines(projection?.keywords);
   return {
     intro: INTRO,
-    system: INDUSTRY_SYSTEM[industry] ?? SYSTEM_DEFAULT,
-    keywords: KEYWORDS[industry] ?? KEYWORDS.default!,
+    system: projectedSystem.length ? projectedSystem : SYSTEM_DEFAULT,
+    keywords: projectedKeywords.length ? projectedKeywords : KEYWORDS_DEFAULT,
     detail: DETAIL,
     bridge: BRIDGE,
   };

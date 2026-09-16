@@ -1,82 +1,87 @@
 /**
- * 星盟战舰设计令牌 · 全量版（F1）
- * 数值事实源：高保真原型 V4.0 :root 变量 + 星盟战舰设计规范 V1.0 §2（色彩）/§3（字体）/§4（布局）/§7（动效）
- * 逐值对齐，禁止自由发挥（D5）；Tailwind v4 令牌制：只写 @theme，无 tailwind.config.js（总纲 §1）
+ * 星盟战舰设计令牌 · 深空银辉 V2（F1 换肤）
+ * 数值事实源：@workloom/ui 共享语义令牌；本文件只为旧 Tailwind 类提供兼容别名。
+ * V2 视觉语言（2026-09 拍板）：深空灰四阶背景 + 亮银视觉元素 = 高级金属质感；
+ * Tailwind v4 令牌制：只写 @theme，无 tailwind.config.js（总纲 §1）
  *
  * F1 验收走查口径：
- *  §2.1 色板：深空四阶 + 星云晕染对 + 舰桥金渐变对 + 金高光 + 全息青/深青 + 语义四色（绿/琥珀/红/需介入紫）
- *  §2.2 用色分工：金=行动与奖励、青=信息与证据（禁止混用——本文件注释即走查清单）
+ *  §2.1 色板：深空灰四阶 + 深空晕染对 + 亮银渐变对 + 深银强调 + 钢蓝银信息色 + 语义四色（降饱和）
+ *  §2.2 用色分工：亮银=行动与视觉元素、钢蓝银=信息与证据（禁止混用——本文件注释即走查清单）
  *  §3  字体三级：sans 正文 / mono 编号代码 / orb HUD 数字；字号阶梯 Display→Micro
- *  §4.1 布局：舰桥 1180px / 三栏 236px·弹性·264px / 圆角分级 / 间距 8 倍数
+ *  §4.1 布局：工作台 1180px / 三栏 236px·弹性·264px / 圆角分级 / 间距 8 倍数
  *  §7  动效：drift 90s / pulse 1.6s·2s·0.8s / sheen 2.6s；全部登记 prefers-reduced-motion 降级
+ *  与 3D 场景关系：场景内暖金/青为内容信号色，界面银灰为框架色——银器衬暖光，互不抢戏
  */
 @import "tailwindcss";
 
 @theme {
-  /* ===== §2.1 色板 · 糖果色系（小红书式年轻时尚） ===== */
-  /* 糖果四阶（背景三分层：页面奶莓 → 卡片云白 → 浮层蜜桃雾 → 悬停樱花粉） */
-  --color-bg950: #0e1013;
-  --color-bg900: #15181c;
-  --color-bg800: #1c2025;
-  --color-bg700: #252a30;
-  /* 糖果晕染对（背景晕染与空态插画，不做功能色） */
-  --color-nebula: #1a1f26;
-  --color-nebula2: #12161c;
-  /* 珊瑚主色（行动/奖励专属）+ 深珊瑚强调 + 主色上文字（§2.2 对比度） */
-  --color-gold: #d6dce4;
-  --color-gold2: #f0f4f9;
-  --color-goldhi: #a8b2be;
-  --color-ongold: #12151a;
-  /* 蓝莓信息色（信息/证据专属）+ 天空蓝（链接/次级信息） */
-  --color-holo: #8fa9c9;
-  --color-holo2: #b3c6de;
-  /* 语义四色（全局唯一）：薄荷绿=auto/已完成 蜜桃橙=review/待审 草莓红=block/需介入/失败 葡萄紫=需介入 */
-  --color-go: #46b190;
-  --color-warn: #d9a045;
-  --color-alert: #e05a6b;
-  --color-need: #a88bd4;
-  /* 可可文字三级（§2.1/§3） */
-  --color-ink: #e8ebef;
-  --color-ink2: #9aa2ac;
-  --color-ink3: #68707a;
+  /* ===== §2.1 色板 · 深空银辉 V2（高级质感：深空灰底 + 亮银视觉元素） =====
+   * 视觉语言：深空灰四阶为背景画布，亮银为行动与视觉元素主色（按钮/标题/导航），
+   * 钢蓝银为信息证据色；语义四色降饱和融入；3D 场景内的暖金/青色为内容信号色，
+   * 与界面银灰形成"银器衬暖光"的对比关系（场景=内容，界面=银）。 */
+  /* 深空灰四阶（背景四分层：页面深空灰 → 卡片岩灰 → 浮层钢灰 → 悬停锡灰） */
+  --color-bg950: var(--wl-color-bg);
+  --color-bg900: var(--wl-color-surface);
+  --color-bg800: var(--wl-color-surface-raised);
+  --color-bg700: var(--wl-color-surface-muted);
+  /* 深空晕染对（背景晕染与空态插画，不做功能色） */
+  --color-nebula: var(--wl-color-surface-muted);
+  --color-nebula2: var(--wl-color-bg);
+  /* 亮银主色（行动/视觉元素专属）+ 银辉高光 + 深银强调 + 主色上文字（§2.2 对比度） */
+  --color-gold: var(--wl-brand-primary);
+  --color-gold2: var(--wl-color-action);
+  --color-goldhi: var(--wl-color-text);
+  --color-ongold: var(--wl-brand-on-primary);
+  /* 钢蓝银信息色（信息/证据专属）+ 浅钢蓝（链接/次级信息） */
+  --color-holo: var(--wl-color-info);
+  --color-holo2: var(--wl-color-focus);
+  /* 语义四色（全局唯一，降饱和融入银灰）：青绿=auto/已完成 赭金=review/待审 绛红=block/需介入/失败 黛紫=需介入 */
+  --color-go: var(--wl-color-success);
+  --color-warn: var(--wl-color-warning);
+  --color-alert: var(--wl-color-danger);
+  --color-need: var(--wl-color-info);
+  /* 银灰文字三级（§2.1/§3） */
+  --color-ink: var(--wl-color-text);
+  --color-ink2: var(--wl-color-text-muted);
+  --color-ink3: var(--wl-color-text-muted);
   /* 卡片与描线 */
-  --color-card: rgb(21 24 28 / 0.82);
-  --color-line: rgb(214 220 228 / 0.12);
-  --color-gline: rgb(214 220 228 / 0.30);
+  --color-card: var(--wl-color-surface);
+  --color-line: var(--wl-color-border);
+  --color-gline: var(--wl-color-border);
 
 
   /* ===== §3 字体三级 ===== */
-  --font-sans: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace; /* 编号/代码：禁止换行（white-space:nowrap） */
-  --font-orb: "Orbitron", "JetBrains Mono", ui-monospace, monospace; /* HUD 数字：KPI/LV/能量/战报大数字 */
+  --font-sans: var(--wl-font-sans);
+  --font-mono: var(--wl-font-mono); /* 编号/代码 */
+  --font-orb: var(--wl-font-numeric); /* HUD 数字：KPI/LV/能量/日报大数字 */
 
   /* ===== §3.1 字号阶梯（桌面端基准，取区间中值） ===== */
-  --text-display: 44px; /* 封面/战役级标题（仅营销物料与封面） */
-  --text-h1: 22px; /* 页面标题 */
-  --text-h2: 16px; /* 卡片/面板标题 */
-  --text-body: 13.5px; /* 正文、消息正文（行高 1.7–1.9） */
-  --text-caption: 11px; /* 辅助说明、时间、标签 */
-  --text-micro: 10px; /* 图例、角标（不低于 9.5） */
-  --text-kpi: 28px; /* KPI 大数（配 --font-orb） */
+  --text-display: var(--wl-text-display); /* 封面/战役级标题 */
+  --text-h1: var(--wl-text-h1); /* 页面标题 */
+  --text-h2: var(--wl-text-h2); /* 卡片/面板标题 */
+  --text-body: var(--wl-text-body); /* 正文、消息正文 */
+  --text-caption: var(--wl-text-caption); /* 辅助说明、时间、标签 */
+  --text-micro: var(--wl-text-micro); /* 图例、角标 */
+  --text-kpi: var(--wl-text-kpi); /* KPI 大数（配 --font-orb） */
 
   /* ===== §4.1 布局与栅格 ===== */
-  --spacing-bridge: 1180px; /* 舰桥框架宽（居中） */
-  --spacing-col-left: 236px; /* 左会话列表 */
-  --spacing-col-right: 264px; /* 右上下文 */
-  --radius-msg: 14px; /* 消息气泡（左上直角 4px 表「对方消息」） */
-  --radius-panel: 16px; /* 面板卡（14–16 取上界） */
-  --radius-pop: 18px; /* 弹层（16–18 取上界） */
-  --radius-bridge: 20px; /* 舰桥框架 */
+  --spacing-bridge: var(--wl-content-max); /* 工作台框架宽（居中） */
+  --spacing-col-left: var(--wl-panel-list); /* 左会话列表 */
+  --spacing-col-right: var(--wl-panel-side); /* 右上下文 */
+  --radius-msg: var(--wl-radius-md); /* 消息气泡 */
+  --radius-panel: var(--wl-radius-lg); /* 面板卡 */
+  --radius-pop: var(--wl-radius-lg); /* 弹层 */
+  --radius-bridge: var(--wl-radius-lg); /* 工作台框架 */
 
   /* ===== §7 动效令牌（功能反馈 ≤1.2s；氛围类除外；全部有降级） ===== */
-  --animate-drift: drift 90s linear infinite alternate; /* 星野缓漂（氛围；降级=静态星点图） */
-  --animate-pulse-hud: wl-pulse 1.6s ease-in-out infinite; /* 呼吸状态灯·巡航（降级=常亮） */
-  --animate-pulse-warn: wl-pulse 2s ease-in-out infinite; /* 呼吸状态灯·待审 */
-  --animate-pulse-alert: wl-pulse 0.8s ease-in-out infinite; /* 呼吸状态灯·熔断 */
-  --animate-sheen: sheen 2.6s ease-in-out infinite; /* 金按钮流光（降级=静态渐变） */
-  --animate-sweep: sweep 4s linear infinite; /* 雷达扫描（5.8；降级=静态雷达图） */
-  --animate-xpflow: xpflow 1.2s linear infinite; /* XP 斜纹流光（§6；降级=静态渐变条） */
-  --animate-skflow: skflow 1.4s ease-in-out infinite; /* 骨架屏流光（5.10；降级=静态灰块） */
+  --animate-drift: drift var(--wl-motion-ambient) linear infinite alternate; /* 星野缓漂 */
+  --animate-pulse-hud: wl-pulse calc(var(--wl-motion-slow) * 5) var(--wl-ease-standard) infinite;
+  --animate-pulse-warn: wl-pulse calc(var(--wl-motion-slow) * 6.25) var(--wl-ease-standard) infinite;
+  --animate-pulse-alert: wl-pulse calc(var(--wl-motion-slow) * 2.5) var(--wl-ease-standard) infinite;
+  --animate-sheen: sheen calc(var(--wl-motion-slow) * 8) var(--wl-ease-standard) infinite;
+  --animate-sweep: sweep calc(var(--wl-motion-slow) * 12.5) linear infinite;
+  --animate-xpflow: xpflow calc(var(--wl-motion-slow) * 4) linear infinite;
+  --animate-skflow: skflow calc(var(--wl-motion-slow) * 4.5) var(--wl-ease-standard) infinite;
 
   @keyframes sweep {
     to { transform: rotate(360deg); }
@@ -110,11 +115,16 @@
     @apply bg-bg950 text-ink font-sans antialiased;
   }
   ::selection {
-    background: rgb(214 220 228 / 0.24);
+    background: color-mix(in srgb, var(--wl-color-action) 24%, transparent);
   }
-  /* 编号/代码不换行（§3 mono 规则） */
+  /* 编号/代码在窄容器和 200% 缩放下必须可收缩，不得撑破所在面板。 */
   code, .font-mono {
-    white-space: nowrap;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  code {
+    white-space: pre-wrap;
   }
   /* §7/§10 降级纪律：尊重系统减弱动效设置——全部动效降级为静态 */
   @media (prefers-reduced-motion: reduce) {
@@ -127,25 +137,52 @@
 }
 
 @layer utilities {
-  /* 舰桥金渐变（行动/奖励专属；sheen 流光层配合 .gold-btn 使用） */
+  /* 亮银渐变（行动/视觉元素专属；sheen 流光层配合 .gold-btn 使用） */
   .gold-grad {
     background: linear-gradient(135deg, var(--color-gold), var(--color-gold2));
   }
-  /* 全息青细描边（信息/证据专属） */
+  /* 银灰细描边（信息/证据专属） */
   .holo-line {
     border-color: var(--color-line);
   }
 }
 
-/* 移动端适配（样板间工程：手机上可看可用——隐藏侧栏、主区全宽；≤1240px 框架贴边） */
-@media (max-width: 1240px) {
-  .w-bridge { width: calc(100vw - 16px) !important; }
-}
-@media (max-width: 860px) {
-  .w-col-left, .w-col-right { display: none !important; }
+/* PC 壳按「导航和 AI 助手让位后的真实宽度」重排，避免固定画布叠加造成横向溢出。 */
+.wl-page-host {
+  box-sizing: border-box;
+  transition: padding-right var(--wl-motion-normal) var(--wl-ease-standard);
 }
 
-/* P0 经营剧场动画 */
+/* 旧页面即使带 outline-none，也不能抹掉键盘用户的共享焦点指示。 */
+[data-workloom-client="b-pc"] :focus-visible {
+  outline: 3px solid var(--wl-color-focus) !important;
+  outline-offset: 2px !important;
+}
+
+.wl-bridge-shell {
+  container-type: inline-size;
+}
+
+@container (max-width: 880px) {
+  .wl-bridge-grid:not(.wl-bridge-grid--managed) {
+    grid-template-columns: var(--spacing-col-left) minmax(0, 1fr);
+  }
+  .wl-bridge-grid:not(.wl-bridge-grid--managed) .wl-bridge-right {
+    display: none;
+  }
+}
+
+@container (max-width: 650px) {
+  .wl-bridge-grid:not(.wl-bridge-grid--managed) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wl-bridge-grid:not(.wl-bridge-grid--managed) .wl-bridge-left {
+    display: none;
+  }
+}
+
+
+/* P0 经营主页动画 */
 @keyframes holo-spin { from { transform: rotateX(68deg) rotateZ(0deg); } to { transform: rotateX(68deg) rotateZ(360deg); } }
 @keyframes holo-core-pulse { 0%,100% { opacity: .75; } 50% { opacity: 1; } }
 .holo-core { animation: holo-core-pulse 2.6s ease-in-out infinite; transform-origin: center; }

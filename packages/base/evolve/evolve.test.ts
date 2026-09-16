@@ -117,7 +117,15 @@ d("PG 集成 · 自我进化飞轮（种子库）", async () => {
   const pg = (await import("pg")).default;
   const { loadActivePreferences, recordPreferenceUsageInTx } = await import("./preference-inject.js");
   const { runMemoryMinerBeat } = await import("./memory-miner.js");
-  const { decayMemories, disableMemory, editMemoryContent, recallMemoriesByMember } = await import("./memory-lifecycle.js");
+  const {
+    decayMemories,
+    disableMemory,
+    editMemoryContent,
+    previewMemoryImpact,
+    reactivateMemory,
+    recallMemoriesByMember,
+    restoreMemories,
+  } = await import("./memory-lifecycle.js");
   const { buildEvolutionScorecard } = await import("./scorecard.js");
   const { upsertMemory, MockEmbedder, searchMemories, getMemorySources } = await import("../workdata/memory.js");
   const { gatewayAppendOnClient } = await import("../workdata/gateway.js");
@@ -245,8 +253,9 @@ d("PG 集成 · 自我进化飞轮（种子库）", async () => {
     expect(r.reinforced).toBeGreaterThanOrEqual(1);
     expect(r.calibrateEventIds.length).toBeGreaterThanOrEqual(1);
     // 记忆内容带统计口径；归因可反查
-    const hits = await searchMemories(app, scope, { kind: "preference", limit: 50 });
-    const mem = hits.find((h) => h.memory_id === "mem-reject-price.too_high");
+    // 固定 memory_id 会跨重复验收运行被幂等强化；按精确 ID 读取，避免工作区中
+    // 历史记忆超过列表上限后让存在性断言受到分页顺序影响。
+    const { memory: mem } = await getMemorySources(app, scope, "mem-reject-price.too_high");
     expect(mem).toBeDefined();
     expect(mem!.content).toContain("price.too_high");
     expect(Number(mem!.confidence)).toBeGreaterThan(0.5);
@@ -258,13 +267,12 @@ d("PG 集成 · 自我进化飞轮（种子库）", async () => {
     await seedGestures(3, "edit", undefined, "preference");
     const r = await runMemoryMinerBeat(app, gateway, scope);
     expect(r.editPatterns).toBeGreaterThanOrEqual(1);
-    const hits = await searchMemories(app, scope, { kind: "pattern", limit: 50 });
-    const mem = hits.find((h) => h.memory_id === "mem-pat-edit-price.adjust");
+    const { memory: mem } = await getMemorySources(app, scope, "mem-pat-edit-price.adjust");
     expect(mem).toBeDefined();
     expect(mem!.content).toContain("口味");
   });
 
-  it("生命周期：人类编辑（PII 拦截）→ 禁用 → 来源人清算，全程 memory.calibrate 留痕", async () => {
+  it("生命周期：编辑 → 影响预览 → 禁用/重新启用 → 来源清算/撤销，全程留痕", async () => {
     // 编辑：干净内容放行
     const edited = await editMemoryContent(app, gateway, scope, { memberNo: "MEM-001" }, `mem-inj-pref-${RUN}`, `人类修订后的偏好 ${RUN}`);
     expect(edited.calibrateEventId).toMatch(/^E-\d+$/);
@@ -274,14 +282,23 @@ d("PG 集成 · 自我进化飞轮（种子库）", async () => {
     await expect(
       editMemoryContent(app, gateway, scope, { memberNo: "MEM-001" }, `mem-inj-pref-${RUN}`, "客人电话 13812345678"),
     ).rejects.toThrow(/PII/);
-    // 禁用
+    const impact = await previewMemoryImpact(app, scope, { memoryIds: [`mem-inj-pref-${RUN}`] });
+    expect(impact.affectedMemoryIds).toEqual([`mem-inj-pref-${RUN}`]);
+    expect(impact.futureTaskPolicy).toContain("重新检索");
+    // 禁用与单条恢复
     await disableMemory(app, gateway, scope, { memberNo: "MEM-001" }, `mem-inj-pref-${RUN}`);
     const afterDisable = await searchMemories(app, scope, { status: "recalled", limit: 50 });
     expect(afterDisable.some((h) => h.memory_id === `mem-inj-pref-${RUN}`)).toBe(true);
+    const reactivated = await reactivateMemory(app, gateway, scope, { memberNo: "MEM-001" }, `mem-inj-pref-${RUN}`);
+    expect(reactivated.calibrateEventId).toMatch(/^E-\d+$/);
+    expect((await searchMemories(app, scope, { limit: 50 })).some((h) => h.memory_id === `mem-inj-pref-${RUN}`)).toBe(true);
     // 来源人清算：本用例 MEM-TEST-<RUN> 的手势沉淀（提炼器强化的 mem-reject-price.too_high 含其来源事件）
     const recall = await recallMemoriesByMember(app, gateway, scope, { memberNo: "MEM-001" }, `MEM-TEST-${RUN}`);
     expect(recall.recalled.length).toBeGreaterThanOrEqual(1);
     expect(recall.calibrateEventIds.length).toBe(recall.recalled.length);
+    const restored = await restoreMemories(app, gateway, scope, { memberNo: "MEM-001" }, recall.recalled);
+    expect(restored.restored.length).toBe(recall.recalled.length);
+    expect(restored.calibrateEventIds.length).toBe(restored.restored.length);
   });
 
   it("衰减扫描：不报错且只动超窗零引用记忆（新建记忆有观察期）", async () => {

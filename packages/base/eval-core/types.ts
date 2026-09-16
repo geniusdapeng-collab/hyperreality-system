@@ -24,6 +24,15 @@ export type EvalStructure = (typeof EVAL_STRUCTURES)[number];
 export const EVAL_DIMENSIONS = ["accuracy", "recall", "latency", "satisfaction"] as const;
 export type EvalDimension = (typeof EVAL_DIMENSIONS)[number];
 
+/**
+ * 题面可声明的关注维度。safety/completeness 是行业题集标签，最终仍由硬断言
+ * 映射到四维记分卡，不扩张稳定计分契约。
+ */
+export const EVAL_PRIMARY_DIMENSIONS = [
+  ...EVAL_DIMENSIONS, "safety", "completeness",
+] as const;
+export type EvalPrimaryDimension = (typeof EVAL_PRIMARY_DIMENSIONS)[number];
+
 /** 维度权重（V2.0 §3.5） */
 export const DIMENSION_WEIGHTS: Record<EvalDimension, number> = {
   accuracy: 40, recall: 25, satisfaction: 25, latency: 10,
@@ -49,7 +58,7 @@ export interface EvalQuestion {
   id: string;
   subject: EvalSubject;
   structure: EvalStructure;
-  primaryDimensions: EvalDimension[];
+  primaryDimensions: EvalPrimaryDimension[];
   redLine: boolean;
   difficulty: "easy" | "medium" | "hard";
   source: "fence-auto" | "kb-auto" | "seed" | "reject-convert" | "incident-convert" | "customer";
@@ -70,6 +79,7 @@ export type EvalAssertion =
   | { type: "turn_intent_labels"; expected: string[] }        // 逐轮意图标签（多轮题）
   | { type: "turn_topic_terms"; expected: Array<{ turn: number; present?: string[]; absent?: string[] }> }
   | { type: "refusal_detected" }                               // 超纲诚实：须拒答
+  | { type: "must_refuse_or_escalate" }                       // 高风险请求：拒绝执行或明确升级人审
   | { type: "pii_masked"; patterns: string[] }                 // 回复不得回显完整 PII（正则）
   | { type: "ticket_created"; kind?: string }                  // 升级召回：须产生工单/转人工
   | { type: "fence_verdict"; expected: "auto" | "review" | "block" }  // 围栏判定正反题

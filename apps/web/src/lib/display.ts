@@ -6,9 +6,23 @@
  * 一律经本层映射；未收录的值走兜底人性化处理，保证任何情况下不出现
  * 「processing / render.submit / 0 8 * * *」这类原始串直接上屏。
  *
- * 扩展纪律：新域（新工单类型/新动作码）落地时同步登记本表；行业版在
- * ACTION_TEXT_EXT 追加行业动作码即可，无需改组件。
+ * 扩展纪律：基座只保留公共术语；行业岗位、动作与字段显示名必须通过
+ * 当前已验签 Bundle 的 terminology 投影注入，禁止在客户端追加行业词表。
  */
+import { clientChineseText, clientFieldLabel, clientStatusLabel, clientValueText } from "@workloom/ui";
+
+let DISPLAY_TERMINOLOGY: Readonly<Record<string, string>> = {};
+
+/** 身份或工作区切换时由导航上下文原子替换，不能累加，以免跨租户串用术语。 */
+export function hydrateDisplayTerminology(terminology: Record<string, string>): void {
+  DISPLAY_TERMINOLOGY = Object.freeze(Object.fromEntries(
+    Object.entries(terminology).filter(([, value]) => clientChineseText(value, "") === value.trim()),
+  ));
+}
+
+function projectedText(key: string): string | undefined {
+  return DISPLAY_TERMINOLOGY[key];
+}
 
 // —— 工单域 ——
 export const TICKET_STATUS_TEXT: Record<string, string> = {
@@ -34,7 +48,7 @@ export const TICKET_PRIORITY_TEXT: Record<string, string> = {
 };
 
 export const TICKET_ACTOR_TEXT: Record<string, string> = {
-  c_user: "住客",
+  c_user: "客户",
   staff: "员工",
   agent: "AI 员工",
   system: "系统",
@@ -61,6 +75,16 @@ export const APPROVAL_STATUS_TEXT: Record<string, string> = {
   edited: "已改派",
   escalated: "已升级",
 };
+
+export const APPROVAL_GESTURE_TEXT: Readonly<Record<string, string>> = {
+  approve: "已批准",
+  edit: "已修改后批准",
+  reject: "已驳回",
+};
+
+export function approvalGestureText(value: string | null | undefined): string {
+  return value ? (APPROVAL_GESTURE_TEXT[value] ?? "审批已处理") : "审批已处理";
+}
 
 // —— 对话意图 ——
 export const INTENT_TEXT: Record<string, string> = {
@@ -101,7 +125,66 @@ export const COMMON_STATUS_TEXT: Record<string, string> = {
   expired: "已过期",
   rolled_back: "已回滚",
   ready: "就绪",
+  queued: "排队中",
+  unverified: "待核实",
+  synced: "已同步",
 };
+
+export const RULE_RESULT_TEXT: Record<string, string> = {
+  pass: "已放行",
+  allow: "已放行",
+  review: "待人工复核",
+  block: "已阻断",
+  blocked: "已阻断",
+  deny: "已阻断",
+};
+
+export const MODEL_TIER_TEXT: Record<string, string> = {
+  economy: "经济档",
+  standard: "标准档",
+  premium: "高能力档",
+  human: "人工处理",
+};
+
+export const MODEL_WINDOW_TEXT: Record<string, string> = {
+  "off-peak": "低峰时段",
+  peak: "高峰时段",
+  realtime: "实时",
+};
+
+export const MEMBER_ROLE_TEXT: Record<string, string> = {
+  owner: "负责人",
+  manager: "管理员",
+  approver: "审批人",
+  member: "成员",
+  readonly: "只读成员",
+  partner: "合作伙伴",
+};
+
+export const OBJECT_TYPE_TEXT: Record<string, string> = {
+  thread: "任务",
+  approval: "审批事项",
+  rule: "规则",
+  member: "成员",
+  agent: "数字员工",
+  memory: "组织记忆",
+  ticket: "服务工单",
+  workspace: "工作区",
+};
+
+export const CAPABILITY_TEXT: Record<string, string> = {
+  "ticket.handle": "工单处理",
+  "ops.execute": "日常执行",
+  "report.view": "经营报表",
+  "deliverable.view": "交付物查看",
+  "workorder.self": "仅本人工单",
+  "read:*": "只读访问",
+  "write:*": "业务写入",
+};
+
+export function capabilityText(value: string): string {
+  return CAPABILITY_TEXT[value] ?? "受限能力";
+}
 
 // —— 线程模式 ——
 export const THREAD_MODE_TEXT: Record<string, string> = {
@@ -112,10 +195,6 @@ export const THREAD_MODE_TEXT: Record<string, string> = {
 
 /** 动作码 → 中文（底座通用域） */
 export const ACTION_TEXT: Record<string, string> = {
-  // 经营动作
-  "price.adjust": "调整房价",
-  "price.query": "查询房价",
-  "comment.reply": "回复评论",
   "memory.upsert": "更新组织记忆",
   // 夜班
   "night.note": "夜班记录",
@@ -135,31 +214,14 @@ export const ACTION_TEXT: Record<string, string> = {
   "kb.document": "知识文档入库",
   "kb.search": "检索知识库",
   "kb.crawl": "抓取官网建库",
-  // CEO
-  "ceo.briefing": "CEO 晨报",
+  // 公司负责人
+  "ceo.briefing": "公司负责人晨报",
+  "ceo.decision": "公司负责人决策",
   "ceo.board_pack": "董事会简报",
   "im.outbound": "外发消息",
-  "captain.decision": "CEO 决策",
+  "captain.decision": "公司负责人决策",
   "captain.grant": "签署授权宪章",
   "captain.transit": "宪章状态流转",
-};
-
-/** 行业扩展动作码（视频域等；行业版可在此追加，组件零改动） */
-export const ACTION_TEXT_EXT: Record<string, string> = {
-  "render.submit": "提交渲染",
-  "render.approve": "审批渲染",
-  "publish.post": "发布内容",
-  "publish.quota": "发布配额",
-  "script.update": "更新渲染脚本",
-  "comment.monitor": "评论监控",
-  "deal.quote": "商单报价",
-  "dossier.confirm": "确认情报档案",
-  "theme.select": "选定主题方向",
-  "prd.confirm": "确认产品需求",
-  "prompt_package.confirm": "确认镜头提示词",
-  "portrait_set.confirm": "确认定妆照",
-  "pipeline.started": "启动制作管线",
-  "pipeline.gate": "管线质量门",
 };
 
 const ACTION_PART_TEXT: Record<string, string> = {
@@ -199,27 +261,38 @@ const ACTION_PART_TEXT: Record<string, string> = {
 
 /** 动作码人性化：先查表，未收录则按「域·动作」末段翻译兜底，永不裸奔原始码 */
 export function actionText(action: string): string {
-  const hit = ACTION_TEXT[action] ?? ACTION_TEXT_EXT[action] ?? ACTION_OPS_TEXT[action];
+  const hit = projectedText(`action.${action}`) ?? ACTION_TEXT[action] ?? ACTION_OPS_TEXT[action];
   if (hit) return hit;
   const parts = action.split(".");
   const tail = parts[parts.length - 1] ?? action;
-  return ACTION_PART_TEXT[tail] ?? tail.replace(/_/g, " ");
+  return ACTION_PART_TEXT[tail] ?? "系统操作";
 }
 
 /** 枚举通用展示：给定字典与值，未收录时把下划线串转为空格分词（小字展示，不用英文全大写） */
 export function dictText(dict: Record<string, string>, value: string | null | undefined): string {
   if (!value) return "—";
-  return dict[value] ?? value.replace(/_/g, " ");
+  if (dict[value]) return dict[value]!;
+  if (/[^\u0000-\u007f]/.test(value)) return clientChineseText(value, "待确认");
+  if (/^(MEM|E|T|VID|R|G)-/.test(value)) return "待确认";
+  return clientStatusLabel(value) === value ? "待确认" : clientStatusLabel(value);
 }
 
 /** 技术 ID 友好化：tck-seed-001 → ···001；apr-e-9064 → ···9064；无可提取尾号则原样 */
 export function shortId(id: string | null | undefined): string {
   if (!id) return "—";
   const m = id.match(/(\d+)$/);
-  return m ? `···${m[1]}` : id;
+  return m ? `···${m[1]}` : "编号已记录";
 }
 
-/** cron → 中文读法（覆盖系统内全部实际用到的表达式；未知表达式兜底原样） */
+/** 版本标识只呈现人类可读序号；包名、哈希和内部路径不得直接释放到客户端。 */
+export function versionText(value: string | null | undefined): string {
+  if (!value) return "版本待确认";
+  const match = value.match(/(?:^|[\/_-])v?(\d+(?:\.\d+)*)$/i) ?? value.match(/^v?(\d+(?:\.\d+)*)$/i);
+  if (match?.[1]) return `第 ${match[1]} 版`;
+  return clientChineseText(value, "版本已记录");
+}
+
+/** 定时表达式 → 中文读法；未知表达式不向普通客户端泄露底层语法。 */
 export function cronText(expr: string): string {
   const known: Record<string, string> = {
     "*/30 * * * *": "每 30 分钟",
@@ -239,7 +312,7 @@ export function cronText(expr: string): string {
   if (daily) return `每天 ${daily[2]!.padStart(2, "0")}:${daily[1]!.padStart(2, "0")}`;
   const hourly = expr.match(/^\*\/(\d+) \* \* \* \*$/);
   if (hourly) return `每 ${hourly[1]} 分钟`;
-  return expr;
+  return "自定义执行计划";
 }
 
 /** 置信度 → 中文档位 */
@@ -253,136 +326,86 @@ export function confidenceText(score: number | null | undefined): string {
 /** 延迟毫秒 → 友好读法 */
 export function latencyText(ms: number | null | undefined): string {
   if (ms == null) return "—";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 1000) return `${Math.round(ms)} 毫秒`;
+  return `${(ms / 1000).toFixed(1)} 秒`;
 }
 
 // —— 行动者/员工代号 → 中文名（F-CN1：界面不出现 reconcile-agent/guest-success 这类原始 ID）——
 /** preset_key / actor id → 中文名。成员编号（MEM-xxx）与事件编号（E-xxx）属代号，原样保留 */
 export const ACTOR_TEXT: Record<string, string> = {
-  // 酒店域
-  "reconcile-agent": "财务司库官",
-  "competitor-agent": "市场侦察官",
-  "channel-watcher": "渠道哨兵官",
-  "ai-receptionist": "智能接待官",
-  "pm-staff-officer": "产品参谋官",
-  "requirement-analyst": "需求分析官",
-  "competitor-scout": "竞品侦察官",
-  "data-insight": "数据洞察官",
-  "user-listener": "用户倾听官",
-  "doc-writer": "文档主笔官",
-  "industry-radar": "行业瞭望官",
-  "release-guardian": "发布护航官",
-  "content-agent": "内容主笔官",
-  "voice-front-agent": "语音前台官",
-  "guest-success": "住客满意官",
-  "owner-cockpit": "业主驾驶舱",
-  "groupbuy-agent": "团购运营官",
-  "pricing-agent": "收益定价官",
-  "desktop-agent": "数字执行官",
-  "review-agent": "口碑公关官",
-  "coupon-operator": "优惠券运营官",
-  "lead-concierge": "线索管家官",
-  "company-ceo": "公司CEO",
+  "company-ceo": "公司负责人",
   captain: "编排官",
   "im-channels": "IM 渠道",
   system: "系统",
   "night-shift": "夜班中心",
   "morning-briefing": "夜班晨报",
-  "inspection-agent": "品质巡检官",
-  // 视频域常见
-  director: "总导演",
-  producer: "制片人",
-  editor: "剪辑师",
-  renderer: "渲染师",
-  publisher: "发布专员",
-  "data-analyst": "数据看板官",
-  "script-writer": "剧本师",
 };
 
 /**
- * 行动者人性化：先查表；未收录的 xxx-agent 去后缀查词根；MEM-/E-/T- 等编号原样；
- * 其余下划线/连字符串转空格分词（永不裸奔原始 ID）
+ * 行动者人性化：先查表；未收录的 xxx-agent 去后缀查词根；
+ * 其余标识仅在通过中文边界后展示（永不裸奔原始 ID）。
  */
 export function actorText(id: string): string {
   if (!id) return "—";
-  const hit = ACTOR_TEXT[id];
+  const hit = projectedText(`actor.${id}`) ?? ACTOR_TEXT[id];
   if (hit) return hit;
-  if (/^(MEM|E|T|VID|R|G)-/.test(id)) return id; // 编号类保留
+  if (/^(MEM|E|T|VID|R|G)-/.test(id)) return "系统成员";
   if (id.endsWith("-agent")) {
     const root = id.slice(0, -6);
-    // 未收录岗位：词根转空格+"数字员工"（界面不出现英文 Agent 后缀）
-    return ACTOR_TEXT[root] ? `${ACTOR_TEXT[root]}` : `${root.replace(/[-_]/g, " ")} · 数字员工`;
+    return projectedText(`actor.${root}`) ?? ACTOR_TEXT[root] ?? "数字员工";
   }
-  return id.replace(/[-_]/g, " ");
+  return clientChineseText(id, "系统成员");
 }
 
 /** 夜班/运营高频动作码补录（F-CN1） */
 export const ACTION_OPS_TEXT: Record<string, string> = {
-  // 夜班/运营高频动作码（点式全量，F-CN1；与种子/套件动作码对齐）
+  // 基座公共动作码；行业动作从 Bundle 术语投影读取。
   "approval.gesture": "审批手势",
   "ask.answer": "问询应答",
-  "audience.segment": "客群分群",
-  "booking.confirm": "订单确认",
-  "campaign.publish": "活动发布",
-  "campaign.schedule": "活动排期",
-  "competitor.fetch": "竞对抓取",
-  "content.publish": "内容发布",
-  "conversion.attribute": "成交归因",
-  "coupon.create": "创建券",
-  "coupon.promote": "券推广",
-  "funnel.weekly": "漏斗周报",
-  "geo.publish": "GEO 发布",
-  "guest.care.send": "住客关怀",
-  "inspection.scan": "巡检扫描",
-  "intent.radar.report": "意图雷达播报",
-  "lead.assign": "线索分派",
-  "lead.capture": "线索捕获",
-  "lead.nurture": "线索培育",
-  "live.campaign": "直播活动",
-  "market.scan": "市场扫描",
-  "member.referral": "会员转介绍",
   "memory.consolidate": "记忆整理",
   "night.package.deliver": "夜班日报投递",
   "night.run.start": "夜班开始",
-  "order.reconcile": "对账核销",
-  "order.refund": "订单退款",
-  "render.review": "渲染审片",
-  "review.asset.boost": "好评加热",
-  "review.reply": "回复评价",
-  "script.draft": "脚本起草",
   "strategy.memo": "策略备忘",
   "thread.dispatch": "任务派发",
-  "visibility.snapshot": "曝光快照",
   // 裸词别名（历史数据兼容）
-  reconcile: "对账核销",
-  fetch: "竞对抓取",
   send: "发送",
   answer: "即时应答",
   dispatch: "任务派发",
-  boost: "加热推广",
   weekly: "周报汇总",
-  attribute: "成交归因",
-  referral: "转介绍跟进",
   "morning-briefing": "晨报",
   consolidate: "记忆整理",
   deliver: "夜班投递",
   start: "开始",
-  scan: "巡检扫描",
+  scan: "扫描检查",
 };
 
 /** 行动载荷人性化：常见 JSON 键 → 中文键值对；非对象原样返回（F-CN1） */
 const PAYLOAD_KEY_TEXT: Record<string, string> = {
   diff: "差异", rounds: "轮次", card: "竞对", price: "价格", sku: "单品", count: "数量",
-  note: "备注", occ: "入住率", revpar: "RevPAR", adr: "均价", score: "评分", status: "状态",
+  note: "备注", score: "评分", status: "状态",
+  title: "标题", text: "内容", summary: "摘要", gesture: "审批动作", reason: "原因",
+  mode: "任务方式", result: "结果", verdict: "结论", provider: "模型服务", model: "模型",
+  credits: "积分", tier: "能力档位", window: "调用时段", link: "关联入口", url: "地址",
 };
+
+function payloadValueText(value: unknown, depth = 0): string {
+  if (value == null || value === "") return "暂无";
+  if (typeof value !== "object") return clientValueText(value);
+  if (depth >= 2) return clientValueText(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "暂无";
+    const shown = value.slice(0, 4).map((item) => payloadValueText(item, depth + 1));
+    return `${shown.join("、")}${value.length > shown.length ? `等 ${value.length} 项` : ""}`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>).slice(0, 6);
+  if (entries.length === 0) return "暂无";
+  return entries.map(([key, nested]) => {
+    const label = projectedText(`field.${key}`) ?? PAYLOAD_KEY_TEXT[key] ?? clientFieldLabel(key, { fallbackLabel: "补充信息" });
+    return `${label}：${payloadValueText(nested, depth + 1)}`;
+  }).join("；");
+}
+
 export function payloadText(after: unknown, maxLen = 160): string {
   if (after == null) return "";
-  if (typeof after !== "object") return String(after).slice(0, maxLen);
-  const parts = Object.entries(after as Record<string, unknown>).map(([k, v]) => {
-    const key = PAYLOAD_KEY_TEXT[k] ?? k;
-    const val = typeof v === "object" ? JSON.stringify(v) : String(v);
-    return `${key} ${val}`;
-  });
-  return parts.join(" · ").slice(0, maxLen);
+  return payloadValueText(after).slice(0, maxLen);
 }

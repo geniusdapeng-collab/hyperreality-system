@@ -233,6 +233,7 @@ function MateVector2D({ size, mood = "neutral", gesture = null, frame = "bust", 
       data-render-mode="vector2d"
       data-avatar-ready="true"
       data-avatar-motion="dynamic"
+      role="img"
       aria-label="织伴数字人（动态矢量后端）"
       style={{ position: "relative", width: size, height: size, overflow: "hidden", pointerEvents: "none" }}
     >
@@ -246,7 +247,7 @@ function MateVector2D({ size, mood = "neutral", gesture = null, frame = "bust", 
       `}</style>
       <div style={{ position: "absolute", inset: 0, transform: `scale(${cropScale})`, transformOrigin: frame === "full" ? "50% 100%" : "50% 34%" }}>
         <div style={{ position: "absolute", left: "12%", right: "12%", bottom: "1%", height: "9%", borderRadius: "50%", background: "radial-gradient(ellipse,rgba(255,217,138,.32),transparent 72%)", animation: "mate-v2-glow 2.8s ease-in-out infinite" }} />
-        <svg viewBox="0 0 420 620" width="100%" height="100%" style={{ overflow: "visible" }}>
+        <svg data-wl-custom-graphic="live-character" viewBox="0 0 420 620" width="100%" height="100%" aria-hidden="true" style={{ overflow: "visible" }}>
           <defs>
             <linearGradient id="mateHair" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#ffcc69"/><stop offset=".55" stopColor="#f08d46"/><stop offset="1" stopColor="#b95136"/></linearGradient>
             <linearGradient id="mateDress" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#23314a"/><stop offset="1" stopColor="#101827"/></linearGradient>
@@ -757,9 +758,9 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
         position: "relative", width: size, height: size, borderRadius: 16,
         overflow: "hidden", pointerEvents: "none",
       }}
-      aria-label="织伴数字人（Live2D）"
+      aria-label="织伴数字人"
     >
-      {!renderReady && !loadError && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#68707a", fontSize: 12 }}>数字人正在登台…</div>}
+      {!renderReady && !loadError && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#68707a", fontSize: 14 }}>数字人正在登台…</div>}
     </div>
   );
 }

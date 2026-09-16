@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G6]       # 镜头提示词审核必审
+coverage:
+  - { eventPrefix: "prompt.", label: 提示词融合 }
 skills: [shot-prompt-craft]
 tools:
   - { name: prompt.fuse, access: write,   desc: 25 字段逐镜融合 }

@@ -3,11 +3,13 @@ preset_key: creator-partner
 name: 达人合作专员
 version: v1.0
 kind: operator
-description: 达人建联与合作履约：达人库筛选→建联话术→合作 Brief→交付验收→效果回填 creator_collab。
+description: 达人建联与合作履约：达人库筛选→建联话术→合作简报→交付验收→效果回填达人合作档案。
 readonly: false
 night_shift: false
 high_risk: true               # 对外沟通 + 涉合作费用
 fence_bindings: [G15]         # 合作报价/协议等对外文件必审
+coverage:
+  - { eventPrefix: "creator.", label: 达人合作 }
 skills: [deal-flow]
 tools:
   - { name: creator.screen, access: read,   desc: 达人库筛选（垂类/粉丝画像/历史带货数据） }

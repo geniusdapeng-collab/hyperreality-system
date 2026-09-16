@@ -21,6 +21,8 @@ export interface AccountsDeps {
   now?: () => number;
 }
 
+export type VerificationPurpose = "login" | "activate" | "invite" | "danger-confirm" | `danger-confirm:${string}`;
+
 const CODE_TTL_MS = 5 * 60_000;
 const CODE_DAILY_LIMIT = 5;
 const CODE_MAX_ATTEMPTS = 5;
@@ -29,13 +31,21 @@ const LOCK_MS = 15 * 60_000;
 
 const now = (d: AccountsDeps) => (d.now ? d.now() : Date.now());
 
+/** 生产响应永不携带本地验证码；客户端仍会再做一次开发构建守卫。 */
+export function developmentVerificationCode(code: string, nodeEnv = process.env.NODE_ENV): string | undefined {
+  return nodeEnv === "production" ? undefined : code;
+}
+
 /* ================= 验证码 ================= */
 
 export async function requestCode(
   deps: AccountsDeps,
-  input: { channel: "phone" | "email"; target: string; purpose: "login" | "activate" | "invite" | "danger-confirm"; ip?: string },
+  input: { channel: "phone" | "email"; target: string; purpose: VerificationPurpose; ip?: string },
 ): Promise<{ sent: boolean; devCode?: string }> {
   const { q, sms } = deps;
+  if (input.channel !== "phone") {
+    throw new Error("邮箱验证码通道尚未接入，请改用手机号验证码或密码登录");
+  }
   const dayAgo = new Date(now(deps) - 24 * 3600e3).toISOString();
   const recent = await q(
     `SELECT count(*)::int AS c FROM verification_codes WHERE channel=$1 AND target=$2 AND purpose=$3 AND created_at > $4`,
@@ -45,13 +55,21 @@ export async function requestCode(
     throw new Error("今日验证码发送次数已达上限（5 次），请明天再试");
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
+  const verificationId = newId("vcode");
   await q(
     `INSERT INTO verification_codes (id, channel, target, purpose, code_hash, expires_at)
      VALUES ($1,$2,$3,$4,$5,$6)`,
-    [newId("vcode"), input.channel, input.target, input.purpose, hashSecret(code, input.target), new Date(now(deps) + CODE_TTL_MS).toISOString()],
+    [verificationId, input.channel, input.target, input.purpose, hashSecret(code, input.target), new Date(now(deps) + CODE_TTL_MS).toISOString()],
   );
-  await sms.send(input.target, `【WorkLoom】验证码 ${code}，5 分钟内有效。请勿泄露给他人。`);
-  return { sent: true, devCode: process.env.NODE_ENV === "production" ? undefined : code };
+  try {
+    await sms.send(input.target, `【WorkLoom】验证码 ${code}，5 分钟内有效。请勿泄露给他人。`);
+  } catch (error) {
+    // 发送失败的验证码不可被消费，也不应占用用户的发送配额。
+    // 删除失败不覆盖原始通道错误，避免客户端误判为数据库问题。
+    await q(`DELETE FROM verification_codes WHERE id=$1`, [verificationId]).catch(() => undefined);
+    throw error;
+  }
+  return { sent: true, devCode: developmentVerificationCode(code) };
 }
 
 export async function consumeCode(
@@ -255,12 +273,48 @@ export async function revokeAllSessions(q: QueryFn, accountId: string): Promise<
 
 /* ================= 注册 / 激活 / 邀请 ================= */
 
+/** 生成面向地址栏的建议标识；中文名称没有安全拉丁转写时使用手机号尾号，不伪造拼音。 */
+export function suggestedWorkspaceSlug(workspaceName: string, phone: string): string {
+  const latin = workspaceName
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 28);
+  const tail = phone.replace(/\D/g, "").slice(-4) || "new";
+  const base = latin.length >= 3 ? latin : `workspace-${tail}`;
+  return base.replace(/-+$/g, "").slice(0, 32);
+}
+
+async function allocateWorkspaceSlug(
+  q: QueryFn,
+  input: { workspaceName: string; phone: string; requested?: string },
+): Promise<string> {
+  const requested = input.requested?.trim();
+  const base = requested || suggestedWorkspaceSlug(input.workspaceName, input.phone);
+  if (!/^[a-z0-9][a-z0-9-]{2,39}$/.test(base)) {
+    throw new Error("工作区地址标识须为 3–40 位小写字母、数字或连字符");
+  }
+  const exists = async (slug: string) => Boolean((await q(`SELECT 1 FROM workspaces WHERE slug=$1`, [slug])).rows[0]);
+  if (requested) {
+    if (await exists(requested)) throw new Error("该工作区地址标识已被使用，请更换后重试");
+    return requested;
+  }
+  if (!(await exists(base))) return base;
+  for (let suffix = 2; suffix <= 99; suffix++) {
+    const candidate = `${base.slice(0, 39 - String(suffix).length)}-${suffix}`;
+    if (!(await exists(candidate))) return candidate;
+  }
+  const randomSuffix = randomToken(6).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6) || "new100";
+  return `${base.slice(0, 32)}-${randomSuffix}`.slice(0, 40);
+}
+
 /** 自助开通：注册账号 + 建租户 + 建首店工作区 + 本人即 owner */
 export async function registerTenantOwner(
   deps: AccountsDeps,
   input: {
     phone: string; code: string; displayName: string;
-    tenantName: string; workspaceName: string; workspaceSlug: string; industry: string; plan?: PlanTier;
+    tenantName: string; workspaceName: string; workspaceSlug?: string; industry: string; plan?: PlanTier;
     password?: string; ip?: string;
   },
 ) {
@@ -275,12 +329,17 @@ export async function registerTenantOwner(
     );
     acc = { id };
   }
+  const workspaceSlug = await allocateWorkspaceSlug(deps.q, {
+    workspaceName: input.workspaceName,
+    phone: input.phone,
+    requested: input.workspaceSlug,
+  });
   const tenantId = newId("tenant");
   const wsId = newId("ws");
   await deps.q(`INSERT INTO tenants (id, name, plan) VALUES ($1,$2,$3)`, [tenantId, input.tenantName, input.plan ?? "pro"]);
   await deps.q(
     `INSERT INTO workspaces (id, tenant_id, name, slug, industry, stage, night_config) VALUES ($1,$2,$3,$4,$5,'stable','{}')`,
-    [wsId, tenantId, input.workspaceName, input.workspaceSlug, input.industry],
+    [wsId, tenantId, input.workspaceName, workspaceSlug, input.industry],
   );
   const memberId = newId("mem");
   await deps.q(
@@ -289,8 +348,14 @@ export async function registerTenantOwner(
     [memberId, wsId, "MEM-001", input.displayName, acc.id],
   );
   await loginEvent(deps.q, { accountId: acc.id as string, kind: "activate.ok", workspaceId: wsId, ip: input.ip });
-  const identity = await identityFor(deps.q, acc.id as string, input.workspaceSlug);
-  return { ...(await issueSession(deps, { accountId: acc.id as string, identity: identity!, ip: input.ip })), identity, tenantId, workspaceId: wsId };
+  const identity = await identityFor(deps.q, acc.id as string, workspaceSlug);
+  return {
+    ...(await issueSession(deps, { accountId: acc.id as string, identity: identity!, ip: input.ip })),
+    identity,
+    tenantId,
+    workspaceId: wsId,
+    workspaceSlug,
+  };
 }
 
 /** 邀请成员（owner/manager 发起） */
@@ -373,7 +438,7 @@ export async function updateMemberRole(
   );
 }
 
-/** 设置/修改前台快切 PIN（本人操作） */
+/** 设置/修改共享终端快切 PIN（本人操作） */
 export async function setQuickPin(deps: AccountsDeps, input: { memberId: string; pin: string }): Promise<void> {
   if (!/^\d{4,6}$/.test(input.pin)) throw new Error("PIN 须为 4-6 位数字");
   await deps.q(`UPDATE members SET quick_pin_hash=$2 WHERE id=$1`, [input.memberId, hashPassword(input.pin)]);

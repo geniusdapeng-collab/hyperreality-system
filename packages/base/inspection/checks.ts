@@ -1,35 +1,30 @@
 /**
- * inspection · 巡检项定义与确定性探针（F9.1）
- *  - 巡检项由行业包定义：内置默认=多渠道价格 / 状态同步 / 评价 / 违规（PRD M9.2 原文口径）
- *  - 探针为纯函数：输入只读快照（loadSnapshot 取自 profiles.archive / 事件流），输出 Finding 列表
- *  - 探针可注入（演示/测试用）；默认探针不编造数据——快照缺项时该检项记「无数据」而非假异常
+ * inspection · 行业无关巡检契约与确定性执行器（F9.1）
+ *
+ * 基座只定义“检项、快照、探针、发现”的协议，不内置渠道、价格、评价等
+ * 任何行业对象、阈值或用户文案。生产调用方必须从已验证的活动 Bundle 解析
+ * 出受控行业适配器；没有适配器时由 scan 失败关闭，绝不把空配置当作巡检正常。
  */
 
 /** 异常分级（F9.2）：高/中/低三级 → 推送策略 P0/P1/P2 */
 export type Severity = "high" | "medium" | "low";
 
-export type CheckKind = "channel_price" | "state_sync" | "review" | "violation";
+/** 行业自有的受控检项类型；基座不枚举行业种类。 */
+export type CheckKind = string;
 
 export interface CheckDef {
   id: string;
   kind: CheckKind;
+  /** 面向用户的中文检项名称，由行业适配器提供。 */
   name: string;
 }
-
-/** 默认巡检项清单（F9.1；US9.5：新行业只配置检项清单即获得完整巡检能力） */
-export const DEFAULT_CHECKS: CheckDef[] = [
-  { id: "chk-channel-price", kind: "channel_price", name: "多渠道价格一致性" },
-  { id: "chk-state-sync", kind: "state_sync", name: "状态同步" },
-  { id: "chk-review", kind: "review", name: "新评价扫描" },
-  { id: "chk-violation", kind: "violation", name: "违规巡检" },
-];
 
 export interface Finding {
   checkId: string;
   /** ok=正常 / anomaly=异常 / nodata=快照缺该项数据（不算正常项，不算异常） */
   status: "ok" | "anomaly" | "nodata";
   severity?: Severity;
-  /** 面板展示摘要（渠道/账号点名走 objectId） */
+  /** 面板展示摘要；行业对象名与文案必须由行业适配器生成。 */
   summary: string;
   objectType: string;
   objectId?: string;
@@ -37,119 +32,79 @@ export interface Finding {
   source: string;
 }
 
-/** 巡检只读快照（探针输入；字段均可选——缺什么探针报什么 nodata） */
-export interface InspectionSnapshot {
-  /** 渠道价格采样：archive.inspection.channels = [{ channel, price, parity }] */
-  channels?: Array<{ channel: string; price?: number; parity?: boolean; status?: string }>;
-  /** 状态同步采样：archive.inspection.stateUnits = [{ unit, synced }]（unit 含义由行业包定义） */
-  stateUnits?: Array<{ unit: string; synced: boolean }>;
-  /** 新评价采样：archive.inspection.reviews = [{ id, channel, score }]（≤3 分为差评） */
-  reviews?: Array<{ id: string; channel: string; score: number }>;
-  /** 违规采样：archive.inspection.violations = [{ id, kind, detail }] */
-  violations?: Array<{ id: string; kind: string; detail: string }>;
-}
+/**
+ * 行业巡检快照的透明载体。字段 Schema 及解析责任属于受控行业适配器，基座
+ * 不猜测 channels/reviews/rooms 等业务字段。
+ */
+export type InspectionSnapshot = Readonly<Record<string, unknown>>;
 
 export type Probe = (check: CheckDef, snapshot: InspectionSnapshot) => Finding[];
 
-/* ---------- 默认探针（确定性；阈值与 seed/围栏同源，不新增数值） ---------- */
+export interface InspectionAdapter {
+  /** 随服务端制品审核的受控适配器标识。 */
+  id: string;
+  /** 必须对应活动 Bundle 装配出的只读数字员工岗位。 */
+  presetKey: string;
+  checks: readonly CheckDef[];
+  probes: Readonly<Record<string, Probe>>;
+}
 
-const channelPriceProbe: Probe = (check, s) => {
-  if (!s.channels || s.channels.length === 0) {
-    return [{ checkId: check.id, status: "nodata", summary: "无渠道价格快照", objectType: "channel", source: "channel_price" }];
+export class InspectionConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InspectionConfigurationError";
   }
-  return s.channels.map((c): Finding => {
-    if (c.status && c.status !== "online") {
-      return {
-        checkId: check.id, status: "anomaly", severity: "high",
-        summary: `渠道「${c.channel}」状态 ${c.status}（非 online）`, objectType: "channel", objectId: c.channel, source: "channel_price",
-      };
+}
+
+function validateConfiguration(checks: readonly CheckDef[], probes: Readonly<Record<string, Probe>>): void {
+  if (checks.length === 0) {
+    throw new InspectionConfigurationError("当前行业包未声明巡检检项，已停止运行");
+  }
+  const ids = new Set<string>();
+  for (const check of checks) {
+    if (!check.id.trim() || !check.kind.trim() || !check.name.trim()) {
+      throw new InspectionConfigurationError("行业巡检检项缺少标识、类型或中文名称");
     }
-    if (c.parity === false) {
-      return {
-        checkId: check.id, status: "anomaly", severity: "medium",
-        summary: `渠道「${c.channel}」价格不一致（parity=false）`, objectType: "channel", objectId: c.channel, source: "channel_price",
-      };
+    if (ids.has(check.id)) {
+      throw new InspectionConfigurationError(`行业巡检检项标识重复：${check.id}`);
     }
-    return {
-      checkId: check.id, status: "ok",
-      summary: `渠道「${c.channel}」价格正常`, objectType: "channel", objectId: c.channel, source: "channel_price",
-    };
-  });
-};
-
-const stateSyncProbe: Probe = (check, s) => {
-  if (!s.stateUnits || s.stateUnits.length === 0) {
-    return [{ checkId: check.id, status: "nodata", summary: "无状态同步快照", objectType: "unit", source: "state_sync" }];
+    ids.add(check.id);
+    if (typeof probes[check.kind] !== "function") {
+      throw new InspectionConfigurationError(`检项「${check.id}」没有已登记探针`);
+    }
   }
-  return s.stateUnits.map((r): Finding =>
-    r.synced
-      ? { checkId: check.id, status: "ok", summary: `单元「${r.unit}」状态已同步`, objectType: "unit", objectId: r.unit, source: "state_sync" }
-      : { checkId: check.id, status: "anomaly", severity: "medium", summary: `单元「${r.unit}」状态未同步`, objectType: "unit", objectId: r.unit, source: "state_sync" },
-  );
-};
+}
 
-const reviewProbe: Probe = (check, s) => {
-  if (!s.reviews) {
-    return [{ checkId: check.id, status: "nodata", summary: "无评价快照", objectType: "review", source: "review" }];
-  }
-  if (s.reviews.length === 0) {
-    return [{ checkId: check.id, status: "ok", summary: "无新增评价", objectType: "review", source: "review" }];
-  }
-  return s.reviews.map((r): Finding =>
-    r.score <= 3
-      ? { checkId: check.id, status: "anomaly", severity: "high", summary: `差评 ${r.score} 分（渠道 ${r.channel}）待跟进`, objectType: "review", objectId: r.id, source: "review" }
-      : { checkId: check.id, status: "ok", summary: `评价 ${r.score} 分（渠道 ${r.channel}）正常`, objectType: "review", objectId: r.id, source: "review" },
-  );
-};
-
-const violationProbe: Probe = (check, s) => {
-  if (!s.violations) {
-    return [{ checkId: check.id, status: "nodata", summary: "无违规快照", objectType: "violation", source: "violation" }];
-  }
-  if (s.violations.length === 0) {
-    return [{ checkId: check.id, status: "ok", summary: "无违规", objectType: "violation", source: "violation" }];
-  }
-  return s.violations.map((v): Finding => ({
-    checkId: check.id, status: "anomaly", severity: "high",
-    summary: `违规（${v.kind}）：${v.detail}`, objectType: "violation", objectId: v.id, source: "violation",
-  }));
-};
-
-export const DEFAULT_PROBES: Record<CheckKind, Probe> = {
-  channel_price: channelPriceProbe,
-  state_sync: stateSyncProbe,
-  review: reviewProbe,
-  violation: violationProbe,
-};
-
-/** 跑一轮检项（纯函数）：checks × probes → findings；单项探针抛错向上抛（由 scan 负责失败事件化，L9.2） */
+/**
+ * 跑一轮由行业适配器显式声明的检项。第三个参数没有默认值，避免任何调用方
+ * 在 Bundle/适配器缺失时悄悄落回某个示例行业。
+ */
 export function runChecks(
-  checks: CheckDef[],
+  checks: readonly CheckDef[],
   snapshot: InspectionSnapshot,
-  probes: Record<CheckKind, Probe> = DEFAULT_PROBES,
+  probes: Readonly<Record<string, Probe>>,
 ): Finding[] {
+  validateConfiguration(checks, probes);
   const out: Finding[] = [];
-  for (const c of checks) {
-    const probe = probes[c.kind];
-    if (!probe) throw new Error(`检项「${c.id}」无对应探针（kind=${c.kind}）`);
-    out.push(...probe(c, snapshot));
-  }
+  for (const check of checks) out.push(...probes[check.kind]!(check, snapshot));
   return out;
 }
 
-/** 同源聚合（E9.2）：同 source 的异常合并为一条摘要，详单进面板 */
+/** 同源聚合（E9.2）：同 source 的异常合并为一条摘要，详单进面板。 */
 export function aggregateBySource(findings: Finding[]): Array<{ source: string; severity: Severity; count: number; items: Finding[] }> {
   const groups = new Map<string, Finding[]>();
-  for (const f of findings.filter((x) => x.status === "anomaly")) {
-    const list = groups.get(f.source) ?? [];
-    list.push(f);
-    groups.set(f.source, list);
+  for (const finding of findings.filter((item) => item.status === "anomaly")) {
+    const list = groups.get(finding.source) ?? [];
+    list.push(finding);
+    groups.set(finding.source, list);
   }
   const rank: Record<Severity, number> = { high: 3, medium: 2, low: 1 };
   return [...groups.entries()].map(([source, items]) => ({
     source,
-    severity: items.reduce<Severity>((acc, i) => (rank[i.severity ?? "low"] > rank[acc] ? (i.severity ?? "low") : acc), "low"),
+    severity: items.reduce<Severity>((current, item) => (
+      rank[item.severity ?? "low"] > rank[current] ? (item.severity ?? "low") : current
+    ), "low"),
     count: items.length,
-    items: items.sort((a, b) => rank[b.severity ?? "low"] - rank[a.severity ?? "low"]),
+    items: items.sort((left, right) => rank[right.severity ?? "low"] - rank[left.severity ?? "low"]),
   }));
 }

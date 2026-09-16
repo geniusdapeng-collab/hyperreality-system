@@ -8,6 +8,7 @@
  */
 import { XpBar } from "./XpBar";
 import { EventIdChip } from "./EventIdChip";
+import { THREAD_MODE_TEXT, actionText } from "../../lib/display";
 
 export type QuestStatus = "queued" | "running" | "review" | "done" | "failed" | "paused";
 
@@ -44,19 +45,19 @@ export function QuestCard({
   return (
     <div className={`rounded-msg border bg-card p-4 ${meta.border}`}>
       <div className="mb-2 flex items-center gap-2">
-        <span className="rounded border border-gold/60 bg-gold/10 px-1.5 py-0.5 text-micro font-black tracking-widest text-gold">
-          主线 MAIN QUEST
+        <span className="rounded border border-gold/60 bg-gold/10 px-1.5 py-0.5 text-body font-black tracking-widest text-gold">
+          主线任务
         </span>
-        <span className="rounded border border-line px-1.5 py-0.5 text-micro text-ink3">{mode}</span>
+        <span className="rounded border border-line px-1.5 py-0.5 text-body text-ink3">{THREAD_MODE_TEXT[mode] ?? "协作模式"}</span>
         <EventIdChip id={eventId} />
         <span className="flex-1" />
-        <span className={`inline-flex items-center gap-1.5 text-caption font-bold ${meta.cls}`}>
+        <span className={`inline-flex items-center gap-1.5 text-body font-bold ${meta.cls}`}>
           <span className={`inline-block h-1.5 w-1.5 rounded-full bg-current ${meta.pulse ?? ""}`} />
           {reconnecting ? "重连中…" : meta.label}
         </span>
       </div>
       <div className="mb-1 text-h2 font-bold text-ink">{title}</div>
-      {action && <div className="mb-2.5 text-body text-ink2">当前动作：{action}</div>}
+      {action && <div className="mb-2.5 break-words text-body text-ink2">当前动作：{actionText(action)}</div>}
       <XpBar done={done} total={total} />
       {/* 里程碑节点灯（x/y 段） */}
       <div className="mt-2 flex gap-1.5">

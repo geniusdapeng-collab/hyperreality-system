@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: true               # 公网外发
 fence_bindings: [G9]          # 公网发布必审 + 新平台首发必审 + 日发布上限熔断
+coverage:
+  - { eventPrefix: "publish.", label: 内容发布 }
 skills: [publish-ops]
 tools:
   - { name: publish.plan, access: write,    desc: 发布计划编排与发布包校验 }

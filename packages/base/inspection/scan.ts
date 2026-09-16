@@ -16,13 +16,11 @@ import type pg from "pg";
 import { gatewayAppend } from "../workdata/gateway.js";
 import {
   aggregateBySource,
-  DEFAULT_PROBES,
-  DEFAULT_CHECKS,
   runChecks,
-  type CheckDef,
+  InspectionConfigurationError,
+  type InspectionAdapter,
   type Finding,
   type InspectionSnapshot,
-  type Probe,
   type Severity,
 } from "./checks.js";
 
@@ -100,7 +98,7 @@ export async function assertReadonlyPreset(app: pg.Pool, scope: Scope, presetKey
   }
 }
 
-/** 只读快照装载（profiles.archive.inspection；缺项由探针报 nodata，不编造） */
+/** 只读快照装载（profiles.archive.inspection；字段由已验证行业适配器解释） */
 export async function loadSnapshot(app: pg.Pool, scope: Scope): Promise<InspectionSnapshot> {
   const client = await app.connect();
   try {
@@ -164,8 +162,8 @@ export async function listOpenAnomalyKeys(app: pg.Pool, scope: Scope, day: Date)
 }
 
 /**
- * 跑一轮巡检（默认检项=内置四检，F9.1；时刻=每日 07:00 可配，由触发器引擎 F4.7 调度——
- * 首版演示手动/触发器调用 runInspectionScan，定时挂接见 B9 tickTriggers）
+ * 跑一轮巡检。adapter 必须由调用方从已验证活动 Bundle 的受控注册表解析；
+ * 缺失时仍按 L9.2 写失败事件，绝不使用示例行业默认值或返回“运行正常”。
  */
 export async function runInspectionScan(
   app: pg.Pool,
@@ -173,8 +171,7 @@ export async function runInspectionScan(
   scope: Scope,
   opts: {
     at?: Date;
-    checks?: CheckDef[];
-    probes?: Record<string, Probe>;
+    adapter?: InspectionAdapter | null;
     snapshot?: InspectionSnapshot;
     retries?: number;
   } = {},
@@ -216,11 +213,18 @@ async function scanOnce(
   scope: Scope,
   runId: string,
   at: Date,
-  opts: { checks?: CheckDef[]; probes?: Record<string, Probe>; snapshot?: InspectionSnapshot },
+  opts: { adapter?: InspectionAdapter | null; snapshot?: InspectionSnapshot },
 ): Promise<ScanReport> {
-  await assertReadonlyPreset(app, scope); // L9.1 前置
+  const adapter = opts.adapter;
+  if (!adapter) {
+    throw new InspectionConfigurationError("当前工作区没有经已验证行业包授权的巡检适配器");
+  }
+  if (!adapter.id.trim() || !adapter.presetKey.trim()) {
+    throw new InspectionConfigurationError("行业巡检适配器缺少受控标识或只读岗位");
+  }
+  await assertReadonlyPreset(app, scope, adapter.presetKey); // L9.1 前置
   const snapshot = opts.snapshot ?? (await loadSnapshot(app, scope));
-  const findings = runChecks(opts.checks ?? DEFAULT_CHECKS, snapshot, (opts.probes as never) ?? DEFAULT_PROBES);
+  const findings = runChecks(adapter.checks, snapshot, adapter.probes);
 
   const effective = findings.filter((f) => f.status !== "nodata");
   const okCount = effective.filter((f) => f.status === "ok").length;

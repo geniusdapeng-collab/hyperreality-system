@@ -233,7 +233,20 @@ function VectorCeremonyStage({ actors, occasion = "first-install", dancing = tru
         return (
           <div key={`${actor.presetKey}-${index}`} style={{ position: "absolute", left: `${left}%`, bottom: `${bottom}%`, zIndex: isCeo ? 5 : row === 0 ? 4 : 3, width: avatarSize + 74, marginLeft: -(avatarSize + 74) / 2, textAlign: "center", animation: dancing ? `ceremony-v2-dance ${slow ? 1.42 : .94}s ease-in-out ${index * .05}s infinite` : `ceremony-v2-arrive .58s ease ${index * .025}s both`, transformOrigin: "50% 100%" }}>
             <AgentAvatarOf name={actor.name} presetKey={actor.presetKey} size={avatarSize} />
-            <div style={{ display: "inline-block", marginTop: 3, padding: "3px 9px", borderRadius: 99, color: isCeo ? "#ffd98a" : "#e7eef8", fontWeight: isCeo ? 750 : 600, fontSize: isCeo ? 15 : 11, whiteSpace: "nowrap", textShadow: "0 2px 10px #000", background: "rgba(7,12,22,.78)", border: `1px solid ${isCeo ? "rgba(255,217,138,.34)" : "rgba(138,216,255,.18)"}`, boxShadow: "0 6px 18px rgba(0,0,0,.28)" }}>{actor.name}</div>
+            <div
+              data-wl-meta
+              className={isCeo ? "truncate text-body" : "truncate text-caption"}
+              title={actor.name}
+              style={{
+                display: "inline-block", maxWidth: "100%",
+                marginTop: 3, padding: "3px 9px", borderRadius: 99,
+                color: isCeo ? "#ffd98a" : "#e7eef8", fontWeight: isCeo ? 750 : 600,
+                lineHeight: 1.35,
+                textShadow: "0 2px 10px #000", background: "rgba(7,12,22,.78)",
+                border: `1px solid ${isCeo ? "rgba(255,217,138,.34)" : "rgba(138,216,255,.18)"}`,
+                boxShadow: "0 6px 18px rgba(0,0,0,.28)",
+              }}
+            >{actor.name}</div>
           </div>
         );
       })}

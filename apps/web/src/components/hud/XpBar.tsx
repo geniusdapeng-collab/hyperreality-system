@@ -34,7 +34,7 @@ export function XpBar({
           />
         </div>
       </div>
-      <span className="font-orb text-caption font-bold tracking-wider text-goldhi">
+      <span className="font-orb text-body font-bold tracking-wider text-goldhi">
         {done}/{total}
         {gain ? <span className="ml-1 text-gold">+{gain} XP</span> : null}
       </span>

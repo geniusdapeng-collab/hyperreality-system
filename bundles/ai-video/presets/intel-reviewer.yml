@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G1]
+coverage:
+  - { eventPrefix: "dossier.review.", label: 情报复核 }
 skills: [jenny-loom-research]
 tools:
   - { name: research.search, access: read,  desc: 检索评价语料 }

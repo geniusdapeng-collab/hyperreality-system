@@ -11,6 +11,30 @@ import { z } from "zod";
 export const CEO_MODES = ["disabled", "shadow", "trial", "suspended", "active"] as const;
 export type CeoMode = (typeof CEO_MODES)[number];
 
+const autonomyRangeSchema = z.object({
+  label: z.string().min(1).max(80),
+  lower: z.number(),
+  upper: z.number(),
+  anchor: z.number().default(1),
+}).refine(
+  ({ lower, upper, anchor }) => lower <= anchor && anchor <= upper,
+  { message: "自治区间必须满足 lower <= anchor <= upper" },
+);
+
+const autonomySchema = z.object({
+  /** 比例/区间边界由 Bundle 命名，例如某类动作相对基准的允许范围。 */
+  ranges: z.record(z.string().min(1), autonomyRangeSchema).default({}),
+  /** 金额或计数上限由 Bundle 命名，基座只执行通用比较。 */
+  caps: z.record(z.string().min(1), z.object({
+    label: z.string().min(1).max(80),
+    limit: z.number().nonnegative(),
+  })).default({}),
+})
+  // 自治字段是基座治理契约。未知字段不能被 Zod 静默剥离后继续以
+  // trial/active 身份运行，否则会把“旧结构”伪装成“空边界”。
+  .strict()
+  .default(() => ({ ranges: {}, caps: {} }));
+
 export const charterSchema = z.object({
   version: z.number().int().default(1),
   mode: z.enum(CEO_MODES).default("disabled"),
@@ -18,19 +42,13 @@ export const charterSchema = z.object({
     name: z.string().default("公司CEO"),
     persona: z.string().default("稳健经营型"),
   }).default(() => ({ name: "公司CEO", persona: "稳健经营型" })),
-  autonomy: z.object({
-    price_band: z.tuple([z.number(), z.number()]).default(() => [0.9, 1.2] as [number, number]),
-    procurement_cap: z.number().default(1000),
-    campaign_cap: z.number().default(500),
-  }).default(() => ({ price_band: [0.9, 1.2] as [number, number], procurement_cap: 1000, campaign_cap: 500 })),
+  autonomy: autonomySchema,
   /** L4 必请示清单（只紧不松：运行期只可加、不可减） */
   escalate: z.array(z.string()).default([
-    "低于底价报价/安全禁区相关",
-    "单月累计让利超上限",
     "围栏规则放宽（任何放宽）",
-    "新渠道/新平台上线",
-    "对外公开承诺（赔偿/免费/声明）",
     "宪章变更",
+    "不可逆的对外动作",
+    "跨工作区权限变更",
   ]),
   briefing: z.object({
     daily: z.string().default("08:30"),
@@ -40,9 +58,9 @@ export const charterSchema = z.object({
   }).default(() => ({ daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" as const })),
   circuit_breaker: z.object({
     window_days: z.number().int().default(14),
-    kpi_floor: z.record(z.string(), z.number()).default(() => ({ completion_rate: 0.25 })),
+    kpi_floor: z.record(z.string(), z.number()).default({}),
     tightened: z.boolean().default(false), // 熔断后=true：自治边界已收紧一档
-  }).default(() => ({ window_days: 14, kpi_floor: { completion_rate: 0.25 }, tightened: false })),
+  }).default(() => ({ window_days: 14, kpi_floor: {}, tightened: false })),
   grant: z.object({
     event_id: z.string(),
     granted_by: z.string(),
@@ -148,13 +166,16 @@ export function isExpired(c: Charter, now = Date.now()): boolean {
 export function effectiveAutonomy(c: Charter): Charter["autonomy"] {
   const a = c.autonomy;
   if (c.mode !== "trial") return a;
-  // 三上限减半；价格带向 1 收窄一半（如 ±15% → ±7.5%）
-  const narrow = (lo: number, hi: number): [number, number] => [1 - (1 - lo) / 2, 1 + (hi - 1) / 2];
-  const [lo, hi] = narrow(a.price_band[0], a.price_band[1]);
   return {
-    price_band: [Number(lo.toFixed(4)), Number(hi.toFixed(4))],
-    procurement_cap: Math.floor(a.procurement_cap / 2),
-    campaign_cap: Math.floor(a.campaign_cap / 2),
+    ranges: Object.fromEntries(Object.entries(a.ranges).map(([key, range]) => [key, {
+      ...range,
+      lower: Number((range.anchor - (range.anchor - range.lower) / 2).toFixed(4)),
+      upper: Number((range.anchor + (range.upper - range.anchor) / 2).toFixed(4)),
+    }])),
+    caps: Object.fromEntries(Object.entries(a.caps).map(([key, cap]) => [key, {
+      ...cap,
+      limit: Math.floor(cap.limit / 2),
+    }])),
   };
 }
 
@@ -178,14 +199,20 @@ export function evalCircuitBreaker(c: Charter, latestKpi: Record<string, number>
   return { tripped: false, alreadyTightened: c.circuit_breaker.tightened };
 }
 
-/** 熔断收紧：自治边界降一档（价格带减半、上限减半），与试用降档同构但作用于正式态 */
+/** 熔断收紧：所有区间向各自 anchor 收窄一半、所有上限减半。 */
 export function tightenAutonomy(c: Charter): Charter {
   const next = structuredClone(c);
   const a = next.autonomy;
   next.autonomy = {
-    price_band: [1 - (1 - a.price_band[0]) / 2, 1 + (a.price_band[1] - 1) / 2],
-    procurement_cap: Math.floor(a.procurement_cap / 2),
-    campaign_cap: Math.floor(a.campaign_cap / 2),
+    ranges: Object.fromEntries(Object.entries(a.ranges).map(([key, range]) => [key, {
+      ...range,
+      lower: range.anchor - (range.anchor - range.lower) / 2,
+      upper: range.anchor + (range.upper - range.anchor) / 2,
+    }])),
+    caps: Object.fromEntries(Object.entries(a.caps).map(([key, cap]) => [key, {
+      ...cap,
+      limit: Math.floor(cap.limit / 2),
+    }])),
   };
   next.circuit_breaker = { ...next.circuit_breaker, tightened: true };
   next.updated_at = new Date().toISOString();

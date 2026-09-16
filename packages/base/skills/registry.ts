@@ -30,6 +30,8 @@ export interface SkillRow {
   fence_bindings: string[];
   body: string;
   desensitized: boolean;
+  /** 受控分发元数据；具体展示键由消费端白名单解析。 */
+  dist_meta?: Record<string, unknown>;
 }
 
 export class SkillError extends Error {

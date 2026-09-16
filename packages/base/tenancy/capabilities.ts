@@ -48,6 +48,31 @@ export const PLAN_CAPABILITIES: Record<PlanTier, PlanCapabilities> = {
 
 export type CapabilityKey = Exclude<keyof PlanCapabilities, "eventRetentionDays">;
 
+const PLAN_LABELS: Record<PlanTier, string> = {
+  community: "社区版",
+  pro: "专业版",
+  teams: "团队版",
+  vpc: "私有部署版",
+};
+
+const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
+  quest: "多步骤任务编排",
+  nightShift: "夜班自动运行",
+  inspection: "经营巡检",
+  sharedMemory: "团队共享记忆",
+  auditReport: "审计报告",
+  vpcSeam: "内网接入",
+  localModel: "本地模型",
+};
+
+export function planDisplayName(plan: PlanTier): string {
+  return PLAN_LABELS[plan];
+}
+
+export function capabilityDisplayName(capability: CapabilityKey): string {
+  return CAPABILITY_LABELS[capability];
+}
+
 export function getCapabilities(plan: PlanTier): PlanCapabilities {
   return PLAN_CAPABILITIES[plan];
 }
@@ -64,7 +89,7 @@ export class PlanForbidden extends Error {
     public readonly plan: PlanTier,
     public readonly capability: CapabilityKey,
   ) {
-    super(`当前版本「${plan}」不含能力「${capability}」，请升级（F7.2 版本能力矩阵）`);
+    super(`当前使用${planDisplayName(plan)}，暂不包含“${capabilityDisplayName(capability)}”，请升级后再试。`);
     this.name = "PlanForbidden";
   }
   /** HTTP 语义 */
@@ -77,7 +102,7 @@ export class PlanForbidden extends Error {
       this.capability === "vpcSeam" || this.capability === "localModel" ? "vpc"
       : this.capability === "sharedMemory" || this.capability === "auditReport" ? "teams"
       : "pro";
-    return `升级至 ${need} 版解锁「${this.capability}」`;
+    return `升级至${planDisplayName(need)}后可使用“${capabilityDisplayName(this.capability)}”。`;
   }
 }
 

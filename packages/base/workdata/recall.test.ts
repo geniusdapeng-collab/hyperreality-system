@@ -9,10 +9,24 @@ import {
   nlSearchEvents,
   NL_TRANSLATE_TIMEOUT_MS,
   type EventFilter,
+  type NlTranslatorLexicon,
   type NlTranslator,
 } from "./recall.js";
 
 const scope = { tenantId: "tenant-demo", workspaceId: "ws-yunqi" };
+const hotelLexicon: NlTranslatorLexicon = {
+  objects: [
+    { terms: ["差评", "评价"], value: "review" },
+    { terms: ["房价", "调价", "价格"], value: "room_price" },
+    { terms: ["订单", "退款", "对账"], value: "order" },
+  ],
+  actions: [
+    { terms: ["退款"], value: "order.refund" },
+    { terms: ["调价"], value: "price.adjust" },
+    { terms: ["回复"], value: "review.reply" },
+  ],
+  ruleIds: ["R1", "R2", "R3", "R4", "R5", "R6"],
+};
 
 describe("buildWhere（结构化过滤）", () => {
   it("强制租户+工作区范围（越权返回空的第一道）", () => {
@@ -43,7 +57,7 @@ describe("buildWhere（结构化过滤）", () => {
 });
 
 describe("MockNlTranslator（D4 无 Key 演示）", () => {
-  const t = new MockNlTranslator();
+  const t = new MockNlTranslator(hotelLexicon);
 
   it("「昨天的差评」→ review + 昨日时间窗", async () => {
     const f = await t.translate("昨天的差评有哪些", scope);
@@ -110,7 +124,7 @@ d("PG 集成检索（种子 100 事件）", async () => {
   });
 
   it("NL 端到端（Mock 翻译器）：「夜班被熔断的调价」", async () => {
-    const r = await nlSearchEvents(pool, scope, "夜班被熔断的调价", new MockNlTranslator(), { limit: 100 });
+    const r = await nlSearchEvents(pool, scope, "夜班被熔断的调价", new MockNlTranslator(hotelLexicon), { limit: 100 });
     expect(r.degraded).toBe(false);
     expect(r.filter?.ruleResult).toBe("blocked");
     // #39 修复：原断言「窗口内必有事件」依赖种子剧本时间恰好落在「昨夜 22:00→今晨 08:30」

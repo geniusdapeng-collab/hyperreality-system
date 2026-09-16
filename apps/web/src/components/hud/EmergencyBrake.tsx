@@ -5,24 +5,29 @@
  * 本卡含二次确认视觉态；真实暂停链路（pauseAll，B9）在 F11/P9 接线。
  */
 import { useState } from "react";
+import { Icon } from "@workloom/ui";
 
-export function EmergencyBrake({ onConfirm }: { onConfirm?: () => void }) {
+export function EmergencyBrake({ onConfirm, busy = false, disabled = false }: { onConfirm?: () => void; busy?: boolean; disabled?: boolean }) {
   const [arming, setArming] = useState(false);
+  const unavailable = disabled || !onConfirm;
   if (arming) {
     // 二次确认（拉动式）：确认杆 + 撤回
     return (
       <span className="inline-flex items-center gap-1.5">
         <button
           type="button"
+          disabled={busy || unavailable}
+          aria-busy={busy || undefined}
           onClick={() => { onConfirm?.(); setArming(false); }}
-          className="cursor-pointer rounded-lg border border-alert bg-alert/20 px-3.5 py-1.5 text-xs font-extrabold tracking-wider text-alert shadow-[0_0_16px_rgba(255,77,109,.4)]"
+          className="cursor-pointer rounded-lg border border-alert bg-alert/20 px-3.5 py-1.5 text-body font-extrabold tracking-wider text-alert shadow-[0_0_16px_rgba(255,77,109,.4)] disabled:cursor-wait disabled:opacity-50"
         >
-          ⚠ 确认制动（全端 ≤60s 生效）
+          {!busy && <Icon name="warning" size={15} />} {busy ? "正在制动…" : "确认制动（全端 ≤60s 生效）"}
         </button>
         <button
           type="button"
+          disabled={busy || unavailable}
           onClick={() => setArming(false)}
-          className="cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink3"
+          className="cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-body text-ink3"
         >
           撤回
         </button>
@@ -32,11 +37,12 @@ export function EmergencyBrake({ onConfirm }: { onConfirm?: () => void }) {
   return (
     <button
       type="button"
+      disabled={busy || unavailable}
       onClick={() => setArming(true)}
-      className="cursor-pointer rounded-lg border border-alert/55 bg-alert/7 px-3.5 py-1.5 text-xs font-extrabold tracking-wider text-alert transition-colors hover:bg-alert/15"
-      title="紧急制动：一键暂停全部夜间 Agent（G5 · ≤60s）"
+      className="cursor-pointer rounded-lg border border-alert/55 bg-alert/7 px-3.5 py-1.5 text-body font-extrabold tracking-wider text-alert transition-colors hover:bg-alert/15 disabled:cursor-wait disabled:opacity-50"
+      title={onConfirm ? "紧急制动：暂停全部夜间数字员工" : "请进入夜班中心执行紧急制动"}
     >
-      🛑 紧急制动
+      <Icon name="brake" size={16} /> 紧急制动
     </button>
   );
 }

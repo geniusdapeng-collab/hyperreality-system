@@ -3,7 +3,10 @@
  * 铁律：游戏是结构不是皮肤——组件语义与《游戏规则手册》一一对应；不改变任何业务机制
  */
 
-/** LevelBadge 等级徽章 LV（§6）：Orbitron「LV.12」金色高光字 + 段位小字（全息青）
+import { versionText } from "../../lib/display";
+import { Icon } from "@workloom/ui";
+
+/** LevelBadge 等级徽章：等级数字 + 段位小字（全息青）
  *  主理人=圆形头像金描边；船员=方形头像+版本角标。段位阶梯：青铜→白银→黄金→铂金→星钻 */
 export function LevelBadge({
   level,
@@ -22,7 +25,7 @@ export function LevelBadge({
     <div className="flex items-center gap-2.5">
       <div className="relative">
         <div
-          className={`flex h-10 w-10 items-center justify-center border-2 font-orb text-caption font-black ${
+          className={`flex h-10 w-10 items-center justify-center border-2 font-orb text-body font-black ${
             captain
               ? "rounded-full border-gold bg-gold/10 text-goldhi shadow-[0_0_12px_rgba(214,220,228,.4)]"
               : "rounded-md border-line bg-bg700 text-ink2"
@@ -31,14 +34,14 @@ export function LevelBadge({
           {name.slice(0, 1)}
         </div>
         {!captain && version && (
-          <span className="absolute -right-1.5 -bottom-1 rounded border border-line bg-bg900 px-1 font-mono text-[9.5px] text-ink3">
-            {version}
+          <span className="absolute -right-1.5 -bottom-1 rounded border border-line bg-bg900 px-1 font-mono text-body text-ink3">
+            {versionText(version)}
           </span>
         )}
       </div>
       <div>
-        <div className="font-orb text-body font-bold tracking-wider text-goldhi">LV.{level}</div>
-        <div className="text-micro text-holo">{rank}</div>
+        <div className="font-orb text-body font-bold tracking-wider text-goldhi">等级 {level}</div>
+        <div className="text-body text-holo">{rank}</div>
       </div>
     </div>
   );
@@ -52,11 +55,11 @@ export function AchievementBadge({ name, achievedAt }: { name: string; achievedA
         className="flex h-11 w-11 items-center justify-center border-2 border-gold/70 bg-gold/8 text-lg"
         style={{ clipPath: "polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)" }}
       >
-        🏅
+        <Icon name="medal" size={24} />
       </div>
       <div>
         <div className="text-body font-bold text-goldhi">{name}</div>
-        <div className="font-mono text-micro text-ink3">{achievedAt}</div>
+        <div className="font-mono text-body text-ink3">{achievedAt}</div>
       </div>
     </div>
   );
@@ -81,8 +84,8 @@ export function SquadRing({
         return (
           <div
             key={m.name}
-            title={`${m.name} ${m.version}${active ? " · 巡航中" : " · 待命"}`}
-            className={`absolute flex h-7 w-7 items-center justify-center rounded-md border text-micro font-bold transition-all ${
+            title={`${m.name} ${versionText(m.version)}${active ? " · 巡航中" : " · 待命"}`}
+            className={`absolute flex h-7 w-7 items-center justify-center rounded-md border text-body font-bold transition-all ${
               active
                 ? "border-gold/70 bg-gold/12 text-goldhi shadow-[0_0_10px_rgba(214,220,228,.5)]"
                 : "border-line bg-bg700/60 text-ink3"
@@ -95,15 +98,15 @@ export function SquadRing({
       })}
       <div className="absolute inset-0 flex items-center justify-center text-center">
         <div>
-          <div className="font-orb text-caption font-bold text-holo">{active ? "巡航中" : "待命"}</div>
-          <div className="text-micro text-ink3">{members.length} 名成员</div>
+          <div className="font-orb text-body font-bold text-holo">{active ? "巡航中" : "待命"}</div>
+          <div className="text-body text-ink3">{members.length} 名成员</div>
         </div>
       </div>
     </div>
   );
 }
 
-/** EquipSlot 装配槽（§6，仅 P7 装配中心）：六边形槽位，已装配金光点亮，失败红边 */
+/** EquipSlot 装配槽（§6，仅 P7 舰船换装坞）：六边形槽位，已装配金光点亮，失败红边 */
 export function EquipSlot({
   label,
   filled = false,
@@ -115,7 +118,7 @@ export function EquipSlot({
 }) {
   return (
     <div
-      className={`flex h-16 w-16 flex-col items-center justify-center border-2 text-micro font-bold ${
+      className={`flex h-16 w-16 flex-col items-center justify-center border-2 text-body font-bold ${
         failed
           ? "border-alert/70 bg-alert/8 text-alert"
           : filled
@@ -124,7 +127,7 @@ export function EquipSlot({
       }`}
       style={{ clipPath: "polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)" }}
     >
-      <span>{failed ? "✗" : filled ? "◆" : "◇"}</span>
+      <Icon name={failed ? "error" : filled ? "check" : "circle"} label={failed ? "校验失败" : filled ? "已装配" : "待装配"} size={15} />
       <span className="mt-0.5 px-1 text-center leading-tight">{label}</span>
     </div>
   );
@@ -151,11 +154,11 @@ export function EquipCard({
     <div className={`rounded-msg border-2 bg-card p-3.5 ${RARITY.border}`}>
       <div className="mb-1 flex items-center justify-between">
         <span className="text-body font-bold text-ink">{name}</span>
-        <span className={`text-micro font-bold ${RARITY.cls}`}>{RARITY.tag}</span>
+        <span className={`text-body font-bold ${RARITY.cls}`}>{RARITY.tag}</span>
       </div>
-      <div className="text-caption leading-relaxed text-ink2">{desc}</div>
+      <div className="text-body leading-relaxed text-ink2">{desc}</div>
       {installs !== undefined && (
-        <div className="mt-1.5 text-micro text-ink3">
+        <div className="mt-1.5 text-body text-ink3">
           已装 <b className="font-orb text-holo">{installs}</b> 个工作区
         </div>
       )}

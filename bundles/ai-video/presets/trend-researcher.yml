@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G1]       # 情报档案确认（无源不入库）
+coverage:
+  - { eventPrefix: "trend.", label: 趋势研究 }
 skills: [jenny-loom-research]
 tools:
   - { name: research.search, access: read,  desc: 检索趋势与竞品账号 }

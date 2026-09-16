@@ -156,8 +156,18 @@ export async function runQueueBeat(
       approvalId: row.approval_id, eventId: row.event_id,
       action: String(snap.action ?? ""), params,
       ruleIds: Array.isArray(snap.rule_ids) ? (snap.rule_ids as string[]) : [],
-      priceCtx: { afterPrice: Number(params.price ?? NaN) || undefined, basePrice: Number(snap.base_price ?? 458) || undefined },
-      amountCtx: { amount: Number(params.amount ?? NaN) || undefined },
+      rangeCtx: {
+        key: typeof snap.autonomy_range_key === "string" ? snap.autonomy_range_key : undefined,
+        value: Number.isFinite(Number(snap.autonomy_range_value)) ? Number(snap.autonomy_range_value) : undefined,
+      },
+      amountCtx: {
+        amount: Number.isFinite(Number(snap.autonomy_amount)) ? Number(snap.autonomy_amount) : undefined,
+        capKey: typeof snap.autonomy_cap_key === "string" ? snap.autonomy_cap_key : undefined,
+      },
+      irreversible: snap.irreversible === true,
+      affectedDomains: Array.isArray(snap.affected_domains)
+        ? snap.affected_domains.filter((value): value is string => typeof value === "string")
+        : [],
       title: String(snap.title ?? row.event_id),
     };
     // D22 三级分流：微决策规则直通 / 常规单模型推理 / 重大六步深度管线
@@ -220,9 +230,8 @@ ${item.action} ${JSON.stringify(item.params)}
       }
       if (!applied) return; // 他处已裁决：本拍不再写 ceo.decision 事件（P0-4）
       const expected: ExpectedOutcome = {
-        metric: "kpi_hold",
-        // 基线：决策后核心 KPI 不低于宪章熔断下限（取 kpi_floor 首项；行业事实面注册后可细化）
-        target: Object.values(charter.circuit_breaker.kpi_floor)[0] ?? 0,
+        metric: "occ_hold",
+        target: 0.7, // 基线：决策后 OCC 不低于宪章下限（行业事实面注册后可细化）
         review_at: new Date(Date.now() + 3 * 86400e3).toISOString(),
         note: "决策日记：3 天后回测（decision.outcome）",
       };
@@ -281,7 +290,7 @@ export async function runDeviationBeat(
       params: { trigger: "goal_deviation", deviation_pt: deviation, threshold, mode: charter.mode },
       after: {
         title: `偏差专项：目标落后 ${Math.abs(deviation)}pt`,
-        plan: deviation < 0 ? "启动补救举措池（调价建议/渠道加投/内容补强），逐路过围栏与宪章" : "超目标运行，固化打法入组织记忆",
+        plan: deviation < 0 ? "启动补救举措池；每项候选动作逐一经过围栏与宪章裁决" : "超目标运行，固化有效做法到组织记忆",
       },
       basis: [`goal.tracking 最新偏差 ${deviation}pt，阈值 ±${threshold}pt（方案 §五 偏差触发器）`],
     }, { dryRun });

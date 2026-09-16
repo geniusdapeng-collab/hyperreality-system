@@ -15,6 +15,11 @@ const BASE = `http://localhost:${PORT}`;
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const RUN = `e2e-${Date.now().toString(36)}`;
 const DEV_C_SECRET = "workloom-c-dev-secret-change-me";
+const FIXTURE_WORKSPACE_ID = process.env.SERVICE_C_TEST_WORKSPACE_ID?.trim() || null;
+if (process.env.RUN_DB_TESTS === "1" && !FIXTURE_WORKSPACE_ID) {
+  throw new Error("服务 E2E 已启用真库，但未显式配置 SERVICE_C_TEST_WORKSPACE_ID");
+}
+const fixtureDescribe = FIXTURE_WORKSPACE_ID ? describe : describe.skip;
 // 仓库无关的 DB 解析：优先环境变量，其次读仓库根 .env（vitest 不自动加载），最后回退 workloom
 import { readFileSync } from "node:fs";
 function resolveDbUrl(): string {
@@ -32,6 +37,7 @@ let server: ChildProcess;
 let db: pg.Client;
 let bToken = "";   // MEM-001 owner
 let roToken = "";  // MEM-003 readonly
+let fixtureWorkspaceSlug = "";
 
 /* ---------------- 基础工具 ---------------- */
 
@@ -76,15 +82,9 @@ async function trpc(proc: string, opts: { input?: unknown; token?: string; metho
   return { status: res.status, data: body.result?.data ?? null, error: body.error ?? null };
 }
 
-/** 与 C 端网关同一工作区解析口径（SERVICE_C_WORKSPACE_ID ?? 酒店回归域优先 ?? 首个工作区），多工作区仓库（如视频版）下保证 B/C 同域 */
+/** 与 C 端网关同一工作区解析口径：测试必须显式指定，禁止从数据库猜测。 */
 function serviceCWorkspaceId(): string | null {
-  if (process.env.SERVICE_C_WORKSPACE_ID) return process.env.SERVICE_C_WORKSPACE_ID;
-  try {
-    const env = readFileSync(new URL("../../../../.env", import.meta.url), "utf-8");
-    const m = env.match(/^SERVICE_C_WORKSPACE_ID=(.+)$/m);
-    if (m?.[1]?.trim()) return m[1].trim();
-  } catch { /* 无 .env 回退 */ }
-  return null;
+  return FIXTURE_WORKSPACE_ID;
 }
 
 async function resolveWorkspaceSlug(): Promise<string> {
@@ -92,12 +92,10 @@ async function resolveWorkspaceSlug(): Promise<string> {
   const pool = new pg.Pool({ connectionString: DB_URL });
   try {
     const wsId = serviceCWorkspaceId();
-    if (wsId) {
-      const r = await pool.query(`SELECT slug FROM workspaces WHERE id=$1`, [wsId]);
-      if (r.rows[0]?.slug) return String(r.rows[0].slug);
-    }
-    const r = await pool.query(`SELECT slug FROM workspaces ORDER BY (slug='yunqi-hotel') DESC, created_at LIMIT 1`);
-    return String(r.rows[0]?.slug ?? "yunqi-hotel");
+    if (!wsId) throw new Error("E2E 必须显式配置 SERVICE_C_TEST_WORKSPACE_ID");
+    const r = await pool.query(`SELECT slug FROM workspaces WHERE id=$1`, [wsId]);
+    if (!r.rows[0]?.slug) throw new Error(`E2E 工作区不存在：${wsId}`);
+    return String(r.rows[0].slug);
   } finally { await pool.end(); }
 }
 
@@ -113,7 +111,8 @@ async function bindMember(cUserId: string, memberId: string): Promise<void> {
 }
 
 async function signCToken(over: Record<string, unknown>, secret = DEV_C_SECRET, exp = "1h"): Promise<string> {
-  return new SignJWT({ workspaceId: "ws-yunqi", cUserId: "cu-x", channel: "h5", scope: "c-user", ...over })
+  if (!FIXTURE_WORKSPACE_ID) throw new Error("缺少显式服务 E2E 工作区夹具");
+  return new SignJWT({ workspaceId: FIXTURE_WORKSPACE_ID, cUserId: "cu-x", channel: "h5", scope: "c-user", ...over })
     .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setIssuer("workloom-c").setExpirationTime(exp)
     .sign(new TextEncoder().encode(secret));
 }
@@ -121,9 +120,13 @@ async function signCToken(over: Record<string, unknown>, secret = DEV_C_SECRET, 
 /* ---------------- 服务拉起/回收 ---------------- */
 
 beforeAll(async () => {
+  if (!FIXTURE_WORKSPACE_ID) return;
+  const workspaceId = FIXTURE_WORKSPACE_ID;
+  process.env.SERVICE_C_WORKSPACE_ID = workspaceId;
+  fixtureWorkspaceSlug = await resolveWorkspaceSlug();
   server = spawn(process.execPath, ["node_modules/tsx/dist/cli.mjs", "--env-file=.env", "apps/server/src/index.ts"], {
     cwd: ROOT,
-    env: { ...process.env, SERVER_PORT: String(PORT), SERVICE_C_DEMO_AUTH: "true" },
+    env: { ...process.env, SERVER_PORT: String(PORT), SERVICE_C_DEMO_AUTH: "true", SERVICE_C_WORKSPACE_ID: workspaceId },
     stdio: "ignore",
     detached: true, // 独立进程组：afterAll 按组杀（tsx 会再派生 node 子进程）
   });
@@ -143,15 +146,16 @@ beforeAll(async () => {
 }, 90_000);
 
 afterAll(async () => {
-    // 清理本套件写入的知识库文档（防评测/演示环境污染——基线文档保留）
-    try {
-      const pg = (await import("pg")).default;
-      const pool = new pg.Pool({ connectionString: DB_URL });
-      // 仅清理本套件 upsert 产生的测试文档（标题带 RUN 前缀 e2e- 开头）；种子基线与预置库（FAQ/送物/报修）一律保留
-      await pool.query(`DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE title LIKE 'e2e-%')`);
-      await pool.query(`DELETE FROM kb_documents WHERE title LIKE 'e2e-%'`);
-      await pool.end();
-    } catch { /* 清理失败不阻断 */ }
+  if (!FIXTURE_WORKSPACE_ID) return;
+  // 清理本套件写入的知识库文档（防评测/演示环境污染——基线文档保留）
+  try {
+    const pg = (await import("pg")).default;
+    const pool = new pg.Pool({ connectionString: DB_URL });
+    // 仅清理本套件 upsert 产生的测试文档（标题带 RUN 前缀 e2e- 开头）；种子基线与预置库（FAQ/送物/报修）一律保留
+    await pool.query(`DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE title LIKE 'e2e-%')`);
+    await pool.query(`DELETE FROM kb_documents WHERE title LIKE 'e2e-%'`);
+    await pool.end();
+  } catch { /* 清理失败不阻断 */ }
 
   if (server?.pid) {
     try { process.kill(-server.pid, "SIGKILL"); } catch { server.kill("SIGKILL"); }
@@ -161,7 +165,7 @@ afterAll(async () => {
 
 /* ================= E. 渠道与安全 ================= */
 
-describe("E 渠道 · session 签发", () => {
+fixtureDescribe("E 渠道 · session 签发", () => {
   it("h5 演示直登 → {token, user}", async () => {
     const res = await cReq("/session", { method: "POST", body: JSON.stringify({ channel: "h5", openid: `${RUN}-e1` }) }, undefined, "203.0.113.11");
     expect(res.status).toBe(200);
@@ -204,7 +208,7 @@ describe("E 渠道 · session 签发", () => {
   });
 });
 
-describe("E 安全 · 限流", () => {
+fixtureDescribe("E 安全 · 限流", () => {
   it("session 同 IP+channel 第 61 次 → 429", async () => {
     const ip = "198.51.100.61";
     let last = 0;
@@ -239,7 +243,7 @@ describe("E 安全 · 限流", () => {
   });
 });
 
-describe("E 安全 · token 校验", () => {
+fixtureDescribe("E 安全 · token 校验", () => {
   it("缺 Authorization 头 → 401", async () => {
     const res = await cReq("/tickets", {}, undefined, "203.0.113.21");
     expect(res.status).toBe(401);
@@ -269,7 +273,7 @@ describe("E 安全 · token 校验", () => {
   });
 });
 
-describe("E 安全 · 越权与输入约束", () => {
+fixtureDescribe("E 安全 · 越权与输入约束", () => {
   it("越权读他人工单详情 → 404", async () => {
     const a = await cSession(`${RUN}-oa`, "h5", "203.0.113.31");
     const b = await cSession(`${RUN}-ob`, "h5", "203.0.113.32");
@@ -371,7 +375,7 @@ describe("E 安全 · 越权与输入约束", () => {
 
 /* ================= D. 业务查询 ================= */
 
-describe("D 业务查询 · 绑定引导与卡片契约", () => {
+fixtureDescribe("D 业务查询 · 绑定引导与卡片契约", () => {
   it("未绑定查订单：/orders 空集 + bindRequired + 引导文案", async () => {
     const { token } = await cSession(`${RUN}-d1`, "h5", "203.0.113.51");
     const j = (await (await cReq("/orders", {}, token, "203.0.113.51")).json()) as Record<string, unknown>;
@@ -380,36 +384,52 @@ describe("D 业务查询 · 绑定引导与卡片契约", () => {
     expect(String(j.hint)).toContain("绑定会员");
   });
 
-  it("未绑定查会员：/member level=游客 + bindRequired", async () => {
+  it("未绑定查权益：/member 只返回中文展示摘要 + bindRequired", async () => {
     const { token } = await cSession(`${RUN}-d2`, "h5", "203.0.113.52");
     const j = (await (await cReq("/member", {}, token, "203.0.113.52")).json()) as Record<string, unknown>;
-    expect(j).toMatchObject({ level: "游客", points: 0, bindRequired: true });
+    expect(j).toMatchObject({ title: "身份尚未绑定", bindRequired: true });
     expect(j.benefits).toEqual([]);
+    expect(j).not.toHaveProperty("level");
+    expect(j).not.toHaveProperty("points");
   });
 
-  it("绑定会员后 /orders 返回本人订单（字段契约齐全）", async () => {
+  it("绑定身份后 /orders 返回本人记录的通用中文展示投影", async () => {
     const s = await cSession(`${RUN}-d3`, "h5", "203.0.113.53");
     await bindMember(s.user.id, "M-1001");
     const j = (await (await cReq("/orders", {}, s.token, "203.0.113.53")).json()) as { orders: Array<Record<string, unknown>>; demo: boolean; bindRequired?: boolean };
     expect(j.bindRequired).toBeUndefined();
     expect(j.orders.length).toBeGreaterThan(0);
     const o = j.orders[0]!;
-    for (const k of ["id", "title", "status", "checkIn", "roomType", "amount"]) expect(o, k).toHaveProperty(k);
+    for (const k of ["id", "cardTitle", "title", "statusText", "details", "amountText"]) expect(o, k).toHaveProperty(k);
+    for (const leaked of ["status", "checkIn", "checkOut", "roomType", "amount", "priceYuan"]) {
+      expect(o).not.toHaveProperty(leaked);
+    }
+    expect(String(o.statusText)).toMatch(/[\u3400-\u9fff]/);
+    expect(o.details).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "房型" }),
+      expect.objectContaining({ label: "入住日期" }),
+    ]));
   });
 
-  it("订单金额分→元换算（117600 分 → 1176 元）", async () => {
+  it("订单金额由行业适配器转换为展示文本（117600 分 → ¥1,176.00）", async () => {
     const s = await cSession(`${RUN}-d4`, "h5", "203.0.113.54");
     await bindMember(s.user.id, "M-1001");
-    const j = (await (await cReq("/orders", {}, s.token, "203.0.113.54")).json()) as { orders: Array<{ id: string; amount: number }> };
+    const j = (await (await cReq("/orders", {}, s.token, "203.0.113.54")).json()) as { orders: Array<{ id: string; amountText: string }> };
     const target = j.orders.find((o) => o.id === "O-20260820-001")!;
-    expect(target.amount).toBe(1176);
+    expect(target.amountText).toBe("¥1,176.00");
   });
 
-  it("绑定会员后 /member 返回等级/积分/权益（demo 标注）", async () => {
+  it("绑定身份后 /member 返回中文标题/展示指标/权益（demo 标注）", async () => {
     const s = await cSession(`${RUN}-d5`, "h5", "203.0.113.55");
     await bindMember(s.user.id, "M-1001");
     const j = (await (await cReq("/member", {}, s.token, "203.0.113.55")).json()) as Record<string, unknown>;
-    expect(j).toMatchObject({ level: "金卡", points: 2680, demo: true });
+    expect(j).toMatchObject({
+      title: "金卡会员",
+      metric: { label: "当前积分", value: "2,680" },
+      demo: true,
+    });
+    expect(j).not.toHaveProperty("level");
+    expect(j).not.toHaveProperty("points");
     expect((j.benefits as unknown[]).length).toBeGreaterThan(0);
   });
 
@@ -429,27 +449,34 @@ describe("D 业务查询 · 绑定引导与卡片契约", () => {
     const cards = r.cards as Array<{ kind: string; data: Record<string, unknown> }>;
     expect(cards.length).toBeGreaterThan(0);
     expect(cards[0]!.kind).toBe("order");
-    expect(cards[0]!.data).toHaveProperty("checkIn");
+    expect(cards[0]!.data).toHaveProperty("details");
+    expect(cards[0]!.data).toHaveProperty("statusText");
+    expect(cards[0]!.data).not.toHaveProperty("checkIn");
+    expect(cards[0]!.data).not.toHaveProperty("roomType");
   });
 
-  it("chat 查会员（已绑定）→ member 卡片（level/points/benefits）", async () => {
+  it("chat 查会员（已绑定）→ member 卡片（中文展示摘要/权益）", async () => {
     const s = await cSession(`${RUN}-d8`, "h5", "203.0.113.58");
     await bindMember(s.user.id, "M-1001");
     const r = await chat(s.token, "我的会员积分还有多少", {}, "203.0.113.58");
     const cards = r.cards as Array<{ kind: string; data: Record<string, unknown> }>;
     expect(cards[0]!).toMatchObject({ kind: "member" });
-    expect(cards[0]!.data).toMatchObject({ level: "金卡", points: 2680 });
+    expect(cards[0]!.data).toMatchObject({ title: "金卡会员", metric: { label: "当前积分", value: "2,680" } });
     expect(Array.isArray(cards[0]!.data.benefits)).toBe(true);
+    expect(cards[0]!.data).not.toHaveProperty("level");
+    expect(cards[0]!.data).not.toHaveProperty("points");
   });
 
-  it("chat 查房价 → catalog 卡片（items 含 sku/name/priceYuan）", async () => {
+  it("chat 查房价 → catalog 卡片只含通用展示字段", async () => {
     const { token } = await cSession(`${RUN}-d9`, "h5", "203.0.113.59");
     const r = await chat(token, "豪华大床房多少钱一晚", {}, "203.0.113.59");
     const cards = r.cards as Array<{ kind: string; data: { items: Array<Record<string, unknown>> } }>;
     expect(cards[0]!.kind).toBe("catalog");
+    expect(cards[0]!.data).toMatchObject({ cardTitle: "可订房型与价格" });
     expect(cards[0]!.data.items.length).toBeGreaterThan(0);
-    expect(cards[0]!.data.items[0]).toHaveProperty("sku");
-    expect(cards[0]!.data.items[0]).toHaveProperty("priceYuan");
+    expect(cards[0]!.data.items[0]).toMatchObject({ title: "豪华大床房", priceText: "¥588 / 晚" });
+    expect(cards[0]!.data.items[0]).not.toHaveProperty("sku");
+    expect(cards[0]!.data.items[0]).not.toHaveProperty("priceYuan");
   });
 
   it("chat 未绑定查订单 → 答案替换为绑定引导且不出卡", async () => {
@@ -472,7 +499,9 @@ describe("D 业务查询 · 绑定引导与卡片契约", () => {
     const { token } = await cSession(`${RUN}-d12`, "h5", "203.0.113.65");
     const r = await chat(token, "我的工单进度怎么样了", {}, "203.0.113.65");
     expect(r.intent).toBe("biz_query");
-    expect(String(r.answer)).toContain("工单进度");
+    // 当前用户没有工单时必须返回真实空态，不能为满足话术断言伪造一条进度。
+    expect(String(r.answer)).toContain("暂未查到");
+    expect(r.cards).toEqual([]);
   });
 
   it("/orders 与 /member 均带 demo 标注", async () => {
@@ -499,7 +528,7 @@ describe("D 业务查询 · 绑定引导与卡片契约", () => {
 
 /* ================= F. C 端端到端旅程 ================= */
 
-describe("F C 端旅程 · 首问到五星评价全链路", () => {
+fixtureDescribe("F C 端旅程 · 首问到五星评价全链路", () => {
   let token = "";
   let cUserId = "";
   let convId = "";
@@ -544,11 +573,17 @@ describe("F C 端旅程 · 首问到五星评价全链路", () => {
     const t = r.ticket as { id: string; status: string; dept: string; statusText: string };
     ticketId = t.id;
     expect(t).toMatchObject({ status: "assigned", dept: "客房部", statusText: "已受理" });
+    expect(r.receipt).toMatchObject({ state: "accepted", resourceId: ticketId });
+    expect(typeof (r.receipt as { requestId: string }).requestId).toBe("string");
+    expect(typeof (r.receipt as { eventId: string }).eventId).toBe("string");
   });
 
   it("F6 受理通知：通知箱含 ticket.accepted", async () => {
-    const n = (await (await cReq("/notifications", {}, token, ip)).json()) as { notifications: Array<{ kind: string; payload: { ticketId?: string } }> };
+    const n = (await (await cReq("/notifications", {}, token, ip)).json()) as {
+      notifications: Array<{ kind: string; payload: { ticketId?: string }; deliveryState: string }>;
+    };
     expect(n.notifications.some((x) => x.kind === "ticket.accepted" && x.payload.ticketId === ticketId)).toBe(true);
+    expect(n.notifications.find((x) => x.kind === "ticket.accepted" && x.payload.ticketId === ticketId)?.deliveryState).toBe("demo");
   });
 
   it("F7 同幂等键重放 → deduped:true 同单号", async () => {
@@ -593,9 +628,16 @@ describe("F C 端旅程 · 首问到五星评价全链路", () => {
   it("F13 五星评价 → ratingScore 5", async () => {
     const res = await cReq(`/tickets/${ticketId}/rate`, { method: "POST", body: JSON.stringify({ score: 5, comment: "响应很快" }) }, token, ip);
     expect(res.status).toBe(200);
-    const t = ((await res.json()) as { ticket: { ratingScore: number; ratingComment: string } }).ticket;
+    const body = (await res.json()) as {
+      ticket: { ratingScore: number; ratingComment: string };
+      receipt: { requestId: string; eventId: string; state: string; resourceId: string };
+    };
+    const t = body.ticket;
     expect(t.ratingScore).toBe(5);
     expect(t.ratingComment).toBe("响应很快");
+    expect(body.receipt).toMatchObject({ state: "recorded", resourceId: ticketId });
+    expect(typeof body.receipt.requestId).toBe("string");
+    expect(typeof body.receipt.eventId).toBe("string");
   });
 
   it("F14 重复评价 → 409", async () => {
@@ -616,7 +658,7 @@ describe("F C 端旅程 · 首问到五星评价全链路", () => {
   });
 });
 
-describe("F C 端旅程 · 场景分支", () => {
+fixtureDescribe("F C 端旅程 · 场景分支", () => {
   it("投诉一句话直达 → intent complaint + complaint 草稿（confirm 后客服部）", async () => {
     const { token } = await cSession(`${RUN}-fc`, "h5", "203.0.113.111");
     const r = await chat(token, "我要投诉，隔壁房间半夜太吵了", {}, "203.0.113.111");
@@ -714,13 +756,13 @@ describe("F C 端旅程 · 场景分支", () => {
 
 /* ================= G. B 端视角（tRPC serviceRouter） ================= */
 
-describe("G B 端 · 登录与守卫", () => {
+fixtureDescribe("G B 端 · 登录与守卫", () => {
   it("loginAs 返回 token + identity（owner / plan pro）", async () => {
-    const r = await trpc("auth.loginAs", { input: { workspaceSlug: "yunqi-hotel", memberNo: "MEM-001" }, method: "mutation" });
+    const r = await trpc("auth.loginAs", { input: { workspaceSlug: fixtureWorkspaceSlug, memberNo: "MEM-001" }, method: "mutation" });
     expect(r.error).toBeNull();
     const d = r.data as { token: string; identity: Record<string, unknown> };
     expect(typeof d.token).toBe("string");
-    expect(d.identity).toMatchObject({ memberNo: "MEM-001", role: "owner", workspaceId: "ws-yunqi" });
+    expect(d.identity).toMatchObject({ memberNo: "MEM-001", role: "owner", workspaceId: FIXTURE_WORKSPACE_ID });
   });
 
   it("loginAs 不存在工作区 → NOT_FOUND", async () => {
@@ -730,7 +772,7 @@ describe("G B 端 · 登录与守卫", () => {
   });
 
   it("loginAs 不存在成员 → NOT_FOUND", async () => {
-    const r = await trpc("auth.loginAs", { input: { workspaceSlug: "yunqi-hotel", memberNo: "MEM-999" }, method: "mutation" });
+    const r = await trpc("auth.loginAs", { input: { workspaceSlug: fixtureWorkspaceSlug, memberNo: "MEM-999" }, method: "mutation" });
     expect(r.error!.data?.code).toBe("NOT_FOUND");
   });
 
@@ -749,14 +791,14 @@ describe("G B 端 · 登录与守卫", () => {
   });
 });
 
-describe("G B 端 · KB 管理", () => {
+fixtureDescribe("G B 端 · KB 管理", () => {
   let colId = "";
   let docId = "";
 
-  it("kb.listCollections 含种子「住客服务知识库」", async () => {
+  it("kb.listCollections 含活动 Bundle 提供的可用知识集合", async () => {
     const r = await trpc("service.kb.listCollections", { token: bToken });
     const cols = (r.data as { collections: Array<{ id: string; name: string }> }).collections;
-    expect(cols.some((c) => c.name === "住客服务知识库")).toBe(true);
+    expect(cols.some((c) => c.id.length > 0 && c.name.trim().length > 0)).toBe(true);
   });
 
   it("kb.createCollection 创建后列表可见", async () => {
@@ -861,7 +903,7 @@ describe("G B 端 · KB 管理", () => {
   });
 });
 
-describe("G B 端 · 工单消费", () => {
+fixtureDescribe("G B 端 · 工单消费", () => {
   let cTicketId = "";
   let cToken = "";
   let createdId = "";
@@ -883,8 +925,8 @@ describe("G B 端 · 工单消费", () => {
     // 直插一张 created 单（C 端链路建单即 assigned，created 态由 DB fixture 构造）
     createdId = `tck-${RUN}-created`;
     await db.query(
-      `INSERT INTO c_tickets (id, workspace_id, kind, title, payload, status) VALUES ($1,'ws-yunqi','other',$2,'{}','created')`,
-      [createdId, `${RUN}-待分派单`],
+      `INSERT INTO c_tickets (id, workspace_id, kind, title, payload, status) VALUES ($1,$2,'other',$3,'{}','created')`,
+      [createdId, FIXTURE_WORKSPACE_ID, `${RUN}-待分派单`],
     );
     const r = await trpc("service.tickets.assign", { input: { ticketId: createdId, dept: "礼宾部", assignee: "MEM-002" }, token: bToken, method: "mutation" });
     expect(r.error).toBeNull();
@@ -932,7 +974,7 @@ describe("G B 端 · 工单消费", () => {
   });
 });
 
-describe("G B 端 · stats.overview 指标", () => {
+fixtureDescribe("G B 端 · stats.overview 指标", () => {
   it("字段齐全：date/sessions/qaCount/avgConfidence/groundedRate/avgLatencyMs/ticketsToday/completionRate/slaBreached/avgRating", async () => {
     const r = await trpc("service.stats.overview", { token: bToken });
     expect(r.error).toBeNull();
@@ -966,7 +1008,8 @@ describe("G B 端 · stats.overview 指标", () => {
     const q = await db.query<{ grounded: string; answered: string }>(
       `SELECT count(*) FILTER (WHERE role='assistant' AND jsonb_array_length(citations) > 0)::text AS grounded,
               count(*) FILTER (WHERE role='assistant')::text AS answered
-       FROM c_messages WHERE workspace_id='ws-yunqi' AND created_at >= date_trunc('day', now())`,
+       FROM c_messages WHERE workspace_id=$1 AND created_at >= date_trunc('day', now())`,
+      [FIXTURE_WORKSPACE_ID],
     );
     const expectRate = Number((Number(q.rows[0]!.grounded) / Number(q.rows[0]!.answered)).toFixed(3));
     expect(d.groundedRate).toBe(expectRate);

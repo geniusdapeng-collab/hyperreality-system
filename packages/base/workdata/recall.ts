@@ -127,6 +127,13 @@ export interface NlTranslator {
   translate(query: string, scope: { tenantId: string; workspaceId: string }): Promise<EventFilter>;
 }
 
+/** 行业词义由活动 Bundle/调用方注入；基座默认词典为空。 */
+export interface NlTranslatorLexicon {
+  objects?: Array<{ terms: readonly string[]; value: string }>;
+  actions?: Array<{ terms: readonly string[]; value: string }>;
+  ruleIds?: readonly string[];
+}
+
 /** NL 翻译超时（E1.6 降级口径，与 P1 意图路由同机制：>3s 放弃 NL，回落表单） */
 export const NL_TRANSLATE_TIMEOUT_MS = 3_000;
 
@@ -135,22 +142,18 @@ export const NL_TRANSLATE_TIMEOUT_MS = 3_000;
  * 规则直译演示剧本高频问法；零外部依赖、确定性输出。
  */
 export class MockNlTranslator implements NlTranslator {
+  constructor(private readonly lexicon: NlTranslatorLexicon = {}) {}
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async translate(query: string, _scope?: { tenantId: string; workspaceId: string }): Promise<EventFilter> {
     const f: EventFilter = {};
-    // 对象类型直译（内置默认枚举口径）
-    if (/差评|评价/.test(query)) f.objectType = "review";
-    else if (/房价|售价|调价|价格/.test(query)) f.objectType = "room_price";
-    else if (/订单|退款|对账/.test(query)) f.objectType = "order";
-    else if (/内容|首图|文案/.test(query)) f.objectType = "content";
-    else if (/渠道/.test(query)) f.objectType = "channel";
-    // 动作直译
-    if (/退款/.test(query)) f.action = "order.refund";
-    else if (/调价/.test(query)) f.action = "price.adjust";
-    else if (/回复/.test(query)) f.action = "review.reply";
+    const object = this.lexicon.objects?.find((entry) => entry.terms.some((term) => query.includes(term)));
+    if (object) f.objectType = object.value;
+    const action = this.lexicon.actions?.find((entry) => entry.terms.some((term) => query.includes(term)));
+    if (action) f.action = action.value;
     // 规则与结果直译
-    const rm = query.match(/R[1-6]/);
-    if (rm) f.ruleId = rm[0];
+    const ruleId = this.lexicon.ruleIds?.find((id) => query.includes(id));
+    if (ruleId) f.ruleId = ruleId;
     if (/熔断|被拦|block/i.test(query)) f.ruleResult = "blocked";
     else if (/待审|挂起|审批/.test(query)) f.ruleResult = "review";
     // 时间直译（演示剧本：昨天/今天/夜班窗口）
@@ -188,7 +191,7 @@ export class OpenAiNlTranslator implements NlTranslator {
             content:
               "你是检索翻译器。把用户自然语言翻译成事件检索过滤器 JSON，只允许这些键：" +
               "objectType, objectId, action, actor, actorType(human|agent|system), " +
-              "ruleId(R1-R6), ruleResult(pass|review|blocked|conflict), from, to(ISO 时间), sessionId, text。" +
+              "ruleId, ruleResult(pass|review|blocked|conflict), from, to(ISO 时间), sessionId, text。" +
               "不确定的键不要产出。只输出 JSON。",
           },
           { role: "user", content: query },

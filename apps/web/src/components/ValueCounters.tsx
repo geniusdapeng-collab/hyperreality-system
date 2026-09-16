@@ -38,7 +38,7 @@ export function ValueCounters() {
   return (
     <div className="flex items-center gap-4 rounded-lg border border-line bg-card px-3 py-1.5">
       {items.map((it) => (
-        <div key={it.label} className="flex items-baseline gap-1.5 text-[11px] text-ink3">
+        <div key={it.label} className="flex items-baseline gap-1.5 text-body text-ink3">
           <span>{it.label}</span>
           <span className={`font-orb text-[15px] font-bold tracking-wider ${it.tone}`}
             style={{ animation: it.value > 0 ? "wl-counter-breathe 2.4s ease-in-out infinite" : undefined }}>

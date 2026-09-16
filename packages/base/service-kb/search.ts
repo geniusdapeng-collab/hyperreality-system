@@ -18,17 +18,28 @@ export interface KbSearchHit {
   score: number;
 }
 
-/** 查询分词（中英混排：英文/数字按词，中文按 2-gram 防单字噪声命中，纯函数） */
-/** 疑问/语气停用字：含其一的 CJK bigram 不计入相关度分子分母（评测校准：口语长句稀释问题） */
-const STOPCHARS = new Set([..."什么怎几多哪吗呢了的要是可有在把被让请帮我你他她它们这那和与或就不都也很还又再各每谁为啥啊呀吧嘛哦嗯办证想能够"]);
-/** 子串同义词扩展：口语词 → KB 规范词（小体量 FAQ 库的确定性桥接） */
-const SYNONYMS: Array<[string, string]> = [
-  ["会员", "会员卡"], ["优惠", "折扣"], ["配送", "送货"], ["开票", "发票"], ["退换", "售后"],
-];
-/** 弱词表：单独命中不构成「区分度证据」的泛用词 */
-const WEAK_TOKENS = new Set(["时间", "免费", "收费", "可以", "服务", "商品", "店铺", "半天", "一份", "一瓶", "东西", "地方", "怎么", "如何", "一下", "价格", "多少钱", "订单", "买家", "顾客", "客服", "工作", "两张", "一张", "几位", "一些"]);
+/**
+ * 活动 Bundle 可注入的检索词表。基座默认值为空：不预判任何行业的同义词，
+ * 也不把任何业务名词擅自降为弱词。
+ */
+export interface KbSearchLexicon {
+  synonyms?: ReadonlyArray<readonly [source: string, canonical: string]>;
+  weakTokens?: readonly string[];
+}
 
-export function tokenizeQuery(query: string): string[] {
+/** 查询分词（中英混排：英文/数字按词，中文按 2-gram 防单字噪声命中，纯函数） */
+/** 疑问/语气停用字：只包含通用语法字；业务词必须由活动 Bundle 词表声明。 */
+const STOPCHARS = new Set([..."什么怎几多哪吗呢了的要是可有在把被让请帮我你他她它们这那和与或就不都也很还又再各每谁为啥啊呀吧嘛哦嗯想能够"]);
+
+function normalizedWeakTokens(lexicon?: KbSearchLexicon): Set<string> {
+  return new Set((lexicon?.weakTokens ?? []).map((token) => token.trim().toLowerCase()).filter(Boolean));
+}
+
+export function isWeakKbToken(token: string, lexicon?: KbSearchLexicon): boolean {
+  return normalizedWeakTokens(lexicon).has(token.trim().toLowerCase());
+}
+
+export function tokenizeQuery(query: string, lexicon?: KbSearchLexicon): string[] {
   const tokens = new Set<string>();
   const lower = query.toLowerCase();
   for (const m of lower.matchAll(/[a-z0-9]+/g)) tokens.add(m[0]);
@@ -41,9 +52,14 @@ export function tokenizeQuery(query: string): string[] {
     if ([...bg].some((ch) => STOPCHARS.has(ch))) continue; // 停用字过滤
     tokens.add(bg);
   }
-  // 同义词扩展（子串命中即补规范词 token）
-  for (const [colloq, canon] of SYNONYMS) if (lower.includes(colloq) || cjk.includes(colloq)) tokens.add(canon);
-  if (cjk.includes("水") && (cjk.includes("瓶") || cjk.includes("送"))) tokens.add("矿泉水");
+  // 同义词只能由已验证的活动 Bundle/显式调用方注入；基座不内置业务词义。
+  for (const [source, canonical] of lexicon?.synonyms ?? []) {
+    const normalizedSource = source.trim().toLowerCase();
+    const normalizedCanonical = canonical.trim().toLowerCase();
+    if (normalizedSource && normalizedCanonical && lower.includes(normalizedSource)) {
+      tokens.add(normalizedCanonical);
+    }
+  }
   return [...tokens].filter((t) => t.length > 0);
 }
 
@@ -54,8 +70,9 @@ export function tokenizeQuery(query: string): string[] {
 export function scoreChunkFallback(
   query: string,
   chunk: { heading: string; content: string },
+  lexicon?: KbSearchLexicon,
 ): number {
-  const tokens = tokenizeQuery(query);
+  const tokens = tokenizeQuery(query, lexicon);
   if (tokens.length === 0) return 0;
   const stripHyphen = (t: string) => t.toLowerCase().replace(/(?<=[a-z0-9])-(?=[a-z0-9])/g, "");
   const hay = stripHyphen(`${chunk.heading}\n${chunk.content}`);
@@ -64,13 +81,13 @@ export function scoreChunkFallback(
   let headHits = 0;
   for (const t of tokens) {
     if (hay.includes(t)) matched += 1;
-    if (head.includes(t) && !WEAK_TOKENS.has(t)) headHits += 1; // 弱词命中标题不构成主题信号（「收费」不该点亮「收费配送」）
+    if (head.includes(t) && !isWeakKbToken(t, lexicon)) headHits += 1;
   }
   if (matched === 0) return 0;
   const coverage = matched / tokens.length;
   const headBoost = Math.min(0.2, headHits * 0.08);
   const lenPenalty = Math.min(0.15, chunk.content.length / 4000);
-  // 拉丁词全中加成：wifi/SPA 等专有名词完整命中是强相关信号（CJK bigram 噪声不应淹没它）
+  // 拉丁词全中加成：显式标识完整命中是强相关信号（CJK bigram 噪声不应淹没它）
   const latin = tokens.filter((t) => /^[a-z0-9]+$/.test(t) && t.length >= 2);
   const latinAllHit = latin.length > 0 && latin.every((t) => hay.includes(t));
   const latinBoost = latinAllHit ? 0.12 : 0;
@@ -78,10 +95,10 @@ export function scoreChunkFallback(
   // 区分度地板（评测校准 v2）：命中证据按强度分档兜底——
   // ① 标题命中：FAQ 小库中 heading 命中是最强主题信号
   // ② 多 token 命中正文（≥2）
-  // ③ 单个区分度 token 命中（非弱词，如「拖鞋」「蛋糕」「红酒」）
+  // ③ 单个区分度 token 命中（未被显式词表声明为弱词）
   const matchedTokens = tokens.filter((t) => hay.includes(t));
   const contentHits = matchedTokens.filter((t) => stripHyphen(chunk.content).includes(t)).length;
-  const distinctive = matchedTokens.filter((t) => !WEAK_TOKENS.has(t) && !/^[a-z0-9]$/.test(t));
+  const distinctive = matchedTokens.filter((t) => !isWeakKbToken(t, lexicon) && !/^[a-z0-9]$/.test(t));
   let floor = 0;
   if (headHits > 0) floor = Math.max(floor, 0.55 + 0.05 * Math.min(headHits, 3) + coverage * 0.2);
   if (contentHits >= 2) floor = Math.max(floor, 0.5 + 0.04 * Math.min(contentHits, 4) + coverage * 0.2);
@@ -125,8 +142,9 @@ async function keywordSearch(
   query: string,
   workspaceId: string,
   limit: number,
+  lexicon?: KbSearchLexicon,
 ): Promise<KbSearchHit[]> {
-  const tokens = tokenizeQuery(query);
+  const tokens = tokenizeQuery(query, lexicon);
   if (tokens.length === 0) return [];
   // 候选召回：任一词 ILIKE 或 tsvector 命中（宽进严出，精排在 TS 侧确定性完成）
   const likeConds = tokens.map((_, i) => `c.content ILIKE '%' || $${i + 3} || '%'`).join(" OR ");
@@ -144,7 +162,7 @@ async function keywordSearch(
       heading: row.heading,
       documentTitle: row.document_title,
       documentId: row.document_id,
-      score: scoreChunkFallback(query, row),
+      score: scoreChunkFallback(query, row, lexicon),
     }))
     .filter((h) => h.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -154,6 +172,8 @@ async function keywordSearch(
 export interface SearchOptions {
   workspaceId: string;
   limit?: number;
+  /** 必须来自已验证的活动 Bundle 投影或受信调用方；省略时使用纯通用检索。 */
+  lexicon?: KbSearchLexicon;
 }
 
 /** 混合检索主入口：有 embedder 走向量链路，无则关键词兜底（degraded 标注供调用方留痕） */
@@ -170,6 +190,6 @@ export async function searchKB(
     if (hits.length > 0) return { hits, degraded: false };
     // 向量链路零命中（如全库无 embedding）→ 关键词兜底
   }
-  const hits = await keywordSearch(db, query, opts.workspaceId, limit);
+  const hits = await keywordSearch(db, query, opts.workspaceId, limit, opts.lexicon);
   return { hits, degraded: !extra.embedder };
 }

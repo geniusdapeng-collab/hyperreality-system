@@ -57,7 +57,7 @@ function wireChannelDb(db: FakeDb): FakeDb {
     const id = nextSerial(d, "c_notifications");
     d.table("c_notifications").push({
       id, workspace_id: p[0], c_user_id: p[1], channel: p[2], kind: p[3],
-      payload: JSON.parse(String(p[4])), driver: p[5], status: "delivered",
+      payload: JSON.parse(String(p[4])), driver: p[5], status: p[6],
       created_at: new Date().toISOString(),
     });
     return { rows: [{ id }] };
@@ -182,7 +182,11 @@ describe("E4 身份核验 · verifyIdentity", () => {
   it("DemoPassThroughProvider 直通：verified:true + demo:true + 落 phone_hash", async () => {
     const db = wireChannelDb(new FakeDb());
     const u = await resolveCUser(db, { workspaceId: WS, channel: "h5", openid: "o-v" });
-    const r = await verifyIdentity(db, { workspaceId: WS, cUserId: u.user.id, phone: "13800000001", code: "123456" });
+    const r = await verifyIdentity(
+      db,
+      { workspaceId: WS, cUserId: u.user.id, phone: "13800000001", code: "123456" },
+      new DemoPassThroughProvider(),
+    );
     expect(r).toEqual({ verified: true, demo: true });
     const row = db.table("c_users").find((x) => x["id"] === u.user.id)!;
     expect(row["phone_hash"]).toBe(hashPhone("13800000001"));
@@ -211,7 +215,8 @@ describe("E5 推送 · 驱动分层与落库留痕", () => {
     await driver.deliver({ channel: "h5", openid: "o-1", kind: "message", payload: { text: "hi" } });
     expect(box).toHaveLength(1);
     expect(box[0]).toMatchObject({ channel: "h5", kind: "message" });
-    expect(typeof box[0]!["deliveredAt"]).toBe("string");
+    expect(typeof box[0]!["recordedAt"]).toBe("string");
+    expect(box[0]!["deliveryState"]).toBe("demo");
   });
 
   it("微信订阅消息未注入 sender → 调用即抛（不静默假成功）", async () => {
@@ -239,10 +244,10 @@ describe("E5 推送 · 驱动分层与落库留痕", () => {
     const r = await pushMessage(db, {
       workspaceId: WS, cUserId: u.user.id, kind: "ticket_update", payload: { ticketId: "TK-1" },
     });
-    expect(r).toMatchObject({ driver: "mock", status: "delivered", mock: true });
+    expect(r).toMatchObject({ driver: "mock", status: "pending", deliveryState: "demo", mock: true });
     expect(typeof r.notificationId).toBe("number");
     const row = db.table("c_notifications").find((n) => n["id"] === r.notificationId)!;
-    expect(row).toMatchObject({ c_user_id: u.user.id, kind: "ticket_update", driver: "mock", status: "delivered" });
+    expect(row).toMatchObject({ c_user_id: u.user.id, kind: "ticket_update", driver: "mock", status: "pending" });
   });
 
   it("pushMessage：微信渠道用户按注册表选 wechat-subscribe 驱动（注入后投递）", async () => {

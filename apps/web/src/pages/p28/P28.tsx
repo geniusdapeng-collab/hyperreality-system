@@ -4,18 +4,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { MEMBER_ROLE_TEXT, dictText } from "../../lib/display";
+import { AsyncState, Icon, clientValueText } from "@workloom/ui";
 
 interface Group {
   workspaceId: string; slug: string; workspaceName: string; tenantName: string;
   role: string; industry: string; pendingApprovals: number;
 }
 
-const ROLE_LABEL: Record<string, string> = { owner: "老板", manager: "店长", staff: "员工", readonly: "查看" };
-
 export default function P28() {
   const nav = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void (async () => {
@@ -24,11 +25,18 @@ export default function P28() {
         const svc = trpc.accounts.inbox as unknown as { unified: { query: () => Promise<{ groups: Group[] }> } };
         const r = await svc.unified.query();
         setGroups(r.groups);
-      } catch (e) { setErr(e instanceof Error ? e.message : "加载失败"); }
+      } catch (e) {
+        console.warn("加载统一待办失败", e);
+        setErr("暂时无法加载待办，请稍后重试。");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
   const total = groups.reduce((s, g) => s + g.pendingApprovals, 0);
+
+  if (loading) return <AsyncState status="loading" title="正在汇总统一待办" description="正在按您可访问的工作区核对审批事项。" />;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
@@ -41,13 +49,13 @@ export default function P28() {
         {groups.map((g) => (
           <button
             key={g.workspaceId}
-            onClick={() => nav("/p4")}
+            onClick={() => nav("/approvals")}
             className="flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-5 py-4 text-left hover:border-emerald-600"
           >
             <div>
               <div className="font-semibold">{g.workspaceName}</div>
-              <div className="mt-0.5 text-xs text-neutral-400">
-                {g.tenantName} · {g.industry} · 我的角色：{ROLE_LABEL[g.role] ?? g.role}
+              <div className="mt-0.5 text-body text-neutral-400">
+                {g.tenantName} · {clientValueText(g.industry)} · 我的角色：{dictText(MEMBER_ROLE_TEXT, g.role)}
               </div>
             </div>
             <div className="text-right">
@@ -56,7 +64,7 @@ export default function P28() {
                   {g.pendingApprovals} 待审批
                 </span>
               ) : (
-                <span className="text-xs text-emerald-500">无待办 ✓</span>
+                <span className="inline-flex items-center gap-1 text-body text-emerald-500">无待办 <Icon name="check" size={14} /></span>
               )}
             </div>
           </button>

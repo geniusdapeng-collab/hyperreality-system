@@ -10,15 +10,23 @@ import {
 import { routeTier, decideForCaptain } from "./router.js";
 import { buildMemo, composeBriefing, type BriefFacts } from "./briefing.js";
 
-/** 默认值动态引用（纪律：默认值调整不破测试——禁止写死魔法数，一律走 defaultCharter 投影） */
-const CAP = defaultCharter().autonomy;
-const BREAKER = Object.entries(defaultCharter().circuit_breaker.kpi_floor)[0] as [string, number];
-
-const granted = () => transition(defaultCharter(), {
+const RANGE_KEY = "unit-change-ratio";
+const CAP_KEY = "unit-spend";
+const CAP = 5000;
+const configuredCharter = () => {
+  const c = defaultCharter();
+  c.autonomy = {
+    ranges: { [RANGE_KEY]: { label: "变更比例", lower: 0.85, upper: 1.15, anchor: 1 } },
+    caps: { [CAP_KEY]: { label: "支出上限", limit: CAP } },
+  };
+  c.circuit_breaker.kpi_floor = { quality: 0.7 };
+  return c;
+};
+const granted = () => transition(configuredCharter(), {
   kind: "grant",
   grant: {
     event_id: "E-G1", granted_by: "MEM-001", granted_at: new Date().toISOString(),
-    disclosure_version: "risk-v1", clauses: ["自主调价", "自主采购", "试用降档规则"],
+    disclosure_version: "risk-v1", clauses: ["自治执行", "支出边界", "试用降档规则"],
     shadow_days: 3, trial_days: 7, trial_ends_at: null, retain_until: null,
   },
 });
@@ -64,14 +72,14 @@ describe("治理状态机（§12.1）", () => {
 });
 
 describe("试用期降档 overlay（§12.1）", () => {
-  it("trial 态三上限减半、价格带向 1 收窄一半；active 态原样", () => {
+  it("trial 态所有上限减半、区间向锚点收窄一半；active 态原样", () => {
     const t = transition(granted(), { kind: "advance" });
     const eff = effectiveAutonomy(t);
-    expect(eff.procurement_cap).toBe(Math.floor(CAP.procurement_cap / 2));
-    expect(eff.price_band[0]).toBeCloseTo(1 - (1 - CAP.price_band[0]) / 2, 3);
-    expect(eff.price_band[1]).toBeCloseTo(1 + (CAP.price_band[1] - 1) / 2, 3);
+    expect(eff.caps[CAP_KEY]?.limit).toBe(Math.floor(CAP / 2));
+    expect(eff.ranges[RANGE_KEY]?.lower).toBeCloseTo(0.925, 3);
+    expect(eff.ranges[RANGE_KEY]?.upper).toBeCloseTo(1.075, 3);
     const a = transition(transition(t, { kind: "expire" }), { kind: "keep_long" });
-    expect(effectiveAutonomy(a).procurement_cap).toBe(CAP.procurement_cap);
+    expect(effectiveAutonomy(a).caps[CAP_KEY]?.limit).toBe(CAP);
   });
 });
 
@@ -79,58 +87,54 @@ describe("五级审批路由（方案 §三）", () => {
   const c = transition(transition(granted(), { kind: "advance" }), { kind: "expire" });
   const active = transition(c, { kind: "keep_long" });
 
-  it("价格带内 → L2；带外 → L4；围栏放宽/宪章变更 → 一律 L4；跨区 → L3", () => {
-    expect(routeTier(active, { action: "price.adjust", params: {}, priceCtx: { afterPrice: 500, basePrice: 458 } })).toBe("l2_captain");
-    expect(routeTier(active, { action: "price.adjust", params: {}, priceCtx: { afterPrice: 600, basePrice: 458 } })).toBe("l4_chairman");
+  it("声明区间内 → L2；区间外 → L4；围栏放宽/宪章变更 → 一律 L4；跨区 → L3", () => {
+    expect(routeTier(active, { action: "record.update", params: {}, rangeCtx: { key: RANGE_KEY, value: 1.09 } })).toBe("l2_captain");
+    expect(routeTier(active, { action: "record.update", params: {}, rangeCtx: { key: RANGE_KEY, value: 1.3 } })).toBe("l4_chairman");
     expect(routeTier(active, { action: "fence.patch", params: {}, isFenceWiden: true })).toBe("l4_chairman");
     expect(routeTier(active, { action: "charter.update", params: {}, isCharterChange: true })).toBe("l4_chairman");
     expect(routeTier(active, { action: "inventory.transfer", params: {}, crossWorkspace: true })).toBe("l3_fleet");
   });
 
   it("金额超自治上限 → L4；试用降档后上限同步收紧", () => {
-    expect(routeTier(active, { action: "procurement.create", params: {}, amountCtx: { amount: CAP.procurement_cap * 2 } })).toBe("l4_chairman");
-    expect(routeTier(active, { action: "procurement.create", params: {}, amountCtx: { amount: Math.floor(CAP.procurement_cap / 2) } })).toBe("l2_captain");
+    expect(routeTier(active, { action: "expense.create", params: {}, amountCtx: { amount: CAP + 1000, capKey: CAP_KEY } })).toBe("l4_chairman");
+    expect(routeTier(active, { action: "expense.create", params: {}, amountCtx: { amount: Math.floor(CAP * 0.6), capKey: CAP_KEY } })).toBe("l2_captain");
     const trial = transition(granted(), { kind: "advance" });
-    // 降档后上限减半：介于半额与全额之间即越限
-    expect(routeTier(trial, { action: "procurement.create", params: {}, amountCtx: { amount: Math.floor(CAP.procurement_cap * 0.75) } })).toBe("l4_chairman");
+    expect(routeTier(trial, { action: "expense.create", params: {}, amountCtx: { amount: Math.floor(CAP * 0.6), capKey: CAP_KEY } })).toBe("l4_chairman"); // 降档后 CAP/2 上限
   });
 });
 
 describe("公司CEO 裁决策略（router.decideForCaptain）", () => {
   const active = transition(transition(granted(), { kind: "advance" }), { kind: "expire" });
   const c = transition(active, { kind: "keep_long" });
-  const base = { approvalId: "a1", eventId: "E-1", action: "price.adjust", params: {}, ruleIds: ["R1"], title: "调价" };
+  const base = { approvalId: "a1", eventId: "E-1", action: "record.update", params: {}, ruleIds: ["R1"], title: "调整记录" };
 
   it("带内 approve / 贴边 escalate / 带外 escalate（路由兜底）/ 无判据 escalate（保守默认）", () => {
-    expect(decideForCaptain(c, { ...base, priceCtx: { afterPrice: 480, basePrice: 458 } }).kind).toBe("approve");
-    expect(decideForCaptain(c, { ...base, priceCtx: { afterPrice: 396, basePrice: 458 } }).kind).toBe("escalate"); // 0.865 破带下沿
-    expect(decideForCaptain(c, { ...base, priceCtx: { afterPrice: 600, basePrice: 458 } }).kind).toBe("escalate");
+    expect(decideForCaptain(c, { ...base, rangeCtx: { key: RANGE_KEY, value: 1.05 } }).kind).toBe("approve");
+    expect(decideForCaptain(c, { ...base, rangeCtx: { key: RANGE_KEY, value: 0.86 } }).kind).toBe("escalate");
+    expect(decideForCaptain(c, { ...base, rangeCtx: { key: RANGE_KEY, value: 1.3 } }).kind).toBe("escalate");
     expect(decideForCaptain(c, { ...base, action: "misc.op" }).kind).toBe("escalate");
   });
 
   it("金额 70% 内 approve / 70-100% escalate", () => {
-    expect(decideForCaptain(c, { ...base, action: "procurement.create", amountCtx: { amount: Math.floor(CAP.procurement_cap * 0.5) } }).kind).toBe("approve");
-    expect(decideForCaptain(c, { ...base, action: "procurement.create", amountCtx: { amount: Math.floor(CAP.procurement_cap * 0.9) } }).kind).toBe("escalate");
+    expect(decideForCaptain(c, { ...base, action: "expense.create", amountCtx: { amount: Math.floor(CAP * 0.4), capKey: CAP_KEY } }).kind).toBe("approve");
+    expect(decideForCaptain(c, { ...base, action: "expense.create", amountCtx: { amount: Math.floor(CAP * 0.8), capKey: CAP_KEY } }).kind).toBe("escalate");
   });
 });
 
 describe("自治熔断（方案 §六）", () => {
   it("KPI 跌破下限 → tripped；tightenAutonomy 收紧一档且置 tightened；已收紧不重复", () => {
-    const c = defaultCharter();
-    const [metric, floor] = BREAKER;
-    const below = { [metric]: floor - 0.01 };
-    const v = evalCircuitBreaker(c, below);
+    const c = configuredCharter();
+    const v = evalCircuitBreaker(c, { quality: 0.62 });
     expect(v.tripped).toBe(true);
-    expect(v.metric).toBe(metric);
+    expect(v.metric).toBe("quality");
     const t = tightenAutonomy(c);
-    expect(t.autonomy.procurement_cap).toBe(Math.floor(CAP.procurement_cap / 2));
+    expect(t.autonomy.caps[CAP_KEY]?.limit).toBe(Math.floor(CAP / 2));
     expect(t.circuit_breaker.tightened).toBe(true);
-    expect(evalCircuitBreaker(t, below).alreadyTightened).toBe(true);
+    expect(evalCircuitBreaker(t, { quality: 0.62 }).alreadyTightened).toBe(true);
   });
 
   it("KPI 未破线 → 不触发", () => {
-    const [metric, floor] = BREAKER;
-    expect(evalCircuitBreaker(defaultCharter(), { [metric]: floor + 0.01 }).tripped).toBe(false);
+    expect(evalCircuitBreaker(configuredCharter(), { quality: 0.83 }).tripped).toBe(false);
   });
 });
 
@@ -138,8 +142,8 @@ describe("Decision Memo 依据链强制（治理 §九.3）", () => {
   it("空 basis 拒绝生成；正常生成含推荐标星", () => {
     expect(() => buildMemo({ title: "t", situation: "s", options: [], recommendation: "r", basis: [] })).toThrow("依据链强制");
     const m = buildMemo({
-      title: "调价", situation: "OCC 落后", options: [{ label: "批准", recommended: true }, { label: "驳回" }],
-      recommendation: "批准", basis: ["goal.tracking 偏差 6pt"],
+      title: "调整计划", situation: "目标进度落后", options: [{ label: "批准", recommended: true }, { label: "驳回" }],
+      recommendation: "批准", basis: ["目标跟踪偏差 6 个百分点"],
     });
     expect(m.options[0]?.recommended).toBe(true);
     expect(m.basis).toHaveLength(1);
@@ -149,7 +153,7 @@ describe("Decision Memo 依据链强制（治理 §九.3）", () => {
 describe("简报模板合成（via=rule 数字全真）", () => {
   it("四层结构含 L4 请示计数与溯源声明", () => {
     const facts: BriefFacts = {
-      kpi: { 事件库规模: "100 条" }, actionsTop: [{ action: "price.adjust", n: 5 }],
+      kpi: { 事件库规模: "100 条" }, actionsTop: [{ action: "record.update", n: 5 }],
       pendingByTier: { l2_captain: 2, l4_chairman: 1 }, incidents: 0,
     };
     const text = composeBriefing("daily", facts, "公司CEO");
@@ -167,9 +171,9 @@ describe("边界与细节（二轮深测补充）", () => {
   });
 
   it("shadow 不降档（降档仅 trial）；suspended 不降档", () => {
-    expect(effectiveAutonomy(granted()).procurement_cap).toBe(CAP.procurement_cap);
+    expect(effectiveAutonomy(granted()).caps[CAP_KEY]?.limit).toBe(CAP);
     const susp = transition(transition(granted(), { kind: "advance" }), { kind: "expire" });
-    expect(effectiveAutonomy(susp).procurement_cap).toBe(CAP.procurement_cap);
+    expect(effectiveAutonomy(susp).caps[CAP_KEY]?.limit).toBe(CAP);
   });
 
   it("tightenAutonomy 保留授权记录与升级清单（熔断不改治理链）", () => {
@@ -194,7 +198,7 @@ describe("边界与细节（二轮深测补充）", () => {
     // 任何输入都不应产出 reject——reject 只来自人类手势
     const verdicts = [
       decideForCaptain(active, { approvalId: "a", eventId: "e", action: "x", params: {}, ruleIds: [], title: "t" }),
-      decideForCaptain(active, { approvalId: "a", eventId: "e", action: "price.adjust", params: {}, ruleIds: [], priceCtx: { afterPrice: 999, basePrice: 458 }, title: "t" }),
+      decideForCaptain(active, { approvalId: "a", eventId: "e", action: "record.update", params: {}, ruleIds: [], rangeCtx: { key: RANGE_KEY, value: 9 }, title: "t" }),
     ];
     for (const v of verdicts) expect(v.kind).not.toBe("reject");
   });
@@ -209,5 +213,30 @@ describe("宪章解析健壮性", () => {
   it("空档/脏档 → 默认 disabled 宪章", () => {
     expect(parseCharter(undefined).mode).toBe("disabled");
     expect(parseCharter({ mode: "bogus" }).mode).toBe("disabled");
+  });
+
+  it("旧版或未知自治字段不得被静默剥离后继续执行", () => {
+    const parsed = parseCharter({
+      mode: "trial",
+      autonomy: {
+        legacy_range: [0.85, 1.15],
+        legacy_cap: 5000,
+      },
+    });
+    expect(parsed.mode).toBe("disabled");
+    expect(parsed.autonomy).toEqual({ ranges: {}, caps: {} });
+  });
+
+  it("非法区间失败关闭，防止反向边界进入路由与熔断", () => {
+    const parsed = parseCharter({
+      mode: "active",
+      autonomy: {
+        ranges: {
+          invalid: { label: "无效区间", lower: 1.2, anchor: 1, upper: 0.8 },
+        },
+        caps: {},
+      },
+    });
+    expect(parsed.mode).toBe("disabled");
   });
 });

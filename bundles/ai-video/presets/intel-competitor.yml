@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G1]
+coverage:
+  - { eventPrefix: "dossier.competitor.", label: 竞品情报 }
 skills: [jenny-loom-research]
 tools:
   - { name: research.search, access: read,  desc: 检索竞品公开信息 }

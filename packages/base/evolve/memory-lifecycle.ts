@@ -7,7 +7,7 @@
  *  ② recallMemoriesByMember——来源人一键清算：成员离任/换岗时，作废其手势沉淀的全部
  *     偏好记忆（D24 修订 2：偏好绑定来源人，防个人口味过拟合为组织真理）；
  *  ③ editMemoryContent——人类编辑记忆内容（M2.1 可读可改；禁明文 PII，F1.8）；
- *  ④ disableMemory——人类禁用（→ recalled，可由再次写入复活，upsertMemory 语义）。
+ *  ④ disableMemory——人类禁用（→ recalled）；reactivate/restore 提供显式可审计恢复。
  */
 import type pg from "pg";
 import {
@@ -250,4 +250,134 @@ export async function disableMemory(
     });
     return { calibrateEventId };
   });
+}
+
+/* ================= ⑤ 影响预览与显式恢复 ================= */
+
+export interface MemoryImpactPreview {
+  affectedMemoryIds: string[];
+  agents: Array<{ id: string; name: string }>;
+  rules: Array<{ id: string; name: string }>;
+  activeTasks: Array<{ id: string; title: string; status: string }>;
+  futureTaskPolicy: string;
+}
+
+/**
+ * 高影响操作提交前的服务端事实预览。只报告已有引用关系，不凭命名猜测员工、规则或任务；
+ * 尚未运行的任务会在启动时重新检索 active 记忆，因此不会继续引用已停用内容。
+ */
+export async function previewMemoryImpact(
+  app: pg.Pool,
+  scope: Scope,
+  input: { memoryIds?: string[]; sourceMemberId?: string },
+): Promise<MemoryImpactPreview> {
+  return inTx(app, scope, async (c) => {
+    const explicitIds = [...new Set((input.memoryIds ?? []).filter(Boolean))].slice(0, 50);
+    const target = input.sourceMemberId
+      ? await c.query<{ memory_id: string }>(
+        `SELECT m.memory_id FROM org_memory m
+         WHERE m.tenant_id=$1 AND m.workspace_id=$2 AND m.status='active'
+           AND EXISTS (
+             SELECT 1 FROM biz_events e
+             WHERE e.tenant_id=m.tenant_id AND e.event_id=ANY(m.source_events)
+               AND e.payload->'who'->>'id'=$3
+           )`,
+        [scope.tenantId, scope.workspaceId, input.sourceMemberId],
+      )
+      : await c.query<{ memory_id: string }>(
+        `SELECT memory_id FROM org_memory
+         WHERE tenant_id=$1 AND workspace_id=$2 AND status='active' AND memory_id=ANY($3::text[])`,
+        [scope.tenantId, scope.workspaceId, explicitIds],
+      );
+    const ids = target.rows.map((row) => row.memory_id);
+    if (ids.length === 0) return {
+      affectedMemoryIds: [], agents: [], rules: [], activeTasks: [],
+      futureTaskPolicy: "没有可停用的活动记忆；系统不会变更任何员工、规则或任务。",
+    };
+
+    const agents = await c.query<{ id: string; name: string }>(
+      `WITH refs AS (
+         SELECT subject_id AS agent_id FROM org_memory
+          WHERE tenant_id=$1 AND workspace_id=$2 AND memory_id=ANY($3::text[]) AND subject_id IS NOT NULL
+         UNION
+         SELECT e.payload->'who'->>'id' AS agent_id
+           FROM memory_usage u JOIN biz_events e ON e.event_id=u.event_id AND e.workspace_id=u.workspace_id
+          WHERE u.workspace_id=$2 AND u.memory_id=ANY($3::text[]) AND e.payload->'who'->>'type'='agent'
+       )
+       SELECT DISTINCT a.id, a.name FROM refs JOIN agents a ON a.id=refs.agent_id AND a.workspace_id=$2
+       ORDER BY a.name`,
+      [scope.tenantId, scope.workspaceId, ids],
+    );
+    const rules = await c.query<{ id: string; name: string }>(
+      `SELECT DISTINCT fr.rule_id AS id, fr.name
+         FROM memory_usage u
+         JOIN biz_events e ON e.event_id=u.event_id AND e.workspace_id=u.workspace_id
+         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(e.payload->'rule_impact','[]'::jsonb)) impact
+         JOIN fence_rules fr ON fr.rule_id=impact->>'rule_id' AND fr.workspace_id IN ($1, '*')
+        WHERE u.workspace_id=$1 AND u.memory_id=ANY($2::text[])
+        ORDER BY fr.name`,
+      [scope.workspaceId, ids],
+    );
+    const activeTasks = await c.query<{ id: string; title: string; status: string }>(
+      `SELECT DISTINCT t.id, t.title, t.status
+         FROM memory_usage u
+         JOIN biz_events e ON e.event_id=u.event_id AND e.workspace_id=u.workspace_id
+         JOIN threads t ON t.id=e.session_id AND t.workspace_id=e.workspace_id
+        WHERE u.workspace_id=$1 AND u.memory_id=ANY($2::text[])
+          AND t.status IN ('running','pending_review','paused')
+        ORDER BY t.title`,
+      [scope.workspaceId, ids],
+    );
+    return {
+      affectedMemoryIds: ids,
+      agents: agents.rows,
+      rules: rules.rows,
+      activeTasks: activeTasks.rows,
+      futureTaskPolicy: "尚未启动的任务会在运行时重新检索活动记忆；停用后不会再注入这些内容。",
+    };
+  });
+}
+
+export async function restoreMemories(
+  app: pg.Pool,
+  gateway: pg.Pool,
+  scope: Scope,
+  actor: { memberNo: string },
+  memoryIds: string[],
+): Promise<{ restored: string[]; calibrateEventIds: string[] }> {
+  void gateway;
+  const ids = [...new Set(memoryIds.filter(Boolean))].slice(0, 50);
+  if (ids.length === 0) return { restored: [], calibrateEventIds: [] };
+  return inTx(app, scope, async (c) => {
+    const rows = await c.query<{ memory_id: string }>(
+      `UPDATE org_memory SET status='active'
+       WHERE tenant_id=$1 AND workspace_id=$2 AND status='recalled' AND memory_id=ANY($3::text[])
+       RETURNING memory_id`,
+      [scope.tenantId, scope.workspaceId, ids],
+    );
+    const restored = rows.rows.map((row) => row.memory_id);
+    const calibrateEventIds: string[] = [];
+    for (const memoryId of restored) {
+      calibrateEventIds.push(await emitCalibrate(c, scope, { id: actor.memberNo, type: "human" }, {
+        memoryId,
+        kind: "human-reactivate",
+        summary: "人类重新启用已回收记忆；恢复动作独立留痕，历史停用记录保持不变",
+      }));
+    }
+    return { restored, calibrateEventIds };
+  });
+}
+
+export async function reactivateMemory(
+  app: pg.Pool,
+  gateway: pg.Pool,
+  scope: Scope,
+  actor: { memberNo: string },
+  memoryId: string,
+): Promise<{ calibrateEventId: string }> {
+  const result = await restoreMemories(app, gateway, scope, actor, [memoryId]);
+  if (!result.restored.length || !result.calibrateEventIds[0]) {
+    throw new MemoryGovernanceError("NOT_FOUND", `记忆 ${memoryId} 不存在或当前不可恢复`);
+  }
+  return { calibrateEventId: result.calibrateEventIds[0] };
 }

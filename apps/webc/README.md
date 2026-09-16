@@ -7,7 +7,7 @@ React 19 + Vite + Tailwind v4（令牌制）+ TS strict。后端契约 `baseURL=
 
 **接入只需两步，均不涉及代码：**
 
-1. **替换配置** `public/service-front.config.json`（品牌、主题、入口、文案）；
+1. **由行业 Bundle 生成投影** `public/industry/service-front.config.json`（品牌、主题、入口、文案）；根级 `public/service-front.config.json` 是基座受管加载壳，行业仓不得修改；
 2. **替换知识库内容**（服务端知识文档，决定 AI 回答与引用来源）。
 
 配置文件加载失败或字段缺失时自动落内置默认值，永不白屏。配置项一览：

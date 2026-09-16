@@ -177,7 +177,7 @@ export async function scan(workspaceId: string, memberNo: string): Promise<{ add
     await push({
       sourceKey: `dev-pend-${t.id}`, kind: "judge", level: "high",
       title: "开发任务三道关全过，等您裁决", body: `「${t.title}」可以发布啦，您点头我就发。`,
-      actions: [{ label: "去裁决", link: "/p25" }], link: "/p25",
+      actions: [{ label: "去裁决", link: "/development" }], link: "/development",
     });
   }
   const devFail = await svcQuery<{ id: string; title: string; review_note: string | null }>(workspaceId,
@@ -186,7 +186,7 @@ export async function scan(workspaceId: string, memberNo: string): Promise<{ add
     await push({
       sourceKey: `dev-fail-${t.id}`, kind: "alert", level: "high",
       title: "开发任务返修两轮没救回来，转您处理", body: `「${t.title}」：${(t.review_note ?? "原因待查").slice(0, 120)}`,
-      actions: [{ label: "去看看", link: "/p25" }], link: "/p25",
+      actions: [{ label: "去看看", link: "/development" }], link: "/development",
     });
   }
 
@@ -197,7 +197,7 @@ export async function scan(workspaceId: string, memberNo: string): Promise<{ add
     await push({
       sourceKey: `rel-${r.id}`, kind: "done", level: "mid",
       title: `发布成功 ${r.version}`, body: (r.changelog.split("\n")[0] ?? "新版本已就位").slice(0, 120),
-      actions: [{ label: "看版本", link: "/p25" }], link: "/p25",
+      actions: [{ label: "看版本", link: "/development" }], link: "/development",
     });
   }
 

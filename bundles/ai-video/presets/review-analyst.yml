@@ -4,10 +4,12 @@ name: 复盘分析师
 version: v1.0
 kind: analyst
 description: 跨平台统一复盘：口径对齐→归因分析→可执行结论；周报复盘与爆款/扑街双向归因。
-readonly: true                # 只读分析，不外发不处置
+readonly: false               # 仅生成内部复盘报告，不外发不处置
 night_shift: false
 high_risk: false
 fence_bindings: [G13]       # 复盘归因告警口径
+coverage:
+  - { eventPrefix: "review.report.", label: 复盘报告 }
 skills: [cross-platform-review]
 tools:
   - { name: review.metrics.join, access: read, desc: 跨平台指标拉通（口径对齐） }

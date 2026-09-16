@@ -85,7 +85,7 @@ function CeoFigure({ active, night }: { active: boolean; night: boolean }) {
       {/* 金色主光柱（体积光） */}
       <SpotBeam color="#ffd98a" height={6.2} topR={0.3} bottomR={1.35} opacity={night ? 0.06 : 0.09} position={[0, 0.3, 0]} />
       <pointLight color="#ffcf7a" intensity={active ? 6 : 3.5} distance={10} decay={2} position={[0, 2.1, 0.4]} />
-      <NamePlate persona={displayNameOf({ presetKey: "company-ceo", roleName: "公司CEO" })} role="" color="#ffd98a" position={[0, 2.55, 0]} />
+      <NamePlate persona={displayNameOf({ presetKey: "company-ceo", roleName: "公司负责人" })} role="" color="#ffd98a" position={[0, 2.55, 0]} />
     </group>
   );
 }

@@ -8,6 +8,8 @@ readonly: false
 night_shift: true             # 账单 T+1 夜间核对
 high_risk: false
 fence_bindings: [G13]         # 分账差异超 ±10% 告警（auto 告警不阻断）
+coverage:
+  - { eventPrefix: "settlement.", label: 结算对账 }
 skills: []
 tools:
   - { name: settlement.fetch, access: read,  desc: 平台账单/结算单抓取 }

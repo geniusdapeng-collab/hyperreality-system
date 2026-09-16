@@ -145,7 +145,9 @@ describe("extractIntentsDeterministic", () => {
 
   it("营业规则：退款+金额 → business-rule（带边界）", () => {
     const doc = parseDocFile("规矩.txt", Buffer.from("退款超过 500 元一定要老板审批"))!;
-    const { intents } = extractIntentsDeterministic(doc);
+    const { intents } = extractIntentsDeterministic(doc, {
+      ruleHints: [{ terms: ["退款", "退货"], key: "approval/refund-credits", bounds: { min: 0, max: 100000 } }],
+    });
     expect(intents[0]).toMatchObject({
       kind: "business-rule", key: "approval/refund-credits", value: 500,
       bounds: { min: 0, max: 100000 },
@@ -274,11 +276,11 @@ describe("buildIntakePreview（端到端：文件 → 意图卡）", () => {
 /* ================= P0-2 新增意图 → 覆盖项映射（白名单九种） ================= */
 
 describe("新增意图映射（service-item / business-rule / forbidden-add）", () => {
-  it("service-item → service-catalog 知识追加（价格/单位/机器人/溯源齐全）", () => {
-    const items = intentToItems({ kind: "service-item", name: "红糖姜茶", price: 0, unit: "杯", robot: true, note: "冲泡好热饮" });
+  it("service-item → service-catalog 知识追加（价格/单位/行业属性/溯源齐全）", () => {
+    const items = intentToItems({ kind: "service-item", name: "红糖姜茶", price: 0, unit: "杯", attributes: { 配送方式: "自动配送" }, note: "冲泡好热饮" });
     expect(items[0]).toMatchObject({
       type: "kb", op: "append", path: "service-catalog",
-      value: { q: "红糖姜茶", price: 0, unit: "杯", robot: true, source: "l1-intake" },
+      value: { q: "红糖姜茶", price: 0, unit: "杯", attributes: { 配送方式: "自动配送" }, source: "l1-intake" },
     });
   });
 

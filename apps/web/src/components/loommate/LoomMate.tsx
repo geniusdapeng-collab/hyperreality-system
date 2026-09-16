@@ -9,6 +9,10 @@ import { useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { VoiceEngine } from "../../voice/VoiceEngine";
 import { MateLive2D, type MateMood, type MateGesture } from "./MateLive2D";
+import { useAskRailPadding, useSideNavWidth } from "../../lib/useAskRail";
+import { canonicalNavigationPath } from "../../shell/NavMenu";
+import { Icon, clientChineseText, clientValueText, useManagedSurface } from "@workloom/ui";
+import { inboxSpeechText } from "./speechText";
 
 /* ---------------- 类型 ---------------- */
 interface Settings {
@@ -84,6 +88,9 @@ function MateAvatar({ size, excited }: { size: number; excited: boolean }) {
 /* ---------------- 主组件 ---------------- */
 export function LoomMate() {
   const navigate = useNavigate();
+  const railW = useAskRailPadding();
+  const navW = useSideNavWidth();
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [settings, setSettings] = useState<Settings | null>(null);
   const [items, setItems] = useState<InboxItem[]>([]);
   const [open, setOpen] = useState<"none" | "chat" | "settings" | "memory">("none");
@@ -92,6 +99,7 @@ export function LoomMate() {
   const [busy, setBusy] = useState(false);
   const [memory, setMemory] = useState<Record<string, MemRow[]> | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
+  const sizeToggleRef = useRef<HTMLButtonElement | null>(null);
   const size = settings?.widget_size ?? "large";
 
   /* —— 浮层交互（拖拽移动 / 迷你球 / 隐藏把手；本机偏好存 localStorage，2026-09 浮层 UX 专项） —— */
@@ -102,14 +110,20 @@ export function LoomMate() {
   const [mini, setMini] = useState(() => { try { return localStorage.getItem("loommate.mini") === "1"; } catch { return false; } });
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
   const persistLocal = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
-  const widgetW = size === "large" ? 480 : 120;
-  const widgetH = size === "large" ? 560 : 170;
+  const availableWidth = Math.max(96, viewport.width - railW - navW - 32);
+  const widgetW = size === "large" ? Math.min(480, availableWidth) : Math.min(120, availableWidth);
+  const widgetH = size === "large" ? Math.min(560, Math.round(widgetW * 1.17)) : 170;
   const clampPos = (x: number, y: number) => ({
-    x: Math.min(Math.max(0, x), window.innerWidth - widgetW),
-    y: Math.min(Math.max(0, y), window.innerHeight - widgetH),
+    x: Math.min(Math.max(navW, x), Math.max(navW, viewport.width - railW - widgetW)),
+    y: Math.min(Math.max(0, y), Math.max(0, viewport.height - widgetH)),
   });
-  const defaultPos = () => ({ x: window.innerWidth - widgetW - 16, y: window.innerHeight - widgetH - 16 });
-  const docked: "left" | "right" = pos ? (pos.x + widgetW / 2 < window.innerWidth / 2 ? "left" : "right") : "right";
+  const defaultPos = () => ({
+    x: Math.max(navW, viewport.width - railW - widgetW - 16),
+    y: Math.max(0, viewport.height - widgetH - 16),
+  });
+  const docked: "left" | "right" = pos
+    ? (pos.x + widgetW / 2 < navW + (viewport.width - railW - navW) / 2 ? "left" : "right")
+    : "right";
   const onDragStart = (e: React.PointerEvent) => {
     const base = pos ?? defaultPos();
     dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: base.x, baseY: base.y, moved: false };
@@ -129,7 +143,12 @@ export function LoomMate() {
     if (!d || !d.moved) { void openPanel("chat"); return; } // 未拖动=点击开聊
     setPos((p) => {
       if (!p) return p;
-      const snapped = { x: p.x + widgetW / 2 < window.innerWidth / 2 ? 16 : window.innerWidth - widgetW - 16, y: p.y };
+      const snapped = {
+        x: p.x + widgetW / 2 < navW + (viewport.width - railW - navW) / 2
+          ? navW + 16
+          : Math.max(navW, viewport.width - railW - widgetW - 16),
+        y: p.y,
+      };
       persistLocal("loommate.pos", JSON.stringify(snapped));
       return snapped;
     });
@@ -166,7 +185,7 @@ export function LoomMate() {
       for (const it of fresh.filter((x) => x.level === "red" || x.level === "high").slice(0, 2)) {
         VoiceEngine.speak({
           role: "loommate", persona: personaName,
-          text: `${it.title}。${it.body}`.slice(0, 120),
+          text: inboxSpeechText(it.title, it.body).slice(0, 120),
           priority: it.level === "red" ? "fuse" : "ambient",
           voiceOverride: VOICE_MAP[s.settings.voice_key] ?? VOICE_MAP.sweet,
         });
@@ -176,6 +195,53 @@ export function LoomMate() {
   }, [personaName]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const keepVisible = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+      setPos((current) => current ? clampPos(current.x, current.y) : current);
+    };
+    const reset = () => {
+      try {
+        localStorage.removeItem("loommate.pos");
+        localStorage.removeItem("loommate.hidden");
+        localStorage.removeItem("loommate.mini");
+      } catch { /* 本机偏好不可写时仍恢复当前会话 */ }
+      setPos(null);
+      setHidden(false);
+      setMini(false);
+      setOpen("none");
+    };
+    const setVisibility = (event: Event) => {
+      const action = (event as CustomEvent<"show" | "hide" | "toggle">).detail;
+      if (action === "show") {
+        setHidden(false);
+        setMini(false);
+        persistLocal("loommate.hidden", "0");
+        persistLocal("loommate.mini", "0");
+      } else if (action === "hide") {
+        setHidden(true);
+        setOpen("none");
+        persistLocal("loommate.hidden", "1");
+      } else {
+        setHidden((value) => {
+          persistLocal("loommate.hidden", value ? "0" : "1");
+          return !value;
+        });
+      }
+    };
+    keepVisible();
+    window.addEventListener("resize", keepVisible);
+    window.addEventListener("workloom:reset-layout", reset);
+    window.addEventListener("workloom:loommate-visibility", setVisibility);
+    return () => {
+      window.removeEventListener("resize", keepVisible);
+      window.removeEventListener("workloom:reset-layout", reset);
+      window.removeEventListener("workloom:loommate-visibility", setVisibility);
+    };
+  // clampPos 按当前左右栏/尺寸计算；这些值变化时重新校正一次即可。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navW, railW, viewport.width, viewport.height, widgetW, widgetH]);
   // 20s 心跳：先扫描事件源再拉收件箱
   useEffect(() => {
     const h = setInterval(async () => {
@@ -189,7 +255,7 @@ export function LoomMate() {
   const act = async (it: InboxItem) => {
     await svc().secretary.markInbox.mutate({ ids: [it.id], status: "acted" }).catch(() => undefined);
     setItems((prev) => prev.filter((x) => x.id !== it.id));
-    if (it.link) navigate(it.link);
+    if (it.link) navigate(canonicalNavigationPath(it.link));
   };
   const later = async (it: InboxItem) => {
     await svc().secretary.markInbox.mutate({ ids: [it.id], status: "read" }).catch(() => undefined);
@@ -203,6 +269,36 @@ export function LoomMate() {
     setSettings((s) => s ? { ...s, widget_size: next } : s);
     await svc().secretary.saveSettings.mutate({ widget_size: next }).catch(() => undefined);
   };
+  const mateSurface = useManagedSurface<HTMLDivElement>({
+    open: size === "fullscreen" || (!hidden && open !== "none"),
+    kind: "assistant-companion",
+    onDismiss: () => {
+      if (size === "fullscreen") void toggleSize();
+      else setOpen("none");
+    },
+    modal: size === "fullscreen",
+    focusOnOpen: size === "fullscreen",
+    restoreFocusOnClose: size === "fullscreen",
+    returnFocusRef: sizeToggleRef,
+  });
+
+  const moveByKeyboard = (event: React.KeyboardEvent<HTMLElement>) => {
+    const movement: Partial<Record<"ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight", [number, number]>> = {
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+    };
+    const direction = movement[event.key as keyof typeof movement];
+    if (!direction) return false;
+    event.preventDefault();
+    const distance = event.shiftKey ? 48 : 16;
+    const base = pos ?? defaultPos();
+    const next = clampPos(base.x + direction[0] * distance, base.y + direction[1] * distance);
+    setPos(next);
+    persistLocal("loommate.pos", JSON.stringify(next));
+    return true;
+  };
 
   const send = async (text: string) => {
     if (!text.trim() || busy) return;
@@ -211,17 +307,19 @@ export function LoomMate() {
     setInput("");
     try {
       const r = await svc().secretary.chat.mutate({ text });
-      setChat((c) => [...c, { from: "mate", text: r.reply }]);
+      const reply = clientChineseText(r.reply, "小织暂时没能整理出可展示的答复，请稍后再试。");
+      setChat((c) => [...c, { from: "mate", text: reply }]);
       if (settings?.voice_on) {
         VoiceEngine.speak({
-          role: "loommate", persona: personaName, text: r.reply.slice(0, 150),
+          role: "loommate", persona: personaName, text: reply.slice(0, 150),
           priority: "ambient", voiceOverride: VOICE_MAP[settings.voice_key] ?? VOICE_MAP.sweet,
         });
       }
       const link = (r.data as { link?: string } | undefined)?.link;
-      if (r.action === "goto" && link) navigate(link);
+      if (r.action === "goto" && link) navigate(canonicalNavigationPath(link));
     } catch (e) {
-      setChat((c) => [...c, { from: "mate", text: `呜……信号不太好：${(e as Error).message.slice(0, 60)}` }]);
+      console.warn("小织对话请求失败", e);
+      setChat((c) => [...c, { from: "mate", text: "呜……信号暂时不稳定。刚才的话已保留，请稍后再试。" }]);
     } finally { setBusy(false); }
   };
 
@@ -236,20 +334,20 @@ export function LoomMate() {
     }
   };
 
-  const dim = size === "large" ? 480 : 96;
+  const dim = size === "large" ? widgetW : Math.min(96, widgetW);
   const unread = items.length;
 
   // —— 全屏屏保模式：她守着整个场，有事直接喊你 ——
   if (size === "fullscreen") {
     return (
-      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-bg950/98"
-        onKeyDown={(e) => { if (e.key === "Escape") void toggleSize(); }} tabIndex={0}
-        ref={(el) => el?.focus()}>
+      <div {...mateSurface} className="fixed inset-0 flex flex-col items-center justify-center bg-bg950/98"
+        style={{ zIndex: "var(--wl-z-assistant)" }}
+        role="dialog" aria-modal="true" aria-label="小织屏保">
         {/* 环境微光背景 */}
         <div className="pointer-events-none absolute inset-0 opacity-30"
           style={{ background: "radial-gradient(ellipse at 50% 62%, rgba(232,160,191,.25), transparent 60%)" }} />
-        <button onClick={() => void toggleSize()}
-          className="absolute right-5 top-5 rounded-full border border-line bg-bg900/80 px-3 py-1.5 text-[11px] text-ink2 hover:text-ink">
+        <button ref={sizeToggleRef} onClick={() => void toggleSize()}
+          className="absolute right-5 top-5 rounded-full border border-line bg-bg900/80 px-3 py-1.5 text-body text-ink2 hover:text-ink">
           退出屏保（Esc）
         </button>
         <button onClick={() => void openPanel("chat")} className="relative cursor-pointer transition-transform hover:scale-[1.02]">
@@ -263,34 +361,34 @@ export function LoomMate() {
           )}
         </button>
         <div className="mt-3 text-[18px] font-semibold text-ink">{personaName} · 正在照看团队</div>
-        <div className="mt-1 text-[12px] text-ink3">点她聊聊 · 有事她会直接喊你</div>
+        <div className="mt-1 text-body text-ink3">点她聊聊 · 有事她会直接喊你</div>
         {/* 红色/高级别事件：屏保中央强提醒 */}
         {items.filter((it) => it.level === "red" || it.level === "high").slice(0, 1).map((it) => (
-          <div key={it.id} className={`mt-5 w-[440px] rounded-2xl border p-4 shadow-2xl ${LEVEL_STYLE[it.level]}`}>
-            <div className="text-[14px] font-semibold text-ink">{it.level === "red" ? "🚨 " : "🔔 "}{it.title}</div>
-            <div className="mt-1 text-[12.5px] leading-relaxed text-ink2">{it.body}</div>
-            <div className="mt-2.5 flex gap-2">
+          <div key={it.id} className={`mt-5 w-[min(28rem,calc(100vw-2rem))] max-w-full rounded-2xl border p-4 shadow-2xl ${LEVEL_STYLE[it.level]}`}>
+            <div className="flex items-center gap-1.5 text-[14px] font-semibold text-ink"><Icon name={it.level === "red" ? "warning" : "notice"} label={it.level === "red" ? "紧急提醒" : "重要提醒"} size={15} />{clientValueText(it.title)}</div>
+            <div className="mt-1 text-body leading-relaxed text-ink2">{clientValueText(it.body)}</div>
+            <div className="wl-action-row mt-2.5 flex flex-wrap gap-2">
               <button onClick={() => void act(it)}
-                className="rounded-lg bg-gradient-to-br from-gold to-gold2 px-4 py-1.5 text-[12px] font-semibold text-ongold">
-                {it.actions[0]?.label ?? "看看"}
+                className="rounded-lg bg-gradient-to-br from-gold to-gold2 px-4 py-1.5 text-body font-semibold text-ongold">
+                {clientValueText(it.actions[0]?.label ?? "看看")}
               </button>
-              <button onClick={() => void later(it)} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-ink2">稍后</button>
+              <button onClick={() => void later(it)} className="rounded-lg border border-line px-3 py-1.5 text-body text-ink2">稍后</button>
             </div>
           </div>
         ))}
         {/* 底部团队运行串话条 */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-line bg-bg900/80 px-6 py-2.5 backdrop-blur">
-          <div className="flex items-center gap-6 overflow-hidden whitespace-nowrap text-[11.5px] text-ink2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-1 overflow-hidden text-body text-ink2">
             <span className="shrink-0 text-gold">● 团队实况</span>
             {items.length === 0 && <span className="animate-pulse">各部门运行正常，一切井然有序……（有事我喊你）</span>}
             {items.slice(0, 6).map((it) => (
-              <span key={it.id} className="shrink-0">{it.title} · {it.body.slice(0, 30)}</span>
+              <span key={it.id} className="min-w-0 break-words">{clientValueText(it.title)} · {clientValueText(it.body.slice(0, 30))}</span>
             ))}
           </div>
         </div>
         {/* 面板（聊/设置/记忆）在全屏态同样可用 */}
         {open !== "none" && (
-          <div className="absolute bottom-16 right-5 top-16 w-[340px]">
+          <div className="absolute bottom-16 right-5 top-16 w-[var(--wl-assistant-expanded)]">
             <MatePanel
               open={open} setOpen={setOpen} openPanel={openPanel}
               chat={chat} busy={busy} input={input} setInput={setInput} send={send}
@@ -309,10 +407,10 @@ export function LoomMate() {
       <button
         onClick={() => { setHidden(false); persistLocal("loommate.hidden", "0"); }}
         title="唤回小织"
-        className="fixed z-[70] flex h-20 w-7 flex-col items-center justify-center gap-1 rounded-l-xl border border-gline bg-bg900/95 text-[11px] font-semibold text-gold shadow-xl hover:bg-bg850"
-        style={docked === "left"
-          ? { left: 0, top: pos?.y ?? "45%", borderRadius: "0 12px 12px 0" }
-          : { right: 0, top: pos?.y ?? "45%" }}
+        className="fixed flex h-20 w-7 flex-col items-center justify-center gap-1 rounded-l-xl border border-gline bg-bg900/95 text-body font-semibold text-gold shadow-xl hover:bg-bg850"
+        style={{ zIndex: "var(--wl-z-assistant)", ...(docked === "left"
+          ? { left: navW, top: pos?.y ?? "45%", borderRadius: "0 12px 12px 0" }
+          : { right: railW, top: pos?.y ?? "45%" }) }}
       >
         <span style={{ writingMode: "vertical-rl" }}>小织</span>
         <span>{docked === "left" ? "▸" : "◂"}</span>
@@ -321,23 +419,23 @@ export function LoomMate() {
   }
 
   const rootStyle: React.CSSProperties = pos
-    ? { position: "fixed", left: pos.x, top: pos.y, zIndex: 70 }
-    : { position: "fixed", right: 16, bottom: 16, zIndex: 70 };
+    ? { position: "fixed", left: pos.x, top: pos.y, zIndex: "var(--wl-z-assistant)" }
+    : { position: "fixed", right: railW + 16, bottom: 16, zIndex: "var(--wl-z-assistant)" };
 
   return (
-    <div className={`flex flex-col gap-2 ${docked === "left" ? "items-start" : "items-end"}`} style={{ fontFamily: "inherit", ...rootStyle }}>
+    <div {...mateSurface} className={`flex flex-col gap-2 ${docked === "left" ? "items-start" : "items-end"}`} style={{ fontFamily: "inherit", ...rootStyle }}>
       {/* 气泡提醒（最多叠 3 条） */}
       {open === "none" && items.slice(0, 3).map((it) => (
-        <div key={it.id} className={`w-[300px] rounded-2xl border p-3 shadow-xl backdrop-blur ${LEVEL_STYLE[it.level]}`}>
+        <div key={it.id} className={`w-[min(19rem,calc(100vw-2rem))] max-w-full rounded-2xl border p-3 shadow-xl backdrop-blur ${LEVEL_STYLE[it.level]}`}>
           <div className="flex items-start justify-between gap-2">
-            <div className="text-[12.5px] font-semibold text-ink">{it.level === "red" ? "🚨 " : ""}{it.title}</div>
-            <button onClick={() => void later(it)} className="shrink-0 text-[10px] text-ink3 hover:text-ink">稍后</button>
+            <div className="flex items-center gap-1.5 text-body font-semibold text-ink">{it.level === "red" && <Icon name="warning" size={14} />}{clientValueText(it.title)}</div>
+            <button onClick={() => void later(it)} className="shrink-0 text-body text-ink3 hover:text-ink">稍后</button>
           </div>
-          <div className="mt-1 text-[11.5px] leading-relaxed text-ink2">{it.body}</div>
-          <div className="mt-2 flex gap-1.5">
+          <div className="mt-1 text-body leading-relaxed text-ink2">{clientValueText(it.body)}</div>
+          <div className="wl-action-row mt-2 flex flex-wrap gap-1.5">
             <button onClick={() => void act(it)}
-              className="rounded-lg bg-gradient-to-br from-gold to-gold2 px-3 py-1 text-[11px] font-semibold text-ongold">
-              {it.actions[0]?.label ?? "看看"}
+              className="rounded-lg bg-gradient-to-br from-gold to-gold2 px-3 py-1 text-body font-semibold text-ongold">
+              {clientValueText(it.actions[0]?.label ?? "看看")}
             </button>
           </div>
         </div>
@@ -362,7 +460,7 @@ export function LoomMate() {
         >
           <img src="/live2d/mao/poster.png" alt={personaName} draggable={false} className="h-full w-full object-cover" />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-alert px-1 text-[10px] font-bold text-white shadow-lg">
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-alert px-1 text-body font-bold text-white shadow-lg">
               {unread}
             </span>
           )}
@@ -371,7 +469,16 @@ export function LoomMate() {
       <div className="flex flex-col items-center">
         <div
           role="button" tabIndex={0}
+          aria-label={`${personaName}助手；回车打开对话，方向键移动，按住 Shift 可加速移动`}
+          aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight"
           onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd}
+          onKeyDown={(e) => {
+            if (moveByKeyboard(e)) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              void openPanel("chat");
+            }
+          }}
           className="relative block cursor-grab touch-none select-none transition-transform hover:scale-105 active:cursor-grabbing"
           title={`${personaName}（拖拽挪位置 · 点击聊聊）`}
         >
@@ -379,25 +486,25 @@ export function LoomMate() {
             ? <MateLive2D size={dim} mood={mood} gesture={mateGesture} />
             : <MateAvatar size={dim} excited={unread > 0} />}
           {unread > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-[11px] font-bold text-white shadow-lg">
+            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-body font-bold text-white shadow-lg">
               {unread}
             </span>
           )}
         </div>
         <div className="mt-0.5 flex items-center gap-1.5">
-          <span className={`rounded-full bg-bg900/90 px-2.5 py-0.5 text-ink shadow ${size === "large" ? "text-[12px]" : "text-[10px]"}`}>
+            <span className="rounded-full bg-bg900/90 px-2.5 py-0.5 text-body text-ink shadow">
             {personaName}
           </span>
-          <button onClick={() => void toggleSize()} title="切换大小"
-            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
+          <button ref={sizeToggleRef} onClick={() => void toggleSize()} title="切换大小"
+            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-body text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
             {MODE_LABEL[size] ?? "变大"}
           </button>
           <button onClick={() => { setMini(true); persistLocal("loommate.mini", "1"); }} title="收起为小球（不挡界面）"
-            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
+            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-body text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
             收起
           </button>
           <button onClick={() => { setHidden(true); persistLocal("loommate.hidden", "1"); setPos((p) => p ?? defaultPos()); }} title="隐藏（屏幕边缘留「小织」把手，点一下唤回）"
-            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-[9px] text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
+            className="rounded-full border border-line bg-bg900/90 px-1.5 py-0.5 text-body text-ink2 opacity-70 shadow hover:text-ink hover:opacity-100">
             隐藏
           </button>
         </div>
@@ -420,46 +527,46 @@ function MatePanel({ open, setOpen, openPanel, chat, busy, input, setInput, send
   setMemory: React.Dispatch<React.SetStateAction<Record<string, MemRow[]> | null>>;
 }) {
   return (
-<div className="flex h-[420px] w-[320px] flex-col rounded-2xl border border-gline bg-bg900/95 shadow-2xl backdrop-blur">
+<div className="flex h-[min(26rem,calc(100vh-2rem))] w-[var(--wl-assistant-expanded)] max-w-full flex-col rounded-2xl border border-gline bg-bg900/95 shadow-2xl backdrop-blur" role="region" aria-label="小织助手面板">
           <div className="flex items-center justify-between border-b border-line px-3 py-2">
             <div className="flex gap-1">
               {([["chat", "聊聊"], ["settings", "设置"], ["memory", "记忆"]] as const).map(([k, label]) => (
                 <button key={k} onClick={() => void openPanel(k)}
-                  className={`rounded-full px-3 py-1 text-[11px] ${open === k ? "bg-gold/15 text-gold" : "text-ink2 hover:text-ink"}`}>
+                  className={`rounded-full px-3 py-1 text-body ${open === k ? "bg-gold/15 text-gold" : "text-ink2 hover:text-ink"}`}>
                   {label}
                 </button>
               ))}
             </div>
-            <button onClick={() => setOpen("none")} className="text-ink3 hover:text-ink">✕</button>
+            <button onClick={() => setOpen("none")} className="text-ink3 hover:text-ink" aria-label="关闭小织助手面板" title="关闭小织助手面板"><Icon name="close" size={16} /></button>
           </div>
           {open === "chat" && (
             <>
               <div className="flex-1 space-y-2 overflow-y-auto p-3">
                 {chat.map((m, i) => (
                   <div key={i} className={m.from === "me" ? "text-right" : ""}>
-                    <span className={`inline-block max-w-[85%] rounded-2xl px-3 py-1.5 text-[12px] leading-relaxed ${
+                    <span className={`inline-block max-w-[85%] rounded-2xl px-3 py-1.5 text-body leading-relaxed ${
                       m.from === "me" ? "bg-gold/15 text-ink" : "bg-bg800 text-ink"}`}>
                       {m.text}
                     </span>
                   </div>
                 ))}
-                {busy && <div className="text-[11px] text-ink3">{personaName}想ing…</div>}
+                {busy && <div className="text-body text-ink3">{personaName}正在思考…</div>}
               </div>
               <div className="border-t border-line p-2">
                 <div className="mb-1.5 flex gap-1">
                   {["任务怎么样了", "明早八点提醒我过审批", "找总经理"].map((chip) => (
                     <button key={chip} onClick={() => void send(chip)}
-                      className="rounded-full border border-line px-2 py-0.5 text-[10px] text-ink3 hover:text-ink">{chip}</button>
+                      className="rounded-full border border-line px-2 py-0.5 text-body text-ink3 hover:text-ink">{chip}</button>
                   ))}
                 </div>
                 <div className="flex gap-1.5">
                   <input value={input} onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") void send(input); }}
                     placeholder={`跟${personaName}说点什么……`}
-                    className="flex-1 rounded-full border border-line bg-bg950 px-3 py-1.5 text-[12px] outline-none focus:border-gline" />
+                    className="min-w-0 flex-1 rounded-full border border-line bg-bg950 px-3 py-1.5 text-body outline-none focus:border-gline" />
                   <button disabled={busy} onClick={() => void send(input)}
-                    className="rounded-full bg-gradient-to-br from-gold to-gold2 px-3.5 py-1.5 text-[12px] font-semibold text-ongold disabled:opacity-50">
-                    发
+                    className="rounded-full bg-gradient-to-br from-gold to-gold2 px-3.5 py-1.5 text-body font-semibold text-ongold disabled:opacity-50">
+                    发送
                   </button>
                 </div>
               </div>
@@ -474,26 +581,26 @@ function MatePanel({ open, setOpen, openPanel, chat, busy, input, setInput, send
           )}
           {open === "memory" && (
             <div className="flex-1 overflow-y-auto p-3">
-              <div className="mb-2 text-[11px] text-ink2">它记住了您什么，全在这里——逐条可删，绝不偷记。</div>
+              <div className="mb-2 text-body text-ink2">它记住了您什么，全在这里——逐条可删，绝不偷记。</div>
               {memory && Object.entries(memory).map(([layer, rows]) => rows.length > 0 && (
                 <div key={layer} className="mb-3">
-                  <div className="mb-1 text-[11px] font-semibold text-gold">{LAYER_TEXT[layer] ?? layer}（{rows.length}）</div>
+                  <div className="mb-1 text-body font-semibold text-gold">{LAYER_TEXT[layer] ?? "其他记忆"}（{rows.length}）</div>
                   {rows.map((r) => (
                     <div key={r.id} className="mb-1 flex items-start justify-between gap-2 rounded-lg bg-bg850 px-2.5 py-1.5">
                       <div>
-                        <div className="text-[11.5px] text-ink">{r.content}</div>
-                        <div className="text-[9.5px] text-ink3">{SOURCE_TEXT[r.source] ?? r.source}</div>
+                        <div className="text-body text-ink">{clientValueText(r.content)}</div>
+                        <div className="text-body text-ink3">{SOURCE_TEXT[r.source] ?? "来源已记录"}</div>
                       </div>
                       <button onClick={() => {
                         void svc().secretary.forget.mutate({ memoryId: r.id });
                         setMemory((m) => m ? { ...m, [layer]: m[layer]!.filter((x) => x.id !== r.id) } : m);
-                      }} className="shrink-0 text-[10px] text-ink3 hover:text-alert">删</button>
+                      }} className="shrink-0 text-body text-ink3 hover:text-alert" aria-label="删除这条记忆">删除</button>
                     </div>
                   ))}
                 </div>
               ))}
               {memory && Object.values(memory).every((r) => r.length === 0) && (
-                <div className="py-8 text-center text-[11px] text-ink3">还是空的呢。对它说「记住：……」就会记在这里。</div>
+                <div className="py-8 text-center text-body text-ink3">还是空的呢。对它说「记住：……」就会记在这里。</div>
               )}
             </div>
           )}
@@ -508,7 +615,7 @@ function SettingsPanel({ settings, personaName, onSave }: {
   const [s, setS] = useState(settings);
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setS((x) => ({ ...x, [k]: v }));
   return (
-    <div className="flex-1 space-y-2.5 overflow-y-auto p-3 text-[12px]">
+    <div className="flex-1 space-y-2.5 overflow-y-auto p-3 text-body">
       <label className="block">
         <span className="text-ink2">它怎么称呼您</span>
         <input value={s.display_name} onChange={(e) => set("display_name", e.target.value)}
@@ -519,7 +626,7 @@ function SettingsPanel({ settings, personaName, onSave }: {
         <div className="mt-1 grid grid-cols-2 gap-1.5">
           {([["tianmei", "小织 · 甜妹撒娇"], ["yuanqi", "小元气 · 活力满满"], ["chenwen", "织稳 · 沉稳专业"], ["custom", "自定义"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => set("persona_key", k)}
-              className={`rounded-lg border px-2 py-1.5 text-[11px] ${s.persona_key === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
+              className={`rounded-lg border px-2 py-1.5 text-body ${s.persona_key === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
               {label}
             </button>
           ))}
@@ -540,7 +647,7 @@ function SettingsPanel({ settings, personaName, onSave }: {
         <div className="mt-1 grid grid-cols-4 gap-1">
           {([["sweet", "甜"], ["bright", "亮"], ["soft", "柔"], ["calm", "稳"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => set("voice_key", k)}
-              className={`rounded-lg border px-2 py-1 text-[11px] ${s.voice_key === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
+              className={`rounded-lg border px-2 py-1 text-body ${s.voice_key === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
               {label}
             </button>
           ))}
@@ -551,7 +658,7 @@ function SettingsPanel({ settings, personaName, onSave }: {
         <div className="mt-1 grid grid-cols-3 gap-1">
           {([["small", "小角落"], ["large", "大形象"], ["fullscreen", "屏保"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => set("widget_size", k)}
-              className={`rounded-lg border px-2 py-1 text-[11px] ${s.widget_size === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
+              className={`rounded-lg border px-2 py-1 text-body ${s.widget_size === k ? "border-gold text-gold" : "border-line text-ink2"}`}>
               {label}
             </button>
           ))}
@@ -560,7 +667,7 @@ function SettingsPanel({ settings, personaName, onSave }: {
       <div className="flex items-center justify-between">
         <span className="text-ink2">语音播报</span>
         <button onClick={() => set("voice_on", !s.voice_on)}
-          className={`rounded-full px-3 py-1 text-[11px] ${s.voice_on ? "bg-gold/15 text-gold" : "border border-line text-ink3"}`}>
+          className={`rounded-full px-3 py-1 text-body ${s.voice_on ? "bg-gold/15 text-gold" : "border border-line text-ink3"}`}>
           {s.voice_on ? "开" : "关"}
         </button>
       </div>
@@ -573,14 +680,14 @@ function SettingsPanel({ settings, personaName, onSave }: {
         </div>
       </div>
       <label className="block">
-        <span className="text-ink2">眼镜/IM 桥 outbox URL（secretary.outbox/v1，最多 3 个，逗号分隔）</span>
+        <span className="text-ink2">外部通知回调地址（最多 3 个，用逗号分隔）</span>
         <input defaultValue={(s.channels?.outbox_urls ?? []).join(",")}
           onBlur={(e) => set("channels", { ...s.channels, outbox_urls: e.target.value.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 3) })}
           placeholder="https://…（红线与高级别实时推送）"
-          className="mt-0.5 w-full rounded-lg border border-line bg-bg950 px-2.5 py-1.5 text-[11px] outline-none focus:border-gline" />
+          className="mt-0.5 w-full rounded-lg border border-line bg-bg950 px-2.5 py-1.5 text-body outline-none focus:border-gline" />
       </label>
       <button onClick={() => void onSave(s)}
-        className="w-full rounded-lg bg-gradient-to-br from-gold to-gold2 py-2 text-[12px] font-semibold text-ongold">
+        className="w-full rounded-lg bg-gradient-to-br from-gold to-gold2 py-2 text-body font-semibold text-ongold">
         保存（{personaName}立即生效）
       </button>
     </div>

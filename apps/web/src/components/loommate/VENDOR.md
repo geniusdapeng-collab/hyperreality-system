@@ -11,9 +11,11 @@
 | Cubism 2.1 core | `public/live2d/live2d.min.js`（129KB，Live2D 官方 SDK） |
 | Cubism 4 core | `public/live2d/live2dcubismcore.min.js`（207KB，Live2D 官方 SDK——插件两个 factory 都检查 runtime，缺一不可，缺则整包报错） |
 | 加载纪律 | 插件在模块求值时即检查 `window.Live2D`——**必须动态 import**（静态 import 整包白屏，已踩过） |
-| 模型（现行） | `public/live2d/shizuku/`（5.6MB，Cubism 2.1，guansss/pixi-live2d-display 官方示例模型） |
+| 模型（现行） | `public/live2d/mao/`（4.4MB，Cubism 3.0，**Live2D 官方示例模型「Mao」**，来源 `Live2D/CubismJavaSamples` 官方仓 develop 分支 `Sample/src/main/assets/Mao`） |
+| 模型（备份） | `public/live2d/shizuku/`（5.6MB，Cubism 2.1，guansss 官方示例模型） |
+| 兜底海报 | `public/live2d/mao/poster.png`（系统实拍的 Mao 真实形象静态图，无 WebGL 兜底用——**禁手绘/自创替代品**，换形象=换模型+换 poster 同批） |
 | 模型许可 | **Live2D Free Material License——可商用**（区别于此前 RPM/VRoid 的非商用演示许可） |
-| 模型风格说明 | shizuku 为黑发校服少女系（演示期选型）；生产建议按行业定制正装/职业风 Live2D 模型（`modelUrl` 配置即换，管线零改动） |
+| 模型风格说明 | **Mao 为橙黄双马尾少女系（2026-09 定稿形象）**；shizuku 保留为备份。生产可按行业定制正装/职业风 Live2D 模型（`modelUrl` 配置即换，管线零改动）；Mao 许可：Live2D Free Material License（可商用，同 shizuku 口径） |
 
 ## 驱动四要素（与 TalkingHead 版同口径）
 
@@ -24,6 +26,6 @@
 
 ## 备选后端：TalkingHead（3D，保留不引用）
 
-- `talkinghead/`（MIT，met4citizen）+ `public/avatars/`（business.glb 写实 CC BY-NC / vroid.glb 动漫非商用）
+- ~~`talkinghead/` + `public/avatars/`~~（2026-09-06 已移除：3D TalkingHead 备份路径与其非商用头像资产一并清除——CC BY-NC 资产留在公开仓本身即许可风险；兜底由 `mao/poster.png` 承担）
 - 写实 3D 在浏览器轻渲染下恐怖谷效应明显（用户评审"惊悚"否决），仅作技术储备
 - 生产若回 3D 路线：需定制 Mixamo 骨架 + ARKit blendshapes 风格化模型（非写实）

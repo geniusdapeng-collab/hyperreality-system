@@ -2,7 +2,7 @@
 # WorkLoom · 三端全貌一键预览（preview:all）
 #
 #   PC 端 · B 端工作台        → http://localhost:3000
-#   移动端 · B 端（高保真+手机壳）→ http://localhost:3001（docs/demo 导航页）
+#   移动端 · B 端工作台       → http://localhost:3001（apps/webb）
 #   移动端 · C 端（AI 服务前台 H5）→ http://localhost:3002（小程序入口模拟）
 #   数据/网关 server           → http://localhost:8787（tRPC /trpc/* · C 端 /c/*）
 #
@@ -12,8 +12,8 @@ set -u
 cd "$(dirname "$0")/.."
 
 PC_PORT=3000; MB_PORT=3001; MC_PORT=3002; SERVER_PORT=8787
-export SERVICE_C_DEMO_AUTH=true TOOL_UNVERIFIED_RATE=0
-export WEB_PORT=$PC_PORT WEBC_PORT=$MC_PORT SERVER_PORT=$SERVER_PORT
+export SERVICE_C_DEMO_AUTH=true SERVICE_C_WORKSPACE_ID=ws-aipm-demo TOOL_UNVERIFIED_RATE=0
+export WEB_PORT=$PC_PORT WEBB_PORT=$MB_PORT WEBC_PORT=$MC_PORT SERVER_PORT=$SERVER_PORT
 
 say() { printf "\033[1;36m[preview:all]\033[0m %s\n" "$1"; }
 PIDS=""
@@ -50,15 +50,8 @@ say "启动 PC 端 :$PC_PORT（apps/web）"
 pnpm -C apps/web exec vite --port $PC_PORT --strictPort >/tmp/preview-all-pc.log 2>&1 &
 PIDS="$PIDS $!"
 
-say "启动 B 端移动 :$MB_PORT（docs/demo 高保真页 + 手机壳容器）"
-# 生成演示页清单（index.html 存在时 http.server 不再给目录索引，自动发现依赖本清单）
-node -e "
-const fs=require('fs');
-const files=fs.readdirSync('docs/demo').filter(f=>f.endsWith('.html')&&!['index.html','shell.html'].includes(f)).sort();
-fs.writeFileSync('docs/demo/.manifest.json', JSON.stringify({files, generatedAt:new Date().toISOString()},null,1));
-console.log('[preview:all] 演示页清单：'+files.length+' 页');
-"
-python3 -m http.server $MB_PORT --bind 127.0.0.1 -d docs/demo >/tmp/preview-all-mb.log 2>&1 &
+say "启动 B 端移动 :$MB_PORT（apps/webb）"
+pnpm -C apps/webb exec vite --port "$MB_PORT" --strictPort >/tmp/preview-all-mb.log 2>&1 &
 PIDS="$PIDS $!"
 
 say "启动 C 端 :$MC_PORT（apps/webc，小程序入口 H5 模拟）"
@@ -81,7 +74,7 @@ echo "╔═══════════════════════�
 echo "║            WorkLoom · 三端全貌预览已就绪（Mock 数据模式）          ║"
 echo "╠══════════════════════════════════════════════════════════════════╣"
 echo "║  🖥  PC 端 · B 端工作台        http://localhost:3000               ║"
-echo "║  📱 移动端 · B 端（手机壳）     http://localhost:3001               ║"
+echo "║  📱 移动端 · B 端工作台         http://localhost:3001               ║"
 echo "║  📱 移动端 · C 端（服务前台）   http://localhost:3002               ║"
 echo "║  ⚙️  server（tRPC + C 端网关）  http://localhost:8787               ║"
 echo "╠══════════════════════════════════════════════════════════════════╣"

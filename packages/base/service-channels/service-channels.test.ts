@@ -8,7 +8,7 @@ import { assertChannel } from "./channels.js";
 import { cUserIdOf, resolveCUser } from "./users.js";
 import { CTokenError, issueCToken, verifyCToken } from "./token.js";
 import { MockPushDriver, pushMessage, WechatSubscribePushDriver } from "./push.js";
-import { hashPhone, verifyIdentity, type PhoneCodeProvider } from "./identity.js";
+import { DemoPassThroughProvider, hashPhone, verifyIdentity, type PhoneCodeProvider } from "./identity.js";
 import { FakeDb, nextSerial } from "../testing/fake-pg.js";
 
 /* ---------- 假库 handler：channels 链路 ---------- */
@@ -45,7 +45,7 @@ function wireChannelDb(db: FakeDb): FakeDb {
     const row = {
       id: nextSerial(d, "c_notifications"), workspace_id: p[0], c_user_id: p[1],
       channel: p[2], kind: p[3], payload: JSON.parse(String(p[4])), driver: p[5],
-      status: "delivered", created_at: new Date().toISOString(),
+      status: p[6], created_at: new Date().toISOString(),
     };
     d.table("c_notifications").push(row);
     return { rows: [{ id: row["id"] }] };
@@ -133,11 +133,12 @@ describe("pushMessage（mock 投递必落库可查）", () => {
       payload: { ticketId: "TK-1", status: "assigned" },
     }, { drivers: { mock } });
     expect(r.mock).toBe(true);
+    expect(r).toMatchObject({ status: "pending", deliveryState: "demo" });
     expect(box.length).toBe(1);
     expect(box[0]).toMatchObject({ kind: "ticket_update", openid: "oH5" });
     const persisted = db.table("c_notifications");
     expect(persisted.length).toBe(1);
-    expect(persisted[0]).toMatchObject({ c_user_id: user.id, driver: "mock", kind: "ticket_update" });
+    expect(persisted[0]).toMatchObject({ c_user_id: user.id, driver: "mock", kind: "ticket_update", status: "pending" });
   });
 
   it("微信渠道缺凭据：真实驱动预留位调用即抛（不静默假成功）", async () => {
@@ -159,6 +160,7 @@ describe("pushMessage（mock 投递必落库可查）", () => {
     }, { drivers: { "wechat-subscribe": wx } });
     expect(r.driver).toBe("wechat-subscribe");
     expect(r.mock).toBe(false);
+    expect(r).toMatchObject({ status: "delivered", deliveryState: "sent" });
     expect(sent.length).toBe(1);
     expect(db.table("c_notifications")[0]).toMatchObject({ driver: "wechat-subscribe" });
   });
@@ -167,10 +169,14 @@ describe("pushMessage（mock 投递必落库可查）", () => {
 /* ================= verifyIdentity ================= */
 
 describe("verifyIdentity（演示直通 + 预留位）", () => {
-  it("演示直通：核验通过回填 phone_hash（不落明文）", async () => {
+  it("显式演示 provider：核验通过回填 phone_hash（不落明文）", async () => {
     const db = wireChannelDb(new FakeDb());
     const { user } = await resolveCUser(db, { workspaceId: WS, channel: "h5", openid: "oH5" });
-    const r = await verifyIdentity(db, { workspaceId: WS, cUserId: user.id, phone: "13800001111", code: "123456" });
+    const r = await verifyIdentity(
+      db,
+      { workspaceId: WS, cUserId: user.id, phone: "13800001111", code: "123456" },
+      new DemoPassThroughProvider(),
+    );
     expect(r).toEqual({ verified: true, demo: true });
     const row = db.table("c_users")[0]!;
     expect(row["phone_hash"]).toBe(hashPhone("13800001111"));
@@ -184,5 +190,26 @@ describe("verifyIdentity（演示直通 + 预留位）", () => {
     const r = await verifyIdentity(db, { workspaceId: WS, cUserId: user.id, phone: "13800001111", code: "000000" }, bad);
     expect(r.verified).toBe(false);
     expect(db.table("c_users")[0]!["phone_hash"]).toBeNull();
+  });
+
+  it("演示 provider 不接受任意六位码", async () => {
+    const db = wireChannelDb(new FakeDb());
+    const { user } = await resolveCUser(db, { workspaceId: WS, channel: "h5", openid: "oH5-bad-demo" });
+    const r = await verifyIdentity(
+      db,
+      { workspaceId: WS, cUserId: user.id, phone: "13800001111", code: "654321" },
+      new DemoPassThroughProvider(),
+    );
+    expect(r).toEqual({ verified: false, demo: true });
+    expect(db.table("c_users")[0]?.["phone_hash"]).toBeNull();
+  });
+
+  it("未注入 provider 时明确失败且不回填", async () => {
+    const db = wireChannelDb(new FakeDb());
+    const { user } = await resolveCUser(db, { workspaceId: WS, channel: "h5", openid: "oH5-unconfigured" });
+    await expect(verifyIdentity(db, {
+      workspaceId: WS, cUserId: user.id, phone: "13800001111", code: "123456",
+    })).rejects.toThrow(/未配置/);
+    expect(db.table("c_users")[0]?.["phone_hash"]).toBeNull();
   });
 });

@@ -3,7 +3,7 @@
  * + 30d refresh（高熵随机串，散列入库，旋转签发，可单设备踢出/全员下线）。
  */
 import { SignJWT } from "jose";
-import type { Identity } from "../tenancy/auth.js";
+import { sessionTokenIssuer, type Identity, type PartnerSessionIdentity } from "../tenancy/auth.js";
 import { hashSecret, randomToken } from "./kdf.js";
 
 const DEV_SECRET = "workloom-dev-secret-change-me";
@@ -19,24 +19,18 @@ export async function signAccessToken(identity: Identity, ttlSec = ACCESS_TTL_SE
   return new SignJWT({ ...identity, kind: "member" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setIssuer("workloom-im")
+    .setIssuer(sessionTokenIssuer())
     .setExpirationTime(`${ttlSec}s`)
     .sign(key());
 }
 
 /** 伙伴域访问令牌（独立 claims：kind=partner，权限=授权清单快照，验收时实时回查 grant 状态） */
-export interface PartnerIdentity {
-  kind: "partner";
-  partnerId: string;
-  contactAccountId: string;
-  name: string;
-  grants: Array<{ grantId: string; tenantId: string; workspaces: string[]; capabilities: string[] }>;
-}
+export type PartnerIdentity = PartnerSessionIdentity;
 export async function signPartnerToken(p: PartnerIdentity, ttlSec = ACCESS_TTL_SEC): Promise<string> {
   return new SignJWT({ ...p })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setIssuer("workloom-im")
+    .setIssuer(sessionTokenIssuer())
     .setExpirationTime(`${ttlSec}s`)
     .sign(key());
 }

@@ -5,47 +5,79 @@
  *  - P6E2 官方技能（金边传说·随 Bundle 分发；安装/已安装状态；绑定围栏可见；「已装给谁」→P8）
  *  - P6E3 团队技能（银边）/ 行业共享（铜边 · 已脱敏 ✓ L8.1；调用次数与采纳率公开=F8.5 事件投影）
  *  - P6E4 零代码新建技能「打造新装备」→ /p6/create 三要素向导（F8.3；「不能做什么」自动转围栏声明）
- *  - 技能广场四环（components/p6/*）：
- *    ①发现环：技能卡「战斗力」区（调用次数/关联爆款率/上周命中率，skills 遥测投影，缺显「—」）
- *      + 顶部「适合当前阶段」推荐横条（workspace.profile.stage → 3 个官方技能）
- *    ②组合环：技能链（爆款种草/合规发布两条样例链，查看步骤 + 编译为管线 toast 占位）
- *    ③进化环：冷藏区（连续 4 周零命中降权展示，Mock 兜底）+ 进化提案（驳回样本修订建议，批准 toast 占位）
- *    ④生产环：拉片反推（jenny-loom-research v2 + 上传占位）+ forge 自建入口（沿用 /p6/create）
  * 状态变体：p6 默认 / p6_create 创建；加载骨架 G10；空态仅官方技能+新建入口（F8.1）；
  *   错误态安装拒绝+原因（L8.2/E8.2）；权限态社区版不显行业共享区（F7.2）+ readonly 隐藏全部动作（E2.6 隐藏非置灰）；
  *   完成后态创建成功→团队技能 v1 进版本管理（F8.3）
- * 数据来源：skills router（list/installs/usage=F8.5 投影/forge/dryRun/awareness.*）+ workspace.profile（阶段）
+ * 数据来源：skills router（list/installs/usage=F8.5 投影/forge/dryRun/awareness.*）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { Bridge } from "../../shell/Bridge";
-import { BannerAlert, EmptyState, SkeletonBlock } from "../../components/hud";
-import {
-  RARITY, displayDesc, displayName, skillIcon,
-} from "../../components/p6/skillShared";
-import type { SkillRow, SkillUsage } from "../../components/p6/skillShared";
-import { StageRecommendBar } from "../../components/p6/StageRecommendBar";
-import { SkillChains } from "../../components/p6/SkillChains";
-import { EvolutionZone } from "../../components/p6/EvolutionZone";
-import { ProductionEntry } from "../../components/p6/ProductionEntry";
+import { BannerAlert, EmptyState, Skeleton } from "../../components/hud";
+import { OBJECT_TYPE_TEXT, actionText, dictText, shortId, versionText } from "../../lib/display";
+import { Icon, clientChineseText, clientValueText, skillIconOf, type SkillIconName } from "@workloom/ui";
+import { useNavigationAccess } from "../../shell/NavigationAccess";
 
+interface SkillRow {
+  id: string; level: "official" | "team" | "industry"; bundle: string | null;
+  name: string; version: string; description: string;
+  fence_bindings: string[]; desensitized: boolean;
+  /** Bundle/受控分发元数据；客户端只消费命名图标，不解析行业字段。 */
+  dist_meta?: { presentation?: { icon?: string } } | null;
+}
+interface SkillUsage {
+  calls30: number; adopted30: number; rejected30: number; adoptionRate: number | null;
+  rejectReasons: Array<{ reason: string; count: number }>;
+  boundAgents: Array<{ id: string; presetKey: string; name: string }>;
+}
 interface InstallRow { skill_id: string; installed_by: string; installed_at: string }
 interface Suggestion {
   key: string; objectType: string; actionCategory: string;
   count: number; windowDays: number; threshold: number; sampleEventIds: string[];
 }
 
+/** 稀有度视觉口径（§6 设计规范：官方=金 / 团队=银 / 行业共享=铜） */
+const RARITY = {
+  official: { border: "border-gold/60", tag: "传说 · 官方", cls: "text-gold" },
+  team: { border: "border-[#C0C8E8]/50", tag: "精良 · 团队", cls: "text-[#C0C8E8]" },
+  industry: { border: "border-[#a8b2be]/50", tag: "共享 · 行业", cls: "text-[#a8b2be]" },
+} as const;
+
+/** 展示名（官方技能 description 首句可声明中文名；团队/行业直接用 name） */
+function displayName(s: SkillRow): string {
+  const m = /^([^。]{2,12})。/.exec(s.description);
+  if (m?.[1]) return clientChineseText(m[1], "未命名技能");
+  return clientChineseText(s.name, "未命名技能");
+}
+/** 展示描述（去掉首句中文名部分） */
+function displayDesc(s: SkillRow): string {
+  const m = /^[^。]{2,12}。(.+)$/.exec(s.description);
+  const description = m?.[1] ?? s.description;
+  return clientChineseText(description, "技能说明待补充");
+}
+
+function suggestionActionText(value: string): string {
+  return clientChineseText(value, actionText(value));
+}
+
+function suggestionObjectText(value: string): string {
+  return dictText(OBJECT_TYPE_TEXT, value);
+}
+
+/** 技能图标：显式分发元数据优先；缺省按 id 稳定分配，不猜测行业语义。 */
+function skillIcon(s: SkillRow): SkillIconName {
+  return skillIconOf(s.id, s.dist_meta?.presentation?.icon);
+}
+
 export default function P6() {
+  const { canAction, plan } = useNavigationAccess();
   const nav = useNavigate();
   const location = useLocation();
   const isCreate = location.pathname.endsWith("/create");
   const prefill = (location.state ?? null) as { name?: string; trigger?: string; fromSuggestion?: string } | null;
 
   const [ready, setReady] = useState(false);
-  const [role, setRole] = useState("owner");
-  const [plan, setPlan] = useState("pro");
-  const [stage, setStage] = useState<string | null>(null); // 工作区阶段（发现环推荐口径）
   const [skills, setSkills] = useState<SkillRow[]>([]);
   const [installs, setInstalls] = useState<InstallRow[]>([]);
   const [usage, setUsage] = useState<Record<string, SkillUsage>>({});
@@ -65,23 +97,18 @@ export default function P6() {
       setSuggSlow(false);
       if (slowTimer.current) clearTimeout(slowTimer.current);
       slowTimer.current = setTimeout(() => setSuggSlow(true), 10_000);
-      const [meR, sk, ins, usg, sug, wsp] = await Promise.all([
-        trpc.members.me.query() as Promise<{ identity: { role: string; plan: string } }>,
+      const [sk, ins, usg, sug] = await Promise.all([
         trpc.skills.list.query() as Promise<SkillRow[]>,
         trpc.skills.installs.query() as Promise<InstallRow[]>,
         trpc.skills.usage.query() as Promise<Record<string, SkillUsage>>,
         trpc.skills.awareness.suggestions.query() as Promise<Suggestion[]>,
-        trpc.workspace.profile.query() as Promise<{ stage: string | null }>,
       ]);
       if (slowTimer.current) clearTimeout(slowTimer.current);
       setSuggSlow(false);
-      setRole(meR.identity.role);
-      setPlan(meR.identity.plan);
       setSkills(sk);
       setInstalls(ins);
       setUsage(usg);
       setSuggestions(sug);
-      setStage(wsp.stage);
     } finally {
       setReady(true);
     }
@@ -94,7 +121,7 @@ export default function P6() {
     return () => clearInterval(t);
   }, [load]);
 
-  const canManage = role === "owner" || role === "manager";
+  const canManage = canAction("skill.manage");
   const showIndustry = plan !== "community"; // F7.2：社区版不显示行业共享区（隐藏非置灰）
   const installedSet = useMemo(() => new Set(installs.map((i) => i.skill_id)), [installs]);
   const officials = skills.filter((s) => s.level === "official");
@@ -107,10 +134,11 @@ export default function P6() {
     setBusy(`sug-${s.key}`);
     try {
       const r = await trpc.skills.awareness.confirm.mutate({ suggestion: s, target: "trigger", schedule: "0 8 * * 1" });
-      setBanner({ level: "info", text: `已固化为定时触发器 ${r.artifactId}（每周一 08:00，受围栏管辖 L4.4；事件 ${r.eventId}）` });
+      setBanner({ level: "info", text: `已固化为每周一 08:00 运行的定时任务；自动执行仍受围栏管辖。任务回执 ${shortId(r.artifactId)}，账本凭证 ${shortId(r.eventId)}。` });
       await load(true);
     } catch (e) {
-      setBanner({ level: "alert", text: `固化失败：${e instanceof Error ? e.message : String(e)}` });
+      console.warn("固化定时任务失败", e);
+      setBanner({ level: "alert", text: "暂时无法固化定时任务，请稍后重试；原建议仍会保留。" });
     } finally {
       setBusy(null);
     }
@@ -121,7 +149,7 @@ export default function P6() {
     setBusy(`sug-${s.key}`);
     try {
       await trpc.skills.awareness.reject.mutate({ key: s.key });
-      setBanner({ level: "warn", text: `已驳回「${s.actionCategory}」类建议——该类检测阈值 ×2 降权（E8.3 校准闭环）` });
+      setBanner({ level: "warn", text: `已驳回「${suggestionActionText(s.actionCategory)}」类建议；系统已降低同类建议的出现频率。` });
       await load(true);
     } finally {
       setBusy(null);
@@ -134,10 +162,12 @@ export default function P6() {
     setCardError((m) => ({ ...m, [skillId]: "" }));
     try {
       const r = await trpc.skills.install.mutate({ skillId });
-      setBanner({ level: "info", text: `已装备 ${skillId}（围栏绑定随安装生效 F8.2${r.bindings.length ? `：${r.bindings.join("/")}` : ""}）` });
+      const skillName = displayName(skills.find((item) => item.id === skillId) ?? { id: skillId, level: "team", bundle: null, name: skillId, version: "", description: "", fence_bindings: [], desensitized: false });
+      setBanner({ level: "info", text: `已装备「${skillName}」；${r.bindings.length ? `同时启用 ${r.bindings.length} 条关联围栏。` : "该技能没有额外围栏。"}` });
       await load(true);
     } catch (e) {
-      setCardError((m) => ({ ...m, [skillId]: e instanceof Error ? e.message : String(e) }));
+      console.warn("安装技能失败", e);
+      setCardError((m) => ({ ...m, [skillId]: "暂时无法安装，请检查权限或稍后重试。" }));
     } finally {
       setBusy(null);
     }
@@ -148,17 +178,16 @@ export default function P6() {
     setBusy(skillId);
     try {
       await trpc.skills.uninstall.mutate({ skillId });
-      setBanner({ level: "warn", text: `已卸载 ${skillId}（围栏绑定即撤销 L8.3）` });
+      const skillName = displayName(skills.find((item) => item.id === skillId) ?? { id: skillId, level: "team", bundle: null, name: skillId, version: "", description: "", fence_bindings: [], desensitized: false });
+      setBanner({ level: "warn", text: `已卸载「${skillName}」；随技能启用的关联围栏已同步撤销。` });
       await load(true);
     } catch (e) {
-      setCardError((m) => ({ ...m, [skillId]: e instanceof Error ? e.message : String(e) }));
+      console.warn("卸载技能失败", e);
+      setCardError((m) => ({ ...m, [skillId]: "暂时无法卸载，请检查权限或稍后重试。" }));
     } finally {
       setBusy(null);
     }
   }, [load]);
-
-  /** 占位动作 toast（技能链编译/进化批准/拉片上传等未上线能力统一走横幅说明，不落库） */
-  const notify = useCallback((text: string) => setBanner({ level: "info", text }), []);
 
   /** 技能卡（装备卡 · 稀有度边框；P6-④ SkillCard） */
   const renderCard = (s: SkillRow) => {
@@ -169,58 +198,52 @@ export default function P6() {
     return (
       <div key={s.id} className={`rounded-msg border-2 bg-card p-3.5 ${r.border}`}>
         <div className="flex items-center justify-between">
-          <span className={`text-micro font-bold ${r.cls}`}>{r.icon} {r.tag}{s.level === "team" ? ` v${s.version.replace(/\.0$/, "")}` : ""}</span>
+          <span className={`text-body font-bold ${r.cls}`}>{r.tag}{s.level === "team" ? ` · ${versionText(s.version)}` : ""}</span>
           {s.level === "industry" && s.desensitized && (
-            <span className="text-micro text-go">已脱敏 ✓</span> /* L8.1 共享前必须脱敏 */
+            <span className="inline-flex items-center gap-1 text-body text-go">已脱敏 <Icon name="check" size={13} /></span> /* L8.1 共享前必须脱敏 */
           )}
         </div>
-        <div className="mt-1.5 text-[22px]">{skillIcon(s)}</div>
+        <div className="mt-1.5 text-holo"><Icon name={skillIcon(s)} size={22} /></div>
         <h4 className="mt-1.5 text-body font-bold text-ink">{displayName(s)}</h4>
-        <div className="mt-1 text-caption leading-relaxed text-ink2">{displayDesc(s)}</div>
+        <div className="mt-1 text-body leading-relaxed text-ink2">{displayDesc(s)}</div>
         {/* 绑定围栏可见（P6E2） */}
         {s.fence_bindings.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {s.fence_bindings.map((f) => (
-              <span key={f} className="rounded border border-line bg-bg800/60 px-1.5 py-0.5 font-mono text-micro text-holo">绑 {f}</span>
-            ))}
+            <span className="rounded border border-line bg-bg800/60 px-1.5 py-0.5 text-body text-holo">
+              已关联 {s.fence_bindings.length} 条围栏
+            </span>
           </div>
         )}
-        {/* 发现环 · 战斗力区（skills 遥测投影；缺数据显「—」不伪造） */}
-        <div className="mt-2 flex gap-2.5 rounded-lg border border-line/60 bg-bg800/40 px-2 py-1.5 text-micro text-ink3">
-          <span title="近 30 天绑定 Agent 动作投影">⚔ 调用 <b className="font-orb text-holo">{u && u.calls30 > 0 ? u.calls30 : "—"}</b></span>
-          <span title="关联产出进入爆款样本占比（遥测未出数）">🔥 爆款率 <b className="font-orb text-ink2">—</b></span>
-          <span title="上周命中率（遥测未出数）">🎯 周命中 <b className="font-orb text-ink2">—</b></span>
-        </div>
         {/* F8.5 使用看板：调用次数 / 采纳率 / 驳回模式（绑定 Agent 事件投影） */}
-        <div className="mt-2 text-micro text-ink3">
+        <div className="mt-2 text-body text-ink3">
           {u && u.calls30 > 0 ? (
             <>
               <b className="font-orb text-holo">{u.calls30}</b> 次调用 · 采纳率{" "}
               <b className={u.adoptionRate !== null && u.adoptionRate >= 0.8 ? "text-go" : "text-warn"}>
                 {u.adoptionRate !== null ? `${Math.round(u.adoptionRate * 100)}%` : "—"}
               </b>
-              {u.adoptionRate !== null && u.adoptionRate < 0.6 && <span className="text-warn">（低采纳，建议优化或下架 F8.5）</span>}
+              {u.adoptionRate !== null && u.adoptionRate < 0.6 && <span className="text-warn">（采纳率偏低，建议优化或下架）</span>}
               {u.rejectReasons.length > 0 && (
-                <div className="mt-0.5">驳回模式：{u.rejectReasons.map((x) => `${x.reason}×${x.count}`).join(" / ")}</div>
+                <div className="mt-0.5">驳回原因：{u.rejectReasons.map((x) => `${clientValueText(x.reason)} × ${x.count}`).join("；")}</div>
               )}
             </>
           ) : (
-            "近 30 天暂无绑定 Agent 动作投影"
+            "近 30 天暂无数字员工调用记录"
           )}
         </div>
         {/* 已装给谁（P6E2 →P8）/ 装备动作（readonly 隐藏 E2.6） */}
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {installed ? (
             <>
-              <span className="rounded border border-go/40 px-2 py-0.5 text-micro text-go">✓ 已装备</span>
+              <span className="inline-flex items-center gap-1 rounded border border-go/40 px-2 py-0.5 text-body text-go"><Icon name="check" size={13} />已装备</span>
               {(u?.boundAgents ?? []).map((a) => (
                 <button
                   key={a.id}
                   type="button"
-                  onClick={() => nav(`/p8/agent/${a.id}`)}
-                  className="cursor-pointer rounded border border-line bg-bg800/60 px-2 py-0.5 text-micro text-ink2 hover:border-holo/50"
+                  onClick={() => nav(`/agents/${a.id}`)}
+                  className="cursor-pointer rounded border border-line bg-bg800/60 px-2 py-0.5 text-body text-ink2 hover:border-holo/50"
                 >
-                  {a.name} →
+                  {clientChineseText(a.name, "数字员工")} →
                 </button>
               ))}
               {canManage && (
@@ -228,7 +251,7 @@ export default function P6() {
                   type="button"
                   disabled={busy === s.id}
                   onClick={() => void uninstall(s.id)}
-                  className="cursor-pointer rounded border border-line px-2 py-0.5 text-micro text-ink3 hover:border-alert/50 hover:text-alert disabled:opacity-40"
+                  className="cursor-pointer rounded border border-line px-2 py-0.5 text-body text-ink3 hover:border-alert/50 hover:text-alert disabled:opacity-40"
                 >
                   卸载
                 </button>
@@ -240,34 +263,31 @@ export default function P6() {
                 type="button"
                 disabled={busy === s.id}
                 onClick={() => void install(s.id)}
-                className="cursor-pointer rounded-md border border-gline bg-bg800/60 px-2.5 py-1 text-caption font-bold text-goldhi hover:border-gold/60 disabled:opacity-40"
+                className="cursor-pointer rounded-md border border-gline bg-bg800/60 px-2.5 py-1 text-body font-bold text-goldhi hover:border-gold/60 disabled:opacity-40"
               >
-                ⚙ 装备到船员
+                <Icon name="configuration" size={14} className="inline" /> 装备到船员
               </button>
             )
           )}
         </div>
-        {err && <div className="mt-2 rounded border border-alert/50 bg-alert/8 px-2 py-1 text-micro text-alert">✗ 拒绝安装：{err}</div>}
+        {err && <div className="mt-2 flex items-start gap-1 rounded border border-alert/50 bg-alert/8 px-2 py-1 text-body text-alert"><Icon name="error" size={13} className="mt-0.5 shrink-0" />拒绝安装：{err}</div>}
       </div>
     );
   };
 
   if (isCreate) {
-    return <SkillWizard prefill={prefill} canManage={canManage} ready={ready} onDone={() => { void load(true); nav("/p6"); }} />;
+    return <SkillWizard prefill={prefill} canManage={canManage} ready={ready} onDone={() => { void load(true); nav("/skills"); }} />;
   }
 
   return (
     <Bridge
       left={
         <>
-          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">技能中心 · ARMORY</div>
+          <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">技能分类</div>
           {[
-            ["#sec-official", "✦ 官方技能", `金边 · ${officials.length}`],
-            ["#sec-team", "✧ 团队技能", `银边 · ${teams.length}`],
-            ...(showIndustry ? [["#sec-industry", "❖ 行业共享", `铜边 · ${industries.length}`] as const] : []),
-            ["#sec-chains", "⛓ 技能链", "组合环 · 2 条样例"],
-            ["#sec-evolution", "🧬 进化环", "冷藏区 · 提案"],
-            ["#sec-production", "🎞 生产环", "拉片反推 · forge"],
+            ["#sec-official", "官方技能", `金边 · ${officials.length}`],
+            ["#sec-team", "团队技能", `银边 · ${teams.length}`],
+            ...(showIndustry ? [["#sec-industry", "行业共享", `铜边 · ${industries.length}`] as const] : []),
           ].map(([href, label, meta]) => (
             <a
               key={href}
@@ -275,13 +295,13 @@ export default function P6() {
               className="mb-1.5 block rounded-lg border border-line bg-card px-3 py-2.5 hover:border-gline"
             >
               <div className="text-body text-ink2">{label}</div>
-              <div className="mt-0.5 text-micro text-ink3">{meta}</div>
+              <div className="mt-0.5 text-body text-ink3">{meta}</div>
             </a>
           ))}
           <button
             type="button"
             onClick={() => nav("/")}
-            className="mt-2 w-full cursor-pointer rounded-lg border border-line px-3 py-2 text-caption text-ink3 hover:border-holo/40 hover:text-ink2"
+            className="mt-2 w-full cursor-pointer rounded-lg border border-line px-3 py-2 text-body text-ink3 hover:border-holo/40 hover:text-ink2"
           >
             ← 返回工作台
           </button>
@@ -289,29 +309,28 @@ export default function P6() {
       }
       right={
         <>
-          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">资产飞轮 · FLYWHEEL</div>
-          <div className="rounded-lg border border-line bg-card p-3 text-caption leading-relaxed text-ink2">
-            执行 → 沉淀（技能/记忆）→ 复用（Agent 调用）→ 再执行；审批手势与驳回原因回流为评估数据（F8.7）。
+          <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">能力沉淀闭环</div>
+          <div className="rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink2">
+            执行 → 沉淀为技能和记忆 → 数字员工复用 → 再执行；审批结果和驳回原因会回流为评估数据。
           </div>
-          <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-caption leading-relaxed text-ink3">
-            <div className="mb-1 text-micro font-bold text-ink2">安全约束</div>
-            行业共享上架前必须脱敏（L8.1/E8.4）<br />
-            生产仅签名白名单（L8.2）<br />
-            技能动作照常过围栏瀑布（L8.3）<br />
-            安装/卸载/创建全部事件化（G8）
+          <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink3">
+            <div className="mb-1 text-body font-bold text-ink2">安全约束</div>
+            行业共享上架前必须脱敏<br />
+            正式环境只允许已签名的白名单技能<br />
+            技能动作始终经过围栏判定<br />
+            安装、卸载和创建都会写入事件账本
           </div>
-          <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-caption text-ink3">
-            <div className="mb-1 text-micro font-bold text-ink2">待确认建议</div>
-            <b className="font-orb text-holo text-[16px]">{suggestions.length}</b> 条（F8.4 高频检测 ≥3 次/周）
+          <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-body text-ink3">
+            <div className="mb-1 text-body font-bold text-ink2">待确认建议</div>
+            <b className="font-orb text-holo text-h2">{suggestions.length}</b> 条（同类任务每周出现至少 3 次时生成建议）
           </div>
         </>
       }
     >
       <div className="px-1">
-        <div className="mb-4 flex items-baseline gap-3">
+        <div className="mb-4 flex flex-wrap items-baseline gap-3">
           <h2 className="text-[20px] font-black text-ink">技能中心</h2>
-          <span className="text-caption text-ink3">Agent 能力商店 · 技能广场</span>
-          <span className="font-mono text-micro text-ink3">F8.2 · F8.4</span>
+          <span className="text-body text-ink3">数字员工能力广场</span>
         </div>
 
         {banner && (
@@ -321,74 +340,74 @@ export default function P6() {
         )}
 
         {!ready ? (
-          <SkeletonBlock lines={5} h={72} /> /* 加载态 G10 */
+          <Skeleton count={5} height={72} label="技能列表正在加载" /> /* 加载态 G10 */
         ) : (
           <>
             {/* P6E1 意识系统建议横幅（F8.4；确认前不产生任何自动化 L4.4） */}
             {suggSlow && !suggSlowDismissed && (
               <div className="mb-3">
                 <BannerAlert level="info" actionLabel="关闭" onAction={() => setSuggSlowDismissed(true)}>
-                  意识系统分析中（建议生成 &gt;10s）…可关闭稍后再看
+                  意识系统分析中（建议生成超过 10 秒）…可关闭稍后再看
                 </BannerAlert>
               </div>
             )}
             {/* P6E1 AwarenessBanner：主建议卡 + 待确认折叠（组件口径：横幅单卡带「待确认 N 条」计数） */}
             {suggestions.length > 0 && (
               <div className="mb-3 rounded-lg border border-holo/35 bg-card px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-[18px]">🤖</span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Icon name="agents" size={18} />
                   <div className="flex-1">
                     <b className="text-body text-ink">AI 副官建议</b>
                     {suggestions.length > 1 && (
-                      <span className="ml-2 rounded border border-holo/40 px-1.5 py-0.5 text-micro text-holo">待确认 {suggestions.length} 条</span>
+                      <span className="ml-2 rounded border border-holo/40 px-1.5 py-0.5 text-body text-holo">待确认 {suggestions.length} 条</span>
                     )}
-                    <div className="mt-0.5 text-caption text-ink2">
-                      检测到高频任务：「{suggestions[0]!.actionCategory}（{suggestions[0]!.objectType}）」近 {suggestions[0]!.windowDays} 天 × <b className="text-holo">{suggestions[0]!.count}</b> 次
-                      （≥{suggestions[0]!.threshold} 次/周 触发建议 F8.4{suggestions[0]!.threshold > 3 ? "，阈值已经驳回校准" : ""}）
+                    <div className="mt-0.5 text-body text-ink2">
+                      检测到高频任务：「{suggestionActionText(suggestions[0]!.actionCategory)}（{suggestionObjectText(suggestions[0]!.objectType)}）」近 {suggestions[0]!.windowDays} 天共 <b className="text-holo">{suggestions[0]!.count}</b> 次
+                      （每周达到 {suggestions[0]!.threshold} 次时生成建议{suggestions[0]!.threshold > 3 ? "；频率已根据历史驳回结果调整" : ""}）
                     </div>
                   </div>
                   {canManage && (
-                    <div className="flex gap-2">
+                    <div className="wl-action-row flex flex-wrap gap-2">
                       <button
                         type="button"
                         disabled={busy === `sug-${suggestions[0]!.key}`}
                         onClick={() => void confirmTrigger(suggestions[0]!)}
-                        className="cursor-pointer rounded-md gold-grad px-3 py-1.5 text-caption font-bold text-ongold disabled:opacity-40"
+                        className="cursor-pointer rounded-md gold-grad px-3 py-1.5 text-body font-bold text-ongold disabled:opacity-40"
                       >
-                        ⚡ 一键固化为定时任务
+                        <Icon name="lightning" size={14} className="inline" /> 一键固化为定时任务
                       </button>
                       <button
                         type="button"
-                        onClick={() => nav("/p6/create", { state: { name: suggestions[0]!.actionCategory, trigger: `出现「${suggestions[0]!.objectType}」类 ${suggestions[0]!.actionCategory} 任务时（高频样本 ${suggestions[0]!.count} 次）`, fromSuggestion: suggestions[0]!.key } })}
-                        className="cursor-pointer rounded-md border border-gline px-3 py-1.5 text-caption font-bold text-goldhi hover:border-gold/60"
+                        onClick={() => nav("/skills/create", { state: { name: suggestionActionText(suggestions[0]!.actionCategory), trigger: `出现「${suggestionObjectText(suggestions[0]!.objectType)}」类 ${suggestionActionText(suggestions[0]!.actionCategory)} 任务时（高频样本 ${suggestions[0]!.count} 次）`, fromSuggestion: suggestions[0]!.key } })}
+                        className="cursor-pointer rounded-md border border-gline px-3 py-1.5 text-body font-bold text-goldhi hover:border-gold/60"
                       >
-                        🛠 生成装备草稿
+                        <Icon name="customize" size={14} className="inline" /> 生成装备草稿
                       </button>
                       <button
                         type="button"
                         disabled={busy === `sug-${suggestions[0]!.key}`}
                         onClick={() => void rejectSug(suggestions[0]!)}
-                        className="cursor-pointer rounded-md border border-line px-3 py-1.5 text-caption text-ink3 hover:border-alert/40 hover:text-alert disabled:opacity-40"
+                        className="cursor-pointer rounded-md border border-line px-3 py-1.5 text-body text-ink3 hover:border-alert/40 hover:text-alert disabled:opacity-40"
                       >
-                        驳回（降权 E8.3）
+                        驳回并减少同类建议
                       </button>
                     </div>
                   )}
                 </div>
                 {/* 其余待确认建议（紧凑行；同三手势） */}
                 {suggestions.slice(1).map((s) => (
-                  <div key={s.key} className="mt-2 flex items-center gap-2.5 border-t border-line/60 pt-2 text-caption">
+                  <div key={s.key} className="mt-2 flex items-center gap-2.5 border-t border-line/60 pt-2 text-body">
                     <span className="flex-1 text-ink2">
-                      「{s.actionCategory}（{s.objectType}）」× <b className="text-holo">{s.count}</b> 次 / {s.windowDays} 天
+                      「{suggestionActionText(s.actionCategory)}（{suggestionObjectText(s.objectType)}）」共 <b className="text-holo">{s.count}</b> 次，统计周期 {s.windowDays} 天
                     </span>
                     {canManage && (
                       <>
                         <button type="button" disabled={busy === `sug-${s.key}`} onClick={() => void confirmTrigger(s)}
-                          className="cursor-pointer rounded border border-gline px-2 py-0.5 text-micro font-bold text-goldhi hover:border-gold/60 disabled:opacity-40">⚡ 固化</button>
-                        <button type="button" onClick={() => nav("/p6/create", { state: { name: s.actionCategory, trigger: `出现「${s.objectType}」类 ${s.actionCategory} 任务时（高频样本 ${s.count} 次）`, fromSuggestion: s.key } })}
-                          className="cursor-pointer rounded border border-line px-2 py-0.5 text-micro text-ink2 hover:border-gline">🛠 草稿</button>
+                          className="cursor-pointer rounded border border-gline px-2 py-0.5 text-body font-bold text-goldhi hover:border-gold/60 disabled:opacity-40"><Icon name="lightning" size={13} className="inline" /> 固化</button>
+                        <button type="button" onClick={() => nav("/skills/create", { state: { name: suggestionActionText(s.actionCategory), trigger: `出现「${suggestionObjectText(s.objectType)}」类 ${suggestionActionText(s.actionCategory)} 任务时（高频样本 ${s.count} 次）`, fromSuggestion: s.key } })}
+                          className="cursor-pointer rounded border border-line px-2 py-0.5 text-body text-ink2 hover:border-gline"><Icon name="customize" size={13} className="inline" /> 草稿</button>
                         <button type="button" disabled={busy === `sug-${s.key}`} onClick={() => void rejectSug(s)}
-                          className="cursor-pointer rounded border border-line px-2 py-0.5 text-micro text-ink3 hover:border-alert/40 hover:text-alert disabled:opacity-40">驳回</button>
+                          className="cursor-pointer rounded border border-line px-2 py-0.5 text-body text-ink3 hover:border-alert/40 hover:text-alert disabled:opacity-40">驳回</button>
                       </>
                     )}
                   </div>
@@ -396,41 +415,31 @@ export default function P6() {
               </div>
             )}
 
-            {/* 发现环①「适合当前阶段」推荐横条（workspace.profile.stage → 3 个官方技能） */}
-            <StageRecommendBar
-              stage={stage}
-              officials={officials}
-              installedSet={installedSet}
-              busy={busy}
-              canManage={canManage}
-              onInstall={(id) => void install(id)}
-            />
-
             {/* 空态（F8.1）：未安装任何技能 → 仅显官方技能 + 新建入口 */}
             {nothingInstalled && (
               <div className="mb-3">
-                <EmptyState title="尚未装备任何技能" hint="从官方技能开始——安装即绑定围栏（F8.2），卸载即撤销（L8.3）" />
+                <EmptyState title="尚未装备任何技能" hint="可以从官方技能开始；安装时会同步启用关联围栏，卸载时同步撤销。" />
               </div>
             )}
 
             {/* P6E2 官方技能（金边传说） */}
-            <div id="sec-official" className="mb-2 text-caption font-bold tracking-wider text-ink2">
-              官方技能 · 随行业 Bundle 分发（金边传说）
+            <div id="sec-official" className="mb-2 text-body font-bold tracking-wider text-ink2">
+              官方技能 · 随行业包分发
             </div>
-            <div className="mb-5 grid grid-cols-3 gap-3">
+            <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
               {officials.map(renderCard)}
             </div>
 
             {/* P6E3 团队技能（银边） */}
             {!nothingInstalled || teams.length > 0 ? (
               <>
-                <div id="sec-team" className="mb-2 text-caption font-bold tracking-wider text-ink2">
+                <div id="sec-team" className="mb-2 text-body font-bold tracking-wider text-ink2">
                   团队技能（银边 · 本工作区自建）
                 </div>
-                <div className="mb-5 grid grid-cols-2 gap-3">
+                <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {teams.length > 0 ? teams.map(renderCard) : (
-                    <div className="col-span-2 rounded-lg border border-dashed border-line p-4 text-center text-caption text-ink3">
-                      还没有团队技能——用下方「打造新装备」零代码创建（F8.3）
+                    <div className="col-span-2 rounded-lg border border-dashed border-line p-4 text-center text-body text-ink3">
+                      还没有团队技能——可用下方「打造新装备」零代码创建
                     </div>
                   )}
                 </div>
@@ -440,12 +449,12 @@ export default function P6() {
             {/* P6E3 行业共享（铜边 · 已脱敏；F7.2 社区版不显示） */}
             {showIndustry && (!nothingInstalled || industries.length > 0) && (
               <>
-                <div id="sec-industry" className="mb-2 text-caption font-bold tracking-wider text-ink2">
-                  行业共享（铜边 · 已脱敏 ✓ L8.1）
+                <div id="sec-industry" className="mb-2 text-body font-bold tracking-wider text-ink2">
+                  行业共享（已脱敏）
                 </div>
-                <div className="mb-5 grid grid-cols-2 gap-3">
+                <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {industries.length > 0 ? industries.map(renderCard) : (
-                    <div className="col-span-2 rounded-lg border border-dashed border-line p-4 text-center text-caption text-ink3">
+                    <div className="col-span-2 rounded-lg border border-dashed border-line p-4 text-center text-body text-ink3">
                       当前行业联盟暂无共享技能
                     </div>
                   )}
@@ -453,20 +462,16 @@ export default function P6() {
               </>
             )}
 
-            {/* 组合环② 技能链（样例链 · 查看步骤 / 编译为管线占位） */}
-            <div id="sec-chains">
-              <SkillChains skills={skills} onToast={notify} />
-            </div>
-
-            {/* 进化环③ 冷藏区 + 进化提案（驳回样本校准闭环） */}
-            <div id="sec-evolution">
-              <EvolutionZone skills={skills} usage={usage} onToast={notify} />
-            </div>
-
-            {/* 生产环④ 拉片反推 + forge 自建入口（P6E4 沿用 /p6/create） */}
-            <div id="sec-production">
-              <ProductionEntry canManage={canManage} onToast={notify} onForge={() => nav("/p6/create")} />
-            </div>
+            {/* P6E4 零代码新建技能 */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => nav("/skills/create")}
+                className="cursor-pointer rounded-md gold-grad px-4 py-2.5 text-body font-bold text-ongold"
+              >
+                <Icon name="customize" size={15} className="inline" /> 打造新装备（零代码）
+              </button>
+            )}
           </>
         )}
       </div>
@@ -503,33 +508,36 @@ function SkillWizard({
     if (!ready) return;
     void (async () => {
       const rules = await trpc.fence.rules.query() as Array<{ rule_id: string; name: string; status: string }>;
-      setRuleOptions(rules.filter((r) => r.status === "active").map((r) => ({ rule_id: r.rule_id, name: r.name })));
+      setRuleOptions(rules.filter((r) => r.status === "active").map((r) => ({
+        rule_id: r.rule_id,
+        name: clientChineseText(r.name, "关联围栏"),
+      })));
     })();
   }, [ready]);
 
   const steps = useMemo(() => stepsText.split("\n").map((s) => s.trim()).filter(Boolean), [stepsText]);
   const valid = name.trim().length > 0 && trigger.trim().length > 0 && steps.length > 0 && boundary.trim().length > 0;
 
-  /** 草稿预览（SKILL.md 投影；与服务端 renderSkillMarkdown 同构） */
+  /** 客户端只展示中文业务草稿，不泄露实际存储字段。 */
   const preview = useMemo(() => {
-    const slug = name.trim().toLowerCase().replace(/[^a-z0-9一-鿿]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
+    const selectedRules = fences.map((id) => ruleOptions.find((rule) => rule.rule_id === id)?.name).filter(Boolean);
     return [
-      `name: ${slug}`,
-      `description: ${desc || "（未填）"}`,
+      `技能名称：${name.trim() || "（未填）"}`,
+      `技能说明：${desc || "（未填）"}`,
       "",
-      "## 触发（何时用）",
+      "触发条件（何时用）",
       trigger || "（未填）",
       "",
-      "## 步骤（怎么做）",
+      "执行步骤（怎么做）",
       ...(steps.length > 0 ? steps.map((s, i) => `${i + 1}. ${s}`) : ["（未填）"]),
       "",
-      "## 边界（什么不做）",
+      "安全边界（什么不做）",
       boundary || "（未填）",
       "",
-      `fence_bindings: [${fences.join(", ")}]`,
-      "生效前 dry-run（F8.3/F2.5）",
+      `关联围栏：${selectedRules.length > 0 ? selectedRules.join("、") : "暂无"}`,
+      "创建后需先完成模拟回放，再允许安装。",
     ].join("\n");
-  }, [name, desc, trigger, steps, boundary, fences]);
+  }, [name, desc, trigger, steps, boundary, fences, ruleOptions]);
 
   const doForge = useCallback(async () => {
     setBusy(true);
@@ -542,7 +550,8 @@ function SkillWizard({
       }) as { skillId: string; version: string };
       setCreated(r);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      console.warn("创建技能失败", e);
+      setError("创建失败，请检查必填内容与权限后重试。");
     } finally {
       setBusy(false);
     }
@@ -555,7 +564,8 @@ function SkillWizard({
       const r = await trpc.skills.dryRun.mutate({ skillId: created.skillId }) as typeof dryReport;
       setDryReport(r);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      console.warn("技能模拟回放失败", e);
+      setError("模拟回放暂时失败，技能尚未安装，请稍后重试。");
     } finally {
       setBusy(false);
     }
@@ -568,7 +578,8 @@ function SkillWizard({
       await trpc.skills.install.mutate({ skillId: created.skillId });
       onDone(); // 完成后态：回技能中心，新卡入「团队技能」（F8.3）
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      console.warn("安装新技能失败", e);
+      setError("安装失败，草稿仍已保留；请稍后重试。");
       setBusy(false);
     }
   }, [created, onDone]);
@@ -576,22 +587,22 @@ function SkillWizard({
   return (
     <Bridge>
       <div className="px-1">
-        <div className="mb-4 flex items-baseline gap-3">
+        <div className="mb-4 flex flex-wrap items-baseline gap-3">
           <h2 className="text-[20px] font-black text-ink">打造新装备</h2>
-          <span className="text-caption text-ink3">零代码自定义技能 · F8.3</span>
-          {prefill?.fromSuggestion && <span className="font-mono text-micro text-holo">来自意识系统建议 {prefill.fromSuggestion}</span>}
+          <span className="text-body text-ink3">零代码自定义技能</span>
+          {prefill?.fromSuggestion && <span className="text-body text-holo">已带入系统建议内容</span>}
         </div>
         {!canManage && ready && (
-          <BannerAlert level="warn">只读成员无创建权限（E2.6 隐藏非置灰——此页入口已在技能中心隐藏）</BannerAlert>
+          <BannerAlert level="warn">当前账号为只读成员，不能创建技能。请联系工作区管理员调整权限。</BannerAlert>
         )}
-        <div className="mt-3 grid grid-cols-2 gap-4">
+        <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-3">
             <div className="rounded-lg border border-line bg-card p-3">
-              <div className="mb-1.5 text-caption font-bold text-ink2">装备名称 / 简述</div>
+              <div className="mb-1.5 text-body font-bold text-ink2">装备名称 / 简述</div>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="如：每周爆款复盘"
+                placeholder="如：周一经营复盘"
                 className="mb-2 w-full rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
               />
               <input
@@ -601,11 +612,11 @@ function SkillWizard({
                 className="w-full rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
               />
             </div>
-            {[
-              { t: "① 何时触发", v: trigger, set: setTrigger, ph: "每周一 08:00，或账号播放连续 3 天下滑时", rows: 2 },
+              {[
+              { t: "① 何时触发", v: trigger, set: setTrigger, ph: "每周一 08:00，或核心指标连续 3 天下滑时", rows: 2 },
             ].map((f) => (
               <div key={f.t} className="rounded-lg border border-line bg-card p-3">
-                <div className="mb-1.5 text-caption font-bold text-ink2">{f.t}</div>
+                <div className="mb-1.5 text-body font-bold text-ink2">{f.t}</div>
                 <textarea
                   value={f.v}
                   onChange={(e) => f.set(e.target.value)}
@@ -616,28 +627,28 @@ function SkillWizard({
               </div>
             ))}
             <div className="rounded-lg border border-line bg-card p-3">
-              <div className="mb-1.5 text-caption font-bold text-ink2">② 做什么（每行一步）</div>
+              <div className="mb-1.5 text-body font-bold text-ink2">② 做什么（每行一步）</div>
               <textarea
                 value={stepsText}
                 onChange={(e) => setStepsText(e.target.value)}
-                placeholder={"汇总上周发布·播放·涨粉\n对比竞对账号同档内容\n给出 3 条本周动作建议"}
+                placeholder={"汇总上周核心经营指标\n对比同类业务表现\n给出 3 条本周动作建议"}
                 rows={3}
                 className="w-full resize-none rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
               />
             </div>
             <div className="rounded-lg border border-line bg-card p-3">
-              <div className="mb-1.5 text-caption font-bold text-ink2">③ 不能做什么 → 自动转围栏声明（F8.3）</div>
+              <div className="mb-1.5 text-body font-bold text-ink2">③ 不能做什么 → 自动生成围栏声明</div>
               <textarea
                 value={boundary}
                 onChange={(e) => setBoundary(e.target.value)}
-                placeholder="只读分析，不得直接发布；涉及功效宣称必审"
+                placeholder="只读分析，不得直接写回；涉及金额或高风险动作必须审批"
                 rows={2}
                 className="w-full resize-none rounded-md border border-line bg-bg900 px-2.5 py-1.5 text-body text-ink outline-none focus:border-holo/50"
               />
               {boundary.trim() && (
-                <div className="mt-1.5 flex items-center gap-1.5 text-micro text-warn">
+                <div className="mt-1.5 flex items-center gap-1.5 text-body text-warn">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-warn" />
-                  已生成围栏声明草稿：边界文本将随技能生效受围栏瀑布管辖（L8.3）
+                  已生成围栏声明草稿：边界文本将随技能生效，并始终受围栏判定管辖
                 </div>
               )}
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -646,18 +657,18 @@ function SkillWizard({
                     key={r.rule_id}
                     type="button"
                     onClick={() => setFences((xs) => xs.includes(r.rule_id) ? xs.filter((x) => x !== r.rule_id) : [...xs, r.rule_id])}
-                    className={`cursor-pointer rounded border px-2 py-0.5 font-mono text-micro ${
+                    className={`cursor-pointer rounded border px-2 py-0.5 text-body ${
                       fences.includes(r.rule_id) ? "border-holo/60 bg-holo/10 text-holo" : "border-line text-ink3 hover:border-holo/40"
                     }`}
-                    title={r.name}
+                    title={clientChineseText(r.name, "关联围栏")}
                   >
-                    {r.rule_id}
+                    {clientChineseText(r.name, "关联围栏")}
                   </button>
                 ))}
               </div>
             </div>
             {error && <BannerAlert level="alert">{error}</BannerAlert>}
-            <div className="flex gap-2.5">
+            <div className="wl-action-row flex flex-wrap gap-2.5">
               {!created ? (
                 <>
                   <button
@@ -666,11 +677,11 @@ function SkillWizard({
                     onClick={() => void doForge()}
                     className="cursor-pointer rounded-md gold-grad px-4 py-2 text-body font-bold text-ongold disabled:opacity-40"
                   >
-                    ✓ 确认创建（进版本管理 v1）
+                    <Icon name="check" size={15} className="inline" /> 确认创建（进版本管理 v1）
                   </button>
                   <button
                     type="button"
-                    onClick={() => nav("/p6")}
+                    onClick={() => nav("/skills")}
                     className="cursor-pointer rounded-md border border-line px-4 py-2 text-body text-ink3 hover:text-ink2"
                   >
                     返回技能中心
@@ -684,16 +695,16 @@ function SkillWizard({
                     onClick={() => void doDryRun()}
                     className="cursor-pointer rounded-md gold-grad px-4 py-2 text-body font-bold text-ongold disabled:opacity-40"
                   >
-                    🧪 dry-run 预览（回放最近 10 条 F2.5）
+                    <Icon name="experiment" size={15} className="inline" /> 模拟回放最近 10 条事件
                   </button>
                   <button
                     type="button"
                     disabled={busy || !dryReport}
                     onClick={() => void doInstall()}
-                    title={dryReport ? "" : "生效前须先 dry-run（F8.3）"}
+                    title={dryReport ? "" : "生效前须先完成模拟回放"}
                     className="cursor-pointer rounded-md border border-go/50 px-4 py-2 text-body font-bold text-go disabled:opacity-40"
                   >
-                    ⚙ 安装到本工作区
+                    <Icon name="configuration" size={15} className="inline" /> 安装到本工作区
                   </button>
                 </>
               )}
@@ -701,21 +712,21 @@ function SkillWizard({
           </div>
           <div className="flex flex-col gap-3">
             <div className="rounded-lg border border-line bg-card p-3">
-              <div className="mb-1.5 text-caption font-bold text-ink2">装备草稿预览 · SKILL.md</div>
-              <pre className="whitespace-pre-wrap rounded-lg border border-line bg-bg900 p-3 font-mono text-micro leading-relaxed text-ink2">{preview}</pre>
-              <div className="mt-2 text-micro leading-relaxed text-ink3">
-                确认创建 → 装备 v1 进版本管理 · 绑定围栏随安装生效、卸载即撤销（F8.2/L8.3）· 生产环境仅签名白名单（L8.2）
+              <div className="mb-1.5 text-body font-bold text-ink2">技能草稿预览</div>
+              <pre className="whitespace-pre-wrap rounded-lg border border-line bg-bg900 p-3 font-mono text-body leading-relaxed text-ink2">{preview}</pre>
+              <div className="mt-2 text-body leading-relaxed text-ink3">
+                确认创建后进入版本管理；关联围栏随安装生效、卸载撤销；正式环境仅允许已签名的白名单技能。
               </div>
             </div>
             {created && (
               <div className="rounded-lg border border-go/40 bg-go/5 p-3">
-                <div className="text-caption font-bold text-go">✓ 已创建 {created.skillId} v{created.version}（团队技能 · 进版本管理 F8.3）</div>
+                <div className="text-body font-bold text-go"><Icon name="check" size={14} className="inline" /> 团队技能已创建并进入版本管理，{versionText(created.version)}</div>
                 {dryReport && (
-                  <div className="mt-2 text-micro text-ink2">
-                    dry-run 回放 {dryReport.replayed} 条：
+                  <div className="mt-2 text-body text-ink2">
+                    已模拟回放 {dryReport.replayed} 条：
                     {dryReport.perRule.length > 0 ? dryReport.perRule.map((r) => (
-                      <div key={r.ruleId} className="mt-1 font-mono">
-                        {r.ruleId}（{r.version}）：pass {r.pass} / review {r.wouldReview} / block {r.wouldBlock}
+                      <div key={r.ruleId} className="mt-1">
+                        {clientChineseText(ruleOptions.find((rule) => rule.rule_id === r.ruleId)?.name, "关联围栏")}：放行 {r.pass} 条、需复核 {r.wouldReview} 条、阻断 {r.wouldBlock} 条
                       </div>
                     )) : <span className="text-ink3">（无绑定围栏可回放）</span>}
                   </div>

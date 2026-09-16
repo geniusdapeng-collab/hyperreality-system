@@ -8,6 +8,8 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { FloorAgent } from "../pages/p0/Floor";
+import { actionText, actorText } from "./display";
+import { clientChineseText } from "@workloom/ui";
 
 export interface DirectorEvent {
   seq: number;
@@ -23,6 +25,38 @@ const CHEER_PATTERNS = [/done$/i, /complete/i, /达成/, /新高/, /表扬/];
 interface TheaterLike {
   ticker?: Array<{ event_id: string; action: string; who: string }>;
   floor?: { agents: FloorAgent[] } | null;
+}
+
+type TheaterTickerItem = NonNullable<TheaterLike["ticker"]>[number];
+
+function directorAgentName(name: unknown, fallbackActorId: string): string {
+  const fallback = clientChineseText(actorText(fallbackActorId), "数字员工");
+  return clientChineseText(name, fallback);
+}
+
+/** 请示事件在进入导演、字幕和语音链路前统一收口。 */
+export function askingDirectorEvent(seq: number, agent: FloorAgent): DirectorEvent {
+  const agentName = directorAgentName(agent.name, agent.presetKey);
+  return {
+    seq,
+    kind: "ask",
+    agentId: agent.id,
+    agentName,
+    text: clientChineseText(agent.statusLine, `${agentName} 向您请示`),
+  };
+}
+
+/** ticker 动作码仅用于内部判定，对外事件文案必须经动作字典。 */
+export function tickerDirectorEvent(seq: number, ticker: TheaterTickerItem): DirectorEvent | null {
+  const agentName = directorAgentName(ticker.who, ticker.who);
+  const action = actionText(ticker.action);
+  if (FUSE_PATTERNS.some((pattern) => pattern.test(ticker.action))) {
+    return { seq, kind: "fuse", agentName, text: `围栏熔断：${action}` };
+  }
+  if (CHEER_PATTERNS.some((pattern) => pattern.test(ticker.action))) {
+    return { seq, kind: "cheer", agentName, text: `捷报：${action}` };
+  }
+  return null;
 }
 
 export function useTheaterDiff(theater: TheaterLike | null): DirectorEvent | null {
@@ -48,7 +82,7 @@ export function useTheaterDiff(theater: TheaterLike | null): DirectorEvent | nul
       const prev = prevAgents.current.get(a.id);
       if (a.state === "asking" && prev !== "asking" && a.approvalId) {
         seq.current += 1;
-        setEvent({ seq: seq.current, kind: "ask", agentId: a.id, agentName: a.name, text: a.statusLine || `${a.name} 向您请示` });
+        setEvent(askingDirectorEvent(seq.current, a));
         break; // 一次一个，队列化由导演层消化
       }
     }
@@ -58,12 +92,10 @@ export function useTheaterDiff(theater: TheaterLike | null): DirectorEvent | nul
     for (const t of theater.ticker ?? []) {
       if (seenEvents.current.has(t.event_id)) continue;
       seenEvents.current.add(t.event_id);
-      if (FUSE_PATTERNS.some((p) => p.test(t.action))) {
+      const nextEvent = tickerDirectorEvent(seq.current + 1, t);
+      if (nextEvent) {
         seq.current += 1;
-        setEvent({ seq: seq.current, kind: "fuse", agentName: t.who, text: `围栏熔断：${t.action}` });
-      } else if (CHEER_PATTERNS.some((p) => p.test(t.action))) {
-        seq.current += 1;
-        setEvent({ seq: seq.current, kind: "cheer", agentName: t.who, text: `捷报：${t.action}` });
+        setEvent(nextEvent);
       }
     }
   }, [theater]);

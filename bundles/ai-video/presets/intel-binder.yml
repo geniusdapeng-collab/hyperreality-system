@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G1]
+coverage:
+  - { eventPrefix: "dossier.bind.", label: 情报归档 }
 skills: [jenny-loom-research]
 tools:
   - { name: dossier.write, access: write, desc: 装订并写入正式档案 }

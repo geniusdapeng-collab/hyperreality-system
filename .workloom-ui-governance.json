@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "workloom.ui-governance-state/v1",
+  "dependency": "npm:typescript@5.9.3",
+  "yamlDependency": "npm:yaml@2.9.0",
+  "updatePolicy": "stable-upgrade-pr-only",
+  "files": {
+    "scripts/verify-ui-consumer.mjs": {
+      "sha256": "33d22bbb2b665ad23c7c570cfce1dab842bfb3f4173284255f106f270b88b288"
+    },
+    "scripts/ui-governance-rules.mjs": {
+      "sha256": "2b5f1786a757083607adddddb913776b0babed4f245b0695170e09afe26cbf12"
+    }
+  }
+}

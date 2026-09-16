@@ -1,7 +1,7 @@
 /**
  * fence-engine · 纯函数判定器（B4 核心，F2.1/F2.2/E2.1/E2.2）
  *
- * 语义（bundles/hotel/fences/hotel-baseline.yml 头部口径，逐字继承）：
+ * 语义（由当前已验证 Bundle 的围栏策略声明，基座只实现通用判定）：
  *  - match 命中（object_type ∈ object_types 且 action ∈ actions）后求值 when 表达式
  *  - 命中 → 按该规则 level 判定；deny 优先并集求值（E2.2）：block > review > auto
  *  - 写类动作无任何规则命中 → 按 default_level 处理（行业包提供，L2.6）

@@ -25,20 +25,34 @@ export async function issueGrant(
     constraints?: Record<string, unknown>;
   },
 ) {
+  const workspaces = [...new Set(input.workspaces)];
+  if (workspaces.length === 0) throw new Error("伙伴授权必须选择至少一个工作区");
+  const scoped = await deps.q(
+    `SELECT id FROM workspaces WHERE tenant_id=$1 AND id = ANY($2::text[])`,
+    [input.tenantId, workspaces],
+  );
+  if (scoped.rows.length !== workspaces.length) {
+    throw new Error("授权范围包含不属于当前租户的工作区");
+  }
   const bad = input.capabilities.filter((c) => !(PARTNER_CAPABILITIES as readonly string[]).includes(c));
   if (bad.length > 0) throw new Error(`未知伙伴能力：${bad.join(",")}`);
   const id = newId("grt");
   await deps.q(
     `INSERT INTO partner_grants (id, partner_id, tenant_id, workspaces, capabilities, constraints, issued_by, expires_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7, now() + ($8 || ' days')::interval)`,
-    [id, input.partnerId, input.tenantId, JSON.stringify(input.workspaces), JSON.stringify(input.capabilities),
+    [id, input.partnerId, input.tenantId, JSON.stringify(workspaces), JSON.stringify(input.capabilities),
      JSON.stringify(input.constraints ?? {}), input.issuedBy, input.ttlDays],
   );
   return { grantId: id };
 }
 
-export async function revokeGrant(deps: AccountsDeps, grantId: string, reason: string): Promise<void> {
-  await deps.q(`UPDATE partner_grants SET revoked_at=now(), revoke_reason=$2 WHERE id=$1`, [grantId, reason]);
+export async function revokeGrant(deps: AccountsDeps, grantId: string, reason: string, tenantId: string): Promise<void> {
+  const result = await deps.q(
+    `UPDATE partner_grants SET revoked_at=now(), revoke_reason=$2
+     WHERE id=$1 AND tenant_id=$3 AND revoked_at IS NULL RETURNING id`,
+    [grantId, reason, tenantId],
+  );
+  if (result.rows.length === 0) throw new Error("授权不存在、已吊销或不属于当前租户");
 }
 
 export async function listGrantsForTenant(q: QueryFn, tenantId: string) {

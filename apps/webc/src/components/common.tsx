@@ -1,34 +1,18 @@
 import { useRef, useState, type ReactNode } from "react";
+import { Badge, TopContextBar, clientChineseText } from "@workloom/ui";
 
 /** 「演示数据」角标：API 降级时展示（不静默） */
 export function DemoBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-warn/50 bg-warn/10 px-2 py-0.5 text-[10px] text-warn">
-      <span className="h-1.5 w-1.5 rounded-full bg-warn" />
-      演示数据
-    </span>
-  );
+  return <Badge tone="warning">演示数据</Badge>;
 }
 
 export function PageHeader({ title, right }: { title: string; right?: ReactNode }) {
-  return (
-    <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-bg800/90 px-4 backdrop-blur">
-      <h1 className="text-[17px] font-semibold text-ink">{title}</h1>
-      <div className="flex items-center gap-2">{right}</div>
-    </header>
-  );
+  return <TopContextBar className="service-page-header" title={title} actions={right} />;
 }
 
-export function StatusChip({ status }: { status: string }) {
-  const tone =
-    status === "已完成"
-      ? "border-go/50 bg-go/10 text-go"
-      : status === "处理中"
-        ? "border-gold/50 bg-gold/10 text-gold"
-        : "border-holo/50 bg-holo/10 text-holo";
-  return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${tone}`}>{status}</span>
-  );
+/** 服务端说明只在具有中文业务语义时展示；内部错误码与英文字段统一走安全文案。 */
+export function chineseMessage(value: unknown, fallback: string): string {
+  return clientChineseText(value, fallback);
 }
 
 export function formatTime(iso?: string): string {
@@ -40,58 +24,6 @@ export function formatTime(iso?: string): string {
   ).padStart(2, "0")}`;
 }
 
-/** 骨架屏：列表加载占位 */
-export function SkeletonList({ rows = 3 }: { rows?: number }) {
-  return (
-    <div className="space-y-3" aria-hidden>
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="rounded-2xl border border-line bg-card p-3.5">
-          <div className="flex items-center justify-between">
-            <div className="skeleton h-3 w-16" />
-            <div className="skeleton h-4 w-12 rounded-full" />
-          </div>
-          <div className="skeleton mt-2.5 h-4 w-4/5" />
-          <div className="mt-2.5 flex items-center justify-between">
-            <div className="skeleton h-2.5 w-24" />
-            <div className="skeleton h-2.5 w-12" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** 空状态：纯 SVG 插画 + 文案 */
-export function EmptyState({
-  title,
-  desc,
-  action,
-}: {
-  title: string;
-  desc?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center px-8 pt-20 text-center">
-      <svg width="96" height="96" viewBox="0 0 96 96" fill="none" aria-hidden>
-        <circle cx="48" cy="48" r="40" stroke="var(--color-line)" strokeWidth="1.5" strokeDasharray="4 5" />
-        <path
-          d="M30 40h36v22a4 4 0 0 1-4 4H34a4 4 0 0 1-4-4V40z"
-          stroke="var(--color-gold)"
-          strokeWidth="1.8"
-          fill="rgb(233 181 88 / 0.08)"
-        />
-        <path d="M30 40l18 12 18-12" stroke="var(--color-gold)" strokeWidth="1.8" strokeLinejoin="round" />
-        <circle cx="48" cy="30" r="2.5" fill="var(--color-holo)" opacity="0.8" />
-        <circle cx="66" cy="26" r="1.5" fill="var(--color-ink3)" />
-        <circle cx="28" cy="28" r="1.5" fill="var(--color-ink3)" />
-      </svg>
-      <p className="mt-4 text-[13.5px] font-medium text-ink2">{title}</p>
-      {desc && <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink3">{desc}</p>}
-      {action && <div className="mt-5">{action}</div>}
-    </div>
-  );
-}
 
 /**
  * 下拉刷新容器：顶部下拉超过阈值触发 onRefresh。
@@ -158,7 +90,7 @@ export function PullToRefresh({
           </span>
         ) : (
           <span
-            className="text-[10px] text-ink3 transition-transform"
+            className="text-body text-ink3 transition-transform"
             style={{ transform: `rotate(${Math.min(pull / THRESHOLD, 1) * 180}deg)` }}
           >
             {pull >= THRESHOLD ? "释放刷新" : "↓ 下拉刷新"}

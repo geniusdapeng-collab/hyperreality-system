@@ -15,12 +15,12 @@ export type ApprovalTier = "l2_captain" | "l3_fleet" | "l4_chairman";
 export interface RouteInput {
   action: string;
   params: Record<string, unknown>;
-  /** 命中的围栏规则 ID 列表（用于识别价格/采购等敏感域） */
+  /** 命中的围栏规则 ID 列表（只用于审计，不推断行业语义） */
   ruleIds?: string[];
   crossWorkspace?: boolean;
-  /** 价格语境：调整后价格与基准价（price.adjust 类） */
-  priceCtx?: { afterPrice?: number; basePrice?: number };
-  amountCtx?: { amount?: number }; // 采购/退款/营销金额
+  /** Bundle 声明的通用区间和值；找不到 key 时失败关闭到 L4。 */
+  rangeCtx?: { key?: string; value?: number };
+  amountCtx?: { amount?: number; capKey?: string };
   isFenceWiden?: boolean;          // 围栏放宽提案（一律 L4）
   isCharterChange?: boolean;       // 宪章变更（一律 L4）
 }
@@ -28,14 +28,15 @@ export interface RouteInput {
 export function routeTier(c: Charter, i: RouteInput): ApprovalTier {
   if (i.isFenceWiden || i.isCharterChange) return "l4_chairman";
   const a = effectiveAutonomy(c);
-  // 价格越自治带 → 董事长
-  if (i.priceCtx?.afterPrice !== undefined && i.priceCtx.basePrice !== undefined && i.priceCtx.basePrice > 0) {
-    const ratio = i.priceCtx.afterPrice / i.priceCtx.basePrice;
-    if (ratio < a.price_band[0] || ratio > a.price_band[1]) return "l4_chairman";
+  // 任一声明区间越界或未配置 → 董事长
+  if (i.rangeCtx?.value !== undefined) {
+    const range = i.rangeCtx.key ? a.ranges[i.rangeCtx.key] : undefined;
+    if (!range || i.rangeCtx.value < range.lower || i.rangeCtx.value > range.upper) return "l4_chairman";
   }
   // 金额超自治上限 → 董事长
   if (i.amountCtx?.amount !== undefined) {
-    const cap = /采购|procurement/i.test(i.action) ? a.procurement_cap : a.campaign_cap;
+    const cap = i.amountCtx.capKey ? a.caps[i.amountCtx.capKey]?.limit : undefined;
+    if (cap === undefined) return "l4_chairman";
     if (i.amountCtx.amount > cap) return "l4_chairman";
   }
   // 跨工作区 → 集团CEO
@@ -51,8 +52,10 @@ export interface QueueItem {
   action: string;
   params: Record<string, unknown>;
   ruleIds: string[];
-  priceCtx?: { afterPrice?: number; basePrice?: number };
-  amountCtx?: { amount?: number };
+  rangeCtx?: { key?: string; value?: number };
+  amountCtx?: { amount?: number; capKey?: string };
+  irreversible?: boolean;
+  affectedDomains?: string[];
   title: string;
 }
 
@@ -65,22 +68,25 @@ export type CeoVerdict =
  *  保守默认：无法判明一律 escalate（拒绝默认的镜像——宁可请示不可错放）。 */
 export function decideForCaptain(c: Charter, item: QueueItem): CeoVerdict {
   const a = effectiveAutonomy(c);
-  // 价格类：带内 approve；贴近带缘（±2% 内）escalate 让人看一眼；带外本不该在 L2（路由保证），兜底 escalate
-  if (item.priceCtx?.afterPrice !== undefined && item.priceCtx.basePrice !== undefined && item.priceCtx.basePrice > 0) {
-    const ratio = item.priceCtx.afterPrice / item.priceCtx.basePrice;
-    const [lo, hi] = a.price_band;
-    if (ratio < lo || ratio > hi) {
-      return { kind: "escalate", rationale: `价格比 ${ratio.toFixed(3)} 超出自治带 [${lo}, ${hi}]，上浮董事长` };
+  // 通用区间：带内 approve；贴近边缘（区间宽度 10% 内）escalate；未声明失败关闭
+  if (item.rangeCtx?.value !== undefined) {
+    const range = item.rangeCtx.key ? a.ranges[item.rangeCtx.key] : undefined;
+    if (!range) return { kind: "escalate", rationale: "请求引用了未声明的自治区间，上浮董事长" };
+    const value = item.rangeCtx.value;
+    if (value < range.lower || value > range.upper) {
+      return { kind: "escalate", rationale: `${range.label} ${value} 超出自治区间 [${range.lower}, ${range.upper}]，上浮董事长` };
     }
-    const edge = 0.02;
-    if (ratio - lo < edge || hi - ratio < edge) {
-      return { kind: "escalate", rationale: `价格比 ${ratio.toFixed(3)} 贴近自治带边缘，谨慎起见上浮复核` };
+    const edge = Math.abs(range.upper - range.lower) * 0.1;
+    if (value - range.lower < edge || range.upper - value < edge) {
+      return { kind: "escalate", rationale: `${range.label} ${value} 贴近自治边缘，谨慎上浮复核` };
     }
-    return { kind: "approve", rationale: `价格比 ${ratio.toFixed(3)} 位于自治带 [${lo}, ${hi}] 内，符合宪章` };
+    return { kind: "approve", rationale: `${range.label} ${value} 位于自治区间内，符合宪章` };
   }
   // 金额类：上限 70% 以内 approve，70–100% escalate（临边谨慎），超上限 escalate
   if (item.amountCtx?.amount !== undefined) {
-    const cap = /采购|procurement/i.test(item.action) ? a.procurement_cap : a.campaign_cap;
+    const capEntry = item.amountCtx.capKey ? a.caps[item.amountCtx.capKey] : undefined;
+    if (!capEntry) return { kind: "escalate", rationale: "请求引用了未声明的自治上限，上浮董事长" };
+    const cap = capEntry.limit;
     const amt = item.amountCtx.amount;
     if (amt > cap) return { kind: "escalate", rationale: `金额 ¥${amt} 超自治上限 ¥${cap}，上浮董事长` };
     if (amt > cap * 0.7) return { kind: "escalate", rationale: `金额 ¥${amt} 达上限 70% 以上，谨慎上浮复核` };

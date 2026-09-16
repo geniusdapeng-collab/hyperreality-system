@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G3]       # 业务需求对齐清单确认必审
+coverage:
+  - { eventPrefix: "insight.", label: 洞察分析 }
 skills: []
 tools:
   - { name: insight.generate, access: write, desc: 生成对齐清单 }

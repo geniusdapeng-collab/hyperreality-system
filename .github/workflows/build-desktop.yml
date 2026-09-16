@@ -27,6 +27,12 @@ env:
 jobs:
   macos:
     runs-on: macos-latest
+    env:
+      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -37,8 +43,15 @@ jobs:
         env:
           VITE_DEMO_WORKSPACE: video-studio
           VITE_DEMO_MEMBER: MEM-V01
+          BUNDLE_SIGNING_PRIVATE_KEY: ${{ secrets.BUNDLE_SIGNING_PRIVATE_KEY }}
+          BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
         run: |
           pnpm install --frozen-lockfile
+          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ 缺少 macOS Developer ID 签名证书，拒绝对外发行"; exit 1; }
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ 缺少 Apple 公证凭据，拒绝对外发行"; exit 1; }
+          test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
+          pnpm bundle:release
+          test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
           grep -q 'WORKLOOM_SAFE_RENDERING' apps/desktop/electron/main.cjs
           grep -q 'WORKLOOM_RENDER_SMOKE' apps/desktop/electron/main.cjs
           grep -q 'previousEnvFile' apps/desktop/electron/bootstrap.cjs
@@ -65,7 +78,10 @@ jobs:
         run: |
           APP="$(find release/mac-arm64 -maxdepth 1 -name '*.app' -print -quit)"
           test -n "$APP" || { echo "❌ arm64 .app 未生成"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          xcrun stapler validate "$APP"
           RES="$APP/Contents/Resources"
+          test -s "$RES/bundle-trust.json" || { echo "❌ 独立 Bundle 公钥环未进包"; exit 1; }
           test -f "$RES/payload.tar.gz" || { echo "❌ 拆包验收失败：payload.tar.gz 未进包"; exit 1; }
           test -f "$RES/payload/PAYLOAD_VERSION" || { echo "❌ 拆包验收失败：PAYLOAD_VERSION 未进包（缺失将致每次启动重解压）"; exit 1; }
           tar -tzf "$RES/payload.tar.gz" > /tmp/wl-pkg-list.txt && grep -q "runtime/node_modules/tsx/package.json" /tmp/wl-pkg-list.txt || { echo "❌ 拆包验收失败：归档内缺 tsx"; exit 1; }
@@ -143,6 +159,9 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    env:
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -157,8 +176,14 @@ jobs:
         env:
           VITE_DEMO_WORKSPACE: video-studio
           VITE_DEMO_MEMBER: MEM-V01
+          BUNDLE_SIGNING_PRIVATE_KEY: ${{ secrets.BUNDLE_SIGNING_PRIVATE_KEY }}
+          BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
         run: |
           pnpm install --frozen-lockfile
+          test -n "$WIN_CSC_LINK" && test -n "$WIN_CSC_KEY_PASSWORD" || { echo "❌ 缺少 Windows 代码签名证书，拒绝对外发行"; exit 1; }
+          test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
+          pnpm bundle:release
+          test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
           pnpm product:verify
           pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
           pnpm -C apps/web build
@@ -184,6 +209,7 @@ jobs:
           node apps/desktop/electron/bootstrap.cjs --smoke --resources "$RES" --support "${TEMP}/wl-smoke"
           EXE="$(find release/win-unpacked -maxdepth 1 -type f -name '*.exe' ! -iname '*uninstall*' -print -quit)"
           test -n "$EXE" || { echo "❌ Windows 应用主程序未生成"; exit 1; }
+          powershell -NoProfile -Command '$s = Get-AuthenticodeSignature -FilePath $args[0]; if ($s.Status -ne "Valid") { Write-Error "应用签名无效：$($s.Status)"; exit 1 }' "$EXE"
           node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_APP_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "${TEMP}/wl-app-smoke"
           test -f "${TEMP}/wl-app-smoke/.bootstrapped" || { echo "❌ 真实应用首启未完成"; exit 1; }
           node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_RENDER_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "${TEMP}/wl-render-default"

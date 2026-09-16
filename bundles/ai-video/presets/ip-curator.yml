@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [G14]       # 送审预检（授权凭证前置）
+coverage:
+  - { eventPrefix: "ip.", label: 知识产权资产 }
 skills: []
 tools:
   - { name: ip.asset.register, access: write, desc: IP 资产登记（授权范围/期限/来源凭证） }

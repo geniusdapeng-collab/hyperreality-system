@@ -6,7 +6,7 @@
  *    客户侧不暴露版本号/状态机概念，只讲人话（"您的 3 项定制已生效"）。
  */
 import { z } from "zod";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { getAppPool } from "@workloom/db";
@@ -18,22 +18,23 @@ import {
   type OverlayDoc,
 } from "@workloom/base/overlay";
 import { routedLlmCall } from "../service/llm.js";
-import { protectedProcedure, router, scopeOf, writeProcedure } from "./context.js";
+import { loadVerifiedBundleManifest } from "@workloom/base/bundles";
+import { actionProcedure, protectedProcedure, router, scopeOf } from "./context.js";
 
 /** 从磁盘行业包构建合并视图（与装配钩子 toView 同口径） */
 function loadViewFromDisk(slug: string): BundleAssetView {
-  const dir = join(process.cwd(), "bundles", slug);
-  const bj = JSON.parse(readFileSync(join(dir, "bundle.json"), "utf-8")) as BundleAssetView["bj"];
-  const presets = readdirSync(join(dir, "presets"))
-    .filter((f) => f.endsWith(".yml"))
-    .map((f) => parseYaml(readFileSync(join(dir, "presets", f), "utf-8")) as Record<string, unknown>);
-  const fencePacks = readdirSync(join(dir, "fences"))
-    .filter((f) => f.endsWith(".yml"))
-    .map((f) => parseYaml(readFileSync(join(dir, "fences", f), "utf-8")) as Record<string, unknown>);
+  const bundleRoot = join(process.cwd(), "bundles");
+  const dir = join(bundleRoot, slug);
+  const manifest = loadVerifiedBundleManifest(slug, bundleRoot);
+  const bj = manifest as BundleAssetView["bj"];
+  const presets = manifest.workloom.provides.presets
+    .map((assetPath) => parseYaml(readFileSync(join(dir, assetPath), "utf-8")) as Record<string, unknown>);
+  const fencePacks = manifest.workloom.provides.fences
+    .map((assetPath) => parseYaml(readFileSync(join(dir, assetPath), "utf-8")) as Record<string, unknown>);
   const extra: Record<string, unknown> = {};
-  const faqPath = join(dir, "service-front", "faq.json");
-  if (existsSync(faqPath)) {
-    const raw = JSON.parse(readFileSync(faqPath, "utf-8")) as { faqs?: unknown[] };
+  const faqAsset = manifest.workloom.provides.serviceFront.find((assetPath) => assetPath.endsWith("/faq.json"));
+  if (faqAsset) {
+    const raw = JSON.parse(readFileSync(join(dir, faqAsset), "utf-8")) as { faqs?: unknown[] };
     extra.faq = Array.isArray(raw?.faqs) ? raw.faqs : [];
   }
   return { bj, presets, fencePacks, extra };
@@ -76,7 +77,7 @@ export const overlayRouter = router({
   }),
 
   /** 存草稿（运营手工编辑入口） */
-  saveDraft: writeProcedure
+  saveDraft: actionProcedure("workspace.configure")
     .input(z.object({
       baseBundle: z.string().min(1).max(50),
       baseVersion: z.string().min(1).max(50),
@@ -101,17 +102,17 @@ export const overlayRouter = router({
     }),
 
   /** 流水线：草稿 → 考试 → 灰度（考试闸不过即拒，事件留痕） */
-  toCanary: writeProcedure.input(versionInput).mutation(async ({ ctx, input }) => {
+  toCanary: actionProcedure("workspace.configure").input(versionInput).mutation(async ({ ctx, input }) => {
     return draftToCanary(getAppPool(), scopeOf(ctx.identity), input.baseBundle, input.overlayVersion, deps);
   }),
 
   /** 流水线：灰度 → 全量（观察期纪律） */
-  toActive: writeProcedure.input(versionInput).mutation(async ({ ctx, input }) => {
+  toActive: actionProcedure("workspace.configure").input(versionInput).mutation(async ({ ctx, input }) => {
     return canaryToActive(getAppPool(), scopeOf(ctx.identity), input.baseBundle, input.overlayVersion, deps);
   }),
 
   /** 一键回滚（止血，直激活） */
-  rollback: writeProcedure.input(baseInput).mutation(async ({ ctx, input }) => {
+  rollback: actionProcedure("workspace.configure").input(baseInput).mutation(async ({ ctx, input }) => {
     return rollback(getAppPool(), scopeOf(ctx.identity), input.baseBundle, ctx.identity.memberNo, deps);
   }),
 
@@ -134,7 +135,7 @@ export const overlayRouter = router({
   /* ================= L1 配置层（AI 结构化意图落库） ================= */
 
   /** L1 自然语言录入：意图 → 校验 → 草稿（接待班/小织调用） */
-  l1Intake: writeProcedure
+  l1Intake: actionProcedure("workspace.configure")
     .input(z.object({
       baseBundle: z.string().min(1).max(50),
       baseVersion: z.string().min(1).max(50),
@@ -186,7 +187,7 @@ export const overlayRouter = router({
    * 文档导入·预览（不落库）：上传文件 → 解析 → 抽取 → 冲突检测 → 意图卡清单。
    * 冲突来自与当前生效覆盖层的比对（同题 FAQ 不同答/同名不同价/规则改值/禁用重复）。
    */
-  docIntakePreview: writeProcedure
+  docIntakePreview: actionProcedure("workspace.configure")
     .input(z.object({
       baseBundle: z.string().min(1).max(50),
       filename: z.string().min(1).max(200),
@@ -211,7 +212,7 @@ export const overlayRouter = router({
    * 文档导入·提交：客户在意图卡清单上勾选确认后，整批进覆盖层草稿（source: l1-intake + 批次溯源）。
    * 生效仍走流水线（考试→灰度→全量），整批可回滚。
    */
-  docIntakeCommit: writeProcedure
+  docIntakeCommit: actionProcedure("workspace.configure")
     .input(z.object({
       baseBundle: z.string().min(1).max(50),
       baseVersion: z.string().min(1).max(50),
@@ -249,7 +250,7 @@ export const overlayRouter = router({
   }),
 
   /** 我的定制：一键恢复原样（客户侧唯一动作，不暴露版本概念） */
-  myRollback: writeProcedure.input(baseInput).mutation(async ({ ctx, input }) => {
+  myRollback: actionProcedure("workspace.configure").input(baseInput).mutation(async ({ ctx, input }) => {
     const doc = await rollback(getAppPool(), scopeOf(ctx.identity), input.baseBundle, ctx.identity.memberNo, deps);
     return { ok: true, summary: `已恢复上一版定制（共 ${doc.items.length} 项）` };
   }),

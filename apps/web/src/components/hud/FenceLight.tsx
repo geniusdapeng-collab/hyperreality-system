@@ -5,6 +5,7 @@
  * 铁律：基线规则带 🔒 金锁标（集团强制，只可加严——单调守卫 F2.3）
  * 双通道：灯 + 文字，不只依赖颜色（§10 可访问性）
  */
+import { Icon, clientValueText } from "@workloom/ui";
 import { FENCE_LEVEL_TEXT } from "../../lib/display";
 
 export type FenceLevel4 = "auto" | "review" | "block" | "need";
@@ -37,12 +38,12 @@ export function FenceLight({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-body font-bold text-ink">
-          {name}
-          {baseline && <span title="基线围栏：集团强制，只可加严（F2.3 单调守卫）">🔒</span>}
+          <span className="min-w-0 break-words">{clientValueText(name)}</span>
+          {baseline && <Icon name="lock" label="集团基线围栏，只可加严" size={14} />}
         </div>
-        {desc && <div className="truncate text-caption text-ink3">{desc}</div>}
+        {desc && <div className="break-words text-body text-ink3">{clientValueText(desc)}</div>}
       </div>
-      <span className={`shrink-0 font-mono text-micro ${m.color.replace("bg-", "text-")}`}>{m.label}</span>
+      <span className={`shrink-0 font-mono text-body ${m.color.replace("bg-", "text-")}`}>{m.label}</span>
     </div>
   );
 }
