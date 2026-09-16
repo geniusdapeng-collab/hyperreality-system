@@ -480,12 +480,14 @@ jobs:
         with:
           artifact-ids: ${{ steps.candidates.outputs.macos-id }}
           path: ${{ runner.temp }}/desktop-candidate/macos
+          merge-multiple: true
 
       - name: 下载 Windows 候选
         uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ steps.candidates.outputs.windows-id }}
           path: ${{ runner.temp }}/desktop-candidate/windows
+          merge-multiple: true
 
       - name: 草稿封存、五资产核验并正式发布
         shell: bash

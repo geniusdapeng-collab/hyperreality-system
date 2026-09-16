@@ -111,12 +111,13 @@ test("Release 标题与当前仓库、稳定 tag 绑定", () => {
   assert.ok(workflow.includes('--title "${GITHUB_REPOSITORY#*/} $RELEASE_TAG"'));
 });
 
-test("唯一 publisher 与基座 PR30 canonical 模板逐字节同源", () => {
+test("唯一 publisher 与基座 canonical 模板逐字节同源并展平候选资产", () => {
   const marker = "  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。";
   const start = workflow.indexOf(marker);
   assert.notEqual(start, -1);
   const publisher = `${workflow.slice(start).split("\n").map((line) => line.startsWith("  ") ? line.slice(2) : line).join("\n")}`;
-  assert.equal(createHash("sha256").update(publisher).digest("hex"), "e9065a08afc698696430e8a8c3c2607e6019c23812fa673559ac7981e7e41bc0");
+  assert.equal(createHash("sha256").update(publisher).digest("hex"), "af712bcbef7e284921a31ea4d45b8a82df9671b1061d183568da9a8540188df6");
+  assert.equal(publisher.match(/merge-multiple: true/gu)?.length, 2);
 });
 
 test("桌面产品身份、端口和签名配置与产品清单一致", () => {
