@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { resolveDesktopWorkflowPath } from "./desktop-workflow-path.mjs";
 
 const root = process.cwd();
 let repositoryRoot = root;
@@ -66,7 +67,13 @@ if (product) {
     if (!builder.includes(marker)) errors.push(`桌面生产构建缺少安全配置：${marker}`);
   }
 
-  const desktopWorkflowPath = path.join(root, ".github/workflows/build-desktop.yml");
+  let desktopWorkflowPath;
+  try {
+    desktopWorkflowPath = resolveDesktopWorkflowPath(repositoryRoot, product).absolute;
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+    desktopWorkflowPath = path.join(repositoryRoot, ".github/workflows/desktop-production-release.yml");
+  }
   const desktopWorkflow = fs.existsSync(desktopWorkflowPath) ? fs.readFileSync(desktopWorkflowPath, "utf8") : "";
   for (const marker of [
     "MAC_CSC_LINK",
@@ -83,8 +90,11 @@ if (product) {
   const releaseScript = path.join(root, "scripts/release.sh");
   if (fs.existsSync(releaseScript)) {
     const releaseSource = fs.readFileSync(releaseScript, "utf8");
-    if (!releaseSource.includes('REPO="$(node scripts/product-runtime.mjs --field repository)"') || releaseSource.includes('REPO="geniusdapeng-collab/')) {
-      errors.push("release.sh 必须从产品清单动态解析目标仓库");
+    if (!releaseSource.includes("本地/长期令牌 Release 通道已封禁") || !/^exit 1$/mu.test(releaseSource)) {
+      errors.push("release.sh 必须保持 fail-closed，正式发行只允许受保护 workflow 单一发布者");
+    }
+    if (/GH_TOKEN|api\.github\.com|uploads\.github\.com|\bcurl\b|\bgh\s+release\b/u.test(releaseSource)) {
+      errors.push("release.sh 不得保留任何令牌或 GitHub Release 网络写入通道");
     }
   }
   const siteRoot = path.resolve(root, product.release?.website ?? "");

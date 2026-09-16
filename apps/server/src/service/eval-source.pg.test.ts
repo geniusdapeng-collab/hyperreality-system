@@ -5,8 +5,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 
-process.env.DATABASE_URL ??= "postgres://postgres:example@localhost:5432/workloom";
-process.env.DATABASE_APP_URL ??= "postgres://workloom_app:example@localhost:5432/workloom";
+process.env.DATABASE_URL ??= "postgres://postgres:workloom@localhost:5432/workloom";
+process.env.DATABASE_APP_URL ??= "postgres://workloom_app:workloom_dev_app@localhost:5432/workloom";
 
 const RUN_DB = process.env.RUN_DB_TESTS === "1" && Boolean(process.env.DATABASE_APP_URL);
 

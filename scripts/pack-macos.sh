@@ -12,6 +12,7 @@
 # ============================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/release-assets.sh
 
 VERSION="v1.1.0"
 ARCH="arm64"
@@ -27,7 +28,12 @@ done
 
 NODE_VER="24.19.0"
 PGAPP_VER="2.9.6-17"
-NODE_TARBALL="node-v${NODE_VER}-darwin-${ARCH}.tar.gz"
+case "$ARCH" in
+  arm64) NODE_ARCH="arm64" ;;
+  x86_64|x64) NODE_ARCH="x64" ;;
+  *) echo "❌ 未知 arch $ARCH"; exit 1 ;;
+esac
+NODE_TARBALL="node-v${NODE_VER}-darwin-${NODE_ARCH}.tar.gz"
 NODE_URL="https://nodejs.org/dist/v${NODE_VER}/${NODE_TARBALL}"
 PGAPP_URL="https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.6/Postgres-${PGAPP_VER}.dmg"
 
@@ -42,10 +48,19 @@ copy() { if command -v ditto >/dev/null 2>&1; then ditto "$1" "$2"; else cp -a "
 
 echo "== 装配 WorkLoom.app（$VERSION · darwin-${ARCH}）=="
 
+PLATFORM_OPS_MODE="$(node scripts/payload-policy.mjs platform-ops-mode)"
+PRODUCT_MANIFEST_PATH="$(node scripts/product-runtime.mjs --manifest-path)"
+case "$PLATFORM_OPS_MODE" in
+  include|exclude) ;;
+  *) echo "❌ 无效的载荷边界策略：$PLATFORM_OPS_MODE"; exit 1 ;;
+esac
+
 # 1. App 骨架（Info.plist + launcher，仓库内版本化）
 [ -f apps/desktop/WorkLoom.app/Contents/Info.plist ] || { echo "❌ 缺 apps/desktop 骨架"; exit 1; }
 copy apps/desktop/WorkLoom.app "$APP"
 chmod +x "$APP/Contents/MacOS/WorkLoom"
+mkdir -p "$APP/Contents/Resources"
+cp apps/desktop/electron/bootstrap.cjs "$APP/Contents/Resources/bootstrap.cjs"
 
 # 2. 产品载荷 runtime/
 echo "→ 装配产品载荷…"
@@ -53,12 +68,16 @@ R="$APP/Contents/Resources/runtime"
 mkdir -p "$R"
 # 源码与配置（白名单制，dist/供应商/测试夹具不进包）
 for p in package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json; do cp "$p" "$R/"; done
+[ -f "$PRODUCT_MANIFEST_PATH" ] || { echo "❌ 缺受保护产品清单"; exit 1; }
+cp "$PRODUCT_MANIFEST_PATH" "$R/product.manifest.json"
 cp .env.example "$R/.env.defaults"
-for d in apps/server apps/web packages bundles; do
+RUNTIME_SOURCE_DIRS=(apps/server apps/web packages bundles)
+[ "$PLATFORM_OPS_MODE" = "include" ] && RUNTIME_SOURCE_DIRS+=(platform-ops)
+for d in "${RUNTIME_SOURCE_DIRS[@]}"; do
   rsync -aR --exclude node_modules --exclude dist --exclude .dsh-home --exclude 'dsh-gate/out' "$d" "$R/"
 done
 mkdir -p "$R/scripts"
-cp scripts/migrate.ts scripts/desktop-bootstrap-db.mjs "$R/scripts/"
+cp scripts/migrate.ts scripts/desktop-bootstrap-db.mjs scripts/product-runtime.mjs scripts/vite-product.mjs "$R/scripts/"
 cp scripts/seed*.ts "$R/scripts/"  # 全部行业种子随包（按 .env.defaults DESKTOP_SEED_SCRIPT 选用）
 printf '%s\n' "$VERSION" > "$R/VERSION"
 
@@ -70,47 +89,66 @@ if [ ! -f apps/web/dist/index.html ]; then
   echo "→ 构建 web…"; pnpm -C apps/web build
 fi
 copy apps/web/dist "$R/apps/web/dist"
-echo "→ 并入 node_modules（pnpm 软链结构需 zip -y 保软链）…"
-copy node_modules "$R/node_modules"
-for d in apps/server apps/web packages/shared packages/db packages/base packages/runtime; do
-  [ -d "$d/node_modules" ] && { mkdir -p "$R/$d"; copy "$d/node_modules" "$R/$d/node_modules"; }
+echo "→ 运行期依赖：受控 npm ci（darwin-${NODE_ARCH}，扁平实体目录）…"
+NM_STAGE="$STAGE/nm-pkg"
+NPM_REG="${NPM_REGISTRY:-https://registry.npmjs.org}"
+node scripts/runtime-deps-lock.mjs stage "$NM_STAGE" --os darwin --cpu "$NODE_ARCH" --registry "$NPM_REG"
+copy "$NM_STAGE/node_modules" "$R/node_modules"
+INTERNAL_PACKAGE_MANIFESTS=(packages/*/package.json)
+[ "$PLATFORM_OPS_MODE" = "include" ] && INTERNAL_PACKAGE_MANIFESTS+=(platform-ops/package.json)
+for pkgjson in "${INTERNAL_PACKAGE_MANIFESTS[@]}"; do
+  [ -f "$pkgjson" ] || continue
+  pname="$(node -p "try{require('./$pkgjson').name||''}catch(e){''}" 2>/dev/null)"
+  [ -n "$pname" ] || continue
+  pdir="$(dirname "$pkgjson")"
+  mkdir -p "$R/node_modules/$(dirname "$pname")"
+  copy "$pdir" "$R/node_modules/$pname"
 done
+find "$R/node_modules" -mindepth 2 -maxdepth 4 -type d -name node_modules -prune -exec rm -rf {} + 2>/dev/null || true
+for f in node_modules/tsx/package.json node_modules/hono/package.json scripts/migrate.ts \
+         scripts/product-runtime.mjs scripts/vite-product.mjs product.manifest.json apps/web/vite.config.ts; do
+  [ -f "$R/$f" ] || { echo "❌ 应急载荷自检失败：runtime/$f 缺失"; exit 1; }
+done
+node scripts/payload-policy.mjs assert-runtime "$R"
 
 # 4. Node darwin 官方二进制
 echo "→ Node $NODE_VER darwin-${ARCH}…"
-curl -sfL --retry 4 -o "$STAGE/$NODE_TARBALL" "$NODE_URL"
+workloom_fetch_verified "$STAGE/$NODE_TARBALL" "$NODE_TARBALL" "$NODE_URL"
 mkdir -p "$APP/Contents/Resources/node"
 tar xzf "$STAGE/$NODE_TARBALL" -C "$APP/Contents/Resources/node" --strip-components=1
 
 # 5. Postgres.app（DMG 挂载仅 macOS 可行）
 if [ "$STRUCTURE_ONLY" = "1" ]; then
   echo "⚠️  structure-only：跳过 Postgres.app 挂载（占位目录代替，禁分发此包）"
-  mkdir -p "$APP/Contents/Resources/pg/Postgres.app/Contents/Versions/17/bin"
+  mkdir -p "$APP/Contents/Resources/pg/bin"
   printf 'structure-only placeholder\n' > "$APP/Contents/Resources/pg/PLACEHOLDER-NOT-FOR-RELEASE"
 else
   echo "→ Postgres.app ${PGAPP_VER}（内置 pgvector 0.8.6）…"
-  curl -sfL --retry 4 -o "$STAGE/pg.dmg" "$PGAPP_URL"
+  workloom_fetch_verified "$STAGE/pg.dmg" "Postgres-${PGAPP_VER}.dmg" "$PGAPP_URL"
   hdiutil attach -nobrowse -mountpoint "$STAGE/mnt" "$STAGE/pg.dmg" >/dev/null
   mkdir -p "$APP/Contents/Resources/pg"
-  ditto "$STAGE/mnt/Postgres.app" "$APP/Contents/Resources/pg/Postgres.app"
+  copy "$STAGE/mnt/Postgres.app/Contents/Versions/17/bin" "$APP/Contents/Resources/pg/bin"
+  copy "$STAGE/mnt/Postgres.app/Contents/Versions/17/lib" "$APP/Contents/Resources/pg/lib"
+  copy "$STAGE/mnt/Postgres.app/Contents/Versions/17/share" "$APP/Contents/Resources/pg/share"
   hdiutil detach "$STAGE/mnt" >/dev/null
   # 结构断言：PG 17 主程序与 pgvector 扩展在位
   # 注：macOS 上 PG≥16 的动态库后缀为 .dylib（非 .so），见 PostgresApp src-17/makefile（vector.dylib）
-  [ -x "$APP/Contents/Resources/pg/Postgres.app/Contents/Versions/17/bin/postgres" ] || { echo "❌ Postgres.app 结构异常"; exit 1; }
-  ls "$APP/Contents/Resources/pg/Postgres.app/Contents/Versions/17/lib/postgresql/vector.dylib" >/dev/null || { echo "❌ pgvector 未随包"; exit 1; }
-  ls "$APP/Contents/Resources/pg/Postgres.app/Contents/Versions/17/share/postgresql/extension/vector.control" >/dev/null || { echo "❌ pgvector control 缺失"; exit 1; }
+  [ -x "$APP/Contents/Resources/pg/bin/postgres" ] || { echo "❌ Postgres.app 结构异常"; exit 1; }
+  ls "$APP/Contents/Resources/pg/lib/postgresql/vector.dylib" >/dev/null || { echo "❌ pgvector 未随包"; exit 1; }
+  ls "$APP/Contents/Resources/pg/share/postgresql/extension/vector.control" >/dev/null || { echo "❌ pgvector control 缺失"; exit 1; }
 fi
 
 # ---------- 5.5 内嵌 nats-server（P0-3 决策点 4：+20MB 开箱即持久化事件总线） ----------
 NATS_VER="v2.11.4"
-case "$ARCH" in arm64) NATS_ARCH="arm64" ;; x86_64) NATS_ARCH="amd64" ;; *) echo "❌ 未知 arch $ARCH"; exit 1 ;; esac
+case "$ARCH" in arm64) NATS_ARCH="arm64" ;; x86_64|x64) NATS_ARCH="amd64" ;; *) echo "❌ 未知 arch $ARCH"; exit 1 ;; esac
 if [ "$STRUCTURE_ONLY" = "1" ]; then
   mkdir -p "$APP/Contents/Resources/nats"
   printf 'structure-only placeholder
 ' > "$APP/Contents/Resources/nats/PLACEHOLDER-NOT-FOR-RELEASE"
 else
   echo "→ nats-server ${NATS_VER} darwin-${NATS_ARCH}…"
-  curl -sfL --retry 4 -o "$STAGE/nats.tgz" "https://github.com/nats-io/nats-server/releases/download/${NATS_VER}/nats-server-${NATS_VER}-darwin-${NATS_ARCH}.tar.gz"
+  NATS_DIST="nats-server-${NATS_VER}-darwin-${NATS_ARCH}.tar.gz"
+  workloom_fetch_verified "$STAGE/nats.tgz" "$NATS_DIST" "https://github.com/nats-io/nats-server/releases/download/${NATS_VER}/${NATS_DIST}"
   tar -xzf "$STAGE/nats.tgz" -C "$STAGE"
   mkdir -p "$APP/Contents/Resources/nats"
   cp "$STAGE/nats-server-${NATS_VER}-darwin-${NATS_ARCH}/nats-server" "$APP/Contents/Resources/nats/"

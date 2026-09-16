@@ -18,8 +18,8 @@ import { charterSchema } from "@workloom/base/captain";
 
 const BASE = process.env.SERVER_BASE ?? "http://localhost:8787";
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const APP_URL = process.env.DATABASE_APP_URL ?? "postgres://workloom_app:example@localhost:5432/workloom";
-const OWNER_URL = process.env.DATABASE_URL ?? "postgres://postgres:example@localhost:5432/workloom";
+const APP_URL = process.env.DATABASE_APP_URL ?? "postgres://workloom_app:workloom_dev_app@localhost:5432/workloom";
+const OWNER_URL = process.env.DATABASE_URL ?? "postgres://postgres:workloom@localhost:5432/workloom";
 const REQUESTED_WORKSPACE_ID = process.env.RELEASE_WORKSPACE_ID?.trim() || null;
 
 /* ================= 判定框架 ================= */

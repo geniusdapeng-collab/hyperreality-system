@@ -306,7 +306,7 @@ async function main() {
 
   if (SMOKE) {
     // 源码冒烟验证外部源码服务与 Electron 主进程，可在 CI/无头环境执行。
-    // 真实 BrowserWindow/像素/数字人由 build-desktop.yml 的 packaged render smoke 验证。
+    // 真实 BrowserWindow/像素/数字人由 desktop-production-release.yml 的 packaged render smoke 验证。
     say("冒烟：拉起 Electron 主进程…");
     smokeSupport = createSmokeSupportDirectory();
     const needNoSandbox = process.platform === "linux" && typeof process.getuid === "function" && process.getuid() === 0;

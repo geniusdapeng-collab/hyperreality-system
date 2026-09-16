@@ -11,7 +11,7 @@ describe("C 端通知投递状态", () => {
 });
 
 describe("C 端正式网页签名入口", () => {
-  const secret = "test-only-h5-entry-secret-at-least-32-characters";
+  const secret = "h5-entry-test-secret-at-least-32-characters";
 
   it("只接受未过期且密钥匹配的工作区与身份声明", async () => {
     const token = await issueH5EntryToken({

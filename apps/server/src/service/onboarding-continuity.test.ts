@@ -41,7 +41,7 @@ describe("标准落地向导草稿契约", () => {
       provider: "deepseek",
       model: "deepseek-chat",
       businessName: "示例企业",
-      apiKey: "test-only",
+      apiKey: "sk-must-not-persist",
       documentBody: "内部制度全文",
       raw_field_name: "底层字段",
       note: 42,

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { issueH5EntryToken } from "./channels.js";
 
-const secret = "test-only-h5-entry-production-secret-at-least-32-characters";
+const secret = "h5-entry-production-test-secret-at-least-32-characters";
 let request: (body: Record<string, unknown>) => Promise<Response>;
 
 beforeAll(async () => {

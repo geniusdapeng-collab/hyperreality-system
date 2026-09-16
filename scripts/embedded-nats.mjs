@@ -17,11 +17,14 @@
  *  node scripts/embedded-nats.mjs download --platform darwin-arm64|windows-amd64|linux-amd64 --out <目录>
  */
 import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, chmodSync } from "node:fs";
+import { chmodSync, createWriteStream, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { get } from "node:https";
 import { connect } from "node:net";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
+import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
+import { verifyAssetFile } from "./release-assets.mjs";
 
 export const NATS_VERSION = "v2.11.4";
 export const NATS_DOWNLOADS = {
@@ -106,10 +109,7 @@ function fetchTo(url, dest, hops = 0) {
         return;
       }
       if (res.statusCode !== 200) { res.resume(); rejectP(new Error(`HTTP ${res.statusCode}`)); return; }
-      const ws = createWriteStream(dest);
-      res.pipe(ws);
-      ws.on("finish", resolveP);
-      ws.on("error", rejectP);
+      pipeline(res, createWriteStream(dest)).then(resolveP, rejectP);
     }).on("error", rejectP);
   });
 }
@@ -126,12 +126,24 @@ async function download() {
   const require = createRequire(import.meta.url);
   const { execFileSync } = require("node:child_process");
   const tmp = resolve(outDir, platform.endsWith("amd64") && platform.startsWith("windows") ? "nats.zip" : "nats.tgz");
+  const partial = `${tmp}.part-${process.pid}`;
+  const assetName = new URL(url).pathname.split("/").pop();
   console.log(`→ 下载 nats-server ${NATS_VERSION}（${platform}）…`);
   // 镜像回退：github.com 直连受限的环境（如大陆沙箱/构建机）走 gh-proxy 前缀
   const candidates = [url, `https://gh-proxy.com/${url}`];
   let lastErr = null;
   for (const u of candidates) {
-    try { await fetchTo(u, tmp); lastErr = null; break; } catch (e) { lastErr = e; }
+    try {
+      rmSync(partial, { force: true });
+      await fetchTo(u, partial);
+      await verifyAssetFile(partial, assetName);
+      renameSync(partial, tmp);
+      lastErr = null;
+      break;
+    } catch (e) {
+      rmSync(partial, { force: true });
+      lastErr = e;
+    }
   }
   if (lastErr) throw lastErr;
   if (tmp.endsWith(".zip")) {
@@ -150,11 +162,13 @@ async function download() {
   console.log(`✅ nats-server ${NATS_VERSION} 就绪：${bin}`);
 }
 
-const cmd = process.argv[2];
-if (cmd === "start") await start();
-else if (cmd === "probe") await probe();
-else if (cmd === "download") await download();
-else {
-  console.error("用法：embedded-nats.mjs start|probe|download（见文件头注释）");
-  process.exit(1);
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const cmd = process.argv[2];
+  if (cmd === "start") await start();
+  else if (cmd === "probe") await probe();
+  else if (cmd === "download") await download();
+  else {
+    console.error("用法：embedded-nats.mjs start|probe|download（见文件头注释）");
+    process.exit(1);
+  }
 }

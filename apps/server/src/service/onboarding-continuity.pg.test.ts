@@ -114,7 +114,7 @@ describe.runIf(RUN_DB).sequential("Onboarding PostgreSQL 集成", () => {
       provider: "deepseek",
       model: "deepseek-chat",
       businessName: "真实测试企业",
-      apiKey: "test-only",
+      apiKey: "sk-never-store",
       documentBody: "不应写入草稿的正文",
     };
     const first = await saveWizardDraft(workspaceId, ownerIdentity, {

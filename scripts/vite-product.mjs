@@ -1,5 +1,9 @@
 /** 三端 Vite 构建身份桥：只从受保护产品清单注入身份。 */
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadProductRuntime } from "./product-runtime.mjs";
+
+const PRODUCT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function escapeHtml(value) {
   return String(value)
@@ -12,7 +16,7 @@ function escapeHtml(value) {
 
 export function workloomProductVite(clientLabel) {
   if (typeof clientLabel !== "string" || !clientLabel.trim()) throw new Error("缺少客户端中文名称");
-  const product = loadProductRuntime(process.cwd());
+  const product = loadProductRuntime(PRODUCT_ROOT);
   const title = `${product.displayName} · ${clientLabel}`;
   return Object.freeze({
     define: {

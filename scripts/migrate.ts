@@ -42,6 +42,10 @@ function sha256(s: string): string {
 }
 
 async function ensureRoles(client: pg.Client): Promise<void> {
+  // Never inherit a legacy cluster-wide md5 setting when this migration rotates role
+  // credentials. The desktop bootstrap reloads the durable SCRAM setting first, while this
+  // session-local guard protects every other supported migrate entry point as well.
+  await client.query("SET password_encryption = 'scram-sha-256'");
   const roles: Array<[string, string]> = [
     ["workloom_app", APP_DB_PASSWORD],
     ["workloom_gateway", GATEWAY_DB_PASSWORD],

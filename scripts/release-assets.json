@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "assets": {
+    "node-v24.19.0-darwin-arm64.tar.gz": {
+      "sha256": "8294b7aa9b03997481c06babf1e8b270c859358f27da57a11509afe537ac381d",
+      "upstream": "https://nodejs.org/download/release/v24.19.0/SHASUMS256.txt"
+    },
+    "node-v24.19.0-darwin-x64.tar.gz": {
+      "sha256": "d1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316",
+      "upstream": "https://nodejs.org/download/release/v24.19.0/SHASUMS256.txt"
+    },
+    "node-v24.19.0-win-x64.zip": {
+      "sha256": "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
+      "upstream": "https://nodejs.org/download/release/v24.19.0/SHASUMS256.txt"
+    },
+    "Postgres-2.9.6-17.dmg": {
+      "sha256": "b38bb00b8c8702a568270aab85995c550f7f93d1503b818efdc5ff9a519b7168",
+      "upstream": "https://api.github.com/repos/PostgresApp/PostgresApp/releases/tags/v2.9.6"
+    },
+    "nats-server-v2.11.4-darwin-amd64.tar.gz": {
+      "sha256": "e4e8fa118db1b19c3d2e32f03233f534794f4d6cdc92ba1e889d6ffd969966c7",
+      "upstream": "https://github.com/nats-io/nats-server/releases/download/v2.11.4/SHA256SUMS"
+    },
+    "nats-server-v2.11.4-darwin-arm64.tar.gz": {
+      "sha256": "151d47377ddb2cdffb4474a30494be493923e2f8d0d390db7244f0509b5c759f",
+      "upstream": "https://github.com/nats-io/nats-server/releases/download/v2.11.4/SHA256SUMS"
+    },
+    "nats-server-v2.11.4-linux-amd64.tar.gz": {
+      "sha256": "84192cee46c62760d9c259a97f373b73bccadc41be779c26ef676542ae15daf6",
+      "upstream": "https://github.com/nats-io/nats-server/releases/download/v2.11.4/SHA256SUMS"
+    },
+    "nats-server-v2.11.4-windows-amd64.zip": {
+      "sha256": "c78771905c52a8590f6c20cb101bb38ab65bd3046bd6ab8edf4e38efd41dce6f",
+      "upstream": "https://github.com/nats-io/nats-server/releases/download/v2.11.4/SHA256SUMS"
+    },
+    "embedded-postgres-binaries-windows-amd64-17.2.0.jar": {
+      "sha256": "41a2c287c4ca14691e9af4e6bdd719aca231983fcac8a43d01c99e1bca613859",
+      "upstream": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-windows-amd64/17.2.0/embedded-postgres-binaries-windows-amd64-17.2.0.jar.sha256"
+    },
+    "postgresql17.17.2.0.nupkg": {
+      "sha256": "32fc04996f592387455c78669f601578e3330796cf4e8a643dd380e4280b57a8",
+      "upstream": "https://community.chocolatey.org/api/v2/package/postgresql17/17.2.0"
+    }
+  },
+  "sourcePins": {
+    "pgvector": {
+      "version": "v0.8.6",
+      "repository": "https://github.com/pgvector/pgvector.git",
+      "commit": "8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c"
+    },
+    "windowsPostgresqlBuild": {
+      "chocolateyPackage": "postgresql17",
+      "chocolateyVersion": "17.2.0",
+      "chocolateySource": "https://community.chocolatey.org/api/v2",
+      "pgConfigVersion": "PostgreSQL 17.2",
+      "requireChecksums": true
+    }
+  }
+}
