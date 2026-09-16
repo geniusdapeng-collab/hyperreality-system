@@ -111,16 +111,21 @@ function openExternalUrl(url, {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-function tarExtractionPlan(archiveFile, destination, pathApi = path) {
-  const relativeArchive = pathApi.relative(destination, archiveFile);
+function tarExtractionPlan(archiveFile, destination, {
+  pathApi = path,
+  realpath = fs.realpathSync.native,
+} = {}) {
+  const canonicalArchive = realpath(archiveFile);
+  const canonicalDestination = realpath(destination);
+  const relativeArchive = pathApi.relative(canonicalDestination, canonicalArchive);
   // Windows 跨盘符时 path.relative 会返回另一个绝对路径；GNU tar 会把
   // X:\\... 误认为 host:path。同盘符使用相对路径，跨盘符则先暂存到目标目录。
   if (pathApi.isAbsolute(relativeArchive) || /^[A-Za-z]:[\\/]/u.test(relativeArchive)) {
-    const stagedArchive = pathApi.join(destination, ".workloom-payload.tar.gz");
-    return { cwd: destination, archiveArg: pathApi.basename(stagedArchive), stagedArchive };
+    const stagedArchive = pathApi.join(canonicalDestination, ".workloom-payload.tar.gz");
+    return { cwd: canonicalDestination, archiveArg: pathApi.basename(stagedArchive), stagedArchive };
   }
   return {
-    cwd: destination,
+    cwd: canonicalDestination,
     archiveArg: relativeArchive.replaceAll("\\", "/"),
     stagedArchive: null,
   };
