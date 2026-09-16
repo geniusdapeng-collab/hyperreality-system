@@ -1,54 +1,128 @@
 # WorkLoom 桌面客户端 · 完全自包含安装包 CI（唯一发行形态，v2.1.0 起）
-# 触发：打 tag（v*）或手动 dispatch；产出上传 GitHub Release
+# 触发：仅允许从 main 手动 dispatch；稳定 tag 必须已精确指向本次 main HEAD
 # 产物：
-#   macOS   WorkLoom 织元-<ver>-arm64.dmg / -x64.dmg（Electron 自包含：Node+PG17+pgvector+nats+载荷）
-#   Windows WorkLoom 织元 Setup <ver>.exe（NSIS，同口径自包含）
+#   macOS   <productName>-mac-arm64.dmg / -mac-x64.dmg（Electron 自包含：Node+PG17+pgvector+nats+载荷）
+#   Windows <productName>-win-x64.exe（NSIS，同口径自包含）
 # 冒烟验收：两平台均在打包后以 bootstrap.cjs --smoke 跑首启全流程
 #   （装配→initdb→迁移→seed-aipm 种子→起服务→健康检查），全绿才上传 Release。
 name: build-desktop
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "版本号（如 v2.1.0）"
+        description: "已存在且精确指向当前 main HEAD 的稳定版本 tag（如 v1.2.3）"
         required: true
-        default: "v2.1.0"
+        type: string
+      release_sha:
+        description: "本次发布提交（40 位小写 SHA，必须等于 tag、dispatch SHA 与当前 main HEAD）"
+        required: true
+        type: string
       platform_signing:
-        description: "平台代码签名（tag 推送固定使用 unsigned；Bundle 始终 Ed25519 签名）"
+        description: "平台代码签名（当前仓默认 unsigned；Bundle 始终 Ed25519 签名）"
         required: true
         type: choice
         options:
-          - signed
           - unsigned
-        default: signed
+          - signed
+        default: unsigned
 
 permissions:
-  contents: write
-  issues: write  # 冒烟失败留证开 Issue（沙箱无法直读 Actions 日志）
+  contents: read
+
+concurrency:
+  group: desktop-production-release
+  cancel-in-progress: false
 
 env:
-  VERSION: ${{ github.event.inputs.version || github.ref_name }}
-  # 手动发布默认走完整平台签名；tag 推送在没有 Apple/Windows 证书时明确走 unsigned。
-  # 两种模式都必须完成行业 Bundle Ed25519 签名并把公钥环打进安装包。
-  PLATFORM_SIGNING: ${{ github.event_name == 'workflow_dispatch' && inputs.platform_signing || 'unsigned' }}
+  RELEASE_PRODUCT_TITLE: "HyperReality 智能视频经营系统"
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+      release_sha: ${{ steps.identity.outputs.release_sha }}
+      platform_signing: ${{ steps.identity.outputs.platform_signing }}
+    steps:
+      - name: 绑定稳定 tag、release SHA、dispatch main 与当前 origin/main
+        id: identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.version }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          PLATFORM_SIGNING_INPUT: ${{ inputs.platform_signing }}
+          DISPATCH_SHA: ${{ github.sha }}
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "❌ 只允许 vMAJOR.MINOR.PATCH 稳定 tag"; exit 1; }
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "❌ release_sha 必须是 40 位小写提交摘要"; exit 1; }
+          test "$PLATFORM_SIGNING_INPUT" = "unsigned" -o "$PLATFORM_SIGNING_INPUT" = "signed" || { echo "❌ 非法平台签名模式"; exit 1; }
+          test "$DISPATCH_REF" = "refs/heads/main" || { echo "❌ 正式发布只能从 main 手动派发"; exit 1; }
+          test "$DISPATCH_SHA" = "$RELEASE_SHA" || { echo "❌ dispatch GITHUB_SHA 与 release_sha 不一致"; exit 1; }
+
+          api() {
+            curl --fail --silent --show-error --retry 3 \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com$1"
+          }
+
+          MAIN_SHA="$(api "/repos/$GITHUB_REPOSITORY/commits/main" | jq -er '.sha')"
+          test "$MAIN_SHA" = "$RELEASE_SHA" || { echo "❌ 当前 origin/main 已不是 release_sha"; exit 1; }
+
+          TAG_REF="$(api "/repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          OBJECT_TYPE="$(jq -er '.object.type' <<<"$TAG_REF")"
+          OBJECT_SHA="$(jq -er '.object.sha' <<<"$TAG_REF")"
+          for _ in 1 2 3 4 5; do
+            test "$OBJECT_TYPE" = "tag" || break
+            TAG_OBJECT="$(api "/repos/$GITHUB_REPOSITORY/git/tags/$OBJECT_SHA")"
+            OBJECT_TYPE="$(jq -er '.object.type' <<<"$TAG_OBJECT")"
+            OBJECT_SHA="$(jq -er '.object.sha' <<<"$TAG_OBJECT")"
+          done
+          test "$OBJECT_TYPE" = "commit" || { echo "❌ 稳定 tag 未解析到 commit"; exit 1; }
+          test "$OBJECT_SHA" = "$RELEASE_SHA" || { echo "❌ 稳定 tag 与 release_sha 不一致"; exit 1; }
+
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "release_sha=$RELEASE_SHA"
+            echo "platform_signing=$PLATFORM_SIGNING_INPUT"
+          } >> "$GITHUB_OUTPUT"
+
   macos:
+    needs: preflight
     runs-on: macos-latest
+    permissions:
+      contents: read
     env:
+      VERSION: ${{ needs.preflight.outputs.tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+      PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform_signing }}
       CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: pnpm }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 24.19.0, cache: pnpm }
+
+      - name: 校验固定 Node/npm 工具链
+        shell: bash
+        run: |
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "11.17.0"
 
       - name: 安装依赖 + 构建 web
         env:
@@ -125,18 +199,23 @@ jobs:
           echo "✅ 真实 .app 后端 + Live2D + 动态矢量双渲染冒烟通过"
         timeout-minutes: 20
 
-      - name: 上传渲染验收证据
+      - name: 留存 macOS 验收证据与失败诊断（私有 Actions Artifact）
         if: always()
         # 截图只是诊断证据；GitHub Artifact 服务偶发超时不应否定已经通过的
         # 后端、默认渲染与安全渲染产品验收。
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: macos-arm64-render-evidence
+          name: desktop-macos-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           path: |
+            /tmp/wl-smoke/logs/*
+            /tmp/wl-smoke/install-state.json
+            /tmp/wl-app-smoke/logs/*
+            /tmp/wl-app-smoke/install-state.json
             /tmp/wl-render-default/logs/render-default.*
             /tmp/wl-render-safe/logs/render-safe.*
+          retention-days: 7
       - name: 装配自包含载荷（darwin-x64）
         run: bash scripts/pack-electron-payload.sh --platform mac --arch x64 --version "$VERSION"
 
@@ -163,66 +242,56 @@ jobs:
           test -f "$RES/payload.tar.gz" || { echo "❌ x64 载荷归档未进包"; exit 1; }
           tar -tzf "$RES/payload.tar.gz" > /tmp/wl-pkg-list-x64.txt && grep -q "runtime/node_modules/tsx/package.json" /tmp/wl-pkg-list-x64.txt || { echo "❌ x64 归档内缺 tsx"; exit 1; }
           echo "✅ x64 拆包验收通过"
-      - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
-        if: failure()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          {
-            echo "## build-desktop macos 失败留证（run ${{ github.run_id }}）"
-            for f in /tmp/wl-smoke/logs/launch-*.log /tmp/wl-smoke/logs/pg.log /tmp/wl-smoke/logs/server.log /tmp/wl-smoke/logs/web.log; do
-              [ -f "$f" ] || continue
-              echo ""; echo "### $(basename "$f")（尾部 120 行）"; echo '```'
-              tail -120 "$f"; echo '```'
-            done
-          } > smoke-report.md
-          gh issue create --title "build-desktop macOS 冒烟失败留证（${{ env.VERSION }} run ${{ github.run_id }}）" --body-file smoke-report.md || true
-
-      - name: 生成平台签名披露与安装说明
+      - name: 封存本次 run/attempt 的 macOS 候选
         shell: bash
         run: |
-          if [ "$PLATFORM_SIGNING" = "signed" ]; then
-            STATUS="✅ 本版本已完成 Apple Developer ID/公证与 Windows Authenticode 签名。"
-            MAC_GUIDE="下载对应芯片的 DMG，拖入「应用程序」后直接打开。"
-            WIN_GUIDE="下载 EXE 后双击安装。"
-          else
-            STATUS="⚠️ 本版本未做 Apple/Windows 平台代码签名，未做 Apple 公证；行业 Bundle 仍已完成 Ed25519 签名与信任环校验。"
-            MAC_GUIDE='下载对应芯片的 DMG 并拖入「应用程序」，首次打开前在「终端」执行 `xattr -cr "/Applications/HyperReality 智能视频经营系统.app"`，再双击打开。'
-            WIN_GUIDE='下载 EXE 后双击安装；SmartScreen 提示时选择「更多信息」→「仍要运行」。'
-          fi
-          cat > release-notes.md <<EOF
-          ## 安装说明
-          $STATUS
+          CANDIDATE_DIR="$RUNNER_TEMP/desktop-macos-candidate"
+          rm -rf "$CANDIDATE_DIR"
+          node scripts/desktop-release-finalizer.mjs seal-platform \
+            --platform macos \
+            --release-dir release \
+            --output-dir "$CANDIDATE_DIR" \
+            --tag "$VERSION" \
+            --sha "$RELEASE_SHA" \
+            --platform-signing "$PLATFORM_SIGNING" \
+            --repository "$GITHUB_REPOSITORY"
 
-          **固定下载入口**：本 Release 页的 `/releases/latest` 永远指向最新版；按 `mac-arm64.dmg`、`mac-x64.dmg` 或 `win-x64.exe` 后缀选择。
-
-          **macOS**：$MAC_GUIDE
-
-          **Windows**：$WIN_GUIDE
-
-          > 客户端完全自包含；平台未签名不等于 Bundle 未校验。安装包内行业 Bundle 始终经过 Ed25519 签名，公钥信任环随应用封装并在运行时校验。
-          EOF
-
-      - name: 上传产物（macOS 双架构 DMG + 安装说明）
-        uses: softprops/action-gh-release@v2
+      - name: 上传本次 run/attempt 的 macOS 候选
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          files: release/*.dmg
-          name: ${{ env.VERSION }}
-          generate_release_notes: true
-          body_path: release-notes.md
+          name: desktop-macos-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-macos-candidate/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
 
   windows:
+    needs: preflight
     # 固定到不预装 PG17 的镜像，随后只从 release-assets.json 锁定源安装 17.11.0。
     runs-on: windows-2022
+    permissions:
+      contents: read
     env:
+      VERSION: ${{ needs.preflight.outputs.tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+      PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform_signing }}
       WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
       WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: pnpm }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 24.19.0, cache: pnpm }
+
+      - name: 校验固定 Node/npm 工具链
+        shell: bash
+        run: |
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "11.17.0"
 
       - name: 编译 pgvector + 同源 PG 运行时（vendor/pg-win + vendor/pgvector-win）
         shell: pwsh
@@ -298,29 +367,6 @@ jobs:
           test -f "$RENDER_SMOKE_ROOT/logs/render-default.json" || { echo "❌ Windows 渲染探针缺失"; exit 1; }
           echo "✅ 真实 Windows 应用后端 + 页面渲染冒烟通过"
         timeout-minutes: 20
-      - name: 失败留证（冒烟日志开 Issue 供远程诊断——沙箱无法直读 Actions 日志）
-        if: failure()
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $fence = [string][char]96 + [string][char]96 + [string][char]96
-          $report = "## build-desktop windows 失败留证（run ${{ github.run_id }}）`n"
-          $roots = @("wl-smoke", "wl-app-smoke", "wl-render-default")
-          foreach ($name in $roots) {
-            $root = Join-Path $env:RUNNER_TEMP $name
-            Get-ChildItem (Join-Path $root "logs\*") -File -ErrorAction SilentlyContinue | ForEach-Object {
-              $report += "`n### $name/$($_.Name)（尾部 120 行）`n$fence`n" + (Get-Content $_.FullName -Tail 120 | Out-String) + "$fence`n"
-            }
-            $installState = Join-Path $root "install-state.json"
-            if (Test-Path $installState) {
-              $report += "`n### $name/install-state.json`n$fence`n" + (Get-Content $installState -Raw | Out-String) + "$fence`n"
-            }
-          }
-          $report | Out-File -Encoding utf8 smoke-report.md
-          gh issue create --title "build-desktop Windows 冒烟失败留证（${{ env.VERSION }} run ${{ github.run_id }}）" --body-file smoke-report.md
-          if ($LASTEXITCODE -ne 0) { Write-Host "issue 创建失败（忽略）" }
-
       - name: 留存 Windows 首启失败诊断（Actions Artifact）
         if: failure()
         continue-on-error: true
@@ -337,35 +383,384 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: 生成平台签名披露与安装说明
+      - name: 封存本次 run/attempt 的 Windows 候选
         shell: bash
         run: |
-          if [ "$PLATFORM_SIGNING" = "signed" ]; then
-            STATUS="✅ 本版本已完成 Apple Developer ID/公证与 Windows Authenticode 签名。"
-            MAC_GUIDE="下载对应芯片的 DMG，拖入「应用程序」后直接打开。"
-            WIN_GUIDE="下载 EXE 后双击安装。"
-          else
-            STATUS="⚠️ 本版本未做 Apple/Windows 平台代码签名，未做 Apple 公证；行业 Bundle 仍已完成 Ed25519 签名与信任环校验。"
-            MAC_GUIDE='下载对应芯片的 DMG 并拖入「应用程序」，首次打开前在「终端」执行 `xattr -cr "/Applications/HyperReality 智能视频经营系统.app"`，再双击打开。'
-            WIN_GUIDE='下载 EXE 后双击安装；SmartScreen 提示时选择「更多信息」→「仍要运行」。'
-          fi
-          cat > release-notes.md <<EOF
-          ## 安装说明
-          $STATUS
+          CANDIDATE_DIR="$RUNNER_TEMP/desktop-windows-candidate"
+          rm -rf "$CANDIDATE_DIR"
+          node scripts/desktop-release-finalizer.mjs seal-platform \
+            --platform windows \
+            --release-dir release \
+            --output-dir "$CANDIDATE_DIR" \
+            --tag "$VERSION" \
+            --sha "$RELEASE_SHA" \
+            --platform-signing "$PLATFORM_SIGNING" \
+            --repository "$GITHUB_REPOSITORY"
 
-          **固定下载入口**：本 Release 页的 `/releases/latest` 永远指向最新版；按 `mac-arm64.dmg`、`mac-x64.dmg` 或 `win-x64.exe` 后缀选择。
-
-          **macOS**：$MAC_GUIDE
-
-          **Windows**：$WIN_GUIDE
-
-          > 客户端完全自包含；平台未签名不等于 Bundle 未校验。安装包内行业 Bundle 始终经过 Ed25519 签名，公钥信任环随应用封装并在运行时校验。
-          EOF
-
-      - name: 上传产物（Windows NSIS）
-        uses: softprops/action-gh-release@v2
+      - name: 上传本次 run/attempt 的 Windows 候选
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          files: release/*.exe
-          name: ${{ env.VERSION }}
-          generate_release_notes: true
-          body_path: release-notes.md
+          name: desktop-windows-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-windows-candidate/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publisher:
+    needs: [preflight, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      VERSION: ${{ needs.preflight.outputs.tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+      PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform_signing }}
+    steps:
+      - name: 下载本次 run/attempt 的 macOS 候选
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: desktop-macos-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidates/macos
+
+      - name: 下载本次 run/attempt 的 Windows 候选
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: desktop-windows-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidates/windows
+
+      - name: 原子封口、逐字节回读并晋级 Latest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import mimetypes
+          import os
+          import re
+          import shutil
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          CHECKSUM_NAME = "WorkLoom-SHA512SUMS.txt"
+          RELEASE_MANIFEST_NAME = "WorkLoom-release-manifest.json"
+          PLATFORM_MANIFESTS = {
+              "macos": "desktop-macos-manifest.json",
+              "windows": "desktop-windows-manifest.json",
+          }
+          SUFFIXES = {
+              "macos": ("-mac-arm64.dmg", "-mac-x64.dmg"),
+              "windows": ("-win-x64.exe",),
+          }
+          TAG = os.environ["VERSION"]
+          SHA = os.environ["RELEASE_SHA"]
+          SIGNING = os.environ["PLATFORM_SIGNING"]
+          PRODUCT_TITLE = os.environ["RELEASE_PRODUCT_TITLE"]
+          EXPECTED_TITLE = f"{PRODUCT_TITLE} {TAG}"
+          REPOSITORY = os.environ["GITHUB_REPOSITORY"]
+          TOKEN = os.environ["GH_TOKEN"]
+          API = f"https://api.github.com/repos/{REPOSITORY}"
+
+          def fail(message):
+              raise RuntimeError(message)
+
+          def digest(path):
+              value = hashlib.sha512()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      value.update(chunk)
+              return value.hexdigest()
+
+          def record(path):
+              size = path.stat().st_size
+              if size <= 0:
+                  fail(f"{path.name} 不能为空")
+              return {"name": path.name, "size": size, "sha512": digest(path)}
+
+          def top_files(directory):
+              if not directory.is_dir():
+                  fail(f"候选目录不存在：{directory}")
+              entries = list(directory.iterdir())
+              if any(not entry.is_file() for entry in entries):
+                  fail(f"候选目录只能包含顶层文件：{directory}")
+              return sorted(entries, key=lambda item: item.name)
+
+          def read_json(path):
+              try:
+                  return json.loads(path.read_text(encoding="utf-8"))
+              except Exception as error:
+                  fail(f"{path.name} 不是有效 JSON：{error}")
+
+          def validate_candidate(platform, directory):
+              files = top_files(directory)
+              names = [path.name for path in files]
+              manifest_name = PLATFORM_MANIFESTS[platform]
+              installers = []
+              for suffix in SUFFIXES[platform]:
+                  matched = [name for name in names if name.endswith(suffix)]
+                  if len(matched) != 1:
+                      fail(f"{platform} 必须且只能有一个 {suffix} 安装包")
+                  installers.append(matched[0])
+              if set(names) != set(installers + [manifest_name]):
+                  fail(f"{platform} 候选含有多余或缺失文件：{', '.join(names)}")
+              manifest = read_json(directory / manifest_name)
+              expected_identity = {
+                  "schemaVersion": 1,
+                  "product": REPOSITORY,
+                  "platform": platform,
+                  "tag": TAG,
+                  "sha": SHA,
+                  "platformSigning": SIGNING,
+              }
+              for key, expected in expected_identity.items():
+                  if manifest.get(key) != expected:
+                      fail(f"{manifest_name} 的 {key} 与本次发布不一致")
+              rows = manifest.get("assets")
+              if not isinstance(rows, list) or len(rows) != len(installers):
+                  fail(f"{manifest_name} 资产记录数量不正确")
+              for name in installers:
+                  if not re.fullmatch(r"[^/\\\r\n\0]+", name):
+                      fail(f"不安全的安装包名称：{name!r}")
+                  actual = record(directory / name)
+                  matched = [row for row in rows if isinstance(row, dict) and row.get("name") == name]
+                  if len(matched) != 1 or matched[0].get("size") != actual["size"] or matched[0].get("sha512") != actual["sha512"]:
+                      fail(f"{manifest_name} 中 {name} 的大小或 sha512 不匹配")
+              return installers
+
+          def request_bytes(method, url, payload=None, content_type="application/vnd.github+json", accept="application/vnd.github+json"):
+              data = payload
+              if isinstance(payload, (dict, list)):
+                  data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+              headers = {
+                  "Accept": accept,
+                  "Authorization": f"Bearer {TOKEN}",
+                  "User-Agent": "workloom-atomic-desktop-publisher",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              if data is not None:
+                  headers["Content-Type"] = content_type
+              request = urllib.request.Request(url, data=data, headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(request, timeout=180) as response:
+                      return response.read()
+              except urllib.error.HTTPError as error:
+                  detail = error.read().decode("utf-8", errors="replace")[:1000]
+                  fail(f"GitHub API {method} {url} 返回 {error.code}：{detail}")
+
+          def api_json(method, path, payload=None):
+              raw = request_bytes(method, f"{API}{path}", payload)
+              return json.loads(raw.decode("utf-8"))
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+                  return None
+
+          def download_asset(api_url):
+              request = urllib.request.Request(api_url, headers={
+                  "Accept": "application/octet-stream",
+                  "Authorization": f"Bearer {TOKEN}",
+                  "User-Agent": "workloom-atomic-desktop-publisher",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              })
+              opener = urllib.request.build_opener(NoRedirect)
+              try:
+                  with opener.open(request, timeout=180) as response:
+                      return response.read()
+              except urllib.error.HTTPError as error:
+                  if error.code not in {301, 302, 303, 307, 308}:
+                      fail(f"GitHub 资产 API 回读失败：HTTP {error.code}")
+                  location = error.headers.get("Location")
+                  parsed = urllib.parse.urlparse(location or "")
+                  if parsed.scheme != "https" or not parsed.netloc:
+                      fail("GitHub 资产 API 返回了不安全的重定向")
+                  # 一次性对象存储 URL 已自带签名；跨域请求不得携带 GitHub token。
+                  clean_request = urllib.request.Request(location, headers={
+                      "User-Agent": "workloom-atomic-desktop-publisher",
+                  })
+                  with urllib.request.urlopen(clean_request, timeout=180) as response:
+                      return response.read()
+
+          def resolve_tag():
+              ref = api_json("GET", f"/git/ref/tags/{urllib.parse.quote(TAG, safe='')}")
+              kind = ref["object"]["type"]
+              value = ref["object"]["sha"]
+              for _ in range(5):
+                  if kind != "tag":
+                      break
+                  item = api_json("GET", f"/git/tags/{value}")
+                  kind = item["object"]["type"]
+                  value = item["object"]["sha"]
+              if kind != "commit":
+                  fail("稳定 tag 未解析到 commit")
+              return value
+
+          def assert_repository_identity():
+              if api_json("GET", "/commits/main")["sha"] != SHA:
+                  fail("发布封口前 origin/main 已移动")
+              if resolve_tag() != SHA:
+                  fail("发布封口前稳定 tag 已移动")
+
+          def all_releases():
+              found = []
+              for page in range(1, 101):
+                  batch = api_json("GET", f"/releases?per_page=100&page={page}")
+                  found.extend(batch)
+                  if len(batch) < 100:
+                      return found
+              fail("Release 数量超出安全分页上限")
+
+          def verify_remote_assets(release_id, local_directory, expected_names):
+              release = api_json("GET", f"/releases/{release_id}")
+              assets = release.get("assets") or []
+              if {asset.get("name") for asset in assets} != set(expected_names) or len(assets) != len(expected_names):
+                  fail("远端 Release 未精确包含五份正式资产")
+              by_name = {asset["name"]: asset for asset in assets}
+              for name in expected_names:
+                  local = (local_directory / name).read_bytes()
+                  asset = by_name[name]
+                  if asset.get("state") != "uploaded" or asset.get("size") != len(local):
+                      fail(f"远端资产状态或大小不正确：{name}")
+                  remote = download_asset(asset["url"])
+                  if remote != local:
+                      fail(f"远端资产逐字节回读不一致：{name}")
+              return release
+
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", TAG):
+              fail("只允许稳定版本 tag")
+          if not re.fullmatch(r"[0-9a-f]{40}", SHA):
+              fail("release SHA 格式不正确")
+          if SIGNING not in {"signed", "unsigned"}:
+              fail("平台签名模式不正确")
+
+          mac_dir = Path("candidates/macos").resolve()
+          windows_dir = Path("candidates/windows").resolve()
+          mac_names = validate_candidate("macos", mac_dir)
+          windows_names = validate_candidate("windows", windows_dir)
+          installer_names = mac_names + windows_names
+          if len(installer_names) != 3 or len(set(installer_names)) != 3:
+              fail("三份跨平台安装包名称必须唯一")
+
+          final_dir = Path(os.environ["RUNNER_TEMP"]) / "desktop-final-release"
+          if final_dir.exists():
+              shutil.rmtree(final_dir)
+          final_dir.mkdir(parents=True)
+          for directory, names in ((mac_dir, mac_names), (windows_dir, windows_names)):
+              for name in names:
+                  shutil.copyfile(directory / name, final_dir / name)
+
+          records = [record(final_dir / name) for name in installer_names]
+          release_manifest = {
+              "schemaVersion": 1,
+              "product": REPOSITORY,
+              "tag": TAG,
+              "sha": SHA,
+              "platformSigning": SIGNING,
+              "assets": records,
+          }
+          (final_dir / RELEASE_MANIFEST_NAME).write_text(
+              json.dumps(release_manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          (final_dir / CHECKSUM_NAME).write_text(
+              "".join(f"{item['sha512']}  {item['name']}\n" for item in records),
+              encoding="utf-8",
+          )
+          expected_names = installer_names + [CHECKSUM_NAME, RELEASE_MANIFEST_NAME]
+          if {path.name for path in top_files(final_dir)} != set(expected_names) or len(top_files(final_dir)) != 5:
+              fail("正式资产目录必须精确包含三份安装包和两份固定证据")
+
+          assert_repository_identity()
+          if any(item.get("tag_name") == TAG for item in all_releases()):
+              fail("该稳定 tag 已存在 Release；拒绝覆盖、复用或续写")
+
+          if SIGNING == "signed":
+              status = "✅ 本版本已完成 Apple Developer ID/公证与 Windows Authenticode 签名。"
+              mac_guide = "下载对应芯片的 DMG，拖入「应用程序」后直接打开。"
+              win_guide = "下载 EXE 后双击安装。"
+          else:
+              status = "⚠️ 本版本未做 Apple/Windows 平台代码签名，未做 Apple 公证；行业 Bundle 仍已完成 Ed25519 签名与信任环校验。"
+              mac_guide = "下载对应芯片的 DMG 并拖入「应用程序」，首次打开前在「终端」对应用执行 xattr -cr，再双击打开。"
+              win_guide = "下载 EXE 后双击安装；SmartScreen 提示时选择「更多信息」→「仍要运行」。"
+          body = (
+              f"## 安装说明\n\n{status}\n\n"
+              f"**macOS**：{mac_guide}\n\n"
+              f"**Windows**：{win_guide}\n\n"
+              "> 客户端完全自包含；平台未签名不等于 Bundle 未校验。"
+              "三份安装包的 SHA-512 与发布身份见本 Release 的两份固定证据。\n"
+          )
+          draft = api_json("POST", "/releases", {
+              "tag_name": TAG,
+              "target_commitish": SHA,
+              "name": EXPECTED_TITLE,
+              "body": body,
+              "draft": True,
+              "prerelease": False,
+              "make_latest": "false",
+          })
+          if not draft.get("draft") or draft.get("prerelease") or draft.get("tag_name") != TAG or draft.get("name") != EXPECTED_TITLE:
+              fail("草稿 Release 身份不正确")
+          release_id = draft["id"]
+          upload_root = f"https://uploads.github.com/repos/{REPOSITORY}/releases/{release_id}/assets"
+          for name in expected_names:
+              path = final_dir / name
+              content_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+              uploaded = json.loads(request_bytes(
+                  "POST",
+                  f"{upload_root}?name={urllib.parse.quote(name, safe='')}",
+                  path.read_bytes(),
+                  content_type=content_type,
+              ).decode("utf-8"))
+              if uploaded.get("name") != name or uploaded.get("state") != "uploaded" or uploaded.get("size") != path.stat().st_size:
+                  fail(f"上传资产回执不正确：{name}")
+
+          verify_remote_assets(release_id, final_dir, expected_names)
+          assert_repository_identity()
+          published = api_json("PATCH", f"/releases/{release_id}", {
+              "draft": False,
+              "prerelease": False,
+              "make_latest": "true",
+          })
+          if published.get("draft") or published.get("prerelease") or published.get("tag_name") != TAG or published.get("name") != EXPECTED_TITLE:
+              fail("正式 Release 晋级状态不正确")
+
+          # 公开、Latest 与 immutable 可能存在秒级最终一致性；只轮询元数据，
+          # 收敛后再做一次五资产逐字节回读，避免公开成功后因瞬态读延迟误判失败。
+          PUBLISH_CONVERGENCE_DELAYS = (0, 2, 4, 8, 16, 30)
+          convergence_error = "发布状态尚未收敛"
+          for delay in PUBLISH_CONVERGENCE_DELAYS:
+              if delay:
+                  time.sleep(delay)
+              try:
+                  sealed = api_json("GET", f"/releases/{release_id}")
+                  latest = api_json("GET", "/releases/latest")
+                  by_tag = api_json("GET", f"/releases/tags/{urllib.parse.quote(TAG, safe='')}")
+                  views = (("release", sealed), ("latest", latest), ("tag", by_tag))
+                  for label, item in views:
+                      if item.get("id") != release_id or item.get("tag_name") != TAG or item.get("name") != EXPECTED_TITLE or item.get("draft") or item.get("prerelease"):
+                          raise RuntimeError(f"{label} 回读身份尚未收敛")
+                      if item.get("immutable") is not True:
+                          raise RuntimeError(f"{label} 回读尚未确认 immutable")
+                  break
+              except RuntimeError as error:
+                  convergence_error = str(error)
+          else:
+              fail(f"正式 Release 元数据在有限退避后仍未收敛：{convergence_error}")
+
+          sealed = verify_remote_assets(release_id, final_dir, expected_names)
+          if sealed.get("immutable") is not True:
+              fail("五资产回读时正式 Release 不再是 immutable")
+          assert_repository_identity()
+          print(json.dumps({
+              "releaseId": release_id,
+              "tag": TAG,
+              "sha": SHA,
+              "platformSigning": SIGNING,
+              "immutable": True,
+              "assets": [record(final_dir / name) for name in expected_names],
+          }, ensure_ascii=False))
+          PY

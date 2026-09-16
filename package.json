@@ -59,7 +59,7 @@
     "projections:check": "tsx scripts/generate-client-projections.mts",
     "bundle:governance": "tsx scripts/bundle-governance.mts",
     "bundle:release": "tsx scripts/bundle-governance.mts --refresh-digests --release",
-    "desktop:release:contract": "node --test scripts/unsigned-desktop-release.test.mjs"
+    "desktop:release:contract": "node --test scripts/unsigned-desktop-release.test.mjs scripts/desktop-release-finalizer.test.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
