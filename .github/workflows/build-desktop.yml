@@ -100,11 +100,6 @@ jobs:
       VERSION: ${{ needs.preflight.outputs.release-tag }}
       RELEASE_SHA: ${{ needs.preflight.outputs.release-sha }}
       PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform-signing }}
-      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -129,12 +124,6 @@ jobs:
           BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
         run: |
           pnpm install --frozen-lockfile
-          if [ "$PLATFORM_SIGNING" = "signed" ]; then
-            test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ signed 模式缺少 macOS Developer ID 签名证书"; exit 1; }
-            test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ signed 模式缺少 Apple 公证凭据"; exit 1; }
-          else
-            echo "⚠️ unsigned 模式：跳过 Apple Developer ID 签名与公证；Release 必须披露安装风险"
-          fi
           test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
           pnpm bundle:release
           test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
@@ -159,12 +148,27 @@ jobs:
         run: bash scripts/pack-electron-payload.sh --platform mac --arch arm64 --version "$VERSION"
 
       - name: 打包 DMG（arm64）
+        if: needs.preflight.outputs.platform-signing == 'signed'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ "$PLATFORM_SIGNING" = "signed" ]; then
-            pnpm exec electron-builder --mac dmg --arm64 --publish never -c.extraMetadata.version="${VERSION#v}"
-          else
-            CSC_IDENTITY_AUTO_DISCOVERY=false CSC_LINK= CSC_KEY_PASSWORD= APPLE_ID= APPLE_APP_SPECIFIC_PASSWORD= APPLE_TEAM_ID= pnpm exec electron-builder --mac dmg --arm64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
-          fi
+          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ 缺少 macOS Developer ID 签名证书，拒绝对外发行"; exit 1; }
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ 缺少 Apple 公证凭据，拒绝对外发行"; exit 1; }
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --arm64 --publish never -c.extraMetadata.version="${VERSION#v}"
+
+      - name: 打包未签名 DMG（arm64）
+        if: needs.preflight.outputs.platform-signing == 'unsigned'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          echo "⚠️ 按发布输入生成未签名、未 Apple 公证的 macOS 安装包"
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --arm64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
 
       - name: 拆包验收 + 冒烟（对 .app 内载荷归档跑首启全流程——验证用户拿到的内容）
         run: |
@@ -217,12 +221,27 @@ jobs:
         run: bash scripts/pack-electron-payload.sh --platform mac --arch x64 --version "$VERSION"
 
       - name: 打包 DMG（x64）
+        if: needs.preflight.outputs.platform-signing == 'signed'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ "$PLATFORM_SIGNING" = "signed" ]; then
-            pnpm exec electron-builder --mac dmg --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
-          else
-            CSC_IDENTITY_AUTO_DISCOVERY=false CSC_LINK= CSC_KEY_PASSWORD= APPLE_ID= APPLE_APP_SPECIFIC_PASSWORD= APPLE_TEAM_ID= pnpm exec electron-builder --mac dmg --x64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
-          fi
+          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ 缺少 macOS Developer ID 签名证书，拒绝对外发行"; exit 1; }
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ 缺少 Apple 公证凭据，拒绝对外发行"; exit 1; }
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+
+      - name: 打包未签名 DMG（x64）
+        if: needs.preflight.outputs.platform-signing == 'unsigned'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          echo "⚠️ 按发布输入生成未签名、未 Apple 公证的 macOS 安装包"
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --x64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
 
       - name: 拆包验收（x64 .app 载荷归档完整性；arm64 runner 无法跑 x64 二进制，文件级核验）
         run: |
@@ -272,8 +291,6 @@ jobs:
       VERSION: ${{ needs.preflight.outputs.release-tag }}
       RELEASE_SHA: ${{ needs.preflight.outputs.release-sha }}
       PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform-signing }}
-      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -302,11 +319,6 @@ jobs:
           BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
         run: |
           pnpm install --frozen-lockfile
-          if [ "$PLATFORM_SIGNING" = "signed" ]; then
-            test -n "$WIN_CSC_LINK" && test -n "$WIN_CSC_KEY_PASSWORD" || { echo "❌ signed 模式缺少 Windows 代码签名证书"; exit 1; }
-          else
-            echo "⚠️ unsigned 模式：跳过 Windows Authenticode；Release 必须披露 SmartScreen 提示"
-          fi
           test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
           pnpm bundle:release
           test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
@@ -322,15 +334,27 @@ jobs:
         run: bash scripts/pack-electron-payload.sh --platform win --arch x64 --version "$VERSION"
 
       - name: 打包 NSIS 安装包
+        if: needs.preflight.outputs.platform-signing == 'signed'
         shell: bash  # pwsh 会把 -c.extraMetadata.version="x" 的 -c 吞掉（ENOENT 实证），统一 bash
         run: |
-          if [ "$PLATFORM_SIGNING" = "signed" ]; then
-            pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
-          else
-            CSC_IDENTITY_AUTO_DISCOVERY=false WIN_CSC_LINK= WIN_CSC_KEY_PASSWORD= CSC_LINK= CSC_KEY_PASSWORD= pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
-          fi
+          test -n "$WIN_CSC_LINK" && test -n "$WIN_CSC_KEY_PASSWORD" || { echo "❌ 缺少 Windows 代码签名证书，拒绝对外发行"; exit 1; }
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
         env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: 打包未签名 NSIS 安装包
+        if: needs.preflight.outputs.platform-signing == 'unsigned'
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+        run: |
+          echo "⚠️ 按发布输入生成未 Authenticode 签名的 Windows 安装包"
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
 
       - name: 拆包验收 + 冒烟（对 win-unpacked 载荷归档跑首启全流程——验证用户拿到的内容）
         shell: bash

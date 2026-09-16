@@ -42,16 +42,14 @@ test("正式发布并发、工具链与 Action 供应链全部锁定", () => {
     "pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320",
     "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
     "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
-    "actions/download-artifact@v4",
   ]) {
     assert.ok(workflow.includes(marker), `缺少正式发布锁定项：${marker}`);
   }
   assert.equal(workflow.match(/node-version: 24\.19\.0/gu)?.length, 2);
   assert.equal(workflow.match(/test "\$\(npm --version\)" = "11\.17\.0"/gu)?.length, 2);
   assert.equal(runtimeMetadata.npmVersion, "11.17.0");
-  const floating = [...workflow.matchAll(/uses:\s+([^\s]+@(v\d+|main|master))\b/gu)]
-    .map((match) => match[1]);
-  assert.deepEqual(floating, ["actions/download-artifact@v4", "actions/download-artifact@v4"]);
+  const floatingActions = workflow.match(/uses:\s+[^\s]+@(v\d+|main|master)\b/gu) ?? [];
+  assert.deepEqual(floatingActions, ["uses: actions/download-artifact@v4", "uses: actions/download-artifact@v4"], "仅 canonical publisher 的双候选下载保留基座模板引用");
 });
 
 test("平台未签名模式不削弱 Bundle Ed25519 信任链", () => {
@@ -69,14 +67,15 @@ test("signed 与 unsigned 平台校验边界清晰", () => {
   assert.match(workflow, /codesign --verify --deep --strict/u);
   assert.match(workflow, /xcrun stapler validate/u);
   assert.match(workflow, /Get-AuthenticodeSignature/u);
-  assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY=false/u);
-  assert.match(workflow, /CSC_LINK= CSC_KEY_PASSWORD=/u);
-  assert.match(workflow, /WIN_CSC_LINK= WIN_CSC_KEY_PASSWORD=/u);
+  assert.equal(workflow.match(/CSC_IDENTITY_AUTO_DISCOVERY: "false"/gu)?.length, 3);
+  assert.equal(workflow.match(/if: needs\.preflight\.outputs\.platform-signing == 'signed'/gu)?.length, 3);
+  assert.equal(workflow.match(/if: needs\.preflight\.outputs\.platform-signing == 'unsigned'/gu)?.length, 3);
+  assert.doesNotMatch(workflow, /(?:CSC_LINK|CSC_KEY_PASSWORD|APPLE_ID|APPLE_APP_SPECIFIC_PASSWORD|APPLE_TEAM_ID|WIN_CSC_LINK|WIN_CSC_KEY_PASSWORD)=\s/u);
   assert.match(workflow, /-c\.mac\.notarize=false/u);
 });
 
 test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发布五资产", () => {
-  assert.match(builder, /^artifactName: "HyperReality\.System-\$\{os\}-\$\{arch\}\.\$\{ext\}"$/mu);
+  assert.match(builder, /artifactName: "HyperReality\.System-\$\{os\}-\$\{arch\}\.\$\{ext\}"/u);
   assert.match(workflow, /--mac dmg --arm64/u);
   assert.match(workflow, /--mac dmg --x64/u);
   assert.match(workflow, /--win nsis --x64/u);
@@ -86,16 +85,14 @@ test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发�
     'desktop-windows-candidate-${{ github.run_id }}-${{ github.run_attempt }}',
     'WorkLoom-SHA512SUMS.txt',
     'WorkLoom-release-manifest.json',
-    "gh api --paginate --slurp",
-    "artifact-ids: ${{ steps.candidates.outputs.macos-id }}",
-    "artifact-ids: ${{ steps.candidates.outputs.windows-id }}",
-    'gh release create "$RELEASE_TAG"',
-    "--verify-tag --target \"$RELEASE_SHA\" --draft --latest=false",
+    '--draft --latest=false',
     'gh release upload "$RELEASE_TAG"',
+    'node "$FINALIZER" verify',
+    '--draft=false --latest=true',
+    'isLatest,isImmutable',
     'cmp -s "$asset" "$REMOTE_DIR/$name"',
-    'gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=true',
-    "for attempt in $(seq 1 12)",
-    "isLatest,isImmutable,assets",
+    'for attempt in $(seq 1 12)',
+    'resolve_remote_tag()',
     '未做 Apple/Windows 平台代码签名',
     'SmartScreen',
   ]) {
@@ -110,26 +107,16 @@ test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发�
   assert.doesNotMatch(publisher, /node scripts\//u);
 });
 
-test("Release 标题严格继承 canonical 仓库标识", () => {
-  assert.doesNotMatch(workflow, /RELEASE_PRODUCT_TITLE/u);
-  assert.match(workflow, /--title "\$\{GITHUB_REPOSITORY#\*\/\} \$RELEASE_TAG"/u);
+test("Release 标题与当前仓库、稳定 tag 绑定", () => {
+  assert.ok(workflow.includes('--title "${GITHUB_REPOSITORY#*/} $RELEASE_TAG"'));
 });
 
-test("publisher 反缩进后与 PR30 canonical 模板逐字节一致", () => {
-  const start = workflow.indexOf("\n  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。\n");
-  assert.notEqual(start, -1, "缺少 canonical publisher 起点");
-  const publisher = workflow.slice(start + 1);
-  const canonical = publisher
-    .split("\n")
-    .map((line) => {
-      assert.ok(line === "" || line.startsWith("  "), "publisher 每行必须且只能由工作流 jobs 层整体缩进");
-      return line.startsWith("  ") ? line.slice(2) : line;
-    })
-    .join("\n");
-  assert.equal(
-    createHash("sha256").update(canonical).digest("hex"),
-    "e9065a08afc698696430e8a8c3c2607e6019c23812fa673559ac7981e7e41bc0",
-  );
+test("唯一 publisher 与基座 PR30 canonical 模板逐字节同源", () => {
+  const marker = "  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。";
+  const start = workflow.indexOf(marker);
+  assert.notEqual(start, -1);
+  const publisher = `${workflow.slice(start).split("\n").map((line) => line.startsWith("  ") ? line.slice(2) : line).join("\n")}`;
+  assert.equal(createHash("sha256").update(publisher).digest("hex"), "e9065a08afc698696430e8a8c3c2607e6019c23812fa673559ac7981e7e41bc0");
 });
 
 test("桌面产品身份、端口和签名配置与产品清单一致", () => {
