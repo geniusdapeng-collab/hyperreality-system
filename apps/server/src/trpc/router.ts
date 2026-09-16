@@ -134,6 +134,12 @@ import {
   resolveAuthoritativeClientAccess,
 } from "../service/access-authority.js";
 import {
+  replayWelcome,
+  saveWelcomeProgress,
+  welcomeProgress,
+  WELCOME_STEPS,
+} from "../service/onboarding-continuity.js";
+import {
   buildEvolutionScorecard,
   decayMemories,
   disableMemory,
@@ -244,6 +250,33 @@ async function probeLlm(cfg: { baseUrl: string; apiKey?: string; model: string }
 }
 
 const onboardingRouter = router({
+  /** 首次欢迎按账号/角色/工作区持久化；只读成员也只能写自己的欢迎进度。 */
+  welcomeStatus: protectedProcedure.query(async ({ ctx }) => ({
+    ...(await welcomeProgress(ctx.identity.workspaceId, {
+      memberId: ctx.identity.memberId,
+      memberNo: ctx.identity.memberNo,
+      role: ctx.identity.role,
+    })),
+    role: ctx.identity.role,
+  })),
+
+  saveWelcomeProgress: protectedProcedure
+    .input(z.object({
+      status: z.enum(["in_progress", "paused", "completed"]),
+      currentStep: z.enum(WELCOME_STEPS),
+    }))
+    .mutation(async ({ ctx, input }) => saveWelcomeProgress(ctx.identity.workspaceId, {
+      memberId: ctx.identity.memberId,
+      memberNo: ctx.identity.memberNo,
+      role: ctx.identity.role,
+    }, input)),
+
+  replayWelcome: protectedProcedure.mutation(async ({ ctx }) => replayWelcome(ctx.identity.workspaceId, {
+    memberId: ctx.identity.memberId,
+    memberNo: ctx.identity.memberNo,
+    role: ctx.identity.role,
+  })),
+
   /** 运行态总览（P0 横幅/落地向导同一事实源）：数据模式 + LLM 装配 + 工作区规模 */
   status: protectedProcedure.query(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
