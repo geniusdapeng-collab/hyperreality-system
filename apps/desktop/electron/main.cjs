@@ -455,16 +455,14 @@ async function runRenderSmoke() {
   // 仪式通过并不代表正式产品页可交付。必须真正退出仪式，依次验收职场与舞台 3D：
   // 画面非黑、团队完整、默认标签只含岗位名（系统内置人名不能泄漏到 HUD）。
   const enteredSystem = await win.webContents.executeJavaScript(`(() => {
-    const buttons = [...document.querySelectorAll('button')];
-    const skip = buttons.find((button) => button.textContent?.includes('跳过仪式'));
+    const skip = document.querySelector('button[data-welcome-action="skip-team"]');
     skip?.click();
     return !!skip;
   })()`, true);
   if (!enteredSystem) throw new Error(`无法退出团队仪式：${JSON.stringify(report)}`);
   await new Promise((resolve) => setTimeout(resolve, 350));
   const confirmedSystem = await win.webContents.executeJavaScript(`(() => {
-    const buttons = [...document.querySelectorAll('button')];
-    const enter = buttons.find((button) => button.textContent?.includes('进入系统'));
+    const enter = document.querySelector('button[data-welcome-action="enter-system"]');
     enter?.click();
     return !!enter;
   })()`, true);

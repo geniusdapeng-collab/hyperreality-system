@@ -176,6 +176,7 @@ export function WelcomeCeremony({
             style={{ cursor: "pointer", color: "#9aa2ac", fontSize: 14, background: "rgba(11,13,16,.75)", border: "1px solid rgba(214,220,228,.2)", borderRadius: 8, padding: "8px 14px" }}
           >稍后继续</button>
           <button
+            data-welcome-action="skip-team"
             onClick={skip}
             style={{ cursor: "pointer", color: "#9aa2ac", fontSize: 14, background: "rgba(11,13,16,.75)", border: "1px solid rgba(214,220,228,.2)", borderRadius: 8, padding: "8px 14px" }}
           >跳到介绍 <Icon name="chevron" size={13} style={{ display: "inline" }} /></button>
@@ -229,7 +230,7 @@ export function WelcomeCeremony({
             ))}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 18, alignItems: "center", marginBottom: 30 }}>
-            <button onClick={onDone} style={{
+            <button data-welcome-action="enter-system" onClick={onDone} style={{
               padding: "18px 50px", borderRadius: 14, border: "none", cursor: "pointer",
               fontSize: 17, fontWeight: 700, letterSpacing: 2, color: "#12151a",
               background: "linear-gradient(135deg, #f0f4f9, #c3ccd8)",

@@ -5,7 +5,7 @@
 #   ② pgvector 官方 Makefile.win 需要 PGROOT 环境变量（非 PATH 里的 pg_config）。
 # 方案：choco 装全量 PG17（含头文件+pg_config）→ PGROOT 指向它 → vcvars64 + nmake →
 #       从 PGROOT 归集 vector.dll + control + sql 到 vendor/pgvector-win/。
-#       运行时 ABI 兼容：pack-windows.sh 的 zonky PG 与 choco PG 同为 EDB 官方 17.x 构建。
+#       运行时 ABI 兼容：编译产物和随包运行时都取自同一份锁定 EDB PostgreSQL 树。
 # 用法（CI 或本机 Windows 管理员环境）：pwsh scripts/build-pgvector-win.ps1
 # ============================================================
 $ErrorActionPreference = "Stop"
@@ -93,8 +93,8 @@ try {
 }
 
 # ---------- 3.5 暂存运行时 PG 树（与编译底座同源，ABI 绝对一致） ----------
-# 背景：v2.0.13 实证 choco(17.6) 编译的 vector.dll 在 zonky(17.2) 运行时缺符号
-# （"The specified procedure could not be found"）——运行时与编译底座必须同源。
+# 背景：v2.0.13 实证不同 17.x 小版本会让 vector.dll 在运行时缺符号；同时 pgvector
+# 0.8.6 官方明确要求 Windows PostgreSQL 17.3+，所以编译与运行统一锁定 EDB 17.11。
 # 顺带收益：EDB 全量树含 psql/pg_isready 等完整工具链（zonky 仅三件套）。
 $RunPg = "vendor/pg-win"
 if (Test-Path $RunPg) { Remove-Item $RunPg -Recurse -Force }

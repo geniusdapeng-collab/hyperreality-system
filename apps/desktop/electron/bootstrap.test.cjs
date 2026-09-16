@@ -182,6 +182,16 @@ describe("桌面载荷原子装配", () => {
     assert.match(source, /if \(SOURCE_MODE\)[\s\S]*if \(RENDER_SMOKE\)[\s\S]*源码模式禁止执行发布渲染冒烟/u);
     assert.match(source, /else \{[\s\S]*handle = await bootstrap\(\{[\s\S]*resourcesDir/u);
   });
+
+  it("发布渲染冒烟使用稳定动作标记走完真实欢迎流程", () => {
+    const mainSource = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+    const welcomeSource = fs.readFileSync(path.join(__dirname, "../../web/src/components/WelcomeCeremony.tsx"), "utf8");
+    for (const action of ["skip-team", "enter-system"]) {
+      assert.ok(mainSource.includes(`data-welcome-action="${action}"`));
+      assert.ok(welcomeSource.includes(`data-welcome-action="${action}"`));
+    }
+    assert.doesNotMatch(mainSource, /textContent\?\.includes\(['"](?:跳过仪式|进入系统)/u);
+  });
 });
 
 describe("桌面 PostgreSQL 实例归属与端口契约", () => {

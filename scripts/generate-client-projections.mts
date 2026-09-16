@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseBundleManifest } from "../packages/industry-contract/src/index.ts";
+import { isStrictPathWithin } from "./path-containment.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 let repositoryRoot = root;
@@ -93,7 +94,10 @@ if (!manifest.workloom.ui.serviceFront.enabled) {
 const candidates = manifest.workloom.provides.serviceFront.filter((item) => item.endsWith("client.json"));
 if (candidates.length !== 1) throw new Error(`默认行业包必须且只能声明一个 service-front/client.json，实际 ${candidates.length} 个`);
 const sourcePath = resolve(bundleDir, candidates[0]!);
-if (!sourcePath.startsWith(`${bundleDir}/`) || !existsSync(sourcePath)) throw new Error("C端投影源不存在或越出行业包目录");
+if (
+  !existsSync(sourcePath)
+  || !isStrictPathWithin(realpathSync(bundleDir), realpathSync(sourcePath))
+) throw new Error("C端投影源不存在或越出行业包目录");
 const source = JSON.parse(readFileSync(sourcePath, "utf8")) as Record<string, unknown>;
 const theme = source.theme as { primary?: unknown; secondary?: unknown } | undefined;
 if (!theme || typeof theme.primary !== "string" || typeof theme.secondary !== "string") {

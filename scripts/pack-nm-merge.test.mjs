@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { buildMergedRuntimeManifest, runtimeDependencySources } from "./pack-nm-merge.mjs";
+import { buildMergedRuntimeManifest, parsePnpmRuntimeLock, runtimeDependencySources } from "./pack-nm-merge.mjs";
 import { payloadPolicyFor } from "./payload-policy.mjs";
 
 function writeJson(path, value) {
@@ -75,6 +75,21 @@ const andromedaPolicy = payloadPolicyFor({
   productId: "workroom-andromeda",
   role: "operations-hub",
   repository: "geniusdapeng-collab/workroom-andromeda",
+});
+
+test("pnpm 锁文件在 Windows CRLF 检出后保持同一解析语义", () => {
+  const lf = [
+    "lockfileVersion: '9.0'",
+    "importers:",
+    "  .:",
+    "    dependencies:",
+    "      hono:",
+    "        specifier: 1.0.0",
+    "        version: 1.0.0",
+    "",
+  ].join("\n");
+  assert.deepEqual(parsePnpmRuntimeLock(lf.replaceAll("\n", "\r\n")), parsePnpmRuntimeLock(lf));
+  assert.throws(() => parsePnpmRuntimeLock(lf.replace("\n", "\r")), /孤立 CR/u);
 });
 
 test("基座物理存在 platform-ops 时依赖合成仍排除平台工程", () => {

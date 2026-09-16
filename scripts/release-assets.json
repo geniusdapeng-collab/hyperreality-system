@@ -38,9 +38,9 @@
       "sha256": "41a2c287c4ca14691e9af4e6bdd719aca231983fcac8a43d01c99e1bca613859",
       "upstream": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-windows-amd64/17.2.0/embedded-postgres-binaries-windows-amd64-17.2.0.jar.sha256"
     },
-    "postgresql17.17.2.0.nupkg": {
-      "sha256": "32fc04996f592387455c78669f601578e3330796cf4e8a643dd380e4280b57a8",
-      "upstream": "https://community.chocolatey.org/api/v2/package/postgresql17/17.2.0"
+    "postgresql17.17.11.0.nupkg": {
+      "sha256": "548a16efbe4db433a42e0dac3d2815035471ecb0c2cc5f362dc603877a8ad4a9",
+      "upstream": "https://community.chocolatey.org/api/v2/package/postgresql17/17.11.0"
     }
   },
   "sourcePins": {
@@ -51,9 +51,9 @@
     },
     "windowsPostgresqlBuild": {
       "chocolateyPackage": "postgresql17",
-      "chocolateyVersion": "17.2.0",
+      "chocolateyVersion": "17.11.0",
       "chocolateySource": "https://community.chocolatey.org/api/v2",
-      "pgConfigVersion": "PostgreSQL 17.2",
+      "pgConfigVersion": "PostgreSQL 17.11",
       "requireChecksums": true
     }
   }

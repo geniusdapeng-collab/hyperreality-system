@@ -28,7 +28,7 @@ test("release asset manifest pins every desktop runtime artifact", () => {
     "nats-server-v2.11.4-linux-amd64.tar.gz",
     "nats-server-v2.11.4-windows-amd64.zip",
     "embedded-postgres-binaries-windows-amd64-17.2.0.jar",
-    "postgresql17.17.2.0.nupkg",
+    "postgresql17.17.11.0.nupkg",
   ];
   assert.deepEqual(Object.keys(manifest.assets).sort(), required.sort());
   for (const asset of required) assert.match(expectedAssetSha256(asset), /^[a-f0-9]{64}$/);
@@ -40,9 +40,9 @@ test("release asset manifest pins every desktop runtime artifact", () => {
   });
   assert.deepEqual(manifest.sourcePins.windowsPostgresqlBuild, {
     chocolateyPackage: "postgresql17",
-    chocolateyVersion: "17.2.0",
+    chocolateyVersion: "17.11.0",
     chocolateySource: "https://community.chocolatey.org/api/v2",
-    pgConfigVersion: "PostgreSQL 17.2",
+    pgConfigVersion: "PostgreSQL 17.11",
     requireChecksums: true,
   });
 });
@@ -69,16 +69,16 @@ test("Windows PG provenance must match every locked build input", async () => {
     const file = join(dir, "WORKLOOM-PROVENANCE.txt");
     const valid = [
       "postgresql_chocolatey_package=postgresql17",
-      "postgresql_chocolatey_version=17.2.0",
+      "postgresql_chocolatey_version=17.11.0",
       "postgresql_chocolatey_source=https://community.chocolatey.org/api/v2",
-      "pg_config_version=PostgreSQL 17.2",
+      "pg_config_version=PostgreSQL 17.11",
       "pgvector_version=v0.8.6",
       "pgvector_commit=8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c",
       "",
     ].join("\n");
     await writeFile(file, valid);
     assert.equal(verifyWindowsPgProvenance(file).pgvector_version, "v0.8.6");
-    await writeFile(file, valid.replace("17.2.0", "17.6.0"));
+    await writeFile(file, valid.replace("17.11.0", "17.2.0"));
     assert.throws(() => verifyWindowsPgProvenance(file), /provenance mismatch/);
   } finally {
     await rm(dir, { recursive: true, force: true });
