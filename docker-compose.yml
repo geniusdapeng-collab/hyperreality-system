@@ -1,0 +1,23 @@
+# WorkLoom IM 底座 · 本地开发基础设施
+# 阶段一仅引入 PostgreSQL 17 + pgvector（D3）；Presidio / LiteLLM 等一律停车场（总纲 §7）
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: workloom-im-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: workloom
+      POSTGRES_DB: workloom
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d workloom"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:

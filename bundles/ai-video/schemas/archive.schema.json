@@ -1,0 +1,41 @@
+{
+  "$id": "workloom://bundles/ai-video/schemas/archive",
+  "title": "一企一档字段组（视频经理版 · fusion-design §5；forbidden 红线双写 L1.6 同源纪律）",
+  "type": "object",
+  "required": ["brand", "forbidden"],
+  "properties": {
+    "brand": {
+      "type": "string",
+      "description": "品牌名称（档案主体）"
+    },
+    "charter": {
+      "type": "object",
+      "description": "数字CEO 宪章（D21：授权边界/熔断/简报节拍/六步授权 grant；切换经营模式时整体替换 autonomy/circuit_breaker，grant 结构不变）"
+    },
+    "variants": {
+      "type": "array",
+      "description": "宪章变体模板（账号制/项目制/合同制）",
+      "items": { "type": "object" }
+    },
+    "platforms": {
+      "type": "array",
+      "description": "分发平台清单",
+      "items": { "type": "string" }
+    },
+    "accounts": {
+      "type": "array",
+      "description": "账号清单（平台/账号名/日发上限，防关联标注）",
+      "items": { "type": "object" }
+    },
+    "forbidden": {
+      "type": "array",
+      "description": "禁用表达与事实红线（G6 导演评审/G14 送审预检判定依据；广告法极限词/超官方口径功效/虚构外观参数）",
+      "items": { "type": "string" }
+    },
+    "fact_red_lines": {
+      "type": "array",
+      "description": "事实红线（ProductTruthChecker 一票否决口径）",
+      "items": { "type": "string" }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "workloom-runtime-payload",
+  "private": true,
+  "version": "0.0.0",
+  "description": "正式桌面运行期精确依赖合成（受控 npm ci 使用，自动生成勿手改）",
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@trpc/server": "11.18.0",
+    "@vitejs/plugin-react": "6.1.0",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.13.5",
+    "jose": "6.2.10",
+    "pg": "8.23.0",
+    "tsx": "4.23.12",
+    "vite": "8.2.2",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  }
+}

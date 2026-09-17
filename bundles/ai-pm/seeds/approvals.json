@@ -1,0 +1,16 @@
+{
+ "items": [
+  {
+   "title": "WorkBuddy 发布团队协作功能——威胁评级上调请示",
+   "level": "review",
+   "from": "competitor-scout",
+   "kind": "threat-rating"
+  },
+  {
+   "title": "用户差评回复草稿（FB-003 数据对不上）——外发前请审",
+   "level": "review",
+   "from": "user-listener",
+   "kind": "reply-draft"
+  }
+ ]
+}

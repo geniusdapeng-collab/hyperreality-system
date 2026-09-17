@@ -1,0 +1,224 @@
+{
+  "$id": "workloom://bundles/hotel/ui/cases",
+  "description": "工作台 UI 状态用例清单（§2.2 槽⑥：皮肤+页面状态同步；P7E3 ⑤『UI 用例同步』校验基准——page 须在已注册页面表内）",
+  "pages": [
+    "p1",
+    "p2",
+    "p3",
+    "p5",
+    "p6",
+    "p9"
+  ],
+  "cases": [
+    {
+      "page": "p1",
+      "name": "默认·晨间简报就位",
+      "expect": "首屏 ≤1.5s 出简报卡（G10）"
+    },
+    {
+      "page": "p1",
+      "name": "派遣·一句话建线程",
+      "expect": "≤3s 跳转 P2（F3.1）"
+    },
+    {
+      "page": "p1",
+      "name": "待审红点",
+      "expect": "待审数>0 时泊位红点计数"
+    },
+    {
+      "page": "p1",
+      "name": "夜班交接",
+      "expect": "package_generated 显昨夜日报卡"
+    },
+    {
+      "page": "p1",
+      "name": "空态·无进行中线程",
+      "expect": "虚线空态+引导派遣"
+    },
+    {
+      "page": "p1",
+      "name": "错误态·事件检索超时",
+      "expect": "降级结构化过滤（E1.6）"
+    },
+    {
+      "page": "p1",
+      "name": "权限态·readonly",
+      "expect": "隐藏派遣输入（E2.6）"
+    },
+    {
+      "page": "p2",
+      "name": "默认·任务时间线",
+      "expect": "五元事件流正序渲染"
+    },
+    {
+      "page": "p2",
+      "name": "pending_review·三手势",
+      "expect": "批准/编辑/驳回权重 1/2/3（F1.7）"
+    },
+    {
+      "page": "p2",
+      "name": "运行中·进度条",
+      "expect": "progress_done/total 实时投影"
+    },
+    {
+      "page": "p2",
+      "name": "失败态·不静默",
+      "expect": "红条+失败事件回链（L9.2）"
+    },
+    {
+      "page": "p2",
+      "name": "暂停态·夜班刹车",
+      "expect": "EmergencyBrake ≤60s（G5）"
+    },
+    {
+      "page": "p2",
+      "name": "留痕·事件编号",
+      "expect": "每条动作显 E-编号 chip（G8）"
+    },
+    {
+      "page": "p2",
+      "name": "回执位·未核实",
+      "expect": "无回执标『未核实』（L3.6）"
+    },
+    {
+      "page": "p3",
+      "name": "默认·待审队列",
+      "expect": "按权重排序（F5.x）"
+    },
+    {
+      "page": "p3",
+      "name": "单条审批·≤2步",
+      "expect": "手势→确认两步完成（G6）"
+    },
+    {
+      "page": "p3",
+      "name": "整包审批·≤5min",
+      "expect": "批量卡一键过（G6）"
+    },
+    {
+      "page": "p3",
+      "name": "编辑后批准",
+      "expect": "diff 快照留痕（E5.3）"
+    },
+    {
+      "page": "p3",
+      "name": "驳回·理由枚举",
+      "expect": "reason_enum 必选"
+    },
+    {
+      "page": "p3",
+      "name": "过期态",
+      "expect": "expired 置灰+原因"
+    },
+    {
+      "page": "p3",
+      "name": "权限态·readonly",
+      "expect": "队列只读无手势（E2.6）"
+    },
+    {
+      "page": "p5",
+      "name": "默认·围栏版本卡",
+      "expect": "hotel-baseline/v1 active"
+    },
+    {
+      "page": "p5",
+      "name": "dry-run 报告",
+      "expect": "回放三栏统计（F2.5）"
+    },
+    {
+      "page": "p5",
+      "name": "单调守卫",
+      "expect": "基线只收紧不放宽（F2.3）"
+    },
+    {
+      "page": "p5",
+      "name": "冲突态",
+      "expect": "规则冲突标红进审批"
+    },
+    {
+      "page": "p5",
+      "name": "回滚态",
+      "expect": "rolled_back 版本留痕"
+    },
+    {
+      "page": "p5",
+      "name": "权限态·readonly",
+      "expect": "无新建/激活入口（E2.6）"
+    },
+    {
+      "page": "p5",
+      "name": "空态·无草稿",
+      "expect": "引导从审批驳回起草"
+    },
+    {
+      "page": "p6",
+      "name": "默认·三级装备架",
+      "expect": "金/银/铜稀有度（F8.1）"
+    },
+    {
+      "page": "p6",
+      "name": "意识建议横幅",
+      "expect": "≥3次/周高频建议（F8.4）"
+    },
+    {
+      "page": "p6",
+      "name": "安装·围栏绑定",
+      "expect": "安装即绑定生效（F8.2）"
+    },
+    {
+      "page": "p6",
+      "name": "拒绝态·未签名",
+      "expect": "行业共享 NOT_SIGNED 红条（L8.2）"
+    },
+    {
+      "page": "p6",
+      "name": "看板·采纳率",
+      "expect": "30d 调用/采纳投影（F8.5）"
+    },
+    {
+      "page": "p6",
+      "name": "向导·三要素",
+      "expect": "不能做什么自动转围栏（F8.3）"
+    },
+    {
+      "page": "p6",
+      "name": "权限态·社区版",
+      "expect": "不显行业共享区（F7.2）"
+    },
+    {
+      "page": "p9",
+      "name": "默认·夜班驾驶舱",
+      "expect": "班次状态 pill（F4.8）"
+    },
+    {
+      "page": "p9",
+      "name": "候选清单",
+      "expect": "F4.1 计数与明细"
+    },
+    {
+      "page": "p9",
+      "name": "三栏统计",
+      "expect": "自动/待审/熔断（F4.4）"
+    },
+    {
+      "page": "p9",
+      "name": "暂停·恢复",
+      "expect": "≤60s 生效（G5）"
+    },
+    {
+      "page": "p9",
+      "name": "打包·日报",
+      "expect": "package_generated 快照"
+    },
+    {
+      "page": "p9",
+      "name": "围栏快照",
+      "expect": "当晚版本锁定（F2.6）"
+    },
+    {
+      "page": "p9",
+      "name": "空态·未配置",
+      "expect": "引导配置夜班窗口"
+    }
+  ]
+}

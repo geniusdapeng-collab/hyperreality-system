@@ -1,0 +1,83 @@
+# 叙事片管线 · fusion-design §4
+# 每步 = Quest 任务卡；断点续跑继承 dsh replay；每步产物写 biz_events 五元事件
+quest: narrative-film
+name: 叙事片管线
+version: v1
+description: 剧本→场景→片头→视听→连贯审查→提示词融合→字段质检→定妆照→预生产确认→渲染→后期→成片入库
+steps:
+  - step_key: script
+    name: 剧本蓝图
+    owner: scriptwriter
+    outputs: [script_blueprint]
+  - step_key: scene
+    name: 场景设计
+    owner: scene-designer
+    outputs: [scene_card]
+  - step_key: opening
+    name: 片头设计
+    owner: opening-designer
+    outputs: [shot_card]            # 片头 30 字段卡（25+5 专属）
+  - step_key: visual
+    name: 视觉语言设计
+    owner: visual-director
+    outputs: [shot_card]
+  - step_key: audio
+    name: 音频设计
+    owner: audio-designer
+    outputs: [shot_card]
+  - step_key: continuity
+    name: 连贯性导演评审
+    owner: continuity-reviewer
+    outputs: [review_report]        # 6 问评审 + 5 维评分，硬阻断直接打回
+  - step_key: prompt-fuse
+    name: 逐镜提示词融合
+    owner: prompt-fuser
+    outputs: [prompt_package]
+  - step_key: field-check
+    name: 字段质检与修复
+    owner: field-inspector
+    outputs: [prompt_package]       # 25/30 字段规则+LLM 混合质检
+  - step_key: g6-prompt-confirm
+    name: 提示词审核
+    owner: director
+    gate: G6
+    outputs: [prompt_package]       # 含导演评分报告的审批卡
+  - step_key: micromotion
+    name: 微动作增强
+    owner: micromotion-stylist
+    outputs: [prompt_package]       # 5 路流水线：面部/身体/眼神/呼吸/融合
+  - step_key: portrait
+    name: 定妆照制作
+    owner: portrait-artist
+    outputs: [portrait_set]
+  - step_key: g5-portrait-confirm
+    name: 定妆照确认
+    owner: director
+    gate: G5
+    outputs: [portrait_set]
+  - step_key: g7-preproduction
+    name: 预生产最终确认
+    owner: director
+    gate: G7
+    outputs: [video_project]
+  - step_key: render-script
+    name: 渲染脚本生成入 CMS
+    owner: render-operator
+    outputs: [render_script]        # MD 正文 + 25/30 字段 JSON + 字符数校验快照，v1 起版本链
+  - step_key: g8-render-submit
+    name: 渲染提交审批
+    owner: director
+    gate: G8
+    outputs: [render_job]
+  - step_key: render
+    name: Seedance 渲染与回填
+    owner: render-operator
+    outputs: [render_job, video_asset]
+  - step_key: post
+    name: 后期合成
+    owner: post-editor
+    outputs: [final_video]
+  - step_key: archive
+    name: 成片入库
+    owner: post-editor
+    outputs: [final_video, video_asset]

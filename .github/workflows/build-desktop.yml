@@ -1,0 +1,667 @@
+# WorkLoom 桌面客户端 · 完全自包含安装包 CI（唯一发行形态，v2.1.0 起）
+# 触发：仅允许从 main 手动 dispatch；稳定 tag 必须已精确指向本次 main HEAD
+# 产物：
+#   macOS   <productName>-mac-arm64.dmg / -mac-x64.dmg（Electron 自包含：Node+PG17+pgvector+nats+载荷）
+#   Windows <productName>-win-x64.exe（NSIS，同口径自包含）
+# 冒烟验收：两平台均在打包后以 bootstrap.cjs --smoke 跑首启全流程
+#   （装配→initdb→迁移→seed-aipm 种子→起服务→健康检查），全绿才上传 Release。
+name: build-desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "已存在且精确指向当前 main HEAD 的稳定版本 tag（如 v1.2.3）"
+        required: true
+        type: string
+      release_sha:
+        description: "本次发布提交（40 位小写 SHA，必须等于 tag、dispatch SHA 与当前 main HEAD）"
+        required: true
+        type: string
+      platform_signing:
+        description: "平台代码签名（当前仓默认 unsigned；Bundle 始终 Ed25519 签名）"
+        required: true
+        type: choice
+        options:
+          - unsigned
+          - signed
+        default: unsigned
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-production-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release-tag: ${{ steps.identity.outputs.release-tag }}
+      release-sha: ${{ steps.identity.outputs.release-sha }}
+      platform-signing: ${{ steps.identity.outputs.platform-signing }}
+    steps:
+      - name: 绑定稳定 tag、release SHA、dispatch main 与当前 origin/main
+        id: identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.version }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          PLATFORM_SIGNING_INPUT: ${{ inputs.platform_signing }}
+          DISPATCH_SHA: ${{ github.sha }}
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "❌ 只允许 vMAJOR.MINOR.PATCH 稳定 tag"; exit 1; }
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "❌ release_sha 必须是 40 位小写提交摘要"; exit 1; }
+          test "$PLATFORM_SIGNING_INPUT" = "unsigned" -o "$PLATFORM_SIGNING_INPUT" = "signed" || { echo "❌ 非法平台签名模式"; exit 1; }
+          test "$DISPATCH_REF" = "refs/heads/main" || { echo "❌ 正式发布只能从 main 手动派发"; exit 1; }
+          test "$DISPATCH_SHA" = "$RELEASE_SHA" || { echo "❌ dispatch GITHUB_SHA 与 release_sha 不一致"; exit 1; }
+
+          api() {
+            curl --fail --silent --show-error --retry 3 \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com$1"
+          }
+
+          MAIN_SHA="$(api "/repos/$GITHUB_REPOSITORY/commits/main" | jq -er '.sha')"
+          test "$MAIN_SHA" = "$RELEASE_SHA" || { echo "❌ 当前 origin/main 已不是 release_sha"; exit 1; }
+
+          TAG_REF="$(api "/repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          OBJECT_TYPE="$(jq -er '.object.type' <<<"$TAG_REF")"
+          OBJECT_SHA="$(jq -er '.object.sha' <<<"$TAG_REF")"
+          for _ in 1 2 3 4 5; do
+            test "$OBJECT_TYPE" = "tag" || break
+            TAG_OBJECT="$(api "/repos/$GITHUB_REPOSITORY/git/tags/$OBJECT_SHA")"
+            OBJECT_TYPE="$(jq -er '.object.type' <<<"$TAG_OBJECT")"
+            OBJECT_SHA="$(jq -er '.object.sha' <<<"$TAG_OBJECT")"
+          done
+          test "$OBJECT_TYPE" = "commit" || { echo "❌ 稳定 tag 未解析到 commit"; exit 1; }
+          test "$OBJECT_SHA" = "$RELEASE_SHA" || { echo "❌ 稳定 tag 与 release_sha 不一致"; exit 1; }
+
+          {
+            echo "release-tag=$RELEASE_TAG"
+            echo "release-sha=$RELEASE_SHA"
+            echo "platform-signing=$PLATFORM_SIGNING_INPUT"
+          } >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: preflight
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.preflight.outputs.release-tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release-sha }}
+      PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform-signing }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.preflight.outputs.release-sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 24.19.0, cache: pnpm }
+
+      - name: 校验固定 Node/npm 工具链
+        shell: bash
+        run: |
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "11.17.0"
+
+      - name: 安装依赖 + 构建 web
+        env:
+          VITE_DEMO_WORKSPACE: video-studio
+          VITE_DEMO_MEMBER: MEM-V01
+          BUNDLE_SIGNING_PRIVATE_KEY: ${{ secrets.BUNDLE_SIGNING_PRIVATE_KEY }}
+          BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
+        run: |
+          pnpm install --frozen-lockfile
+          test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
+          pnpm bundle:release
+          test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
+          pnpm projections:generate
+          grep -q 'WORKLOOM_SAFE_RENDERING' apps/desktop/electron/main.cjs
+          grep -q 'WORKLOOM_RENDER_SMOKE' apps/desktop/electron/main.cjs
+          grep -q 'previousEnvFile' apps/desktop/electron/bootstrap.cjs
+          grep -q 'validateStoredSession' apps/web/src/lib/trpc.ts
+          grep -q 'speakAndWait' apps/web/src/components/MateWelcome.tsx
+          grep -q 'data-render-mode="vector2d"' apps/web/src/components/loommate/MateLive2D.tsx
+          grep -q 'acquireExclusive' apps/web/src/voice/VoiceEngine.ts
+          grep -q 'transitionTrace' apps/desktop/electron/main.cjs
+          grep -q 'mouthPeak' apps/desktop/electron/main.cjs
+          ! grep -q '__workloomEnterTeam' apps/web/src/components/WelcomeCeremony.tsx
+          pnpm product:verify
+          pnpm projections:check
+          pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
+          pnpm -C packages/industry-contract build
+          pnpm -C apps/web build
+
+      - name: 装配自包含载荷（darwin-arm64）
+        run: bash scripts/pack-electron-payload.sh --platform mac --arch arm64 --version "$VERSION"
+
+      - name: 打包 DMG（arm64）
+        if: needs.preflight.outputs.platform-signing == 'signed'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ 缺少 macOS Developer ID 签名证书，拒绝对外发行"; exit 1; }
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ 缺少 Apple 公证凭据，拒绝对外发行"; exit 1; }
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --arm64 --publish never -c.extraMetadata.version="${VERSION#v}"
+
+      - name: 打包未签名 DMG（arm64）
+        if: needs.preflight.outputs.platform-signing == 'unsigned'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          echo "⚠️ 按发布输入生成未签名、未 Apple 公证的 macOS 安装包"
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --arm64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
+
+      - name: 拆包验收 + 冒烟（对 .app 内载荷归档跑首启全流程——验证用户拿到的内容）
+        run: |
+          APP="$(find release/mac-arm64 -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$APP" || { echo "❌ arm64 .app 未生成"; exit 1; }
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            xcrun stapler validate "$APP"
+          else
+            ! codesign -dvv "$APP" 2>&1 | grep -q '^Authority=' || { echo "❌ unsigned 模式意外发现平台签名"; exit 1; }
+            echo "✅ 已确认 arm64 应用未携带 Apple Developer ID 签名/公证票据"
+          fi
+          RES="$APP/Contents/Resources"
+          test -s "$RES/bundle-trust.json" || { echo "❌ 独立 Bundle 公钥环未进包"; exit 1; }
+          test -f "$RES/payload.tar.gz" || { echo "❌ 拆包验收失败：payload.tar.gz 未进包"; exit 1; }
+          test -f "$RES/payload/PAYLOAD_VERSION" || { echo "❌ 拆包验收失败：PAYLOAD_VERSION 未进包（缺失将致每次启动重解压）"; exit 1; }
+          tar -tzf "$RES/payload.tar.gz" > /tmp/wl-pkg-list.txt && grep -q "runtime/node_modules/tsx/package.json" /tmp/wl-pkg-list.txt || { echo "❌ 拆包验收失败：归档内缺 tsx"; exit 1; }
+          grep -q "nats/nats-server" /tmp/wl-pkg-list.txt || { echo "❌ 拆包验收失败：归档内缺 nats"; exit 1; }
+          echo "✅ 拆包验收通过（arm64 .app 载荷归档完整）"
+          node apps/desktop/electron/bootstrap.cjs --smoke --resources "$RES" --support /tmp/wl-smoke
+          BIN="$(find "$APP/Contents/MacOS" -maxdepth 1 -type f -perm -111 -print -quit)"
+          test -n "$BIN" || { echo "❌ arm64 应用主程序未生成"; exit 1; }
+          WORKLOOM_APP_SMOKE=1 WORKLOOM_SUPPORT_DIR=/tmp/wl-app-smoke "$BIN"
+          test -f /tmp/wl-app-smoke/.bootstrapped || { echo "❌ 真实应用首启未完成"; exit 1; }
+          WORKLOOM_RENDER_SMOKE=1 WORKLOOM_SUPPORT_DIR=/tmp/wl-render-default "$BIN"
+          test -f /tmp/wl-render-default/logs/render-default.json || { echo "❌ 默认渲染探针缺失"; exit 1; }
+          WORKLOOM_RENDER_SMOKE=1 WORKLOOM_SAFE_RENDERING=1 WORKLOOM_SUPPORT_DIR=/tmp/wl-render-safe "$BIN"
+          test -f /tmp/wl-render-safe/logs/render-safe.json || { echo "❌ 安全渲染探针缺失"; exit 1; }
+          echo "✅ 真实 .app 后端 + Live2D + 动态矢量双渲染冒烟通过"
+        timeout-minutes: 20
+
+      - name: 留存 macOS 验收证据与失败诊断（私有 Actions Artifact）
+        if: always()
+        # 截图只是诊断证据；GitHub Artifact 服务偶发超时不应否定已经通过的
+        # 后端、默认渲染与安全渲染产品验收。
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: desktop-macos-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            /tmp/wl-smoke/logs/*
+            /tmp/wl-smoke/install-state.json
+            /tmp/wl-app-smoke/logs/*
+            /tmp/wl-app-smoke/install-state.json
+            /tmp/wl-render-default/logs/render-default.*
+            /tmp/wl-render-safe/logs/render-safe.*
+          retention-days: 7
+      - name: 装配自包含载荷（darwin-x64）
+        run: bash scripts/pack-electron-payload.sh --platform mac --arch x64 --version "$VERSION"
+
+      - name: 打包 DMG（x64）
+        if: needs.preflight.outputs.platform-signing == 'signed'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" || { echo "❌ 缺少 macOS Developer ID 签名证书，拒绝对外发行"; exit 1; }
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID" || { echo "❌ 缺少 Apple 公证凭据，拒绝对外发行"; exit 1; }
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+
+      - name: 打包未签名 DMG（x64）
+        if: needs.preflight.outputs.platform-signing == 'unsigned'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          echo "⚠️ 按发布输入生成未签名、未 Apple 公证的 macOS 安装包"
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --mac dmg --x64 --publish never -c.mac.notarize=false -c.extraMetadata.version="${VERSION#v}"
+
+      - name: 拆包验收（x64 .app 载荷归档完整性；arm64 runner 无法跑 x64 二进制，文件级核验）
+        run: |
+          APP="$(find release/mac -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$APP" || { echo "❌ x64 .app 未生成"; exit 1; }
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            xcrun stapler validate "$APP"
+          else
+            ! codesign -dvv "$APP" 2>&1 | grep -q '^Authority=' || { echo "❌ unsigned 模式意外发现平台签名"; exit 1; }
+          fi
+          RES="$APP/Contents/Resources"
+          test -s "$RES/bundle-trust.json" || { echo "❌ x64 Bundle 公钥环未进包"; exit 1; }
+          test -f "$RES/payload.tar.gz" || { echo "❌ x64 载荷归档未进包"; exit 1; }
+          tar -tzf "$RES/payload.tar.gz" > /tmp/wl-pkg-list-x64.txt && grep -q "runtime/node_modules/tsx/package.json" /tmp/wl-pkg-list-x64.txt || { echo "❌ x64 归档内缺 tsx"; exit 1; }
+          echo "✅ x64 拆包验收通过"
+      - name: 封存本次 run/attempt 的 macOS 候选
+        shell: bash
+        run: |
+          CANDIDATE_DIR="$RUNNER_TEMP/desktop-macos-candidate"
+          rm -rf "$CANDIDATE_DIR"
+          node scripts/desktop-release-finalizer.mjs seal-platform \
+            --platform macos \
+            --release-dir release \
+            --output-dir "$CANDIDATE_DIR" \
+            --tag "$VERSION" \
+            --sha "$RELEASE_SHA" \
+            --platform-signing "$PLATFORM_SIGNING" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: 上传本次 run/attempt 的 macOS 候选
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: desktop-macos-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-macos-candidate/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  windows:
+    needs: preflight
+    # 固定到不预装 PG17 的镜像，随后只从 release-assets.json 锁定源安装 17.11.0。
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.preflight.outputs.release-tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release-sha }}
+      PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform-signing }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.preflight.outputs.release-sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 24.19.0, cache: pnpm }
+
+      - name: 校验固定 Node/npm 工具链
+        shell: bash
+        run: |
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "11.17.0"
+
+      - name: 编译 pgvector + 同源 PG 运行时（vendor/pg-win + vendor/pgvector-win）
+        shell: pwsh
+        run: scripts/build-pgvector-win.ps1
+
+      - name: 安装依赖 + 构建 web
+        env:
+          VITE_DEMO_WORKSPACE: video-studio
+          VITE_DEMO_MEMBER: MEM-V01
+          BUNDLE_SIGNING_PRIVATE_KEY: ${{ secrets.BUNDLE_SIGNING_PRIVATE_KEY }}
+          BUNDLE_SIGNING_KEY_ID: ${{ vars.BUNDLE_SIGNING_KEY_ID || 'hyperreality-release-v1' }}
+        run: |
+          pnpm install --frozen-lockfile
+          test -n "$BUNDLE_SIGNING_PRIVATE_KEY" || { echo "❌ 缺少 Bundle 签名私钥，拒绝生成生产安装包"; exit 1; }
+          pnpm bundle:release
+          test -s build/bundle-trust.json || { echo "❌ 独立 Bundle 公钥环未生成"; exit 1; }
+          pnpm projections:generate
+          pnpm product:verify
+          pnpm projections:check
+          pnpm exec vitest run apps/web/src/voice/VoiceEngine.test.ts
+          pnpm -C packages/industry-contract build
+          pnpm -C apps/web build
+
+      - name: 装配自包含载荷（win-x64）
+        shell: bash
+        run: bash scripts/pack-electron-payload.sh --platform win --arch x64 --version "$VERSION"
+
+      - name: 打包 NSIS 安装包
+        if: needs.preflight.outputs.platform-signing == 'signed'
+        shell: bash  # pwsh 会把 -c.extraMetadata.version="x" 的 -c 吞掉（ENOENT 实证），统一 bash
+        run: |
+          test -n "$WIN_CSC_LINK" && test -n "$WIN_CSC_KEY_PASSWORD" || { echo "❌ 缺少 Windows 代码签名证书，拒绝对外发行"; exit 1; }
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: 打包未签名 NSIS 安装包
+        if: needs.preflight.outputs.platform-signing == 'unsigned'
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+        run: |
+          echo "⚠️ 按发布输入生成未 Authenticode 签名的 Windows 安装包"
+          retry() { local attempt=1; until "$@"; do [ "$attempt" -ge 3 ] && return 1; echo "网络依赖下载失败，准备第 $((attempt + 1))/3 次重试"; attempt=$((attempt + 1)); sleep 8; done; }
+          retry pnpm exec electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="${VERSION#v}"
+
+      - name: 拆包验收 + 冒烟（对 win-unpacked 载荷归档跑首启全流程——验证用户拿到的内容）
+        shell: bash
+        env:
+          # pgvector 编译底座会在 Windows runner 上安装 PostgreSQL 服务并占用 5432。
+          # 候选包验收改用隔离端口，避免构建工具链污染安装包首启结果。
+          WORKLOOM_PG_PORT: "55432"
+          WORKLOOM_SERVER_PORT: "58787"
+          WORKLOOM_WEB_PORT: "55173"
+          WORKLOOM_NATS_PORT: "54222"
+        run: |
+          SMOKE_ROOT="$RUNNER_TEMP/wl-smoke"
+          APP_SMOKE_ROOT="$RUNNER_TEMP/wl-app-smoke"
+          RENDER_SMOKE_ROOT="$RUNNER_TEMP/wl-render-default"
+          RES="release/win-unpacked/resources"
+          test -s "$RES/bundle-trust.json" || { echo "❌ Windows Bundle 公钥环未进包"; exit 1; }
+          test -f "$RES/payload.tar.gz" || { echo "❌ 拆包验收失败：payload.tar.gz 未进包"; exit 1; }
+          test -f "$RES/payload/PAYLOAD_VERSION" || { echo "❌ 拆包验收失败：PAYLOAD_VERSION 未进包（缺失将致每次启动重解压）"; exit 1; }
+          tar -tzf "$RES/payload.tar.gz" > /tmp/wl-pkg-list.txt && grep -q "runtime/node_modules/tsx/package.json" /tmp/wl-pkg-list.txt || { echo "❌ 拆包验收失败：归档内缺 tsx"; exit 1; }
+          node apps/desktop/electron/bootstrap.cjs --smoke --resources "$RES" --support "$SMOKE_ROOT"
+          EXE="$(find release/win-unpacked -maxdepth 1 -type f -name '*.exe' ! -iname '*uninstall*' -print -quit)"
+          test -n "$EXE" || { echo "❌ Windows 应用主程序未生成"; exit 1; }
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            powershell -NoProfile -Command '$s = Get-AuthenticodeSignature -FilePath $args[0]; if ($s.Status -ne "Valid") { Write-Error "应用签名无效：$($s.Status)"; exit 1 }' "$EXE"
+          else
+            powershell -NoProfile -Command '$s = Get-AuthenticodeSignature -FilePath $args[0]; if ($s.Status -eq "Valid") { Write-Error "unsigned 模式意外发现有效 Authenticode 签名"; exit 1 }; Write-Host "已确认 Windows 客户端为平台未签名制品：$($s.Status)"' "$EXE"
+          fi
+          node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_APP_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "$APP_SMOKE_ROOT"
+          test -f "$APP_SMOKE_ROOT/.bootstrapped" || { echo "❌ 真实应用首启未完成"; exit 1; }
+          node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],[],{stdio:"inherit",env:{...process.env,WORKLOOM_RENDER_SMOKE:"1",WORKLOOM_SUPPORT_DIR:process.argv[2]}}); process.exit(r.status ?? 1)' "$EXE" "$RENDER_SMOKE_ROOT"
+          test -f "$RENDER_SMOKE_ROOT/logs/render-default.json" || { echo "❌ Windows 渲染探针缺失"; exit 1; }
+          echo "✅ 真实 Windows 应用后端 + 页面渲染冒烟通过"
+        timeout-minutes: 20
+      - name: 留存 Windows 首启失败诊断（Actions Artifact）
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: desktop-windows-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/wl-smoke/logs/*
+            ${{ runner.temp }}/wl-smoke/install-state.json
+            ${{ runner.temp }}/wl-app-smoke/logs/*
+            ${{ runner.temp }}/wl-app-smoke/install-state.json
+            ${{ runner.temp }}/wl-render-default/logs/*
+            ${{ runner.temp }}/wl-render-default/install-state.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: 封存本次 run/attempt 的 Windows 候选
+        shell: bash
+        run: |
+          CANDIDATE_DIR="$RUNNER_TEMP/desktop-windows-candidate"
+          rm -rf "$CANDIDATE_DIR"
+          node scripts/desktop-release-finalizer.mjs seal-platform \
+            --platform windows \
+            --release-dir release \
+            --output-dir "$CANDIDATE_DIR" \
+            --tag "$VERSION" \
+            --sha "$RELEASE_SHA" \
+            --platform-signing "$PLATFORM_SIGNING" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: 上传本次 run/attempt 的 Windows 候选
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: desktop-windows-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-windows-candidate/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。
+  #
+  # 消费约束：调用工作流必须提供 preflight/macos/windows 三个 job；两个平台 job 先用
+  # scripts/desktop-release-finalizer.mjs seal-platform 生成同一 run/attempt 的候选 Artifact。
+  # 本 job 刻意不 checkout、不安装依赖、不执行仓库脚本；contents:write 只接触已验真的候选字节。
+  publish-desktop-release:
+    needs: [preflight, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: 解析同一 run 最近的双平台候选
+        id: candidates
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.release-sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" > "$RUNNER_TEMP/artifacts-pages.json"
+          node - "$RUNNER_TEMP/artifacts-pages.json" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$RELEASE_SHA" >> "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require("node:fs");
+          const [file, runIdText, attemptText, releaseSha] = process.argv.slice(2);
+          const pages = JSON.parse(fs.readFileSync(file, "utf8"));
+          const artifacts = pages.flatMap((page) => page.artifacts ?? []);
+          const runId = Number(runIdText);
+          const maxAttempt = Number(attemptText);
+          for (const platform of ["macos", "windows"]) {
+            const prefix = `desktop-${platform}-candidate-${runId}-`;
+            const candidates = artifacts
+              .filter((artifact) => artifact.name?.startsWith(prefix) && !artifact.expired)
+              .map((artifact) => ({
+                id: artifact.id,
+                attempt: Number(artifact.name.slice(prefix.length)),
+                headSha: artifact.workflow_run?.head_sha,
+              }))
+              .filter((artifact) => Number.isInteger(artifact.attempt) && artifact.attempt <= maxAttempt)
+              .sort((left, right) => right.attempt - left.attempt);
+            if (!candidates.length) throw new Error(`${platform}: 同一 run 没有有效候选`);
+            if (candidates[0].headSha && candidates[0].headSha !== releaseSha) {
+              throw new Error(`${platform}: 候选提交与发布提交不一致`);
+            }
+            process.stdout.write(`${platform}-id=${candidates[0].id}\n`);
+          }
+          NODE
+
+      - name: 下载 macOS 候选
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.candidates.outputs.macos-id }}
+          path: ${{ runner.temp }}/desktop-candidate/macos
+          merge-multiple: true
+
+      - name: 下载 Windows 候选
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.candidates.outputs.windows-id }}
+          path: ${{ runner.temp }}/desktop-candidate/windows
+          merge-multiple: true
+
+      - name: 草稿封存、五资产核验并正式发布
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release-tag }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.release-sha }}
+          PLATFORM_SIGNING: ${{ needs.preflight.outputs.platform-signing }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/desktop-candidate"
+          ASSET_DIR="$ROOT/release-assets"
+          REMOTE_DIR="$ROOT/remote-assets"
+          FINALIZER="$RUNNER_TEMP/workloom-inline-release-finalizer.mjs"
+          mkdir -p "$ASSET_DIR" "$REMOTE_DIR"
+
+          cat > "$FINALIZER" <<'NODE'
+          import { constants, copyFileSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+          import { createHash } from "node:crypto";
+          import { basename, join } from "node:path";
+
+          const CHECKSUM = "WorkLoom-SHA512SUMS.txt";
+          const RELEASE_MANIFEST = "WorkLoom-release-manifest.json";
+          const [command, directory, output, tag, sha, signing, repository] = process.argv.slice(2);
+          const fail = (message) => { throw new Error(message); };
+          const digest = (file) => createHash("sha512").update(readFileSync(file)).digest("hex");
+          const files = (root) => readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name).sort();
+          const record = (root, name) => {
+            const size = statSync(join(root, name)).size;
+            if (!(size > 0)) fail(`${name} 不能为空`);
+            return { name, size, sha512: digest(join(root, name)) };
+          };
+          const identity = (manifest, label) => {
+            if (manifest.schemaVersion !== 1 || manifest.product !== repository || manifest.tag !== tag
+              || manifest.sha !== sha || manifest.platformSigning !== signing) fail(`${label} 身份不匹配`);
+          };
+          const installers = (root, platform) => {
+            const names = files(root);
+            const patterns = platform === "macos" ? [/-mac-arm64\.dmg$/u, /-mac-x64\.dmg$/u] : [/-win-x64\.exe$/u];
+            return patterns.map((pattern) => {
+              const matches = names.filter((name) => pattern.test(name));
+              if (matches.length !== 1) fail(`${platform} ${pattern} 必须唯一`);
+              return matches[0];
+            });
+          };
+          const verifyRelease = (root) => {
+            const names = files(root);
+            const manifest = JSON.parse(readFileSync(join(root, RELEASE_MANIFEST), "utf8"));
+            identity(manifest, RELEASE_MANIFEST);
+            const expectedInstallers = [...installers(root, "macos"), ...installers(root, "windows")];
+            const expected = [...expectedInstallers, CHECKSUM, RELEASE_MANIFEST].sort();
+            if (names.length !== 5 || JSON.stringify(names) !== JSON.stringify(expected)) fail("正式资产集必须精确为五项");
+            if (!Array.isArray(manifest.assets) || manifest.assets.length !== 3) fail("发布清单必须精确记录三份安装包");
+            const lines = readFileSync(join(root, CHECKSUM), "utf8").trimEnd().split("\n");
+            if (lines.length !== 3) fail("SHA512SUMS 必须精确记录三份安装包");
+            for (const name of expectedInstallers) {
+              const actual = record(root, name);
+              const rows = manifest.assets.filter((asset) => asset.name === name);
+              if (rows.length !== 1 || rows[0].size !== actual.size || rows[0].sha512 !== actual.sha512) fail(`${name} 清单证据不一致`);
+              if (lines.filter((line) => line === `${actual.sha512}  ${name}`).length !== 1) fail(`${name} 校验表记录不唯一`);
+            }
+          };
+
+          if (!/^v\d+\.\d+\.\d+$/u.test(tag) || !/^[0-9a-f]{40}$/u.test(sha)
+            || !["signed", "unsigned"].includes(signing) || !/^[^/]+\/[^/]+$/u.test(repository)) fail("发布身份参数无效");
+          if (command === "assemble") {
+            const all = [];
+            for (const [platform, manifestName] of [["macos", "desktop-macos-manifest.json"], ["windows", "desktop-windows-manifest.json"]]) {
+              const root = join(directory, platform);
+              const names = installers(root, platform);
+              const expectedFiles = [...names, manifestName].sort();
+              if (JSON.stringify(files(root)) !== JSON.stringify(expectedFiles)) fail(`${platform} 候选资产集不精确`);
+              const manifest = JSON.parse(readFileSync(join(root, manifestName), "utf8"));
+              identity(manifest, manifestName);
+              if (manifest.platform !== platform || !Array.isArray(manifest.assets) || manifest.assets.length !== names.length) fail(`${manifestName} 平台或数量错误`);
+              for (const name of names) {
+                const actual = record(root, name);
+                const rows = manifest.assets.filter((asset) => asset.name === name);
+                if (rows.length !== 1 || rows[0].size !== actual.size || rows[0].sha512 !== actual.sha512) fail(`${manifestName}: ${name} 证据不一致`);
+                copyFileSync(join(root, name), join(output, name), constants.COPYFILE_EXCL);
+                all.push(actual);
+              }
+            }
+            writeFileSync(join(output, RELEASE_MANIFEST), `${JSON.stringify({ schemaVersion: 1, product: repository, tag, sha, platformSigning: signing, assets: all }, null, 2)}\n`);
+            writeFileSync(join(output, CHECKSUM), `${all.map((asset) => `${asset.sha512}  ${asset.name}`).join("\n")}\n`);
+            verifyRelease(output);
+          } else if (command === "verify") {
+            verifyRelease(directory);
+          } else {
+            fail("未知封口命令");
+          }
+          NODE
+
+          node "$FINALIZER" assemble "$ROOT" "$ASSET_DIR" "$RELEASE_TAG" "$RELEASE_SHA" "$PLATFORM_SIGNING" "$GITHUB_REPOSITORY"
+
+          resolve_remote_tag() {
+            local object_type object_sha ref_json tag_json depth=0
+            ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}")"
+            object_type="$(node -e 'const r=JSON.parse(process.argv[1]);process.stdout.write(r.object?.type??"")' "$ref_json")"
+            object_sha="$(node -e 'const r=JSON.parse(process.argv[1]);process.stdout.write(r.object?.sha??"")' "$ref_json")"
+            while [ "$object_type" = "tag" ]; do
+              depth=$((depth + 1)); test "$depth" -le 8
+              tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${object_sha}")"
+              object_type="$(node -e 'const r=JSON.parse(process.argv[1]);process.stdout.write(r.object?.type??"")' "$tag_json")"
+              object_sha="$(node -e 'const r=JSON.parse(process.argv[1]);process.stdout.write(r.object?.sha??"")' "$tag_json")"
+            done
+            test "$object_type" = commit
+            printf '%s\n' "$object_sha"
+          }
+          test "$(resolve_remote_tag)" = "$RELEASE_SHA" || { echo "❌ 发布前标签发生漂移"; exit 1; }
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "❌ 目标 Release 已存在；不可变正式版本不得复用"
+            exit 1
+          fi
+
+          if [ "$PLATFORM_SIGNING" = "signed" ]; then
+            TRUST_NOTE="本版本已完成 Apple Developer ID、公证与 Windows Authenticode 签名。"
+          else
+            TRUST_NOTE="本版本未做 Apple/Windows 平台代码签名，未做 Apple 公证；内部行业 Bundle 仍已通过 Ed25519 信任环校验。macOS 首次打开可能需要解除隔离，Windows 可能显示 SmartScreen 提示。"
+          fi
+          printf '%s\n\n%s\n\n%s\n' "## 安装说明" "$TRUST_NOTE" \
+            "固定下载页 /releases/latest 提供 Mac arm64、Mac x64 与 Windows x64 三个平台安装包，并附 SHA-512 校验表和发布清单。" \
+            > "$RUNNER_TEMP/release-notes.md"
+
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --target "$RELEASE_SHA" --draft --latest=false \
+            --title "${GITHUB_REPOSITORY#*/} $RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,targetCommitish,isDraft,isPrerelease,assets > "$RUNNER_TEMP/draft.json"
+          node - "$RUNNER_TEMP/draft.json" "$RELEASE_TAG" "$RELEASE_SHA" <<'NODE'
+          const fs = require("node:fs");
+          const [file, tag, sha] = process.argv.slice(2), release = JSON.parse(fs.readFileSync(file, "utf8"));
+          if (release.tagName !== tag || release.targetCommitish !== sha || !release.isDraft || release.isPrerelease) throw new Error("草稿身份或状态错误");
+          if ((release.assets ?? []).length !== 0) throw new Error("新草稿必须从空资产集开始");
+          NODE
+
+          ASSETS=("$ASSET_DIR"/*)
+          test "${#ASSETS[@]}" -eq 5
+          gh release upload "$RELEASE_TAG" "${ASSETS[@]}" --repo "$GITHUB_REPOSITORY"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,targetCommitish,isDraft,isPrerelease,assets > "$RUNNER_TEMP/uploaded.json"
+          node - "$RUNNER_TEMP/uploaded.json" "$RELEASE_TAG" "$RELEASE_SHA" "$ASSET_DIR" <<'NODE'
+          const fs = require("node:fs");
+          const [file, tag, sha, dir] = process.argv.slice(2), release = JSON.parse(fs.readFileSync(file, "utf8"));
+          const expected = fs.readdirSync(dir).sort(), assets = release.assets ?? [], names = assets.map((asset) => asset.name).sort();
+          if (release.tagName !== tag || release.targetCommitish !== sha || !release.isDraft || release.isPrerelease) throw new Error("上传后草稿身份或状态错误");
+          if (expected.length !== 5 || JSON.stringify(names) !== JSON.stringify(expected)) throw new Error("草稿必须精确包含五项资产");
+          if (assets.some((asset) => asset.state !== "uploaded" || !(asset.size > 0))) throw new Error("草稿存在未完成或空资产");
+          NODE
+
+          for asset in "${ASSETS[@]}"; do
+            name="$(basename "$asset")"
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$REMOTE_DIR"
+            cmp -s "$asset" "$REMOTE_DIR/$name" || { echo "❌ 远端资产与候选字节不一致：$name"; exit 1; }
+          done
+          node "$FINALIZER" verify "$REMOTE_DIR" unused "$RELEASE_TAG" "$RELEASE_SHA" "$PLATFORM_SIGNING" "$GITHUB_REPOSITORY"
+
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=true
+          PROVEN=false
+          for attempt in $(seq 1 12); do
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --json tagName,targetCommitish,isDraft,isPrerelease,isLatest,isImmutable,assets > "$RUNNER_TEMP/public.json"
+            if node - "$RUNNER_TEMP/public.json" "$RELEASE_TAG" "$RELEASE_SHA" "$ASSET_DIR" <<'NODE'
+          const fs = require("node:fs");
+          const [file, tag, sha, dir] = process.argv.slice(2), release = JSON.parse(fs.readFileSync(file, "utf8"));
+          const expected = fs.readdirSync(dir).sort(), assets = release.assets ?? [], names = assets.map((asset) => asset.name).sort();
+          if (release.tagName !== tag || release.targetCommitish !== sha || release.isDraft || release.isPrerelease) process.exit(1);
+          if (!release.isLatest || !release.isImmutable || JSON.stringify(names) !== JSON.stringify(expected)) process.exit(1);
+          if (assets.some((asset) => asset.state !== "uploaded" || !(asset.size > 0))) process.exit(1);
+          NODE
+            then
+              PROVEN=true
+              break
+            fi
+            sleep 5
+          done
+          test "$PROVEN" = "true" || { echo "❌ 公开版本未进入 Latest + immutable 完整状态"; exit 1; }

@@ -1,0 +1,5 @@
+# Computer Use Tool - Runtime Dependencies
+# install.sh 已负责系统级包安装 (xdotool, scrot, tesseract 等)
+# 此文件声明 Python pip 依赖，供 install.sh 调用
+
+playwright>=1.40.0

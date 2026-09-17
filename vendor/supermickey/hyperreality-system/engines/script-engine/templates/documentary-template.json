@@ -1,0 +1,153 @@
+{
+  "$schema": "nirath://templates/documentary/v1",
+  "template_name": "纪录片叙事结构",
+  "template_version": "1.0.0",
+  "description": "适用于纪录片、纪实类视频的三幕结构",
+
+  "structure": {
+    "acts": [
+      {
+        "act_id": "ACT-1",
+        "act_name": "第一幕：引入主题",
+        "act_function": "establish",
+        "description": "建立主题背景，引发观众好奇心",
+        "typical_duration_ratio": 0.25,
+        "beats": [
+          {
+            "beat_id": "B-1.1",
+            "beat_type": "hook",
+            "beat_name": "钩子",
+            "description": "用一个具体场景或人物抓住注意力",
+            "function": "让观众产生'我想知道更多'的好奇"
+          },
+          {
+            "beat_id": "B-1.2",
+            "beat_type": "context",
+            "beat_name": "背景铺陈",
+            "description": "交代时间、地点、背景信息",
+            "function": "建立叙事的基础语境"
+          },
+          {
+            "beat_id": "B-1.3",
+            "beat_type": "question",
+            "beat_name": "核心问题",
+            "description": "提出本片要回答的核心问题",
+            "function": "为全片建立叙事驱动力"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-2",
+        "act_name": "第二幕：探索与发现",
+        "act_function": "confront",
+        "description": "深入主题，呈现多重视角和证据",
+        "typical_duration_ratio": 0.50,
+        "beats": [
+          {
+            "beat_id": "B-2.1",
+            "beat_type": "exploration",
+            "beat_name": "深入探索",
+            "description": "展示主题的不同层面和细节",
+            "function": "用具体案例和数据支撑主题"
+          },
+          {
+            "beat_id": "B-2.2",
+            "beat_type": "contrast",
+            "beat_name": "矛盾/对比",
+            "description": "呈现不同观点或冲突",
+            "function": "增加叙事张力，避免平铺直叙"
+          },
+          {
+            "beat_id": "B-2.3",
+            "beat_type": "revelation",
+            "beat_name": "关键发现",
+            "description": "揭示核心真相或重要发现",
+            "function": "给观众'原来如此'的顿悟感"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-3",
+        "act_name": "第三幕：启示与升华",
+        "act_function": "resolve",
+        "description": "总结发现，引发思考，情感升华",
+        "typical_duration_ratio": 0.25,
+        "beats": [
+          {
+            "beat_id": "B-3.1",
+            "beat_type": "synthesis",
+            "beat_name": "综合归纳",
+            "description": "整合所有线索，给出结论",
+            "function": "让观众获得认知上的完整感"
+          },
+          {
+            "beat_id": "B-3.2",
+            "beat_type": "reflection",
+            "beat_name": "反思",
+            "description": "提出开放性问题，引发观众思考",
+            "function": "超越信息传递，触及更深层的意义"
+          },
+          {
+            "beat_id": "B-3.3",
+            "beat_type": "aftermath",
+            "beat_name": "余韵",
+            "description": "展示主题的现实影响或未来展望",
+            "function": "让主题与观众建立情感连接"
+          }
+        ]
+      }
+    ]
+  },
+
+  "scene_types": {
+    "opening": {
+      "name": "开场",
+      "function": "hook",
+      "required_elements": ["视觉冲击力", "主题暗示"],
+      "typical_duration": 15,
+      "visual_requirements": "大气航拍或特写，建立史诗感或亲密感"
+    },
+    "interview": {
+      "name": "访谈",
+      "function": "establish",
+      "required_elements": ["受访者", "核心观点", "情感真实"],
+      "typical_duration": 20,
+      "visual_requirements": "中近景，自然光，背景有信息量"
+    },
+    "b_roll": {
+      "name": "B-roll",
+      "function": "advance",
+      "required_elements": ["环境细节", "动作过程", "氛围营造"],
+      "typical_duration": 10,
+      "visual_requirements": "丰富细节，动态运镜，环境质感"
+    },
+    "archival": {
+      "name": "资料/档案",
+      "function": "climax",
+      "required_elements": ["历史影像", "文字资料", "证据呈现"],
+      "typical_duration": 10,
+      "visual_requirements": "做旧处理或原样呈现，信息清晰"
+    },
+    "closing": {
+      "name": "结尾",
+      "function": "resolve",
+      "required_elements": ["总结画面", "主题回响"],
+      "typical_duration": 15,
+      "visual_requirements": "与开场呼应，留白，情绪沉淀"
+    }
+  },
+
+  "dialogue_rules": {
+    "max_line_length": 40,
+    "style": "真实自然，有个人色彩，避免播音腔",
+    "forbidden": ["背诵感", "过度修饰", "假大空"],
+    "required": ["真实感", "信息量", "情感真实"]
+  },
+
+  "timing_rules": {
+    "total_duration": 180,
+    "scene_duration_range": [10, 40],
+    "hook_duration": 5,
+    "climax_duration_ratio": 0.20
+  }
+}

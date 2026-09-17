@@ -1,0 +1,194 @@
+{
+ "series": [
+  {
+   "day": "2026-08-06",
+   "dau": 11814,
+   "retention_d7": 0.401,
+   "conversion": 0.082
+  },
+  {
+   "day": "2026-08-07",
+   "dau": 12008,
+   "retention_d7": 0.406,
+   "conversion": 0.08
+  },
+  {
+   "day": "2026-08-08",
+   "dau": 12418,
+   "retention_d7": 0.403,
+   "conversion": 0.085
+  },
+  {
+   "day": "2026-08-09",
+   "dau": 11970,
+   "retention_d7": 0.404,
+   "conversion": 0.082
+  },
+  {
+   "day": "2026-08-10",
+   "dau": 12047,
+   "retention_d7": 0.422,
+   "conversion": 0.089
+  },
+  {
+   "day": "2026-08-11",
+   "dau": 12658,
+   "retention_d7": 0.417,
+   "conversion": 0.085
+  },
+  {
+   "day": "2026-08-12",
+   "dau": 12464,
+   "retention_d7": 0.432,
+   "conversion": 0.078
+  },
+  {
+   "day": "2026-08-13",
+   "dau": 12423,
+   "retention_d7": 0.428,
+   "conversion": 0.083
+  },
+  {
+   "day": "2026-08-14",
+   "dau": 12499,
+   "retention_d7": 0.409,
+   "conversion": 0.09
+  },
+  {
+   "day": "2026-08-15",
+   "dau": 12524,
+   "retention_d7": 0.404,
+   "conversion": 0.08
+  },
+  {
+   "day": "2026-08-16",
+   "dau": 12852,
+   "retention_d7": 0.424,
+   "conversion": 0.091
+  },
+  {
+   "day": "2026-08-17",
+   "dau": 13050,
+   "retention_d7": 0.421,
+   "conversion": 0.094
+  },
+  {
+   "day": "2026-08-18",
+   "dau": 13047,
+   "retention_d7": 0.403,
+   "conversion": 0.083
+  },
+  {
+   "day": "2026-08-19",
+   "dau": 13110,
+   "retention_d7": 0.423,
+   "conversion": 0.089
+  },
+  {
+   "day": "2026-08-20",
+   "dau": 15181,
+   "retention_d7": 0.426,
+   "conversion": 0.09
+  },
+  {
+   "day": "2026-08-21",
+   "dau": 12981,
+   "retention_d7": 0.434,
+   "conversion": 0.092
+  },
+  {
+   "day": "2026-08-22",
+   "dau": 13369,
+   "retention_d7": 0.411,
+   "conversion": 0.088
+  },
+  {
+   "day": "2026-08-23",
+   "dau": 13433,
+   "retention_d7": 0.407,
+   "conversion": 0.084
+  },
+  {
+   "day": "2026-08-24",
+   "dau": 13413,
+   "retention_d7": 0.428,
+   "conversion": 0.089
+  },
+  {
+   "day": "2026-08-25",
+   "dau": 13293,
+   "retention_d7": 0.424,
+   "conversion": 0.081
+  },
+  {
+   "day": "2026-08-26",
+   "dau": 13550,
+   "retention_d7": 0.407,
+   "conversion": 0.084
+  },
+  {
+   "day": "2026-08-27",
+   "dau": 13950,
+   "retention_d7": 0.409,
+   "conversion": 0.083
+  },
+  {
+   "day": "2026-08-28",
+   "dau": 13517,
+   "retention_d7": 0.409,
+   "conversion": 0.079
+  },
+  {
+   "day": "2026-08-29",
+   "dau": 12199,
+   "retention_d7": 0.416,
+   "conversion": 0.079
+  },
+  {
+   "day": "2026-08-30",
+   "dau": 14200,
+   "retention_d7": 0.435,
+   "conversion": 0.083
+  },
+  {
+   "day": "2026-08-31",
+   "dau": 14211,
+   "retention_d7": 0.416,
+   "conversion": 0.093
+  },
+  {
+   "day": "2026-09-01",
+   "dau": 14249,
+   "retention_d7": 0.406,
+   "conversion": 0.08
+  },
+  {
+   "day": "2026-09-02",
+   "dau": 14434,
+   "retention_d7": 0.422,
+   "conversion": 0.09
+  },
+  {
+   "day": "2026-09-03",
+   "dau": 14378,
+   "retention_d7": 0.436,
+   "conversion": 0.084
+  },
+  {
+   "day": "2026-09-04",
+   "dau": 14244,
+   "retention_d7": 0.44,
+   "conversion": 0.08
+  }
+ ],
+ "anomalies": [
+  {
+   "day": "2026-08-20",
+   "note": "发版带动 DAU +18%"
+  },
+  {
+   "day": "2026-08-29",
+   "note": "渠道波动 DAU -12%，已归因"
+  }
+ ]
+}

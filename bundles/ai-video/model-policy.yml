@@ -1,0 +1,36 @@
+# AI 视频社媒营销 · 模型路由策略（bundle 第⑦装配槽，v3.0 通用模型路由系统）
+# 档位：L1 轻量 0.2× / L2 中坚 1× / L3 旗舰 3×；谷时 22:00–08:00 非实时任务再 ×0.2
+# 行业特点：文本 LLM 是加工费、视频渲染是原材料费——预生产批量走谷时，渲染前置质量门
+version: "v3.0"
+scenes:
+  # —— 高频轻量 ——
+  intent-classify:   { tier: L1, fallback: rule-template }
+  cs-answer:         { tier: L1, escalateOn: [low-confidence, thumbs-down] }
+  comment-classify:  { tier: L1, window: off-peak-only }                # 评论五分类（30min 批量巡检）
+  nl-translate:      { tier: L1, fallback: rule-template }
+  # —— 预生产管线（每片数十~上百次调用；批量可谷时，渲染前质量门必过） ——
+  ask-synthesize:    { tier: L2, escalateOn: [thumbs-down] }            # 创作参谋问答
+  quest-plan:        { tier: L2 }
+  preproduction:     { tier: L2, window: off-peak-only }                # 情报/创意/PRD/剧本/分镜（vendor 引擎收口后生效）
+  director-review:   { tier: L2, escalateOn: [redteam-fail] }           # 导演评审（渲染前拦截，挡废片省渲染费）
+  prompt-fusion:     { tier: L2, window: off-peak-only }                # 逐镜提示词融合（25 字段）
+  briefing:          { tier: L2 }
+  ceo-decision:      { tier: L2 }
+  content-generate:  { tier: L2, escalateOn: [redteam-fail, thumbs-down] }
+  kb-extract:        { tier: L2, window: off-peak-only }
+  # —— 低频重度（旗舰档，质量红线） ——
+  ceo-deep-analysis: { tier: L3, noDowngrade: true }
+  hr-replacement:    { tier: L3, noDowngrade: true }
+  fast-scan-report:  { tier: L3, noDowngrade: true, billTo: platform }  # 账号体检报告：售前获客，平台成本
+plans:
+  lite:     { defaultShift: -1 }   # 智享版：整体压一档
+  standard: { defaultShift: 0 }    # 标准版：标准混合
+  smart:                           # 智能版：简单任务保底 L2，评审/裁决走 L3
+    defaultShift: 1
+    tierOverrides:
+      intent-classify: L1
+      nl-translate: L1
+      cs-answer: L1
+      comment-classify: L1
+      director-review: L3
+      ceo-decision: L3

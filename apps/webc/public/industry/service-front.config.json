@@ -1,0 +1,92 @@
+{
+  "workspaceKey": "ai-video-demo",
+  "brandName": "星芒视频工作室",
+  "agentName": "小芒",
+  "logoText": "芒",
+  "theme": {
+    "primary": "#6D28D9",
+    "secondary": "#0E7490"
+  },
+  "welcomeText": "您好，欢迎来到{brand}。我是项目服务助手{agent}，可以帮您提交创作需求、查询项目进度或联系项目经理。",
+  "quickReplies": [
+    {
+      "label": "提交创作需求",
+      "serviceKind": "creative-request"
+    },
+    {
+      "label": "查询项目进度",
+      "sendText": "请帮我查询视频项目的当前进度"
+    },
+    {
+      "label": "补充品牌资料",
+      "serviceKind": "brand-material"
+    },
+    {
+      "label": "联系项目经理",
+      "serviceKind": "support"
+    }
+  ],
+  "serviceEntries": [
+    {
+      "kind": "creative-request",
+      "title": "创作需求",
+      "desc": "提交目标、受众、平台与交付时间",
+      "icon": "创",
+      "sla": "提交后可在工单中查看进度",
+      "titlePlaceholder": "请描述本次视频目标"
+    },
+    {
+      "kind": "brand-material",
+      "title": "品牌资料",
+      "desc": "补充品牌规范、产品事实与禁用内容",
+      "icon": "资",
+      "sla": "资料确认后进入项目事实源",
+      "titlePlaceholder": "请说明需要补充的资料"
+    },
+    {
+      "kind": "support",
+      "title": "项目支持",
+      "desc": "复杂问题转交项目经理",
+      "icon": "人",
+      "sla": "以受理回执中的时间为准",
+      "titlePlaceholder": "请描述问题和影响"
+    }
+  ],
+  "profile": {
+    "identityBinding": false,
+    "membership": false,
+    "orders": false,
+    "labels": {
+      "identity": "项目身份",
+      "membership": "项目权益",
+      "points": "合作值",
+      "orders": "近期项目",
+      "emptyOrders": "暂无视频项目"
+    }
+  },
+  "enableTabs": [
+    "chat",
+    "service",
+    "tickets",
+    "messages",
+    "me"
+  ],
+  "supportPhone": "",
+  "demoHistory": [
+    {
+      "role": "user",
+      "text": "这条产品视频做到哪一步了？"
+    },
+    {
+      "role": "ai",
+      "text": "脚本第二版正在等待导演评审。通过后才会进入真实渲染，当前没有消耗渲染额度。"
+    }
+  ],
+  "projection": {
+    "bundleId": "ai-video",
+    "bundleVersion": "1.0.0",
+    "contractVersion": "2.0.0",
+    "uiVersion": "0.1.1",
+    "manifestDigest": "6b0bb59495d2ab7ca5a622380776b032543d1dbda3486209a89f2ddc74bdb316"
+  }
+}

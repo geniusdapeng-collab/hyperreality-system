@@ -1,0 +1,12 @@
+# E6 · $DSH_HOME/settings.yaml（dsh-settings-file：llm-pi-ai 命名空间）
+# workloom-mock = OpenAI 兼容 Mock provider（packages/runtime/dsh-gate/mock-openai.mjs）
+# 真实模型切换口径：用户在 dsh 设置页/Web Models 页配置凭据（D4/D12 纪律，门禁不依赖外部凭据）
+llm-pi-ai:
+  providers:
+    workloom-mock:
+      apiKeyEnv: WORKLOOM_MOCK_KEY
+      displayName: WorkLoom Mock（门禁专用）
+      api: openai-completions
+      baseURL: http://127.0.0.1:8799/v1
+      models:
+        - id: mock-flash

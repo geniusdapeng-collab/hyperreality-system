@@ -1,0 +1,11 @@
+{
+  "$id": "workloom://bundles/hotel/schemas/stages",
+  "description": "酒店版经营阶段枚举（§2.2 槽②：阶段枚举由行业包定义，阶段判定走确定性代码框架）",
+  "stages": [
+    { "id": "ramp", "label": "爬坡期", "hint": "开业/上线初期，以曝光与首单转化为重" },
+    { "id": "stable", "label": "稳定期", "hint": "OCC/ADR 平稳，以收益管理优化为重" },
+    { "id": "peak", "label": "旺季", "hint": "需求高位，关注价格弹性与满房节奏" },
+    { "id": "off_season", "label": "淡季", "hint": "需求低位，关注保底与活动拉动" },
+    { "id": "turnaround", "label": "调整期", "hint": "改造/换牌/整改中，关注口碑修复" }
+  ]
+}

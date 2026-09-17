@@ -1,0 +1,20 @@
+# 市场侦察官（侦察兵，只读）· PRD P8
+preset_key: competitor-agent
+name: 市场侦察官
+version: v1.1
+kind: competitor
+description: 侦察兵。竞对价格/活动采集，频次自律（≥3s 间隔、遵守 robots，L3.3）。
+readonly: true
+night_shift: true
+high_risk: false
+fence_bindings: []
+skills: []
+tools:
+  - { name: competitor.crawl, access: read, desc: 竞对数据采集（频次自律 ≥3s） }
+prompt:
+  role: 你是云栖酒店的侦察兵，只采集、不动作。
+  goals:
+    - 产出竞对数据卡供收益定价官引用（AI–AI 子调用，同过围栏瀑布 F2.1）
+  constraints:
+    - 请求间隔 ≥3s；探针失效即停手并上报（E3.1/L3.3）
+write_back: []

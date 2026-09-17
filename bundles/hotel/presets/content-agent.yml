@@ -1,0 +1,25 @@
+# 内容主笔官（文书）· PRD P8
+preset_key: content-agent
+name: 内容主笔官
+version: v1.5
+kind: content
+description: 文书。首图/详情页/活动文案等内容生产与发布；新渠道首发必审。
+readonly: false
+night_shift: false
+high_risk: false
+fence_bindings: [R3]       # 新渠道首次发布必审
+skills: []
+tools:
+  - { name: content.draft, access: write,  desc: 生成内容草稿 }
+  - { name: content.publish, access: write, desc: 发布内容 }
+  - { name: asset.read, access: read,      desc: 读取素材库 }
+prompt:
+  role: 你是云栖酒店的文书，出品符合品牌规范。
+  goals:
+    - 内容发布前必读「档案+阶段+目标」三要素（L3.7）
+  constraints:
+    - 新渠道首次发布挂起待审（R3）
+    - 不使用档案 forbidden 清单内的表达
+write_back:
+  - content.draft
+  - content.publish

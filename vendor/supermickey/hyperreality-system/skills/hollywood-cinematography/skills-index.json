@@ -1,0 +1,2163 @@
+{
+  "built_at": "2026-07-28T09:29:23.237Z",
+  "count": 149,
+  "skills": [
+    {
+      "file": "剧情_卡梅隆_情感手持.md",
+      "skill_id": "drama_cameron_emotional_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卡梅隆",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_卡梅隆_紧张手持.md",
+      "skill_id": "drama_cameron_tense_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卡梅隆",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_卢卡斯_告别斯坦尼康.md",
+      "skill_id": "drama_lucas_farewell_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卢卡斯",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_卢卡斯_孤独定场.md",
+      "skill_id": "drama_lucas_lonely_establishing",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卢卡斯",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [
+        "定场"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_卢卡斯_情感斯坦尼康.md",
+      "skill_id": "drama_lucas_emotional_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卢卡斯",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_卢卡斯_救赎斯坦尼康.md",
+      "skill_id": "drama_lucas_redemption_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卢卡斯",
+      "emotions": [
+        "redemption"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_卢卡斯_紧张手持.md",
+      "skill_id": "drama_lucas_tense_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卢卡斯",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_卢卡斯_雨夜斯坦尼康.md",
+      "skill_id": "drama_lucas_rainy_night_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "卢卡斯",
+      "emotions": [
+        "rainy-night"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_库布里克_告别手持.md",
+      "skill_id": "drama_kubrick_farewell_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "库布里克",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_库布里克_孤独手持.md",
+      "skill_id": "drama_kubrick_lonely_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "库布里克",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_库布里克_情感斯坦尼康.md",
+      "skill_id": "drama_kubrick_emotional_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "库布里克",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_库布里克_救赎手持.md",
+      "skill_id": "drama_kubrick_redemption_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "库布里克",
+      "emotions": [
+        "redemption"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_库布里克_温情斯坦尼康.md",
+      "skill_id": "drama_kubrick_tender_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "库布里克",
+      "emotions": [
+        "tender"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_库布里克_雨夜手持.md",
+      "skill_id": "drama_kubrick_rainy_night_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "库布里克",
+      "emotions": [
+        "rainy-night"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯皮尔伯格_史诗斯坦尼康.md",
+      "skill_id": "drama_spielberg_epic_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯皮尔伯格_告别手持.md",
+      "skill_id": "drama_spielberg_farewell_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯皮尔伯格_孤独手持.md",
+      "skill_id": "drama_spielberg_lonely_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯皮尔伯格_情感手持.md",
+      "skill_id": "drama_spielberg_emotional_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯皮尔伯格_救赎手持.md",
+      "skill_id": "drama_spielberg_redemption_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "redemption"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯皮尔伯格_温情斯坦尼康.md",
+      "skill_id": "drama_spielberg_tender_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "tender"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯皮尔伯格_雨夜手持.md",
+      "skill_id": "drama_spielberg_rainnight_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "rainy-night"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_斯科塞斯_舞蹈斯坦尼康.md",
+      "skill_id": "drama_scorsese_dance_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "斯科塞斯",
+      "emotions": [
+        "dance"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_昆汀_舞蹈手持.md",
+      "skill_id": "drama_tarantino_dance_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "昆汀",
+      "emotions": [
+        "dance"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_索金_舞蹈手持.md",
+      "skill_id": "drama_sorkin_dance_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "索金",
+      "emotions": [
+        "dance"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_维伦纽瓦_告别斯坦尼康.md",
+      "skill_id": "drama_villeneuve_farewell_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_维伦纽瓦_孤独手持.md",
+      "skill_id": "drama_villeneuve_lonely_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_维伦纽瓦_情感斯坦尼康.md",
+      "skill_id": "drama_villeneuve_emotional_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_维伦纽瓦_救赎斯坦尼康.md",
+      "skill_id": "drama_villeneuve_redemption_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "redemption"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_维伦纽瓦_温情手持.md",
+      "skill_id": "drama_villeneuve_tender_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "tender"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_维伦纽瓦_雨夜斯坦尼康.md",
+      "skill_id": "drama_villeneuve_rainnight_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "rainy-night"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_诺兰_告别手持.md",
+      "skill_id": "drama_nolan_farewell_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "诺兰",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_诺兰_孤独斯坦尼康.md",
+      "skill_id": "drama_nolan_lonely_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "诺兰",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_诺兰_情感手持.md",
+      "skill_id": "drama_nolan_emotional_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "诺兰",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_诺兰_救赎手持.md",
+      "skill_id": "drama_nolan_redemption_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "诺兰",
+      "emotions": [
+        "redemption"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_诺兰_温情手持.md",
+      "skill_id": "drama_nolan_tender_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "诺兰",
+      "emotions": [
+        "tender"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_诺兰_神秘手持.md",
+      "skill_id": "drama_nolan_mystery_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "诺兰",
+      "emotions": [
+        "mysterious"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_诺兰_雨夜手持.md",
+      "skill_id": "drama_nolan_rainnight_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "诺兰",
+      "emotions": [
+        "rainy-night"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_达米恩_舞蹈斯坦尼康.md",
+      "skill_id": "drama_chazelle_dance_steadicam",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "达米恩",
+      "emotions": [
+        "dance"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "剧情_韦斯安德森_舞蹈手持.md",
+      "skill_id": "drama_wesanderson_dance_handheld",
+      "domain": "cinematography",
+      "type": "drama",
+      "director": "韦斯安德森",
+      "emotions": [
+        "dance"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_博伊尔_舞蹈手持.md",
+      "skill_id": "action_boyle_dance_handheld",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "博伊尔",
+      "emotions": [
+        "dance"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_卡梅隆_史诗航拍.md",
+      "skill_id": "action_cameron_epic_aerial",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "卡梅隆",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "aerial"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_卡梅隆_浪漫斯坦尼康.md",
+      "skill_id": "action_cameron_romantic_steadicam",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "卡梅隆",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_卡梅隆_紧张追逐手持.md",
+      "skill_id": "action_cameron_tense_handheld",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "卡梅隆",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_卢卡斯_史诗手持.md",
+      "skill_id": "action_lucas_epic_handheld",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "卢卡斯",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_库布里克_情感手持.md",
+      "skill_id": "action_kubrick_emotional_handheld",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "库布里克",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_库布里克_紧张斯坦尼康.md",
+      "skill_id": "action_kubrick_tense_steadicam",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "库布里克",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_维伦纽瓦_史诗手持.md",
+      "skill_id": "action_villeneuve_epic_handheld",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_诺兰_史诗斯坦尼康.md",
+      "skill_id": "action_nolan_epic_steadicam",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "诺兰",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "动作_诺兰_紧张追逐手持.md",
+      "skill_id": "action_nolan_tense_handheld",
+      "domain": "cinematography",
+      "type": "action",
+      "director": "诺兰",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卡梅隆_史诗斯坦尼康.md",
+      "skill_id": "comedy_cameron_epic_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卡梅隆",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卡梅隆_孤独手持.md",
+      "skill_id": "comedy_cameron_lonely_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卡梅隆",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卡梅隆_救赎斯坦尼康.md",
+      "skill_id": "comedy_cameron_redemption_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卡梅隆",
+      "emotions": [
+        "redemption"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卡梅隆_浪漫手持.md",
+      "skill_id": "comedy_cameron_romantic_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卡梅隆",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卡梅隆_紧张斯坦尼康.md",
+      "skill_id": "comedy_cameron_tense_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卡梅隆",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卡梅隆_雨夜斯坦尼康.md",
+      "skill_id": "comedy_cameron_rainy_night_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卡梅隆",
+      "emotions": [
+        "rainy-night"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卢卡斯_情感手持.md",
+      "skill_id": "comedy_lucas_emotional_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卢卡斯",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卢卡斯_浪漫斯坦尼康.md",
+      "skill_id": "comedy_lucas_romantic_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卢卡斯",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_卢卡斯_温情手持.md",
+      "skill_id": "comedy_lucas_tender_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "卢卡斯",
+      "emotions": [
+        "tender"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_库布里克_浪漫斯坦尼康.md",
+      "skill_id": "comedy_kubrick_romantic_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "库布里克",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_库布里克_荒诞手持.md",
+      "skill_id": "comedy_kubrick_absurd_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "库布里克",
+      "emotions": [
+        "absurd"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_斯皮尔伯格_史诗手持.md",
+      "skill_id": "comedy_spielberg_epic_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_斯皮尔伯格_浪漫手持.md",
+      "skill_id": "comedy_spielberg_romantic_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_斯皮尔伯格_浪漫斯坦尼康.md",
+      "skill_id": "comedy_spielberg_romantic_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_维伦纽瓦_史诗斯坦尼康.md",
+      "skill_id": "comedy_villeneuve_epic_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_维伦纽瓦_浪漫手持.md",
+      "skill_id": "comedy_villeneuve_romantic_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_诺兰_史诗手持.md",
+      "skill_id": "comedy_nolan_epic_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "诺兰",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_诺兰_告别斯坦尼康.md",
+      "skill_id": "comedy_nolan_farewell_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "诺兰",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_诺兰_浪漫斯坦尼康.md",
+      "skill_id": "comedy_nolan_romance_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "诺兰",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_诺兰_温情斯坦尼康.md",
+      "skill_id": "comedy_nolan_tender_steadicam",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "诺兰",
+      "emotions": [
+        "tender"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "喜剧_诺兰_紧张手持.md",
+      "skill_id": "comedy_nolan_tense_handheld",
+      "domain": "cinematography",
+      "type": "comedy",
+      "director": "诺兰",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "孤独_午夜独醒.md",
+      "skill_id": "loneliness_midnight_awakening",
+      "domain": "cinematography",
+      "type": "loneliness",
+      "director": "",
+      "emotions": [
+        "midnight-awake"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "孤独_热闹中的寂静.md",
+      "skill_id": "loneliness_in_the_midst_of_noise",
+      "domain": "cinematography",
+      "type": "loneliness",
+      "director": "",
+      "emotions": [
+        "quiet-in-chaos"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "孤独_镜子里的陌生人.md",
+      "skill_id": "loneliness_mirror_stranger",
+      "domain": "cinematography",
+      "type": "loneliness",
+      "director": "",
+      "emotions": [
+        "stranger-in-mirror"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_凝视_沉默对峙.md",
+      "skill_id": "microexpression_gaze_silent_standoff",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "oriental-restraint"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_卡萨维茨_粗粝真实.md",
+      "skill_id": "performance_style_cassavetes_raw",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "卡萨维茨",
+      "emotions": [
+        "raw-real"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_压抑喜悦_眼眶泛红.md",
+      "skill_id": "microexpression_suppressed_joy",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "joy"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_压抑悲伤_无声落泪.md",
+      "skill_id": "microexpression_suppressed_sadness",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "grief"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_厌恶_嫌弃.md",
+      "skill_id": "microexpression_disgust_contempt",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "disgust"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_厌恶皱眉_鼻翼翕动.md",
+      "skill_id": "microexpression_disgust_nose_wrinkle",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "disgust"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_告别_不舍与决绝.md",
+      "skill_id": "microexpression_farewell_reluctance_and_resolution",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_告别_无声离别.md",
+      "skill_id": "microexpression_farewell_silent_departure",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "farewell"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_复杂情绪_喜怒交加.md",
+      "skill_id": "microexpression_complex_mixed",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_奥卡萨姆_复古优雅.md",
+      "skill_id": "performance_style_okassam_vintage",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "奥卡萨姆",
+      "emotions": [
+        "vintage-elegant"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_孤独_无人回应的寂静.md",
+      "skill_id": "microexpression_loneliness_silence_of_no_response",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_孤独_灵魂独行.md",
+      "skill_id": "microexpression_loneliness_soul_walking_alone",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "lonely"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_幸福_喜悦.md",
+      "skill_id": "microexpression_happiness_joy",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "joy"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_德尼罗_方法演技.md",
+      "skill_id": "performance_style_denero_method",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "德尼罗",
+      "emotions": [
+        "method-acting"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_恍惚_记忆闪回.md",
+      "skill_id": "microexpression_fugue_memory_flashback",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "trance"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_恐惧_惊恐.md",
+      "skill_id": "microexpression_fear_terror",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "fear"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_恐惧颤抖_牙齿打颤.md",
+      "skill_id": "microexpression_fear_trembling",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "fear"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_悲伤_哀伤.md",
+      "skill_id": "microexpression_grief_sorrow",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "grief"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_惊讶_震惊.md",
+      "skill_id": "microexpression_surprise_shock",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "shocked"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_惊讶凝固_时间停止.md",
+      "skill_id": "microexpression_surprise_frozen",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "shocked"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_愤怒_暴烈.md",
+      "skill_id": "microexpression_anger_rage",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "anger-suppressed"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_愤怒克制_咬紧牙关.md",
+      "skill_id": "microexpression_restrained_anger",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "anger-suppressed"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_战栗_不祥预感.md",
+      "skill_id": "microexpression_shudder_ominous",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "fear"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_斯派克琼斯_神经质幽默.md",
+      "skill_id": "performance_style_spike_jones_neurotic",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "斯派克琼斯",
+      "emotions": [
+        "neurotic-humor"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_斯科塞斯_热情外放.md",
+      "skill_id": "performance_style_scorsese_passionate",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "斯科塞斯",
+      "emotions": [
+        "outgoing"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_曼_紧张内敛.md",
+      "skill_id": "performance_style_mann_tense",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "曼",
+      "emotions": [
+        "tense-reserved"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_破碎_心碎时刻.md",
+      "skill_id": "microexpression_shattered_heartbreak",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "broken"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_空洞_灵魂出窍.md",
+      "skill_id": "microexpression_void_emptiness",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "hollow"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_窒息_窒息感.md",
+      "skill_id": "microexpression_suffocation_choking",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "suffocating"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_索金_话唠爆发.md",
+      "skill_id": "performance_style_sorkin_talky",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "索金",
+      "emotions": [
+        "neurotic-humor"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_芬奇_冷峻逼近.md",
+      "skill_id": "performance_style_fincher_clinical",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "芬奇",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_蔑视_冷嘲.md",
+      "skill_id": "microexpression_contempt_scorn",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "contempt"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_迷醉_超然状态.md",
+      "skill_id": "microexpression_trance_transcendental",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "trance"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_闪电_瞬间启示.md",
+      "skill_id": "microexpression_lightning_sudden_revelation",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "闪电",
+      "emotions": [
+        "epiphany"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_雨夜_无尽雨幕.md",
+      "skill_id": "microexpression_rainy_night_endless_rain",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "",
+      "emotions": [
+        "rainy-night"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "微表情_黑泽明_东方克制.md",
+      "skill_id": "performance_style_kurosawa_eastern",
+      "domain": "acting",
+      "type": "micro-expression",
+      "director": "黑泽明",
+      "emotions": [
+        "oriental-restraint"
+      ],
+      "camera_modes": [],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "恐怖_库布里克_恐怖斯坦尼康.md",
+      "skill_id": "horror_kubrick_horror_steadicam",
+      "domain": "cinematography",
+      "type": "horror",
+      "director": "库布里克",
+      "emotions": [
+        "horror"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "恐怖_库布里克_紧张手持.md",
+      "skill_id": "horror_kubrick_tense_handheld",
+      "domain": "cinematography",
+      "type": "horror",
+      "director": "库布里克",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "恐怖_维伦纽瓦_悬疑手持.md",
+      "skill_id": "horror_villeneuve_suspense_handheld",
+      "domain": "cinematography",
+      "type": "horror",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "suspenseful"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "恐怖_维伦纽瓦_紧张斯坦尼康.md",
+      "skill_id": "horror_villeneuve_tense_steadicam",
+      "domain": "cinematography",
+      "type": "horror",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "恐怖_诺兰_史诗手持.md",
+      "skill_id": "horror_nolan_epic_handheld",
+      "domain": "cinematography",
+      "type": "horror",
+      "director": "诺兰",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "恐怖_诺兰_紧张斯坦尼康.md",
+      "skill_id": "horror_nolan_tense_steadicam",
+      "domain": "cinematography",
+      "type": "horror",
+      "director": "诺兰",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "悬疑_希区柯克_神秘斯坦尼康.md",
+      "skill_id": "suspense_hitchcock_mystery_steadicam",
+      "domain": "cinematography",
+      "type": "suspense",
+      "director": "希区柯克",
+      "emotions": [
+        "mysterious"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "惊悚_大卫林奇_神秘手持.md",
+      "skill_id": "thriller_lynch_mystery_handheld",
+      "domain": "cinematography",
+      "type": "thriller",
+      "director": "大卫林奇",
+      "emotions": [
+        "mysterious"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "惊悚_斯科塞斯_神秘斯坦尼康.md",
+      "skill_id": "thriller_scorsese_mystery_steadicam",
+      "domain": "cinematography",
+      "type": "thriller",
+      "director": "斯科塞斯",
+      "emotions": [
+        "mysterious"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "惊悚_芬奇_神秘手持.md",
+      "skill_id": "thriller_fincher_mystery_handheld",
+      "domain": "cinematography",
+      "type": "thriller",
+      "director": "芬奇",
+      "emotions": [
+        "mysterious"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_卡梅隆_史诗定场.md",
+      "skill_id": "war_cameron_epic_establishing",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "卡梅隆",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "定场"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_卡梅隆_史诗手持.md",
+      "skill_id": "war_cameron_epic_handheld",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "卡梅隆",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_卢卡斯_史诗手持.md",
+      "skill_id": "war_lucas_epic_handheld",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "卢卡斯",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_卢卡斯_史诗斯坦尼康.md",
+      "skill_id": "war_lucas_epic_steadicam",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "卢卡斯",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_卢卡斯_紧张定场.md",
+      "skill_id": "war_lucas_tense_established",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "卢卡斯",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "定场"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_库布里克_史诗定场.md",
+      "skill_id": "war_kubrick_epic_establishing",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "库布里克",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "定场"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_库布里克_情感斯坦尼康.md",
+      "skill_id": "war_kubrick_emotional_steadicam",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "库布里克",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_斯皮尔伯格_情感斯坦尼康.md",
+      "skill_id": "war_spielberg_emotional_steadicam",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_维伦纽瓦_紧张手持.md",
+      "skill_id": "war_villeneuve_tense_handheld",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_诺兰_史诗斯坦尼康.md",
+      "skill_id": "war_nolan_epic_steadicam",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "诺兰",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_诺兰_情感斯坦尼康.md",
+      "skill_id": "war_nolan_emotional_steadicam",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "诺兰",
+      "emotions": [
+        "emotional"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_诺兰_浪漫斯坦尼康.md",
+      "skill_id": "war_nolan_romantic_steadicam",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "诺兰",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "战争_诺兰_紧张手持.md",
+      "skill_id": "war_nolan_tense_handheld",
+      "domain": "cinematography",
+      "type": "war",
+      "director": "诺兰",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_卡梅隆_史诗斯坦尼康.md",
+      "skill_id": "scifi_cameron_epic_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "卡梅隆",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_卡梅隆_紧张追逐_斯坦尼康.md",
+      "skill_id": "sci-fi_cameron_tense_chase_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "卡梅隆",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_卢卡斯_史诗定场.md",
+      "skill_id": "sci-fi_lucas_epic_establishing",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "卢卡斯",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "定场"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_卢卡斯_史诗手持.md",
+      "skill_id": "scifi_lucas_epic_handheld",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "卢卡斯",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_卢卡斯_紧张手持.md",
+      "skill_id": "sci-fi_lucas_tense_handheld",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "卢卡斯",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_库布里克_恐怖斯坦尼康.md",
+      "skill_id": "sci-fi_kubrick_horror_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "库布里克",
+      "emotions": [
+        "horror"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_库布里克_悬疑手持.md",
+      "skill_id": "sci-fi_kubrick_suspense_handheld",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "库布里克",
+      "emotions": [
+        "suspenseful"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_斯皮尔伯格_紧张手持.md",
+      "skill_id": "scifi_spielberg_tense_handheld",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_斯皮尔伯格_紧张斯坦尼康.md",
+      "skill_id": "sci-fi_spielberg_tense_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "斯皮尔伯格",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_维伦纽瓦_史诗航拍_IMAX.md",
+      "skill_id": "sci-fi_villeneuve_epic_aerial_imax",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "epic"
+      ],
+      "camera_modes": [
+        "aerial"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_维伦纽瓦_悬疑手持.md",
+      "skill_id": "sci-fi_villeneuve_suspense_handheld",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "suspenseful"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_维伦纽瓦_悬疑斯坦尼康.md",
+      "skill_id": "scifi_villeneuve_suspense_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "suspenseful"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_维伦纽瓦_神秘手持.md",
+      "skill_id": "scifi_villeneuve_mystery_handheld",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "mysterious"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_维伦纽瓦_紧张斯坦尼康.md",
+      "skill_id": "scifi_villeneuve_tense_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "维伦纽瓦",
+      "emotions": [
+        "tense"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_诺兰_悬疑手持.md",
+      "skill_id": "sci-fi_nolan_suspense_handheld",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "诺兰",
+      "emotions": [
+        "suspenseful"
+      ],
+      "camera_modes": [
+        "handheld"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_诺兰_悬疑斯坦尼康.md",
+      "skill_id": "sci-fi_nolan_suspense_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "诺兰",
+      "emotions": [
+        "suspenseful"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    },
+    {
+      "file": "科幻_诺兰_浪漫斯坦尼康.md",
+      "skill_id": "scifi_nolan_romantic_steadicam",
+      "domain": "cinematography",
+      "type": "sci-fi",
+      "director": "诺兰",
+      "emotions": [
+        "romantic"
+      ],
+      "camera_modes": [
+        "steadicam"
+      ],
+      "intensity_range": null,
+      "hasManifest": true
+    }
+  ]
+}

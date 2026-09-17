@@ -1,0 +1,140 @@
+#!/bin/bash
+# ============================================================
+# HyperReality 织元 · macOS 桌面启动器（W2 / D16）
+# 首启自愈：依赖全自带（Node 24 + Postgres.app 17+pgvector），
+# 用户侧唯一授权 = Gatekeeper「Control+点按→打开」一次；
+# 其余全部自动完成（装配→初始化→迁移→种子→起服务→开浏览器）。
+# 兼容 macOS 自带 bash 3.2；日志：~/Library/Logs/HyperReality/
+# ============================================================
+set -u
+
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCES="$(cd "$SELF_DIR/../Resources" && pwd)"
+SUPPORT="$HOME/Library/Application Support/HyperReality"
+LOGDIR="$HOME/Library/Logs/HyperReality"
+LOG="$LOGDIR/launch-$(date +%Y%m%d-%H%M%S).log"
+RUNTIME="$SUPPORT/runtime"
+PGDATA="$SUPPORT/pgdata"
+PGBIN="$SUPPORT/pg/Postgres.app/Contents/Versions/17/bin"
+NODEBIN="$SUPPORT/node/bin"
+SERVER_PORT=8787
+WEB_PORT=5173
+# 冒烟模式（CI 首航自动化验收）：WORKLOOM_SMOKE=1 时不开浏览器、健康检查通过即退出
+SMOKE="${WORKLOOM_SMOKE:-0}"
+
+mkdir -p "$SUPPORT" "$LOGDIR"
+exec >>"$LOG" 2>&1
+
+say() { printf '%s %s\n' "$(date +%H:%M:%S)" "$1"; }
+die() { say "❌ $1"; [ "$SMOKE" = "1" ] || osascript -e "display dialog \"HyperReality 启动中止：$1\n\n日志：$LOG\" buttons {\"好\"} default button 1 with icon caution" >/dev/null 2>&1; exit 1; }
+# ditto 为 macOS 专属；Linux 兼容层（沙箱冒烟用）回落 cp -a
+copy() { if command -v ditto >/dev/null 2>&1; then ditto "$1" "$2"; else cp -a "$1" "$2"; fi }
+
+say "== HyperReality 织元 · 启动（日志 ${LOG}）=="
+
+# ---------- 0. 装配：首启把运行时载荷复制到可写支持目录 ----------
+PAYLOAD_VER="$(cat "$RESOURCES/runtime/VERSION" 2>/dev/null || echo unknown)"
+INSTALLED_VER="$(cat "$SUPPORT/VERSION" 2>/dev/null || echo none)"
+if [ "$PAYLOAD_VER" != "$INSTALLED_VER" ]; then
+  say "→ 装配运行时载荷（${PAYLOAD_VER}）…"
+  rm -rf "$RUNTIME.new"
+  copy "$RESOURCES/runtime" "$RUNTIME.new" || die "运行时载荷复制失败"
+  rm -rf "$RUNTIME" && mv "$RUNTIME.new" "$RUNTIME"
+  rm -rf "$SUPPORT/node" "$SUPPORT/pg"
+  copy "$RESOURCES/node" "$SUPPORT/node" || die "Node 运行时复制失败"
+  copy "$RESOURCES/pg" "$SUPPORT/pg" || die "Postgres 运行时复制失败"
+  # 解除隔离属性（zip 分发+用户已手动打开主 App，内嵌运行时继承放行）
+  xattr -dr com.apple.quarantine "$SUPPORT" >/dev/null 2>&1
+  printf '%s' "$PAYLOAD_VER" > "$SUPPORT/VERSION"
+  rm -f "$SUPPORT/.bootstrapped"
+  say "✅ 装配完成"
+fi
+export PATH="$NODEBIN:$PGBIN:$PATH"
+TSX="$RUNTIME/node_modules/.bin/tsx"
+VITE="$RUNTIME/apps/web/node_modules/.bin/vite"
+[ -x "$TSX" ] || die "运行时载荷不完整（tsx 缺失）"
+[ -x "$VITE" ] || VITE="$RUNTIME/node_modules/.bin/vite"
+[ -x "$VITE" ] || die "运行时载荷不完整（vite 缺失）"
+
+# ---------- 1. PostgreSQL：用户态、免 sudo、免 brew ----------
+port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+pg_up() { "$PGBIN/pg_isready" -h 127.0.0.1 -p 5432 -d workloom >/dev/null 2>&1; }
+
+if pg_up; then
+  say "✅ PostgreSQL 已在运行（复用）"
+else
+  if port_busy 5432 && [ ! -f "$PGDATA/postmaster.pid" ]; then
+    die "端口 5432 被其他 PostgreSQL 占用——请先退出它，或编辑 $RUNTIME/.env 改端口"
+  fi
+  if [ ! -d "$PGDATA" ]; then
+    say "→ 初始化数据库（initdb）…"
+    "$PGBIN/initdb" -D "$PGDATA" -U "$(whoami)" --auth=trust -E UTF8 --locale=C >/dev/null || die "initdb 失败"
+  fi
+  say "→ 启动 PostgreSQL 17 …"
+  # pg_ctl -o 经 shell 解析：-k 套接字目录路径含空格（Application Support）必须单引号护住
+  "$PGBIN/pg_ctl" -D "$PGDATA" -l "$LOGDIR/pg.log" -o "-p 5432 -k '$SUPPORT' -c listen_addresses=127.0.0.1" -w -t 60 start >/dev/null || die "PostgreSQL 启动失败（详见 $LOGDIR/pg.log）"
+fi
+# 角色与库（幂等）
+"$PGBIN/psql" -h 127.0.0.1 -p 5432 -U "$(whoami)" -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='postgres'" 2>/dev/null | grep -q 1 || \
+  "$PGBIN/psql" -h 127.0.0.1 -p 5432 -U "$(whoami)" -d postgres -c "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD 'workloom'" >/dev/null
+"$PGBIN/psql" -h 127.0.0.1 -p 5432 -U "$(whoami)" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='workloom'" 2>/dev/null | grep -q 1 || \
+  "$PGBIN/createdb" -h 127.0.0.1 -p 5432 -U postgres -O postgres workloom
+"$PGBIN/psql" -h 127.0.0.1 -p 5432 -U postgres -d workloom -c "CREATE EXTENSION IF NOT EXISTS vector" >/dev/null || die "pgvector 扩展装载失败"
+
+# ---------- 2. 配置：.env 默认即本地自足 ----------
+if [ ! -f "$RUNTIME/.env" ]; then
+  cp "$RUNTIME/.env.defaults" "$RUNTIME/.env"
+  # 演示 JWT 密钥首启随机化（本机单用户场景）
+  SECRET="$(uuidgen 2>/dev/null || date +%s%N | shasum | head -c 32)"
+  sed -i.bak "s/^JWT_SECRET=.*/JWT_SECRET=wl-$(printf '%s' "$SECRET" | tr 'A-Z' 'a-z')/" "$RUNTIME/.env" && rm -f "$RUNTIME/.env.bak"
+fi
+
+# ---------- 3. 首启引导：迁移 + 种子（幂等） ----------
+if [ ! -f "$SUPPORT/.bootstrapped" ]; then
+  say "→ 首航引导：数据库迁移 + 演示数据种子…"
+  (cd "$RUNTIME" && "$TSX" --env-file=.env scripts/migrate.ts) || die "数据库迁移失败"
+  (cd "$RUNTIME" && "$TSX" --env-file=.env scripts/seed-video.ts) || die "演示数据种子失败"
+  touch "$SUPPORT/.bootstrapped"
+  say "✅ 首航引导完成"
+fi
+
+# ---------- 4. 起服务：server(8787) + web preview(5173) ----------
+port_busy $SERVER_PORT && die "端口 $SERVER_PORT 被占用——请先退出旧实例（或执行 pkill -f HyperReality）"
+port_busy $WEB_PORT && die "端口 $WEB_PORT 被占用"
+(cd "$RUNTIME/apps/server" && "$TSX" --env-file="$RUNTIME/.env" src/index.ts >>"$LOGDIR/server.log" 2>&1) &
+PID_SERVER=$!
+# vite preview 默认绑 localhost（可能解析为 ::1）——显式锁 127.0.0.1 与健康检查同口径
+(cd "$RUNTIME/apps/web" && "$VITE" preview --host 127.0.0.1 --port $WEB_PORT --strictPort >>"$LOGDIR/web.log" 2>&1) &
+PID_WEB=$!
+
+cleanup() {
+  say "→ 停止服务…"
+  kill "$PID_SERVER" "$PID_WEB" >/dev/null 2>&1
+  # 进程树兜底：tsx/vite 会再派生 node 子进程——启动时已断言端口专属，按端口清杀即精确
+  for i in 1 2 3; do
+    port_busy $SERVER_PORT || port_busy $WEB_PORT || break
+    sleep 1
+  done
+  port_busy $SERVER_PORT && kill $(lsof -tiTCP:$SERVER_PORT -sTCP:LISTEN) >/dev/null 2>&1
+  port_busy $WEB_PORT && kill $(lsof -tiTCP:$WEB_PORT -sTCP:LISTEN) >/dev/null 2>&1
+  if [ -f "$PGDATA/postmaster.pid" ]; then "$PGBIN/pg_ctl" -D "$PGDATA" stop -m fast >/dev/null 2>&1; fi
+  say "== 已停止 =="
+}
+trap cleanup INT TERM EXIT
+
+say "→ 等待服务就绪…"
+ok=""
+for i in $(seq 1 60); do
+  curl -sf "http://127.0.0.1:$SERVER_PORT/health" >/dev/null 2>&1 && curl -sf -o /dev/null "http://127.0.0.1:$WEB_PORT/" && { ok=1; break; }
+  sleep 1
+done
+[ -n "$ok" ] || die "服务 60s 内未就绪（server:$SERVER_PORT / web:${WEB_PORT}，详见 $LOGDIR/）"
+say "✅ 首航检查单全绿：PG ✅ 迁移 ✅ 种子 ✅ server ✅ web ✅"
+
+if [ "$SMOKE" = "1" ]; then
+  say "== SMOKE 模式：健康检查通过，退出 =="
+  exit 0
+fi
+say "== 主甲板已就绪 http://localhost:$WEB_PORT （在程序坞退出 HyperReality 即停止全部服务）=="
+open "http://localhost:$WEB_PORT"
+wait

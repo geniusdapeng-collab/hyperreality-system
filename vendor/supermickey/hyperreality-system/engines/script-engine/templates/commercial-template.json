@@ -1,0 +1,146 @@
+{
+  "$schema": "nirath://templates/commercial/v1",
+  "template_name": "商业广告三幕结构",
+  "template_version": "1.0.0",
+  "description": "适用于品牌宣传、产品推广、商业营销类视频的三幕结构",
+
+  "structure": {
+    "acts": [
+      {
+        "act_id": "ACT-1",
+        "act_name": "第一幕：痛点/渴望",
+        "act_function": "establish",
+        "description": "建立观众共鸣，呈现痛点或渴望",
+        "typical_duration_ratio": 0.20,
+        "beats": [
+          {
+            "beat_id": "B-1.1",
+            "beat_type": "hook",
+            "beat_name": "钩子",
+            "description": "3秒内抓住注意力，提出问题或呈现渴望",
+            "function": "让观众产生'这说的就是我'的共鸣"
+          },
+          {
+            "beat_id": "B-1.2",
+            "beat_type": "problem",
+            "beat_name": "痛点呈现",
+            "description": "具体化问题，放大不适感",
+            "function": "建立解决问题的紧迫性"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-2",
+        "act_name": "第二幕：解决方案/产品展示",
+        "act_function": "confront",
+        "description": "展示产品/服务如何解决痛点",
+        "typical_duration_ratio": 0.55,
+        "beats": [
+          {
+            "beat_id": "B-2.1",
+            "beat_type": "solution_intro",
+            "beat_name": "方案引入",
+            "description": "产品/服务亮相，建立期待",
+            "function": "从问题自然过渡到解决方案"
+          },
+          {
+            "beat_id": "B-2.2",
+            "beat_type": "feature_showcase",
+            "beat_name": "核心卖点展示",
+            "description": "展示1-3个核心卖点，每个配合视觉证明",
+            "function": "用具体场景证明产品价值"
+          },
+          {
+            "beat_id": "B-2.3",
+            "beat_type": "social_proof",
+            "beat_name": "信任背书",
+            "description": "用户评价、数据、权威认证",
+            "function": "消除购买顾虑"
+          }
+        ]
+      },
+      {
+        "act_id": "ACT-3",
+        "act_name": "第三幕：行动召唤/品牌记忆",
+        "act_function": "resolve",
+        "description": "强化品牌印象，推动行动",
+        "typical_duration_ratio": 0.25,
+        "beats": [
+          {
+            "beat_id": "B-3.1",
+            "beat_type": "benefit_summary",
+            "beat_name": "利益总结",
+            "description": "一句话总结核心利益",
+            "function": "让观众记住为什么要选择"
+          },
+          {
+            "beat_id": "B-3.2",
+            "beat_type": "cta",
+            "beat_name": "行动召唤",
+            "description": "明确的下一步行动指引",
+            "function": "降低行动门槛，促成转化"
+          },
+          {
+            "beat_id": "B-3.3",
+            "beat_type": "branding",
+            "beat_name": "品牌烙印",
+            "description": "品牌Logo、Slogan、视觉锤",
+            "function": "强化品牌记忆点"
+          }
+        ]
+      }
+    ]
+  },
+
+  "scene_types": {
+    "opening": {
+      "name": "开场钩子",
+      "function": "hook",
+      "required_elements": ["问题/渴望", "情绪共鸣"],
+      "typical_duration": 5,
+      "visual_requirements": "高冲击力画面，快速剪辑，情绪强烈"
+    },
+    "product_reveal": {
+      "name": "产品亮相",
+      "function": "establish",
+      "required_elements": ["产品主体", "核心卖点"],
+      "typical_duration": 10,
+      "visual_requirements": "精致布光，慢动作，质感特写"
+    },
+    "feature_demo": {
+      "name": "功能演示",
+      "function": "advance",
+      "required_elements": ["使用场景", "效果对比"],
+      "typical_duration": 15,
+      "visual_requirements": "前后对比，动态展示，真实场景"
+    },
+    "testimonial": {
+      "name": "用户证言",
+      "function": "climax",
+      "required_elements": ["真实用户", "情感表达", "结果展示"],
+      "typical_duration": 10,
+      "visual_requirements": "真实感，自然光，生活化场景"
+    },
+    "cta_scene": {
+      "name": "行动召唤",
+      "function": "resolve",
+      "required_elements": ["利益重申", "行动指引", "品牌标识"],
+      "typical_duration": 5,
+      "visual_requirements": "简洁有力，品牌色主导，信息清晰"
+    }
+  },
+
+  "dialogue_rules": {
+    "max_line_length": 25,
+    "style": "口号化、节奏感强、易记忆",
+    "forbidden": ["冗长解释", "技术术语堆砌", "消极表达"],
+    "required": ["品牌调性", "利益承诺"]
+  },
+
+  "timing_rules": {
+    "total_duration": 60,
+    "scene_duration_range": [3, 20],
+    "hook_duration": 3,
+    "climax_duration_ratio": 0.20
+  }
+}

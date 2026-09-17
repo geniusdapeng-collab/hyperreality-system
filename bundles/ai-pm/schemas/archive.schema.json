@@ -1,0 +1,1 @@
+{"archive":{"required":["entity_name","industry","stage","goal"],"fields":{"entity_name":"产品/公司名称","industry":"行业","stage":"当前阶段","goal":"经营目标"}}}

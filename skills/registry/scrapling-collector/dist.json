@@ -1,0 +1,17 @@
+{
+  "category": "tool-execution",
+  "origin": "oss-curated",
+  "deps": ["scrapling"],
+  "toolWhitelist": ["scrapling", "python3 -m scrapling", "python3 -c"],
+  "egressDomains": [],
+  "fenceParams": {
+    "dailyActionCap": 500,
+    "respectRobotsTxt": true,
+    "autoThrottle": true,
+    "solveCloudflareRequiresApproval": true,
+    "targetDomainsRequireApproval": true,
+    "humanLoginOnly": true
+  },
+  "license": "BSD-3-Clause",
+  "sourceRepo": "https://github.com/D4Vinci/Scrapling"
+}

@@ -1,0 +1,36 @@
+# 酒店行业 · 模型路由策略（bundle 第⑦装配槽，v3.0 通用模型路由系统）
+# 档位：L1 轻量 0.2× / L2 中坚 1× / L3 旗舰 3×；谷时 22:00–08:00 非实时任务再 ×0.2
+# 场景未点名时继承底座 DEFAULT_MODEL_POLICY
+version: "v3.0"
+scenes:
+  # —— 高频轻量（占调用量 ~80%，小模型又快又省） ——
+  intent-classify:   { tier: L1, fallback: rule-template }              # 意图分类（3s 硬超时，失败走规则）
+  nl-translate:      { tier: L1, fallback: rule-template }              # NL→检索过滤器
+  cs-answer:         { tier: L1, escalateOn: [low-confidence, thumbs-down] }  # C 端客服组答（385 问 KB 命中后改写）
+  voice-concierge:   { tier: L1, escalateOn: [low-confidence, thumbs-down] }  # 语音前台（2.8s 体感红线）
+  comment-classify:  { tier: L1, window: off-peak-only }                # 评价/评论批量分类
+  # —— 中频中等（主力中坚档） ——
+  ask-synthesize:    { tier: L2, escalateOn: [thumbs-down] }            # ASK 经营问询（酒店需多表归因，默认 L2）
+  quest-plan:        { tier: L2 }                                       # Quest 任务规划
+  review-reply:      { tier: L2, escalateOn: [thumbs-down, redteam-fail] }  # 差评回复草稿（人审前）
+  content-generate:  { tier: L2, escalateOn: [redteam-fail, thumbs-down] }  # 内容营销文案
+  briefing:          { tier: L2 }                                       # CEO 晨报/周会/月报
+  ceo-decision:      { tier: L2 }                                       # CEO L2 常规裁决
+  night-report:      { tier: L2, window: off-peak-only }                # 夜班决策包合成（谷时）
+  reconcile-analyze: { tier: L2, window: off-peak-only }                # 渠道对账分析（谷时批量）
+  kb-extract:        { tier: L2, window: off-peak-only }                # 知识库抓取结构化
+  # —— 低频重度（旗舰档，质量红线） ——
+  ceo-deep-analysis: { tier: L3, noDowngrade: true }                    # 六步深度管线（多方案+红队对抗）
+  hr-replacement:    { tier: L3, noDowngrade: true }                    # 汰换诊断书
+  incident-rootcause: { tier: L3, noDowngrade: true }                    # 断点根因闭环
+  fast-scan-report:  { tier: L3, noDowngrade: true, billTo: platform }  # 售前体检报告：效果拉满，平台承担成本
+plans:
+  lite:     { defaultShift: -1 }   # 智享版：整体压一档（L0/L1 为主，月度赠送额度小）
+  standard: { defaultShift: 0 }    # 标准版：标准混合（主推）
+  smart:                           # 智能版：简单任务也保底 L2（又快又准），裁决走 L3
+    defaultShift: 1
+    tierOverrides:
+      intent-classify: L1          # 延迟红线场景保持 L1 快速款
+      nl-translate: L1
+      voice-concierge: L1
+      ceo-decision: L3

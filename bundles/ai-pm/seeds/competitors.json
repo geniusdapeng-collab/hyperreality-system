@@ -1,0 +1,51 @@
+{
+ "competitors": [
+  {
+   "name": "WorkBuddy",
+   "track": "通用 Agent",
+   "threat": "high",
+   "notes": "桌面客户端形态，交付闭环强"
+  },
+  {
+   "name": "Qoder",
+   "track": "IDE Agent",
+   "threat": "medium",
+   "notes": "只起前端的口碑问题，后端装配弱"
+  },
+  {
+   "name": "Devin",
+   "track": "自主任务 Agent",
+   "threat": "medium",
+   "notes": "工程任务自动化，价格高"
+  },
+  {
+   "name": "Cursor",
+   "track": "IDE 辅助",
+   "threat": "low",
+   "notes": "编码辅助为主，非经营系统"
+  },
+  {
+   "name": "Manus",
+   "track": "通用任务 Agent",
+   "threat": "high",
+   "notes": "营销声量大，任务编排强"
+  }
+ ],
+ "reports": [
+  {
+   "title": "WorkBuddy 9 月版本拆解",
+   "date": "2026-09-01",
+   "verdict": "威胁上调：交付闭环与我们客户端形态正面重叠"
+  },
+  {
+   "title": "Qoder 后端装配短板分析",
+   "date": "2026-08-25",
+   "verdict": "我方 BackendGate 机制形成差异化"
+  },
+  {
+   "title": "Manus 任务编排 vs 我方围栏治理",
+   "date": "2026-08-18",
+   "verdict": "对方自由度强但治理缺失，企业市场我方占优"
+  }
+ ]
+}

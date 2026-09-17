@@ -1,0 +1,37 @@
+{
+  "name": "@workloom/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./router": "./src/trpc/router.ts",
+    "./context": "./src/trpc/context.ts",
+    "./service/kb": "./src/service/kb.ts",
+    "./service/ticket": "./src/service/ticket.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "start": "tsx --env-file=../../.env src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "../../node_modules/.bin/vitest run --testTimeout 30000"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@trpc/server": "11.18.0",
+    "@workloom/base": "workspace:*",
+    "@workloom/db": "workspace:*",
+    "@workloom/runtime": "workspace:*",
+    "@workloom/shared": "workspace:*",
+    "hono": "4.13.5",
+    "jose": "6.2.10",
+    "zod": "^4.4.3",
+    "@hyperreality/video-studio": "workspace:*",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,64 @@
+# 客群级 Patch：质检模式（Audit-Only · 只读体检期）
+# 定位：新客户接入的「第 0 阶段」——系统只读扫描社媒账号、只出报告与建议，不写回任何平台。
+# 叠加于 ai-video-baseline/v2 之上，只可收紧不可放宽（F2.3 单调守卫）。
+# 纪律：本 patch 生效期间，一切对外写类动作物理阻断（block）——发布内容/回评论/私信/改简介/投放全部阻断；
+#   客户确认整改项时由人类在平台侧执行，系统只跟踪闭环。
+#   体检期结束（通常 1–2 周）后，客户切换为影子模式 → 正式托管。
+version: ai-video-patch-audit-only/v1
+applies_to: audit_only
+base: ai-video-baseline/v2
+default_level: block          # 写类动作无任何规则命中 → 按 block（默认即拒，宁可错杀）——私信/改简介/改头像等未枚举写操作在此兜底
+patches:
+  - rule_id: G8
+    tighten: { level: block }
+    note: 渲染提交一律阻断（质检期只盘点存量内容与素材，不新烧额度）
+
+  - rule_id: G9
+    tighten: { level: block }
+    note: 公网发布一律阻断（质检期系统不发一条内容，只产出《账号体检报告》）
+
+  - rule_id: G9a
+    tighten: { level: block }
+    note: 新平台首发一律阻断（与 G9 并集取严，不得放宽）
+
+  - rule_id: G9b
+    tighten: { level: block }
+    note: 日发布熔断维持 block（基线纪律，不得放宽）
+
+  - rule_id: G10a
+    tighten: { level: block }
+    note: 夸赞/感谢类评论回复一律阻断（只生成候选草稿进报告，客户人工决定是否发出）
+
+  - rule_id: G10b
+    tighten: { level: block }
+    note: 咨询/售后类评论回复一律阻断（高意向咨询只标记进《评论与口碑清单》，含线索流失估算）
+
+  - rule_id: G10c
+    tighten: { level: block }
+    note: 负面/投诉类评论回复一律阻断（只告警+起草处置建议，取证材料归档）
+
+  - rule_id: G10d
+    tighten: { level: block }
+    note: 敏感内容维持 block（基线纪律，不得放宽）
+
+  - rule_id: G12
+    tighten: { level: block }
+    note: 投放加投一律阻断（质检期只产出投放健康清单，含估算浪费金额，由客户人工处置）
+
+  - rule_id: G14
+    tighten: { level: block }
+    note: 平台送审维持 block（质检期不送审任何稿件）
+
+  - rule_id: G15
+    tighten: { level: block }
+    note: 商单对外文件一律阻断（报价/合同/结案报告只起草不外发）
+
+  - rule_id: G16
+    tighten: { level: block }
+    note: 账号异常登录与防关联违规维持 block（基线纪律，不得放宽）
+
+# 体检期允许的唯一"写"：向系统自身事件库写入巡检发现/报告/建议（五元事件，不落任何平台）。
+# 巡检四线检项（inspection 域，只读工具集裁剪保证）：
+#   账号健康（权重信号/限流风险/违规记录）· 内容健康（发布节律断更/低效选题/高潜未复用素材）
+#   评论与口碑（未处理负面/高意向咨询遗漏/敏感词风险）· 转化健康（主页转化组件缺失/私信响应/线索流失点）
+# 产出物：一账号一份《账号快速体检报告》+ 矩阵总览 + 整改建议单（按预估涨粉/线索挽回排序 Top10，估算标注口径）。

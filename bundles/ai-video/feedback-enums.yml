@@ -1,0 +1,39 @@
+# AI 短视频社媒营销 Bundle · 第⑧装配槽：反馈枚举表（D24 自我进化飞轮 M1）
+# 口径：内容行业高频反馈是主观审美/风格/口味——主观偏好走组织记忆与 prompt 约束，
+# 永不编码进围栏 DSL（D24 修订 1 反馈双通道）；枚举码只增不改（历史事件按 code 归因）。
+version: ai-video-feedback-enums/v1
+enums:
+  # ---- 风格类（主观偏好 → 偏好池）----
+  - code: style.clickbait
+    label: 标题党/钩子过火
+    appliesTo: [reject, edit]
+  - code: tone.mismatch
+    label: 语气不像我们家
+    appliesTo: [reject, edit]
+  - code: hook.weak
+    label: 钩子疲软（前 3 秒无抓力）
+    appliesTo: [reject, edit]
+  - code: style.off_brand
+    label: 偏离账号人设
+    appliesTo: [reject, edit]
+  # ---- 事实与合规类（客观纠错 → 缺陷池）----
+  - code: fact.risk
+    label: 事实红线风险（产品参数/功效宣称）
+    appliesTo: [reject, edit]
+  - code: compliance.platform
+    label: 平台合规风险（违禁词/导流/医疗宣称）
+    appliesTo: [reject]
+  - code: data.stale
+    label: 数据陈旧/依据不足
+    appliesTo: [reject]
+  # ---- 经营类 ----
+  - code: budget.over
+    label: 超出预算/算力上限
+    appliesTo: [reject]
+  - code: schedule.timing
+    label: 发布时机不当
+    appliesTo: [reject]
+  # ---- 通用 ----
+  - code: other
+    label: 其他（须附自由文本说明）
+    appliesTo: [reject, edit]

@@ -1,0 +1,361 @@
+/**
+ * P21 董事长视图（数字CEO · D21）
+ * 治理状态 / 简报流 / 待审分层 / 成绩单 / 节拍手动触发 / 深度授权六步向导 / 一键撤回
+ */
+import { useEffect, useState } from "react";
+import { ensureDemoLogin, trpc } from "../../lib/trpc";
+import { RejectDialog } from "../../components/RejectDialog";
+import { actionText, actorText, payloadText, shortId } from "../../lib/display";
+import { Icon, Input, clientChineseText, clientValueText } from "@workloom/ui";
+import { Bridge } from "../../shell/Bridge";
+
+const StatusPill = ({ tone, children }: { tone: "ok" | "warn" | "info"; children: React.ReactNode }) => (
+  <span className={`inline-block rounded border px-2 py-0.5 text-body ${tone === "ok" ? "border-go/50 text-go" : tone === "warn" ? "border-warn/50 text-warn" : "border-line text-ink3"}`}>{children}</span>
+);
+const Panel = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <section className="mb-4 rounded-xl border border-line bg-card p-4">
+    <div className="mb-3 text-body tracking-[.18em] text-ink3">{title}</div>
+    {children}
+  </section>
+);
+const PageHeader = ({ title, desc }: { title: string; desc: string }) => (
+  <header className="mb-4">
+    <h1 className="text-xl font-bold text-ink">{title}</h1>
+    <p className="mt-1 text-body text-ink3">{desc}</p>
+  </header>
+);
+
+type CeoMode = "disabled" | "shadow" | "trial" | "suspended" | "active";
+
+interface Charter {
+  mode: CeoMode;
+  identity: { name: string };
+  autonomy: {
+    ranges: Record<string, { label: string; lower: number; upper: number; anchor: number }>;
+    caps: Record<string, { label: string; limit: number }>;
+  };
+  circuit_breaker: { tightened: boolean };
+  grant: { granted_by: string; granted_at: string; trial_ends_at: string | null; retain_until: string | null; disclosure_version: string } | null;
+}
+
+interface StateResp {
+  charter: Charter;
+  pendingByTier: Record<string, number>;
+  disclosureVersion: string;
+  requiredClauses: string[];
+}
+
+interface BriefRow { event_id: string; created_at: string; payload: { decision: { action: string; params?: Record<string, unknown>; after?: Record<string, unknown> } } }
+
+interface ChairmanItem {
+  approval_id: string; event_id: string;
+  snapshot: { action?: string; params?: Record<string, unknown>; ceo_escalated?: boolean; ceo_rationale?: string };
+  payload: { decision: { action: string; basis?: string[] }; who: { id: string } };
+}
+
+interface Scorecard {
+  decisions: number; briefings: number; initiatives: number;
+  escalatedToChairman: number; breakerTrips: number; shadowDecisions: number;
+  hitRate: number | null;
+  outcomeCounts: { hit: number; miss: number; fail: number };
+  tierCounts: Record<string, number>;
+}
+
+const MODE_LABEL: Record<CeoMode, string> = {
+  disabled: "未启用（默认关闭）", shadow: "影子模式（模拟决策不执行）", trial: "试用期（边界降一档）",
+  suspended: "仅汇报（已暂停/到期）", active: "正式受托",
+};
+const MODE_TONE: Record<CeoMode, "ok" | "warn" | "info"> = {
+  disabled: "info", shadow: "info", trial: "warn", suspended: "warn", active: "ok",
+};
+const BEATS: Array<[string, string]> = [
+  ["daily", "晨报"], ["queue", "公司级审批"], ["deviation", "偏差扫描"], ["breaker", "熔断巡检"],
+  ["outcome", "命中率回测"], ["hr", "绩效评议"], ["board", "董事会包"], ["orgscan", "扩编扫描"], ["weekly", "周经营会"],
+];
+
+export default function P21() {
+  const [state, setState] = useState<StateResp | null>(null);
+  const [briefs, setBriefs] = useState<BriefRow[]>([]);
+  const [score, setScore] = useState<Scorecard | null>(null);
+  const [queue, setQueue] = useState<ChairmanItem[]>([]);
+  const [msg, setMsg] = useState("");
+  // 授权向导
+  const [clauses, setClauses] = useState<Record<string, boolean>>({});
+  const [identityOk, setIdentityOk] = useState(false);
+  const [autonomyDraft, setAutonomyDraft] = useState<Charter["autonomy"]>({ ranges: {}, caps: {} });
+
+  const load = async () => {
+    await ensureDemoLogin();
+    const nextState = await trpc.captain.state.query() as unknown as StateResp;
+    setState(nextState);
+    setAutonomyDraft(structuredClone(nextState.charter.autonomy));
+    setBriefs(await trpc.captain.briefings.query({ limit: 8 }) as unknown as BriefRow[]);
+    setScore(await trpc.captain.scorecard.query() as unknown as Scorecard);
+    setQueue(await trpc.captain.chairmanQueue.query() as unknown as ChairmanItem[]);
+  };
+  useEffect(() => { void load(); }, []);
+
+  const beat = async (b: string) => {
+    setMsg("节拍执行中…");
+    const r = await trpc.captain.runBeat.mutate({ beat: b as "daily" }) as Record<string, unknown>;
+    setMsg(`节拍「${BEATS.find(([k]) => k === b)?.[1] ?? "经营节拍"}」已完成。${payloadText(r, 120)}`);
+    await load();
+  };
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null);
+  const transit = async (kind: string) => {
+    const r = await trpc.captain.transit.mutate({ kind: kind as "advance" }) as { mode: CeoMode };
+    setMsg(`状态迁移 → ${MODE_LABEL[r.mode]}`);
+    await load();
+  };
+  const feedback = async (eventId: string, signal: "up" | "down") => {
+    await trpc.captain.feedback.mutate({ eventId, signal });
+    setMsg(`已记录您的${signal === "up" ? "点赞" : "点踩"}（入组织记忆，影响后续决策）`);
+  };
+
+  const decide = async (approvalId: string, gesture: "approve" | "reject") => {
+    if (gesture === "reject") {
+      // M1.2（D24）：驳回必须选择行业受控枚举（弹窗），原「无原因驳回」已被服务端 L5.2 拒绝
+      setRejectTarget(approvalId);
+      return;
+    }
+    await trpc.approvals.decide.mutate({ approvalId, gesture });
+    setMsg(`请示 ${shortId(approvalId)} 已批准（三手势写回，全链留痕）`);
+    await load();
+  };
+  /** 驳回弹窗提交（M1.2 受控枚举 + L5.2 留痕） */
+  const submitReject = async (r: { reasonEnum: string; reasonText?: string }) => {
+    if (!rejectTarget) return;
+    await trpc.approvals.decide.mutate({
+      approvalId: rejectTarget,
+      gesture: "reject",
+      reasonEnum: r.reasonEnum,
+      reasonText: r.reasonText,
+    });
+    setRejectTarget(null);
+    setMsg(`请示 ${shortId(rejectTarget)} 已驳回并记录原因，全链路已留痕。`);
+    await load();
+  };
+
+  const grant = async () => {
+    try {
+      const r = await trpc.captain.grant.mutate({
+        clauses: Object.keys(clauses).filter((k) => clauses[k]),
+        autonomy: autonomyDraft,
+        shadowDays: 3, trialDays: 7, identityConfirmed: identityOk,
+      }) as { mode: CeoMode };
+      setMsg(`授权签署完成 → ${MODE_LABEL[r.mode]}（已留痕，不可篡改）`);
+      await load();
+    } catch (e) {
+      console.warn("数字负责人授权失败", e);
+      setMsg("授权未能完成；当前权限没有改变，请检查确认项和身份状态后重试。");
+    }
+  };
+
+  const mode = state?.charter.mode ?? "disabled";
+  const allClauses = state?.requiredClauses ?? [];
+  const allChecked = allClauses.length > 0 && allClauses.every((c) => clauses[c]);
+
+  return (
+    <Bridge
+      left={
+        <div className="space-y-2">
+          <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">治理状态</div>
+          <div className="rounded-lg border border-line bg-card p-3">
+            <StatusPill tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</StatusPill>
+            {state?.charter.grant && (
+              <div className="mt-2 text-body leading-relaxed text-ink3">
+                授权人 {actorText(state.charter.grant.granted_by)}<br />
+                {new Date(state.charter.grant.granted_at).toLocaleDateString()} 签署<br />
+                {state.charter.grant.trial_ends_at && <>试用截止 {new Date(state.charter.grant.trial_ends_at).toLocaleDateString()}<br /></>}
+                {state.charter.circuit_breaker.tightened && <span className="text-warn">自治已熔断收紧一档</span>}
+              </div>
+            )}
+          </div>
+          <div className="rounded-lg border border-line bg-card p-3 text-body text-ink2">
+            <div className="mb-1 text-body tracking-[.2em] text-ink3">待审分层</div>
+            公司负责人审批 {state?.pendingByTier.l2_captain ?? 0} 件<br />
+            集团负责人审批 {state?.pendingByTier.l3_fleet ?? 0} 件<br />
+            <b className="text-gold">请示董事长 {state?.pendingByTier.l4_chairman ?? 0} 件</b>
+          </div>
+          {score && (
+            <div className="rounded-lg border border-line bg-card p-3 text-body text-ink2">
+              <div className="mb-1 text-body tracking-[.2em] text-ink3">成绩单（30 天）</div>
+              审批 {score.decisions} · 简报 {score.briefings} · 立项 {score.initiatives}<br />
+              谨慎上浮 {score.escalatedToChairman} · 熔断 {score.breakerTrips} · 影子决策 {score.shadowDecisions}<br />
+              <b className="text-gold">命中率 {score.hitRate === null ? "样本积累中" : `${(score.hitRate * 100).toFixed(0)}%`}</b>
+              {score.outcomeCounts.hit + score.outcomeCounts.miss + score.outcomeCounts.fail > 0 && (
+                <span className="text-ink3">（中{score.outcomeCounts.hit}/偏{score.outcomeCounts.miss}/打脸{score.outcomeCounts.fail}）</span>
+              )}<br />
+              <span className="text-ink3">分级 微{score.tierCounts.micro ?? 0}·常{score.tierCounts.standard ?? 0}·重{score.tierCounts.major ?? 0}</span>
+            </div>
+          )}
+        </div>
+      }
+      right={
+        <div className="space-y-2">
+          <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">节拍控制台</div>
+          <div className="rounded-lg border border-line bg-card p-3 text-body">
+            {BEATS.map(([k, label]) => {
+              return (
+                <button key={k} onClick={() => void beat(k)}
+                  className="mb-1.5 block w-full rounded border border-line bg-panel px-3 py-2 text-left text-ink2 hover:border-gline">
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {mode !== "disabled" && (
+            <div className="rounded-lg border border-warn/40 bg-card p-3 text-body">
+              <div className="mb-2 text-body tracking-[.2em] text-warn">治理操作</div>
+              {mode === "shadow" && <button onClick={() => void transit("advance")} className="mb-1.5 block w-full rounded border border-gline px-3 py-2 text-gold">影子期合格 → 进入试用</button>}
+              {mode === "suspended" && (<>
+                <button onClick={() => void transit("keep_long")} className="mb-1.5 block w-full rounded border border-gline px-3 py-2 text-gold">长期保留 → 正式受托</button>
+                <button onClick={() => void transit("close")} className="mb-1.5 block w-full rounded border border-line px-3 py-2 text-ink3">关闭数字负责人</button>
+              </>)}
+              {(mode === "trial" || mode === "active") && (
+                <button onClick={() => void transit("revoke")} className="mb-1.5 block w-full rounded border border-warn px-3 py-2 text-warn">一键撤回（即时仅汇报）</button>
+              )}
+            </div>
+          )}
+        </div>
+      }
+    >
+      <PageHeader title="董事长视图 · 数字负责人" desc="您只做两件事：听汇报、批少数关键决策。其余工作由公司负责人带领数字团队完成。" />
+
+      {msg && <div className="mb-3 rounded border border-holo/40 bg-panel px-3 py-2 text-body text-holo">{msg}</div>}
+
+      {mode === "disabled" && (
+        <Panel title="深度授权（六步 · 缺一不可）" >
+          <div className="space-y-3 text-body text-ink2">
+            <div className="rounded border border-warn/40 bg-warn/5 p-3 leading-relaxed">
+              <b>① 风险揭示</b>：数字负责人将在您划定的边界内自主执行真实经营决策。AI 可能误判行情、误读数据，或在极端场景下处理失当。
+              <b className="text-warn">数字负责人不是法律责任主体，授权范围内的经营决策责任由您（授权人）承担。</b>
+              全部决策与授权记录都会不可篡改地留痕。
+            </div>
+            <div>
+              <div className="mb-1 text-body text-ink3">② 逐项确认（必须全部勾选）</div>
+              {allClauses.map((c) => (
+                <label key={c} className="mb-1 flex items-center gap-2">
+                  <input type="checkbox" checked={!!clauses[c]} onChange={(e) => setClauses({ ...clauses, [c]: e.target.checked })} />
+                  <span>{clientValueText(c)}</span>
+                </label>
+              ))}
+            </div>
+            <div>
+              <div className="mb-2 text-body text-ink3">③ 自治边界（由当前行业包声明）</div>
+              {Object.keys(autonomyDraft.ranges).length + Object.keys(autonomyDraft.caps).length === 0 && (
+                <div className="rounded border border-line bg-panel p-3 text-ink3">
+                  当前行业包未声明量化自治边界；未声明的量化动作将保守上浮，请先在行业包中完成配置。
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {Object.entries(autonomyDraft.ranges).map(([key, range]) => (
+                  <div className="rounded border border-line bg-panel p-3" key={key}>
+                    <div className="mb-2 font-medium text-ink">{clientValueText(range.label)}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input label="下限" optionalLabel="" type="number" step="any" value={range.lower}
+                        onChange={(e) => setAutonomyDraft((draft) => ({ ...draft, ranges: { ...draft.ranges, [key]: { ...range, lower: Number(e.target.value) } } }))} />
+                      <Input label="上限" optionalLabel="" type="number" step="any" value={range.upper}
+                        onChange={(e) => setAutonomyDraft((draft) => ({ ...draft, ranges: { ...draft.ranges, [key]: { ...range, upper: Number(e.target.value) } } }))} />
+                    </div>
+                  </div>
+                ))}
+                {Object.entries(autonomyDraft.caps).map(([key, cap]) => (
+                  <div className="rounded border border-line bg-panel p-3" key={key}>
+                    <Input label={clientValueText(cap.label)} optionalLabel="" type="number" min={0} step="any" value={cap.limit}
+                      onChange={(e) => setAutonomyDraft((draft) => ({ ...draft, caps: { ...draft.caps, [key]: { ...cap, limit: Number(e.target.value) } } }))} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="text-ink3">④ 试用计划：影子 3 天 → 试用 7 天（边界自动降一档）→ 到期降级仅汇报（绝不自动续期）</div>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={identityOk} onChange={(e) => setIdentityOk(e.target.checked)} />
+              <span>⑤ 身份核验：我确认是本人在操作</span>
+            </label>
+            <button disabled={!allChecked || !identityOk} onClick={() => void grant()}
+              className="rounded border border-gline px-4 py-2 text-gold disabled:opacity-40">
+              ⑥ 签署授权（留痕不可篡改）
+            </button>
+          </div>
+        </Panel>
+      )}
+
+      {queue.length > 0 && (
+        <Panel title={`请您决策（${queue.length} 件 · 董事长级）`}>
+          <div className="space-y-2">
+            {queue.map((q) => {
+              const snap = q.snapshot;
+              const basis = q.payload.decision.basis ?? [];
+              return (
+                <div key={q.approval_id} className="rounded-lg border border-gline bg-card p-3">
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-body text-ink3">
+                    <span className="font-mono">{shortId(q.approval_id)}</span>
+                    <span>{actionText(snap.action ?? q.payload.decision.action)}</span>
+                    {snap.ceo_escalated && <span className="rounded border border-holo/40 px-1 text-holo">公司负责人谨慎上浮</span>}
+                  </div>
+                  <div className="text-body text-ink2">
+                    关键参数：{payloadText(snap.params ?? {}, 180)}
+                  </div>
+                  {snap.ceo_rationale && <div className="mt-1 text-body text-holo">负责人意见：{clientValueText(snap.ceo_rationale)}</div>}
+                  {basis.length > 0 && (
+                    <details className="mt-1 text-body text-ink3">
+                      <summary className="cursor-pointer">依据链（{basis.length}）</summary>
+                      {basis.map((b, i) => <div key={i}>· {clientValueText(b)}</div>)}
+                    </details>
+                  )}
+                  <div className="wl-action-row mt-2 flex flex-wrap gap-2">
+                    <button onClick={() => void decide(q.approval_id, "approve")} className="inline-flex items-center gap-1 rounded border border-go/50 px-3 py-1 text-body text-go hover:bg-go/10"><Icon name="check" size={14} />批准</button>
+                    <button onClick={() => void decide(q.approval_id, "reject")} className="inline-flex items-center gap-1 rounded border border-warn/50 px-3 py-1 text-body text-warn hover:bg-warn/10"><Icon name="error" size={14} />驳回</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+      <Panel title="简报与决策流">
+        {briefs.length === 0 && <div className="text-body text-ink3">暂无简报——触发一次「晨报」节拍试试</div>}
+        <div className="space-y-2">
+          {briefs.map((b) => {
+            const action = b.payload.decision.action;
+            const after = (b.payload.decision.after ?? {}) as Record<string, unknown>;
+            const params = (b.payload.decision.params ?? {}) as Record<string, unknown>;
+            const text = after.text === undefined || after.text === null || after.text === ""
+              ? ""
+              : clientChineseText(after.text, "简报内容暂时无法显示。");
+            const dry = params.dry_run === true;
+            return (
+              <div key={b.event_id} className="rounded-lg border border-line bg-card p-3">
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-body text-ink3">
+                  <span className="font-mono">{shortId(b.event_id)}</span>
+                  <span>{actionText(action)}</span>
+                  {dry && <StatusPill tone="info">影子·未执行</StatusPill>}
+                  <span className="flex-1" />
+                  <span>{new Date(b.created_at).toLocaleString()}</span>
+                </div>
+                {text && <pre className="whitespace-pre-wrap text-body leading-relaxed text-ink2">{text}</pre>}
+                {action === "ceo.decision" && (
+                  <div className="text-body text-ink2">{payloadText(after.memo ?? after, 300)}</div>
+                )}
+                {(action === "ceo.decision" || action === "initiative.launch") && (
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <button onClick={() => void feedback(b.event_id, "up")} className="inline-flex items-center gap-1 rounded border border-go/40 px-2 py-0.5 text-body text-go hover:bg-go/10"><Icon name="like" size={14} />有帮助</button>
+                    <button onClick={() => void feedback(b.event_id, "down")} className="inline-flex items-center gap-1 rounded border border-warn/40 px-2 py-0.5 text-body text-warn hover:bg-warn/10"><Icon name="dislike" size={14} />需改进</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+      <RejectDialog
+        open={rejectTarget !== null}
+        mode="reject"
+        onCancel={() => setRejectTarget(null)}
+        onSubmit={(r) => void submitReject(r)}
+      />
+    </Bridge>
+  );
+}

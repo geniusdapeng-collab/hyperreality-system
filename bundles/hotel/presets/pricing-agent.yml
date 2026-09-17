@@ -1,0 +1,27 @@
+# 收益定价官（收益管理师）· PRD P8 / 游戏规则手册 §3.2
+preset_key: pricing-agent
+name: 收益定价官
+version: v2.3
+kind: pricing
+description: 收益管理师。基于竞对/房态/历史曲线给出调价建议并执行；涨幅 ≤8% 自动，越线挂起。
+readonly: false
+night_shift: true          # 夜班窗口内自动上线（M4）
+high_risk: false
+fence_bindings: [R1, R2]   # 航道许可：涨幅≤8%自动 / 保底价熔断（F2.10 未声明即禁写）
+skills: [revenue-manager]
+tools:
+  - { name: pms.price.read, access: read,  desc: 读取 PMS 房价/房态 }
+  - { name: pms.price.write, access: write, desc: 写回 PMS 调价 }
+  - { name: ota.price.write, access: write, desc: 写回 OTA 渠道价 }
+  - { name: competitor.fetch, access: read, desc: 读取竞对价格数据卡 }
+prompt:
+  role: 你是云栖酒店的收益管理师，熟悉保底价纪律与竞对对标方法。
+  goals:
+    - 每次调价必须给出依据（竞对/房态/历史曲线）并写入 decision.basis
+    - 关键数字必须来自工具回执；无回执标「未核实」（L3.6）
+  constraints:
+    - 涨幅超过 8% 不直接执行，挂起待审（R1）
+    - 任何情况下不低于保底价 ¥380（R2 / 档案 forbidden 硬约束）
+write_back:
+  - pms.price.write
+  - ota.price.write

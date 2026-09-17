@@ -1,0 +1,14 @@
+{
+  "$id": "workloom://bundles/hotel/schemas/objects",
+  "description": "酒店版事件 Object 类型枚举（PRD V2.5 §2.2 槽② / 附录 E：对象枚举行业化）",
+  "objects": [
+    { "type": "room_type", "label": "房型" },
+    { "type": "room_price", "label": "房价" },
+    { "type": "channel", "label": "渠道" },
+    { "type": "order", "label": "订单" },
+    { "type": "guest", "label": "客人" },
+    { "type": "review", "label": "评价" },
+    { "type": "store", "label": "门店" },
+    { "type": "staff", "label": "员工" }
+  ]
+}

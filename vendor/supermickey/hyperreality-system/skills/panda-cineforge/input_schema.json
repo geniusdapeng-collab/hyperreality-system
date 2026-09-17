@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandacineforge.local/schemas/input-payload-schema.json",
+  "title": "PandaCineForge Skill Generator Input Payload Schema",
+  "description": "影视创作技能引擎输入契约（影视化改造版）",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "output_mode", "output_format", "skill_name", "skill_id", "package_version",
+    "skill_version", "last_updated", "author", "license", "status",
+    "sub_domain", "type", "priority", "tags", "summary",
+    "cinematic_role", "module_target", "deliverable_type", "project_stage",
+    "skill_type", "automation_level", "risk_level", "core_goal", "non_goals",
+    "success_metrics", "user_scenarios", "target_audience", "trigger_intents",
+    "estimated_user_time", "estimated_system_time", "difficulty", "output_style",
+    "execution_layer", "execution_mode", "module_compatibility", "fallback_strategy",
+    "persona_adaptation", "capabilities", "tools_read", "tools_write",
+    "confirmation_required_for", "memory_writeback_fields", "fallback_mode",
+    "publish_target", "registry_ingestible", "domain_pack",
+    "user_profile", "runtime_context", "memory",
+    "logical_topics", "aliases_seed", "problem_patterns", "entities",
+    "scenarios", "project_stages", "urgency", "negative_queries", "retrieval_summary"
+  ],
+  "$defs": {
+    "stringArray": {"type": "array", "items": {"type": "string"}},
+    "freeformObject": {"type": "object", "additionalProperties": true},
+    "nullableString": {"type": ["string", "null"]},
+    "entitiesObject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["who", "actions", "objects"],
+      "properties": {
+        "who": {"$ref": "#/$defs/stringArray"},
+        "actions": {"$ref": "#/$defs/stringArray"},
+        "objects": {"$ref": "#/$defs/stringArray"}
+      }
+    },
+    "moduleCompatibility": {
+      "type": "object", "additionalProperties": true,
+      "description": "键为目标制作系统 Agent 名，如 MyStudio.SceneDesign",
+      "properties": {
+        "input_preprocessing": {"type": "boolean"},
+        "intent_clarification": {"type": "boolean"},
+        "multi_intent_extraction": {"type": "boolean"},
+        "task_analysis": {"type": "boolean"},
+        "skill_matching": {"type": "string"},
+        "task_execution": {"type": "string"},
+        "result_integration": {"type": "boolean"}
+      }
+    },
+    "fallbackStrategy": {
+      "type": "object", "additionalProperties": true,
+      "required": ["level1_tool", "level2_data", "level3_output"],
+      "properties": {
+        "level1_tool": {"type": "string"},
+        "level2_data": {"type": "string"},
+        "level3_output": {"type": "string"}
+      }
+    },
+    "personaAdaptation": {
+      "type": "object", "additionalProperties": true,
+      "required": ["user_profile", "modes", "constraints"],
+      "properties": {
+        "user_profile": {"type": "boolean"},
+        "modes": {"$ref": "#/$defs/stringArray"},
+        "constraints": {
+          "type": "object", "additionalProperties": true,
+          "required": ["safety_first", "location_aware", "time_sensitive"],
+          "properties": {
+            "safety_first": {"type": "boolean"},
+            "location_aware": {"type": "boolean"},
+            "time_sensitive": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object", "additionalProperties": true,
+      "required": ["tools", "data_sources", "output_formats"],
+      "properties": {
+        "tools": {"$ref": "#/$defs/stringArray"},
+        "data_sources": {"$ref": "#/$defs/stringArray"},
+        "output_formats": {"$ref": "#/$defs/stringArray"}
+      }
+    },
+    "domainPack": {
+      "type": "object", "additionalProperties": true,
+      "description": "三大子领域扩展包：cinema/short_video/ai_manga_drama",
+      "properties": {
+        "sub_domain": {"type": "string", "enum": ["cinema", "short_video", "ai_manga_drama"]},
+        "pipeline": {"$ref": "#/$defs/stringArray"},
+        "deliverables": {"$ref": "#/$defs/stringArray"},
+        "standards": {"$ref": "#/$defs/stringArray"},
+        "risk_focus": {"$ref": "#/$defs/stringArray"},
+        "tools": {"$ref": "#/$defs/stringArray"},
+        "quality_bar": {"type": "string"}
+      }
+    }
+  },
+  "properties": {
+    "output_mode": {"type": "string", "enum": ["blueprint", "run"]},
+    "output_format": {"type": "string", "enum": ["markdown", "json", "yaml"]},
+    "qa_pass_threshold": {"type": "integer", "minimum": 0, "maximum": 100, "default": 85},
+
+    "skill_name": {"type": "string", "minLength": 1},
+    "skill_id": {"type": "string", "minLength": 1},
+    "package_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "skill_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "last_updated": {"type": "string", "minLength": 1},
+    "author": {"type": "string", "minLength": 1},
+    "license": {"type": "string", "default": "internal"},
+    "status": {"type": "string", "enum": ["draft", "testing", "production", "deprecated"]},
+
+    "domain": {"type": "string", "const": "ai_cinema"},
+    "sub_domain": {"type": "string", "enum": ["cinema", "short_video", "ai_manga_drama"]},
+    "vertical": {"type": "string", "default": ""},
+    "type": {"type": "string", "minLength": 1},
+    "priority": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
+    "tags": {"$ref": "#/$defs/stringArray"},
+
+    "cinematic_role": {
+      "type": "string",
+      "enum": ["scene_design", "visual_language", "audio_design", "continuity_review", "prompt_fusion", "opening_design", "editing", "color_grading", "vfx"]
+    },
+    "module_target": {
+      "type": "array", "minItems": 1, "items": {"type": "string"},
+      "description": "对齐目标制作系统 Agent，如 [\"MyStudio.SceneDesign\"]"
+    },
+    "deliverable_type": {
+      "type": "string",
+      "enum": ["shotlist", "storyboard", "color_script", "sound_map", "prompt_pack", "edit_decision_list", "opening_sequence", "beat_sheet", "continuity_report", "mix_plan"]
+    },
+    "project_stage": {
+      "type": "string",
+      "enum": ["preproduction", "production", "postproduction", "distribution"]
+    },
+
+    "title": {"$ref": "#/$defs/nullableString", "default": null},
+    "summary": {"type": "string", "minLength": 1},
+    "skill_type": {
+      "type": "string",
+      "enum": ["quick_decision", "deep_analysis", "daily_practice", "emergency_fix", "advanced_strategy", "monitoring", "review", "shotlist_design", "storyboard_design", "color_grading", "sound_design", "edit_decision", "prompt_engineering", "opening_design", "continuity_review"]
+    },
+    "automation_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3", "L4"]},
+    "risk_level": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+    "core_goal": {"type": "string", "minLength": 1},
+    "non_goals": {"$ref": "#/$defs/stringArray"},
+    "success_metrics": {"$ref": "#/$defs/stringArray"},
+    "user_scenarios": {"$ref": "#/$defs/stringArray"},
+    "target_audience": {"$ref": "#/$defs/stringArray"},
+    "trigger_intents": {"$ref": "#/$defs/stringArray"},
+    "estimated_user_time": {"type": "string", "minLength": 1},
+    "estimated_system_time": {"type": "string", "minLength": 1},
+    "difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
+    "output_style": {
+      "type": "string",
+      "enum": ["table_first", "checklist_first", "briefing", "one_pager", "code_first", "shotlist_first", "storyboard_first", "color_script_first", "prompt_first"]
+    },
+    "skill_blueprint_id": {"$ref": "#/$defs/nullableString", "default": null},
+    "skill_run_id": {"$ref": "#/$defs/nullableString", "default": null},
+
+    "execution_layer": {"type": "string", "default": "5"},
+    "execution_mode": {"type": "string", "enum": ["sequential", "parallel", "hybrid"], "default": "sequential"},
+    "module_compatibility": {"$ref": "#/$defs/moduleCompatibility"},
+    "fallback_strategy": {"$ref": "#/$defs/fallbackStrategy"},
+
+    "persona_adaptation": {"$ref": "#/$defs/personaAdaptation"},
+    "required_profile_fields": {"$ref": "#/$defs/stringArray"},
+    "required_context_fields": {"$ref": "#/$defs/stringArray"},
+    "priority_order_hint": {"$ref": "#/$defs/stringArray", "default": []},
+    "disallowed_paths_hint": {"$ref": "#/$defs/stringArray", "default": []},
+    "missing_info_policy_override": {"$ref": "#/$defs/freeformObject", "default": {}},
+
+    "capabilities": {"$ref": "#/$defs/capabilities"},
+    "tools_read": {"$ref": "#/$defs/stringArray"},
+    "tools_write": {"$ref": "#/$defs/stringArray"},
+    "confirmation_required_for": {"$ref": "#/$defs/stringArray"},
+    "memory_writeback_fields": {"$ref": "#/$defs/stringArray"},
+    "fallback_mode": {"type": "string", "minLength": 1},
+    "publish_target": {"type": "string", "enum": ["skill_registry", "runtime_instance", "both"]},
+    "registry_ingestible": {"type": "boolean"},
+
+    "domain_pack": {"$ref": "#/$defs/domainPack"},
+    "user_profile": {"$ref": "#/$defs/freeformObject"},
+    "runtime_context": {"$ref": "#/$defs/freeformObject"},
+    "memory": {"$ref": "#/$defs/freeformObject"},
+
+    "logical_topics": {"$ref": "#/$defs/stringArray", "minItems": 1},
+    "aliases_seed": {"$ref": "#/$defs/stringArray"},
+    "problem_patterns": {"$ref": "#/$defs/stringArray"},
+    "entities": {"$ref": "#/$defs/entitiesObject"},
+    "scenarios": {"$ref": "#/$defs/stringArray"},
+    "project_stages": {
+      "type": "array", "items": {"type": "string", "enum": ["preproduction", "production", "postproduction", "distribution"]},
+      "description": "替换原 age_stages，按制作阶段"
+    },
+    "urgency": {"type": "string", "enum": ["low", "normal", "high", "critical"]},
+    "negative_queries": {"$ref": "#/$defs/stringArray"},
+    "retrieval_summary": {"type": "string", "minLength": 1},
+
+    "candidate_neighbors": {"$ref": "#/$defs/stringArray", "default": []},
+    "channel_weights_override": {"anyOf": [{"type": "object"}, {"type": "null"}], "default": null},
+    "weighted_recall_text_hint": {"$ref": "#/$defs/nullableString", "default": null},
+
+    "quality_thresholds_override": {"anyOf": [{"type": "object"}, {"type": "null"}], "default": null},
+    "qa_contract_override": {"anyOf": [{"type": "object"}, {"type": "null"}], "default": null},
+
+    "pre_fetched_tool_results": {"type": "object", "additionalProperties": true, "default": {}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"output_mode": {"const": "run"}}},
+      "then": {"required": ["skill_run_id"], "properties": {"skill_run_id": {"type": "string", "minLength": 1}}}
+    },
+    {
+      "if": {"properties": {"tools_write": {"type": "array", "minItems": 1}}},
+      "then": {"properties": {"confirmation_required_for": {"type": "array", "minItems": 1, "items": {"type": "string"}}}}
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+# 系统核心代码仓库 - 只推送核心代码
+# 不推送过程生产数据和大文件
+
+# 过程生产数据（不推送）
+characters/
+stories/
+productions/
+.trash/
+temp/
+tmp/
+output/
+logs/
+checkpoints/
+debug_llm/
+*.log
+
+# 大文件类型（不推送）
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.mp3
+*.wav
+*.flac
+
+# 图片资源（assets目录除外）
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.psd
+*.ai
+
+# 允许项目配图（assets目录）
+!assets/*.jpg
+!assets/*.jpeg
+!assets/*.png
+!assets/*.gif
+*.pdf
+
+# 依赖和构建产物（不推送）
+node_modules/
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 环境配置（不推送）
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# 测试数据（可选）
+test-data/
+fixtures/
+*.test.json
+*.mock.json
+
+# 废弃脚本（不推送）
+_deprecated_scripts/
+
+# 运行时输出（不推送）
+preproduction-*.json
+checkpoint-*.json

@@ -1,0 +1,37 @@
+# AI 产品经理行业包 · 基线围栏（方案 V4 §8）
+fences:
+  - rule_id: R-PM1
+    name: 重大事项上报必经审批
+    level: review
+    match: { object_types: [team_briefing], actions: [publish] }
+    action: { result: review }
+  - rule_id: R-PM2
+    name: 需求优先级变更人审
+    level: review
+    match: { object_types: [requirement], actions: [reprioritize] }
+    action: { result: review }
+  - rule_id: R-PM3
+    name: 外部引用须标注来源
+    level: review
+    match: { object_types: [report], actions: [publish_external_ref] }
+    action: { result: review }
+  - rule_id: R-PM4
+    name: 数据只读纪律
+    level: block
+    match: { object_types: [metrics_store], actions: [write, delete] }
+    action: { result: block }
+  - rule_id: R-PM5
+    name: 外发回复必审
+    level: review
+    match: { object_types: [feedback_reply], actions: [send] }
+    action: { result: review }
+  - rule_id: R-PM6
+    name: 文档外发版人审
+    level: review
+    match: { object_types: [document], actions: [publish_external] }
+    action: { result: review }
+  - rule_id: R-PM7
+    name: 发布建议人审
+    level: review
+    match: { object_types: [release], actions: [recommend] }
+    action: { result: review }

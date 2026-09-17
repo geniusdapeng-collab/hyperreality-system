@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手机壳预览 · WorkLoom</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px; padding: 24px;
+    background: linear-gradient(160deg, #fff5f7 0%, #ffeef4 50%, #fdf0ff 100%);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .bar { display: flex; gap: 10px; align-items: center; }
+  .bar a, .bar span {
+    font-size: 13px; color: #d4002a; text-decoration: none;
+    background: #fff; border: 1px solid #ffd6de; border-radius: 999px; padding: 6px 14px;
+  }
+  .bar span { color: #8a4b5a; border-style: dashed; }
+  .phone {
+    width: 402px; height: 872px; border-radius: 48px; padding: 12px;
+    background: #1f1b1d; box-shadow: 0 24px 60px rgba(212, 0, 42, .18), 0 4px 16px rgba(0,0,0,.2);
+    position: relative;
+  }
+  .phone::before {
+    content: ""; position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 26px; background: #1f1b1d; border-radius: 20px; z-index: 2;
+  }
+  iframe {
+    width: 100%; height: 100%; border: 0; border-radius: 38px; background: #fff;
+  }
+  .tip { font-size: 12px; color: #b07a88; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <a href="./index.html">← 返回演示导航</a>
+    <span id="name">加载中…</span>
+  </div>
+  <div class="phone"><iframe id="f" title="mobile-preview"></iframe></div>
+  <div class="tip">移动端容器模拟（390×872）· 仅用于预览，不代表真实小程序审核样式</div>
+<script>
+  const p = new URLSearchParams(location.search);
+  const page = p.get("page") || "hotel-guest-app.html";
+  document.getElementById("f").src = "./" + page;
+  document.getElementById("name").textContent = page;
+  document.title = page + " · 手机壳预览";
+</script>
+</body>
+</html>

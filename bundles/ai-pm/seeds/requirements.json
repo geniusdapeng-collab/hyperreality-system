@@ -1,0 +1,112 @@
+{
+ "items": [
+  {
+   "id": "REQ-001",
+   "title": "Agent 长期记忆：跨会话用户偏好沉淀",
+   "status": "evaluating",
+   "priority": "P0",
+   "estimate": "2周",
+   "value": "留存",
+   "cost": "中"
+  },
+  {
+   "id": "REQ-002",
+   "title": "多模态输入：语音/截图直接提需求",
+   "status": "backlog",
+   "priority": "P1",
+   "estimate": "3周",
+   "value": "体验",
+   "cost": "高"
+  },
+  {
+   "id": "REQ-003",
+   "title": "模型成本控制：按场景自动降档",
+   "status": "doing",
+   "priority": "P0",
+   "estimate": "1周",
+   "value": "成本",
+   "cost": "低"
+  },
+  {
+   "id": "REQ-004",
+   "title": "技能市场：第三方技能审核流",
+   "status": "backlog",
+   "priority": "P1",
+   "estimate": "4周",
+   "value": "生态",
+   "cost": "中"
+  },
+  {
+   "id": "REQ-005",
+   "title": "移动端晨迎仪式适配",
+   "status": "backlog",
+   "priority": "P2",
+   "estimate": "1周",
+   "value": "体验",
+   "cost": "低"
+  },
+  {
+   "id": "REQ-006",
+   "title": "数据看板自定义拖拽编排",
+   "status": "evaluating",
+   "priority": "P1",
+   "estimate": "2周",
+   "value": "效率",
+   "cost": "中"
+  },
+  {
+   "id": "REQ-007",
+   "title": "竞对 WorkBuddy 功能对标月报自动化",
+   "status": "doing",
+   "priority": "P1",
+   "estimate": "3天",
+   "value": "情报",
+   "cost": "低"
+  },
+  {
+   "id": "REQ-008",
+   "title": "PRD 模板库行业化（电商/教育/金融）",
+   "status": "backlog",
+   "priority": "P2",
+   "estimate": "1周",
+   "value": "效率",
+   "cost": "低"
+  },
+  {
+   "id": "REQ-009",
+   "title": "用户反馈情绪趋势周报",
+   "status": "doing",
+   "priority": "P1",
+   "estimate": "4天",
+   "value": "洞察",
+   "cost": "低"
+  },
+  {
+   "id": "REQ-010",
+   "title": "发布前自动回归风险评估",
+   "status": "evaluating",
+   "priority": "P0",
+   "estimate": "2周",
+   "value": "质量",
+   "cost": "中"
+  },
+  {
+   "id": "REQ-011",
+   "title": "知识库 freshness 巡检与过期提醒",
+   "status": "backlog",
+   "priority": "P2",
+   "estimate": "3天",
+   "value": "质量",
+   "cost": "低"
+  },
+  {
+   "id": "REQ-012",
+   "title": "团队编制一键扩容（影子员工转正流）",
+   "status": "backlog",
+   "priority": "P1",
+   "estimate": "2周",
+   "value": "规模",
+   "cost": "中"
+  }
+ ]
+}

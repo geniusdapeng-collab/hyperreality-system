@@ -1,0 +1,92 @@
+# 【已降级为应急回退线，v2.1.0 起】唯一发行形态为 build-desktop.yml 的
+# Electron 完全自包含安装包（DMG/NSIS，客户端窗口即产品）。
+# 本管线（zip 浏览器壳）不再随 tag 触发，仅保留手动 dispatch 应急；产物禁止上传正式 Release。
+# ============================================================
+# WorkLoom macOS 发行管线（W2 / D16）
+# 产物：WorkLoom-macOS.zip + .sha256 → GitHub Release
+# 验收：macos-14 runner 上以 WORKLOOM_SMOKE=1 跑启动器首航冒烟
+#       （PG 起停 + 迁移 + 种子 + server/web 健康检查）通过才发布
+# ============================================================
+name: release-macos
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "发布版本号（如 v1.1.0，仅手动触发；应急回退，禁止上传正式 Release）"
+        required: false
+        default: "v1.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  pack-release:
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      VER: ${{ github.ref_name || inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 24 + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable && corepack prepare pnpm@10.14.0 --activate
+
+      - name: 依赖与构建
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -C apps/web build
+
+      - name: 装配发行包
+        run: bash scripts/pack-macos.sh --version "$VER" --arch arm64
+
+      - name: 首航冒烟（启动器全链：装配→PG→迁移→种子→服务健康）
+        run: |
+          mkdir -p /tmp/wl-smoke && cd /tmp/wl-smoke
+          unzip -q "$GITHUB_WORKSPACE/dist/WorkLoom-macOS.zip"
+          set +e
+          WORKLOOM_SMOKE=1 "./WorkLoom.app/Contents/MacOS/WorkLoom"
+          RC=$?
+          set -e
+          echo "---- 启动器 exit=$RC · 启动日志尾部 ----"
+          tail -80 "$HOME/Library/Logs/WorkLoom/"launch-*.log || true
+          echo "---- pg.log 尾部 ----"
+          tail -60 "$HOME/Library/Logs/WorkLoom/pg.log" || true
+          [ "$RC" -eq 0 ] || exit "$RC"
+          tail -5 "$HOME/Library/Logs/WorkLoom/"launch-*.log | grep -q "首航检查单全绿"
+
+      - name: 发布 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTES=$(mktemp)
+          cat > "$NOTES" <<EOF
+          ## WorkLoom 织元 $VER（macOS）
+
+          企业 Agent IM 底座桌面发行版：AI 员工班组在围栏内全自动巡航，关键时刻人来拍板。
+
+          ### 三步启航
+          1. 下载 \`WorkLoom-macOS.zip\` 并双击解压
+          2. 把 WorkLoom 拖入「应用程序」
+          3. 首次启动：Control+点按 → 打开（Gatekeeper 标准流程，唯一一次授权）
+
+          之后一切自动完成：运行时装配 → PostgreSQL 初始化 → 迁移与演示数据 → 服务启动 → 浏览器打开经营主页。
+          全部依赖包内自带（Node 24 / PostgreSQL 17 + pgvector），无需 brew、无需 sudo、无需命令行。
+
+          ### 校验
+          \`\`\`
+          shasum -a 256 -c WorkLoom-macOS.zip.sha256
+          \`\`\`
+
+          首航冒烟：本包在 macos-14 runner 通过启动器全链冒烟（PG/迁移/种子/server/web 健康检查）后发布。
+          EOF
+          gh release create "$VER" \
+            dist/WorkLoom-macOS.zip dist/WorkLoom-macOS.zip.sha256 \
+            --title "WorkLoom 织元 $VER" --notes-file "$NOTES" \
+            || gh release upload "$VER" dist/WorkLoom-macOS.zip dist/WorkLoom-macOS.zip.sha256 --clobber
+
+      - name: 产物摘要
+        run: ls -lh dist/ && cat dist/WorkLoom-macOS.zip.sha256

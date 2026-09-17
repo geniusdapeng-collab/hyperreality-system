@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视频经理 HyperReality · DeepSeek Harness 企业级 Agent IM —— 你的太空驾驶舱 | Enterprise Agent IM</title>
+<meta name="description" content="视频经理 HyperReality：DeepSeek Harness 企业级 Agent IM，同时面向人类与 Agent 的企业级消息协作网络。WorkData 数据大脑、技能市场、本地数据主权。Enterprise Agent IM powered by DeepSeek Harness — humans and AI agents in one workspace, local-first, Apache-2.0 open source.">
+<meta name="keywords" content="Enterprise Agent IM,DeepSeek Harness,企业级Agent,AI Agent协作,多智能体,人机共存,数码员工,事件溯源,组织记忆,pgvector,本地优先,数据主权,技能市场,skill marketplace,WorkData,multi-agent,human-in-the-loop,local-first,event sourcing,Hono,tRPC,React,PostgreSQL,开源,open source">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<meta property="og:title" content="视频经理 HyperReality · DeepSeek Harness 企业级 Agent IM">
+<meta property="og:description" content="Enterprise Agent IM powered by DeepSeek Harness — humans and AI agents in one workspace. WorkData data brain, skill marketplace, local-first data sovereignty. Apache-2.0.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+
+/* 实机截图带（对账补入：概念图之外的真实产品界面） */
+.real-band{margin-top:72px}
+.real-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,3vw,36px);margin-top:28px}
+.real-grid .cap{margin-top:10px;font-size:12px;letter-spacing:.12em;color:var(--t3);font-family:'JetBrains Mono',monospace}
+@media(max-width:860px){.real-grid{grid-template-columns:1fr}}
+
+/* ============ 星盟战舰设计令牌（星盟战舰设计规范 V1.0 §2.1） ============ */
+:root{
+  --space-900:#050A1A; --space-800:#0A1230; --space-700:#121E45;
+  --nebula-a:#241B4D; --nebula-b:#3A2A6E;
+  --gold-a:#FFB545; --gold-b:#FF8A3D; --gold-hi:#FFE0A3; --on-gold:#2A1500;
+  --holo:#45E0FF; --holo-deep:#2FA8FF;
+  --go:#3DFFB2; --standby:#FFC24D; --alert:#FF5470; --need:#B45CFF;
+  --t1:#EAF1FF; --t2:#9DB2DC; --t3:#5E7099;
+  --line-holo:rgba(96,140,255,.22);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--space-900);
+  color:var(--t1);
+  font-family:'Noto Sans SC','PingFang SC','Source Han Sans SC',sans-serif;
+  line-height:1.8;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(255,181,69,.35);color:#fff}
+a{color:var(--holo-deep);text-decoration:none}
+
+/* 整站大底图：深空星野实景（原则Ⅰ · 每页都是舷窗外的宇宙） */
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:url('assets/scene-nebula.jpg') center/cover no-repeat fixed;
+}
+body::after{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(5,10,26,.62) 0%,rgba(5,10,26,.42) 42%,rgba(5,10,26,.78) 100%);
+}
+
+/* ============ 背景层：星野缓漂 + 星云晕染 + 舱底地平线光晕（原则Ⅰ） ============ */
+#starfield{position:fixed;inset:0;z-index:0;pointer-events:none}
+.nebula{position:fixed;z-index:0;pointer-events:none;filter:blur(90px);opacity:.22;border-radius:50%}
+.nebula-1{width:56vw;height:56vw;left:-14vw;top:-18vw;background:radial-gradient(circle,var(--nebula-b) 0%,transparent 65%)}
+.nebula-2{width:44vw;height:44vw;right:-12vw;top:26vh;background:radial-gradient(circle,var(--nebula-a) 0%,transparent 65%)}
+.nebula-3{width:50vw;height:34vw;left:16vw;bottom:-16vh;background:radial-gradient(ellipse,rgba(255,138,61,.16) 0%,transparent 65%)}
+.horizon{position:fixed;left:0;right:0;bottom:0;height:26vh;z-index:0;pointer-events:none;
+  background:linear-gradient(to top,rgba(255,160,60,.10),rgba(255,160,60,.03) 55%,transparent)}
+
+main,header.site,footer{position:relative;z-index:2}
+
+/* ============ 顶栏 ============ */
+header.site{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 40px;
+  background:rgba(5,10,26,.72);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line-holo);
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand .sigil{width:34px;height:34px;flex:none}
+.brand b{font-weight:900;font-size:16px;letter-spacing:.06em}
+.brand small{display:block;font-size:10px;color:var(--t3);letter-spacing:.28em;line-height:1.2}
+nav.top{display:flex;align-items:center;gap:26px;font-size:13px}
+nav.top a{color:var(--t2);transition:color .2s}
+nav.top a:hover{color:var(--gold-hi)}
+.pill-status{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--go);
+  border:1px solid rgba(61,255,178,.35);border-radius:999px;padding:5px 14px;
+  background:rgba(61,255,178,.06);
+}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--go);flex:none;animation:breathe 1.6s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.35);opacity:.55}}
+@media(max-width:860px){nav.top .hide-m{display:none}header.site{padding:12px 20px}}
+
+/* ============ 通用版式 ============ */
+.wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+section{padding:96px 0}
+.eyebrow{
+  font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.34em;
+  color:var(--holo);text-transform:uppercase;margin-bottom:18px;
+}
+h2.sect{font-size:clamp(26px,3.4vw,38px);font-weight:900;letter-spacing:.03em;line-height:1.35;margin-bottom:16px}
+h2.sect em{font-style:normal;background:linear-gradient(120deg,var(--gold-a),var(--gold-b));-webkit-background-clip:text;background-clip:text;color:transparent}
+p.lede{color:var(--t2);max-width:720px;font-size:15.5px}
+
+/* ============ HERO ============ */
+.hero{min-height:92vh;display:flex;align-items:center;padding:80px 0 60px;position:relative}
+.hero .wrap{position:relative}
+.hero-frame{
+  position:relative;border-radius:20px;
+  padding:clamp(36px,6vw,76px) clamp(28px,6vw,80px);
+  background:
+    linear-gradient(100deg,rgba(5,10,26,.94) 0%,rgba(5,10,26,.78) 36%,rgba(5,10,26,.34) 66%,rgba(5,10,26,.60) 100%),
+    linear-gradient(to top,rgba(5,10,26,.92) 0%,rgba(5,10,26,.12) 42%),
+    url('assets/scene-bridge.jpg') center 40%/cover no-repeat;
+  border:1px solid var(--line-holo);
+  box-shadow:0 0 80px rgba(36,27,77,.5) inset,0 30px 80px rgba(0,0,0,.45);
+  overflow:hidden;
+}
+/* HUD 四角金色刻度线（规范 §4.1） */
+.hud{position:absolute;width:18px;height:18px;border:2px solid rgba(255,181,69,.75);pointer-events:none}
+.hud.tl{top:10px;left:10px;border-right:none;border-bottom:none}
+.hud.tr{top:10px;right:10px;border-left:none;border-bottom:none}
+.hud.bl{bottom:10px;left:10px;border-right:none;border-top:none}
+.hud.br{bottom:10px;right:10px;border-left:none;border-top:none}
+.hero-grid-lines{position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(rgba(69,224,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(69,224,255,.05) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(ellipse at 30% 20%,black 0%,transparent 72%);
+  -webkit-mask-image:radial-gradient(ellipse at 30% 20%,black 0%,transparent 72%);
+}
+.hero h1{
+  font-size:clamp(34px,5.6vw,62px);font-weight:900;line-height:1.28;letter-spacing:.02em;
+  margin:14px 0 22px;max-width:840px;
+}
+.hero h1 .gold{background:linear-gradient(120deg,var(--gold-hi),var(--gold-a) 45%,var(--gold-b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.sub{color:var(--t2);font-size:clamp(15px,1.6vw,17.5px);max-width:680px;margin-bottom:40px}
+.hero p.sub b{color:var(--t1);font-weight:700}
+
+/* 主按钮：全站唯一最高级金色按钮（规范 §5.1 铁律） */
+.cta-row{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.btn-gold{
+  position:relative;display:inline-flex;align-items:center;gap:14px;
+  padding:20px 44px;border:none;cursor:pointer;border-radius:16px;
+  font-family:'Noto Sans SC',sans-serif;font-weight:900;font-size:19px;letter-spacing:.04em;
+  color:var(--on-gold);
+  background:linear-gradient(135deg,var(--gold-a) 0%,var(--gold-b) 100%);
+  box-shadow:0 0 30px rgba(255,160,60,.35),0 10px 34px rgba(255,138,61,.28);
+  overflow:hidden;transition:transform .18s ease,box-shadow .18s ease;
+}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 0 44px rgba(255,160,60,.5),0 16px 44px rgba(255,138,61,.36)}
+.btn-gold:active{transform:translateY(0)}
+.btn-gold .sheen{position:absolute;top:0;left:-80%;width:55%;height:100%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.5),transparent);
+  animation:sheen 2.6s ease-in-out infinite}
+@keyframes sheen{0%{left:-80%}55%,100%{left:130%}}
+.btn-gold svg{flex:none}
+.btn-ghost{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:18px 30px;border-radius:14px;font-weight:700;font-size:15px;
+  color:var(--holo);border:1px solid rgba(69,224,255,.4);
+  background:rgba(69,224,255,.05);transition:background .2s,border-color .2s;
+}
+.btn-ghost:hover{background:rgba(69,224,255,.12);border-color:rgba(69,224,255,.7)}
+.dl-meta{
+  margin-top:22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--t3);letter-spacing:.05em;
+}
+.dl-meta .sep{width:4px;height:4px;border-radius:50%;background:var(--t3)}
+
+/* 仪表盘读数条（Orbitron HUD 数字，规范 §3） */
+.readouts{display:flex;gap:0;margin-top:52px;border:1px solid var(--line-holo);border-radius:14px;overflow:hidden;background:rgba(10,18,48,.5);flex-wrap:wrap}
+.readout{flex:1 1 150px;padding:18px 22px;border-right:1px solid var(--line-holo);position:relative}
+.readout:last-child{border-right:none}
+.readout::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.35;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(69,224,255,.06) 2px 4px)}
+.readout .num{font-family:'Orbitron',monospace;font-weight:700;font-size:24px;color:var(--holo);text-shadow:0 0 16px rgba(69,224,255,.45);white-space:nowrap}
+.readout .num.gold{color:var(--gold-hi);text-shadow:0 0 16px rgba(255,181,69,.4)}
+.readout .lbl{font-size:11.5px;color:var(--t3);margin-top:4px;letter-spacing:.06em}
+
+/* ============ 下载链路 ============ */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px}
+@media(max-width:900px){.steps{grid-template-columns:1fr}}
+.step{
+  position:relative;background:var(--space-800);border:1px solid var(--line-holo);
+  border-radius:16px;padding:30px 26px 26px;overflow:hidden;transition:border-color .25s,transform .25s;
+}
+.step:hover{border-color:rgba(255,181,69,.45);transform:translateY(-4px)}
+.step .idx{
+  font-family:'Orbitron',monospace;font-weight:900;font-size:15px;color:var(--gold-hi);
+  display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
+  border:1.5px solid rgba(255,181,69,.55);border-radius:10px;margin-bottom:18px;
+  background:rgba(255,181,69,.08);text-shadow:0 0 12px rgba(255,181,69,.5);
+}
+.step h3{font-size:18px;font-weight:900;margin-bottom:10px;letter-spacing:.02em}
+.step p{font-size:13.5px;color:var(--t2)}
+.step code, p code, li code{
+  font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--holo);
+  background:rgba(69,224,255,.08);border:1px solid rgba(69,224,255,.2);
+  border-radius:6px;padding:1px 7px;white-space:nowrap;
+}
+.step .tip{
+  margin-top:16px;padding:12px 14px;border-radius:10px;font-size:12.5px;color:var(--standby);
+  background:rgba(255,194,77,.07);border:1px solid rgba(255,194,77,.25);
+}
+.step .tip b{color:var(--standby)}
+.term-shot{
+  margin-top:44px;background:#04070F;border:1px solid var(--line-holo);border-radius:14px;overflow:hidden;
+}
+.term-shot .bar{display:flex;gap:7px;padding:12px 16px;border-bottom:1px solid var(--line-holo);background:var(--space-800)}
+.term-shot .bar i{width:11px;height:11px;border-radius:50%;display:block}
+.term-shot .bar i:nth-child(1){background:#FF5F57}.term-shot .bar i:nth-child(2){background:#FEBC2E}.term-shot .bar i:nth-child(3){background:#28C840}
+.term-shot pre{
+  padding:22px 24px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:2;
+  color:var(--t2);overflow-x:auto;
+}
+.term-shot .c{color:var(--t3)} .term-shot .g{color:var(--go)} .term-shot .h{color:var(--holo)} .term-shot .y{color:var(--gold-hi)}
+
+/* ============ 功能卡 ============ */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px}
+@media(max-width:980px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.cards{grid-template-columns:1fr}}
+.card{
+  background:var(--space-800);border:1px solid var(--line-holo);border-radius:16px;
+  padding:28px 26px;position:relative;overflow:hidden;transition:border-color .25s,transform .25s;
+}
+.card:hover{border-color:rgba(69,224,255,.5);transform:translateY(-4px)}
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(69,224,255,.55),transparent)}
+.card .ico{font-size:26px;margin-bottom:14px;display:block}
+.card h3{font-size:16.5px;font-weight:900;margin-bottom:4px}
+.card .tag{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--holo);letter-spacing:.14em;display:block;margin-bottom:12px}
+.card p{font-size:13.5px;color:var(--t2)}
+
+/* ============ 实景展示（大图区块） ============ */
+.showcase{display:grid;grid-template-columns:1.12fr 1fr;gap:clamp(28px,4vw,56px);align-items:center;margin-top:72px}
+.showcase.flip{grid-template-columns:1fr 1.12fr}
+@media(max-width:900px){.showcase,.showcase.flip{grid-template-columns:1fr}}
+.shot{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line-holo);
+  box-shadow:0 24px 70px rgba(0,0,0,.55),0 0 50px rgba(36,27,77,.35)}
+.shot img{display:block;width:100%;height:auto;transition:transform 1.2s ease}
+.shot:hover img{transform:scale(1.03)}
+.shot::after{content:'';position:absolute;inset:0;pointer-events:none;border-radius:18px;
+  background:linear-gradient(to top,rgba(5,10,26,.42),transparent 38%);
+  box-shadow:inset 0 0 0 1px rgba(69,224,255,.14)}
+.shot .hud{width:14px;height:14px}
+.showcase .txt .eyebrow{margin-bottom:14px}
+.showcase h3{font-size:clamp(21px,2.4vw,28px);font-weight:900;letter-spacing:.02em;line-height:1.4;margin-bottom:14px}
+.showcase h3 em{font-style:normal;background:linear-gradient(120deg,var(--gold-a),var(--gold-b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.showcase .txt p{font-size:14.5px;color:var(--t2)}
+.spec-list{margin-top:20px;display:flex;flex-direction:column;gap:10px}
+.spec-list li{
+  list-style:none;display:flex;gap:12px;align-items:flex-start;
+  font-size:13.5px;color:var(--t2);
+}
+.spec-list li .k{
+  flex:none;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:8px;border:1px solid rgba(69,224,255,.35);background:rgba(69,224,255,.07);font-size:13px;
+}
+.spec-list li b{color:var(--t1)}
+
+/* ============ 成就徽章（游戏化） ============ */
+.badges{display:flex;gap:14px;flex-wrap:wrap;margin-top:40px}
+.badge{
+  display:inline-flex;align-items:center;gap:10px;padding:9px 18px 9px 10px;border-radius:999px;
+  border:1px solid rgba(255,181,69,.38);background:rgba(255,181,69,.06);
+  font-size:13px;color:var(--t2);transition:border-color .2s,transform .2s;
+}
+.badge:hover{border-color:rgba(255,181,69,.75);transform:translateY(-2px)}
+.badge .hex{
+  flex:none;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+  font-size:15px;border-radius:9px;
+  background:linear-gradient(135deg,rgba(255,181,69,.25),rgba(255,138,61,.18));
+  border:1px solid rgba(255,181,69,.5);box-shadow:0 0 12px rgba(255,160,60,.18);
+}
+.badge small{display:block;font-size:10.5px;color:var(--t3);font-family:'JetBrains Mono',monospace;letter-spacing:.04em}
+
+/* ============ 日循环 ============ */
+.loop{margin-top:52px;display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.loop .node{
+  flex:1 1 0;background:var(--space-800);border:1px solid var(--line-holo);
+  border-radius:14px;padding:20px 14px;position:relative;min-width:0;
+}
+.loop .node b{display:block;font-size:14.5px;font-weight:900;margin-bottom:6px}
+.loop .node span{font-size:12px;color:var(--t3)}
+.loop .node .lamp{position:absolute;top:16px;right:16px;width:9px;height:9px;border-radius:50%}
+.loop .arrow{align-self:center;padding:0 7px;color:var(--gold-a);font-size:15px;flex:none;font-weight:900}
+@media(max-width:900px){
+  .loop{flex-direction:column}
+  .loop .arrow{transform:rotate(90deg);width:100%;text-align:center;padding:8px 0}
+}
+
+/* ============ 安全承诺 ============ */
+.safe-band{
+  margin-top:48px;border-radius:16px;padding:34px 32px;
+  background:linear-gradient(140deg,rgba(255,84,112,.07),rgba(10,18,48,.6));
+  border:1px solid rgba(255,84,112,.3);
+}
+.safe-band h3{font-size:18px;font-weight:900;margin-bottom:8px}
+.safe-band h3 .brake{color:var(--alert)}
+.safe-band p{font-size:13.5px;color:var(--t2);max-width:860px}
+.safe-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px}
+@media(max-width:900px){.safe-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.safe-grid{grid-template-columns:1fr}}
+.safe-item{font-size:13px;color:var(--t2);padding:14px 16px;border-radius:12px;background:rgba(5,10,26,.5);border:1px solid var(--line-holo)}
+.safe-item b{display:block;color:var(--t1);margin-bottom:4px;font-size:13.5px}
+
+/* ============ 文档下载 ============ */
+.doc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px}
+.doc-card{display:block;border:1px solid var(--line-holo);border-radius:14px;padding:22px;background:rgba(10,18,40,.55);text-decoration:none;transition:border-color .25s,transform .25s}
+.doc-card:hover{border-color:var(--gold-a);transform:translateY(-3px)}
+.doc-card .doc-tag{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--gold-a);margin-bottom:10px}
+.doc-card h3{font-size:16px;color:var(--t1);margin:0 0 8px}
+.doc-card p{font-size:12.5px;color:var(--t2);line-height:1.7;margin:0 0 14px}
+.doc-card .doc-dl{font-size:12px;color:var(--gold-hi)}
+@media(max-width:860px){.doc-grid{grid-template-columns:1fr}}
+
+/* ============ 技能市场案例 ============ */
+.case-flow{margin-top:30px;border:1px solid var(--line-holo);border-radius:14px;background:rgba(10,18,40,.55);padding:26px 28px}
+.case-flow .cf-goal{font-size:15px;color:var(--gold-hi);font-weight:700;margin-bottom:16px}
+.case-step{display:flex;gap:14px;padding:12px 0;border-top:1px dashed rgba(90,106,156,.35)}
+.case-step:first-of-type{border-top:none}
+.case-step .n{font-family:'JetBrains Mono',monospace;color:var(--gold-a);font-size:12px;min-width:66px;padding-top:2px}
+.case-step b{color:var(--t1);font-size:14px;display:block;margin-bottom:4px}
+.case-step span{color:var(--t2);font-size:12.5px;line-height:1.7}
+.skill-tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:22px}
+.tier{border:1px solid var(--line-holo);border-radius:12px;padding:16px 18px;background:rgba(10,18,40,.4)}
+.tier .tt{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--holo);margin-bottom:8px}
+.tier b{color:var(--t1);font-size:13.5px;display:block;margin-bottom:6px}
+.tier p{color:var(--t2);font-size:12px;line-height:1.7;margin:0}
+@media(max-width:860px){.skill-tiers{grid-template-columns:1fr}}
+
+/* ============ 新物种（AI 原生概念 + 对比） ============ */
+.eq-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:26px}
+.eq{border:1px solid var(--line-holo);border-radius:12px;padding:16px 14px;background:rgba(10,18,40,.5);text-align:center}
+.eq .eq-k{font-size:12px;color:var(--t3);margin-bottom:8px}
+.eq .eq-v{font-size:13px;color:var(--gold-hi);font-weight:700;line-height:1.5}
+.cmp{width:100%;border-collapse:collapse;margin-top:26px;font-size:13px}
+.cmp th,.cmp td{border:1px solid var(--line-holo);padding:12px 14px;text-align:left;vertical-align:top;line-height:1.7}
+.cmp th{background:rgba(154,123,45,.14);color:var(--gold-hi);font-size:13px}
+.cmp td:first-child{color:var(--t1);font-weight:700;white-space:nowrap}
+.cmp td{color:var(--t2)}
+.cmp td:last-child{color:#dfe6ff}
+.era{margin-top:26px;border:1px solid rgba(154,123,45,.5);border-radius:12px;padding:18px 22px;background:rgba(154,123,45,.07);font-size:14px;color:var(--t1);line-height:1.9}
+.era b{color:var(--gold-hi)}
+@media(max-width:960px){.eq-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* ============ 页脚 CTA + footer ============ */
+.final{text-align:center;padding:110px 0 90px}
+.final h2{font-size:clamp(26px,4vw,44px);font-weight:900;margin-bottom:14px;letter-spacing:.03em}
+.final p{color:var(--t2);margin-bottom:36px}
+footer{border-top:1px solid var(--line-holo);padding:34px 0;background:rgba(5,10,26,.6)}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+footer .mono{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3);letter-spacing:.08em}
+footer a{color:var(--t2);font-size:12.5px}
+footer a:hover{color:var(--gold-hi)}
+
+/* 入场动效（≤1.2s，尊重减弱动效设置） */
+.rise{opacity:0;transform:translateY(26px);transition:opacity .9s ease,transform .9s ease}
+.rise.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  .rise{opacity:1;transform:none;transition:none}
+  .btn-gold .sheen,.dot{animation:none}
+}
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+<div class="nebula nebula-1"></div>
+<div class="nebula nebula-2"></div>
+<div class="nebula nebula-3"></div>
+<div class="horizon"></div>
+
+<!-- ============ 顶栏 ============ -->
+<header class="site">
+  <div class="brand">
+    <svg class="sigil" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <rect x="5" y="14" width="30" height="21" rx="3.5" fill="url(#g1)"/>
+      <path d="M6.5 9.5 33 6l1 4.5L7.5 14z" fill="url(#g1)"/>
+      <path d="M11 9l3.2 3.6M17.5 8.2l3.2 3.6M24 7.4l3.2 3.6M30.5 6.6l3.2 3.6" stroke="#1b1206" stroke-width="1.6"/>
+      <path d="M16.5 19.5v10l8.5-5z" fill="#1b1206"/>
+      <defs><linearGradient id="g1" x1="0" y1="0" x2="40" y2="40">
+        <stop stop-color="#FFE0A3"/><stop offset=".5" stop-color="#FFB545"/><stop offset="1" stop-color="#FF8A3D"/>
+      </linearGradient></defs>
+    </svg>
+    <div><b>视频经理 · HyperReality</b><small>STARLEAGUE</small></div>
+  </div>
+  <nav class="top">
+    <span class="pill-status hide-m"><span class="dot"></span>MAC 版 · 开放下载</span>
+    <a href="#download" class="hide-m">下载安装</a>
+    <a href="#showcase" class="hide-m">驾驶舱实景</a>
+    <a href="#features" class="hide-m">驾驶舱能力</a>
+    <a href="#loop" class="hide-m">日循环</a>
+    <a href="#newspecies" class="hide-m">新物种</a>
+    <a href="#skills" class="hide-m">技能市场</a>
+    <a href="en.html" class="hide-m">EN</a>
+    <a href="https://github.com/geniusdapeng-collab/hyperreality-system" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+</header>
+
+<main>
+<!-- ============ HERO ============ -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <div class="hero-frame rise">
+      <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
+      <div class="hero-grid-lines"></div>
+      <div class="eyebrow">视频经理 · HyperReality —— 企业 Agent IM · 太空驾驶舱</div>
+      <h1>设定目标，<span class="gold">自动达成</span>。<br>关键时刻，人来拍板。</h1>
+      <p class="sub">
+        HyperReality 是一套同时面向<b>人类与 Agent</b> 的企业级消息协作网络——给业务负责人的一座太空驾驶舱。
+        夜班战队默认 18:00 准时出征（时段随你自定义），清晨 08:30 昨夜战报送达：战果 ✓、待决断 ◆、求援 ▲ 一屏可读。
+        你每天只需 5 分钟，推进 ✓ / 校准 ✎ / 制动 ✗。
+      </p>
+      <div class="cta-row">
+        <a class="btn-gold" id="btn-download" href="https://github.com/geniusdapeng-collab/hyperreality-system/releases/latest" target="_blank" rel="noopener">
+          <span class="sheen"></span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 11 6 6 6-6"/><path d="M4 21h16"/></svg>
+          下载 Mac 版
+        </a>
+        <a class="btn-ghost" href="#download">查看安装流程 ↓</a>
+      </div>
+      <div class="dl-meta">
+        <span>macOS 13 Ventura +</span><span class="sep"></span>
+        <span>Apple Silicon（M 系列）· Intel 版后续推出</span><span class="sep"></span>
+        <span>GitHub Release 官方分发</span><span class="sep"></span>
+        <span id="dl-channel">CHANNEL: STABLE</span>
+      </div>
+      <div class="readouts">
+        <div class="readout"><div class="num">≤3s</div><div class="lbl">一句话派遣 · 建立任务线程</div></div>
+        <div class="readout"><div class="num gold">18:00</div><div class="lbl">夜班班组 · 默认出征 · 可自定义</div></div>
+        <div class="readout"><div class="num gold">08:30</div><div class="lbl">昨夜战报 · 准时送达</div></div>
+        <div class="readout"><div class="num">≤60s</div><div class="lbl">紧急制动 · 全端生效</div></div>
+        <div class="readout"><div class="num">100%</div><div class="lbl">全程留痕 · 可回滚可归因</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 下载安装链路 ============ -->
+<section id="download">
+  <div class="wrap">
+    <div class="rise">
+      <div class="eyebrow">DOWNLOAD · 首航检查单</div>
+      <h2 class="sect">三步启航，<em>和装一个 Mac 软件一样简单</em></h2>
+      <p class="lede">HyperReality Mac 版通过 GitHub Release 官方分发：下载压缩包 → 解压拖入「应用程序」→ 启动首航。全程无需命令行，无需额外环境。</p>
+    </div>
+    <div class="steps">
+      <div class="step rise">
+        <span class="idx">01</span>
+        <h3>一键下载</h3>
+        <p>点击页面上方金色按钮，跳转到 GitHub Release 页面，下载最新版 <code>HyperReality-macOS.zip</code>。下载完成后它会出现在你的「下载」文件夹里。</p>
+      </div>
+      <div class="step rise">
+        <span class="idx">02</span>
+        <h3>解压 · 拖入应用程序</h3>
+        <p>在「下载」文件夹中双击 zip 解压，得到 <code>HyperReality.app</code>，把它拖进「应用程序」（Applications）文件夹——这就是标准 Mac 安装方式，无安装向导、无捆绑。</p>
+      </div>
+      <div class="step rise">
+        <span class="idx">03</span>
+        <h3>启动首航</h3>
+        <p>从「应用程序」打开 HyperReality，跟随<b style="color:var(--t1)">装配检查单</b>完成起飞前检查，设置你的第一条航道护栏——今晚 18:00，夜班班组即可首次出征。</p>
+        <div class="tip">⚠ 首次打开如提示“无法验证开发者”：<b>按住 Control 点按图标 → 打开</b>，即可正常启动（macOS 对独立分发应用的标准流程）。</div>
+      </div>
+    </div>
+    <div class="term-shot rise">
+      <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c"># 标准 Mac 下载链路（浏览器自动完成，无需手输命令）</span>
+<span class="y">①</span> 点击「下载 Mac 版」 <span class="c">→</span> GitHub Release <span class="c">→</span> HyperReality-macOS.zip 开始下载
+<span class="y">②</span> 访达 <span class="c">→</span> 下载 <span class="c">→</span> 双击解压 <span class="c">→</span> 将 <span class="h">HyperReality.app</span> 拖入「应用程序」
+<span class="y">③</span> 启动台打开 HyperReality <span class="c">→</span> 装配检查单 <span class="c">→</span> 首条航道护栏 <span class="c">→</span> <span class="g">✓ 首航就绪</span>
+
+<span class="c"># 偏好命令行的主理人，也可以一行装好：</span>
+$ curl -L <span class="h">https://github.com/geniusdapeng-collab/hyperreality-system/releases/latest/download/HyperReality-macOS.zip</span> -o ~/Downloads/HyperReality-macOS.zip</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 驾驶舱实景（大图） ============ -->
+<section id="showcase">
+  <div class="wrap">
+    <div class="rise">
+      <div class="eyebrow">ON THE BRIDGE · 驾驶舱实景</div>
+      <h2 class="sect">这不是后台系统，<em>是你的工作台</em></h2>
+      <p class="lede">每一个页面都是舷窗外的宇宙：深空为幕，金光为令，经营即游戏。</p>
+    </div>
+
+    <div class="showcase rise">
+      <div class="shot">
+        <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
+        <img src="assets/scene-squad.jpg" alt="夜班班组 · 夜班 Agent 班组在工作台上巡航" loading="lazy">
+      </div>
+      <div class="txt">
+        <div class="eyebrow">NIGHT SHIFT</div>
+        <h3>🌙 夜班班组 · <em>默认 18:00 准时出征</em></h3>
+        <p>傍晚 18:00，夜班 Agent 班组接棒开工（出征时段完全由你自定义）。每个动作 100% 过航道护栏，不确定的事只写「求援」，绝不猜测执行；夜间是谷时能量补给时段，旗舰模型费率 ≤ 标准 20%——夜巡是性价比最高的玩法。</p>
+        <ul class="spec-list">
+          <li><span class="k">🕕</span><span><b>默认 18:00 出征</b>，时段可按你的经营节奏自定义</span></li>
+          <li><span class="k">🚦</span><span>每个动作 <b>100% 过围栏</b>，越线自动挂起待审</span></li>
+          <li><span class="k">⚡</span><span>谷时补给：旗舰模型费率 <b>≤ 标准 20%</b></span></li>
+          <li><span class="k">🛑</span><span>紧急制动随时可用，<b>≤60s 全端生效</b></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="showcase flip rise">
+      <div class="txt">
+        <div class="eyebrow">BATTLE REPORT</div>
+        <h3>✦ 昨夜战报 · <em>每天 08:30 准时送达</em></h3>
+        <p>清晨打开驾驶舱，昨夜战报已经躺在那里：战果 ✓ 绿 / 待决断 ◆ 琥珀 / 求援 ▲ 红，三栏大数一屏可读。每一件事都带 #E 编号、可展开决策链路回放——昨夜你睡着时战队干的所有事，没有一件无据可查。</p>
+        <ul class="spec-list">
+          <li><span class="k">✓</span><span><b>战果</b>：围栏内自动完成的事，逐条留痕</span></li>
+          <li><span class="k">◆</span><span><b>待决断</b>：命中黄灯航道，等你 ≤2 步拍板</span></li>
+          <li><span class="k">▲</span><span><b>求援</b>：不确定事项只写事件，呼叫主理人接管</span></li>
+          <li><span class="k">#E</span><span>每条记录带<b>等宽编号</b>，点击展开完整决策链路</span></li>
+        </ul>
+      </div>
+      <div class="shot">
+        <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
+        <img src="assets/scene-fleet.jpg" alt="昨夜战报 · 战果 / 待决断 / 求援三栏全息仪表" loading="lazy">
+      </div>
+    </div>
+
+    <div class="real-band rise">
+      <div class="eyebrow">REAL SHOTS · 产品实机截图</div>
+      <div class="real-grid">
+        <figure>
+          <div class="shot">
+            <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
+            <img src="shots/p1.jpg" alt="HyperReality 经营主页实机截图：08:30 昨夜战报三栏与 KPI 仪表" loading="lazy">
+          </div>
+          <figcaption class="cap">P1 经营主页 · 08:30 战报（实机截取）</figcaption>
+        </figure>
+        <figure>
+          <div class="shot">
+            <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
+            <img src="shots/p9.jpg" alt="HyperReality 夜班班组实机截图：班组消息流与状态机" loading="lazy">
+          </div>
+          <figcaption class="cap">P9 夜班班组 · 夜班自治（实机截取）</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 驾驶舱能力 ============ -->
+<section id="features">
+  <div class="wrap">
+    <div class="rise">
+      <div class="eyebrow">CAPABILITIES · 驾驶舱里有什么</div>
+      <h2 class="sect">一个人，驾驶一家公司的<em>全部复杂</em></h2>
+      <p class="lede">传统软件给人一堆扳手，HyperReality 给业务负责人一座太空驾驶舱。人只做三件事：供给、裁决、沉淀——其余全部交给 Agent 班组。</p>
+    </div>
+    <div class="cards">
+      <div class="card rise"><span class="ico">🛰️</span><h3>设定航线 · 一键派遣</h3><span class="tag">QUEST / MAIN QUEST</span><p>一句话说出经营目标，≤3 秒建立任务线程。Quest 自主交付：围栏内全自动执行，越围栏自动挂起待审，交付附变更报告与决策链路。</p></div>
+      <div class="card rise"><span class="ico">🌙</span><h3>夜班班组 · 夜班自治</h3><span class="tag">NIGHT SHIFT · 默认 18:00 出征</span><p>夜班 Agent 班组准时出征，时段支持自定义。每个动作 100% 过围栏，不确定只写求援、绝不猜测执行。谷时能量补给时段，旗舰模型费率 ≤ 标准 20%。</p></div>
+      <div class="card rise"><span class="ico">✦</span><h3>昨夜战报 · 08:30 送达</h3><span class="tag">BATTLE REPORT</span><p>每天清晨的仪式感：战果 ✓ / 待决断 ◆ / 求援 ▲ 三栏大数，一屏可读。昨夜你睡着时战队干的每件事，都带编号、可展开回放。</p></div>
+      <div class="card rise"><span class="ico">🎮</span><h3>主理人决断 · 三操纵杆</h3><span class="tag">CAPTAIN'S CALL</span><p>推进 ✓ / 校准 ✎ / 制动 ✗，单条 ≤2 步拍板。每次校准都会写回事件库、训练舰队——同一驳回模式三次内不再重犯，船员越带越顺手。</p></div>
+      <div class="card rise"><span class="ico">🚦</span><h3>航道护栏 · 三级灯语</h3><span class="tag">AUTO / REVIEW / BLOCK</span><p>常规自动、敏感必审、高危熔断。出厂基线只可加严，新规生效前用历史动作「模拟航行」dry-run 回放——自动化程度随信任逐格放开。</p></div>
+      <div class="card rise"><span class="ico">📼</span><h3>黑匣子 · 全程留痕</h3><span class="tag">APPEND-ONLY EVENT LOG</span><p>五元事件库 append-only，留痕覆盖率 100% 为运行时不变量。每一次操作可回放、可归因、可逆向补偿回滚——没有“虚假的胜利播报”。</p></div>
+    </div>
+
+    <div class="safe-band rise">
+      <h3>🛑 <span class="brake">紧急制动杆，永远挂在工作台最显眼处</span></h3>
+      <p>经营不是游戏存档，不能读档重来——所以这套系统的安全设计比任何游戏都重。任意端一键暂停全部 Agent，≤60 秒全端生效（含浏览器动作安全中止）。这是产品级安全承诺，不是装饰。</p>
+      <div class="safe-grid">
+        <div class="safe-item"><b>不确定不执行</b>夜间不确定事项只写「求援」事件，禁止猜测执行——求援 ▲ 不是失败，是战队在呼叫主理人。</div>
+        <div class="safe-item"><b>无回执不宣称完成</b>关键数字必须来自工具回执；无回执显式标注「未核实」，绝不粉饰。</div>
+        <div class="safe-item"><b>错误可逆</b>回滚 = 逆向补偿事件序列，原始航行日志永不修改，但航线可以修正。</div>
+        <div class="safe-item"><b>失败转人工，不甩锅</b>探针失效即停止一切点击转人工接管——任务暂停 ≠ 任务失败。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 新物种：AI 原生 Agent IM ============ -->
+<section id="newspecies">
+  <div class="wrap rise">
+    <div class="eyebrow">NEW SPECIES · AI-NATIVE AGENT IM</div>
+    <h2 class="sect">第一公民不是消息，<em>是「可追责的动作」</em></h2>
+    <p class="lede">传统 IM 把「沟通」数字化了，但没有把「行动」数字化——消息发出去，事还得人去办。Agent IM 是 AI 原生的协作底座：每一个动作都有主体、有授权、有结果、有留痕。</p>
+    <div class="era">最直观的分水岭是审批卡片：<b>飞书里的审批卡片是外挂的 OA 插件</b>，点一下就跳出 IM、跳进另一个系统；<b>HyperReality 里的审批卡片是原生消息类型</b>，批准手势直接写回事件库成为校准样本。<b>这个差别，就是两个时代的差别。</b>服务对象也换了：传统 IM 服务人，Agent IM 服务 AI——主体换了。人和 AI，在同一个 workspace 协作。</div>
+    <div class="eq-grid">
+      <div class="eq"><div class="eq-k">消息</div><div class="eq-v">= 事件<br>五元结构 · 可审计</div></div>
+      <div class="eq"><div class="eq-k">通讯录</div><div class="eq-v">= 人机混编班组<br>数码员工同册</div></div>
+      <div class="eq"><div class="eq-k">群</div><div class="eq-v">= 任务线程<br>三态流转</div></div>
+      <div class="eq"><div class="eq-k">审批</div><div class="eq-v">= 原生消息类型<br>不是外挂插件</div></div>
+      <div class="eq"><div class="eq-k">在线时长</div><div class="eq-v">= 无人值守经营时长<br>7×24 不打烊</div></div>
+    </div>
+    <h3 style="margin-top:56px;font-size:20px;color:var(--t1)">与通用 AI 办公的本质区别</h3>
+    <p class="lede" style="margin-top:10px">通用 AI 办公助手（WorkBuddy / 千问办公 / QoderWork 等）数字化的是「个人办公任务」；HyperReality 数字化的是「组织经营动作」。这不是功能多寡的差别，是品类差别。</p>
+    <table class="cmp">
+      <tr><th>维度</th><th>通用 AI 办公助手</th><th>视频经理 HyperReality</th></tr>
+      <tr><td>服务对象</td><td>服务「人」：个人/员工的桌面提效助手</td><td>服务「AI 与组织」：AI 是组织成员，人升格为主理人</td></tr>
+      <tr><td>数字化对象</td><td>个人办公任务：文档、表格、纪要</td><td>组织经营动作：可追责、可审计、可回放</td></tr>
+      <tr><td>产品形态</td><td>桌面客户端 / 个人工作台，一人一助手</td><td>企业级 IM 底座：人机混编班组同场协作</td></tr>
+      <tr><td>与 IM 的关系</td><td>IM 是远程遥控入口（手机指挥电脑）</td><td>IM 是本体：消息=事件、审批=原生消息类型</td></tr>
+      <tr><td>协作粒度</td><td>单人任务拆解执行</td><td>目标→步骤→技能装配的组织级流水线，夜班值守 7×24</td></tr>
+      <tr><td>数据归属</td><td>个人账号 / 云端为主</td><td>企业本机：数据主权 + 多租户隔离</td></tr>
+      <tr><td>产出口径</td><td>交付文档、表格等个人产物</td><td>经营口径：营收、差评响应时长、挽回订单</td></tr>
+    </table>
+    <div class="era">一句话：<b>通用 AI 办公让员工的 8 小时更高效；HyperReality 让企业的 24 小时自动运转。</b>二者不冲突——员工可以继续用 WorkBuddy 写文档，HyperReality 在组织层把 AI 编成一支可治理、可度量、可归责的数码班组。</div>
+  </div>
+</section>
+
+<!-- ============ 日循环 ============ -->
+<section id="loop">
+  <div class="wrap">
+    <div class="rise">
+      <div class="eyebrow">CORE LOOP · 每天必玩的理由</div>
+      <h2 class="sect">每天 5 分钟决断，<em>全天候自动巡航</em></h2>
+      <p class="lede">商业经营本身就很像打游戏：设定航线 → 收战报 → 拍板 → 升级。明天的航线，永远比今天更远。</p>
+    </div>
+    <div class="loop rise">
+      <div class="node"><span class="lamp" style="background:var(--gold-a);box-shadow:0 0 10px var(--gold-a)"></span><b>① 设定航线</b><span>一句话派遣，≤3s 建线程</span></div>
+      <span class="arrow">▶</span>
+      <div class="node"><span class="lamp" style="background:var(--go);box-shadow:0 0 10px var(--go)"></span><b>② 战队巡航</b><span>围栏内自动执行 / 越线挂起</span></div>
+      <span class="arrow">▶</span>
+      <div class="node"><span class="lamp" style="background:var(--gold-a);box-shadow:0 0 10px var(--gold-a)"></span><b>③ 昨夜战报</b><span>08:30 送达：战果 / 待决断 / 求援</span></div>
+      <span class="arrow">▶</span>
+      <div class="node"><span class="lamp" style="background:var(--standby);box-shadow:0 0 10px var(--standby)"></span><b>④ 主理人决断</b><span>推进 ✓ / 校准 ✎ / 制动 ✗</span></div>
+      <span class="arrow">▶</span>
+      <div class="node"><span class="lamp" style="background:var(--holo);box-shadow:0 0 10px var(--holo)"></span><b>⑤ 经验沉淀</b><span>手势写回事件库，舰队变聪明</span></div>
+      <span class="arrow">▶</span>
+      <div class="node"><span class="lamp" style="background:var(--gold-hi);box-shadow:0 0 10px var(--gold-hi)"></span><b>⑥ 升级反馈</b><span>+XP 飘字，主理人等级推进</span></div>
+    </div>
+    <div class="badges rise">
+      <span class="badge"><span class="hex">🏅</span><span>勤勉主理人<small>连续 7 天批完战报</small></span></span>
+      <span class="badge"><span class="hex">🛡️</span><span>零事故巡航<small>30 天无 block 熔断</small></span></span>
+      <span class="badge"><span class="hex">📡</span><span>雷达全开<small>首次巡检派单闭环</small></span></span>
+      <span class="badge"><span class="hex">🧭</span><span>立法者<small>5 条护栏过模拟航行</small></span></span>
+      <span class="badge"><span class="hex">🎓</span><span>金牌教头<small>驳回校准 10 次</small></span></span>
+      <span class="badge"><span class="hex">🌌</span><span>深空远征<small>第二艘舰入列</small></span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 技能市场案例 ============ -->
+<section id="skills">
+  <div class="wrap rise">
+    <div class="eyebrow">SKILL MARKETPLACE · 装备库</div>
+    <h2 class="sect">一个目标，自动拆解成步骤；<em>每个步骤，装配不同技能</em></h2>
+    <p class="lede">技能三级体系：official 官方随行业包分发 · team 工作区自建 · industry 脱敏后跨组织共享。安装即绑定围栏、卸载即撤销；自建技能先生成草稿、回放预览、再上线。</p>
+    <div class="case-flow">
+      <div class="cf-goal">真实案例（视频创作工作室）—— 主理人说：「一条种草片，从选题到发布要全自动流水线」</div>
+      <div class="case-step"><span class="n">STEP 1</span><div><b>选题拆解 · 装配技能 jenny-loom-research（行业包自带）</b><span>夜班班组定时采集同类目爆款与竞对账号动态，早八点战报送达可拍选题清单。</span></div></div>
+      <div class="case-step"><span class="n">STEP 2</span><div><b>脚本分镜 · 调用组织记忆</b><span>scriptwriter 起草种草脚本，shot-prompt-craft 生成 25/30 字段镜头提示词，复用历史爆款的结构经验。</span></div></div>
+      <div class="case-step"><span class="n">STEP 3</span><div><b>主理人审批 · 围栏判定为「需批准」</b><span>G8 渲染审批 / G9 发布必审——审批卡片一键同意，手势写回成为校准样本。</span></div></div>
+      <div class="case-step"><span class="n">STEP 4</span><div><b>渲染发布 · 全程留痕</b><span>批准后 render.submit → publish.execute 自动执行，每一步进入五元事件链，可回放可审计。</span></div></div>
+      <div class="case-step"><span class="n">STEP 5</span><div><b>复盘沉淀 · 意识系统发现高频模式</b><span>「评论区同类差评每周 ≥3 次」→ 自动建议固化为新技能 → 一键确认 → dry-run 预览 → 正式上线。</span></div></div>
+    </div>
+    <div class="skill-tiers">
+      <div class="tier"><div class="tt">OFFICIAL</div><b>官方技能 · 随行业包</b><p>选题研究、镜头提示词工艺、评论三级分流——开箱即用。</p></div>
+      <div class="tier"><div class="tt">TEAM</div><b>团队自建 · 零代码</b><p>说清触发 / 步骤 / 边界三要素，自动生成技能草稿，版本管理。</p></div>
+      <div class="tier"><div class="tt">INDUSTRY</div><b>行业共享 · 强制脱敏</b><p>跨组织共享前必须脱敏审核，未脱敏一律拦截。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 文档下载 ============ -->
+<section id="docs">
+  <div class="wrap rise">
+    <div class="eyebrow">MANUALS · 随代码开源</div>
+    <h2 class="sect">三份用户手册，<em>随项目一起下载</em></h2>
+    <p class="lede">已内置在开源仓库 <code>docs/</code> 目录，克隆或下载源码即可一并获取。</p>
+    <div class="doc-grid">
+      <a class="doc-card" href="https://github.com/geniusdapeng-collab/hyperreality-system/blob/main/docs/01-门店店长使用指南.md" target="_blank" rel="noopener">
+        <div class="doc-tag">FOR 店长 / 门店负责人</div>
+        <h3>门店店长使用指南</h3>
+        <p>下载安装 → 首次配置 → 日常使用，全程无技术术语，约 30 分钟上手。</p>
+        <span class="doc-dl">在 GitHub 阅读 ↗</span>
+      </a>
+      <a class="doc-card" href="https://github.com/geniusdapeng-collab/hyperreality-system/blob/main/docs/02-新客户首次接入完整流程.md" target="_blank" rel="noopener">
+        <div class="doc-tag">FOR 任意行业新客户</div>
+        <h3>新客户首次接入完整流程</h3>
+        <p>从下载到正式使用的通用接入流程，六步检查单，接入即上岗。</p>
+        <span class="doc-dl">在 GitHub 阅读 ↗</span>
+      </a>
+      <a class="doc-card" href="https://github.com/geniusdapeng-collab/hyperreality-system/blob/main/docs/03-功能清单-用户版.md" target="_blank" rel="noopener">
+        <div class="doc-tag">FOR 所有人</div>
+        <h3>功能清单（用户版）</h3>
+        <p>全部功能按使用场景分类：经营掌握 / 派遣 / 审批 / 夜班 / 追溯 / 沉淀。</p>
+        <span class="doc-dl">在 GitHub 阅读 ↗</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 页脚 CTA ============ -->
+<section class="final">
+  <div class="wrap rise">
+    <div class="eyebrow" style="text-align:center">READY FOR DEPARTURE</div>
+    <h2>舷窗外一片平静。<br>是时候<span style="background:linear-gradient(120deg,var(--gold-hi),var(--gold-a) 45%,var(--gold-b));-webkit-background-clip:text;background-clip:text;color:transparent">启航</span>了。</h2>
+    <p>目的地，不是星辰大海——是太空宇宙本身。</p>
+    <a class="btn-gold" href="https://github.com/geniusdapeng-collab/hyperreality-system/releases/latest" target="_blank" rel="noopener">
+      <span class="sheen"></span>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 11 6 6 6-6"/><path d="M4 21h16"/></svg>
+      下载 Mac 版 · 免费开始
+    </a>
+    <div class="dl-meta" style="justify-content:center">
+      <span>GitHub Release 官方分发</span><span class="sep"></span><span>zip 解压即用</span><span class="sep"></span><span>无命令行 · 无捆绑</span>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="mono">HYPERREALITY · 视频经理 —— 企业 AGENT IM ｜ APACHE-2.0 开源 ｜ DEEPSEEK HARNESS 运行时地基</div>
+    <div>
+      <a href="https://github.com/geniusdapeng-collab/hyperreality-system" target="_blank" rel="noopener">GitHub 仓库 ↗</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/geniusdapeng-collab/hyperreality-system/releases" target="_blank" rel="noopener">全部版本 ↗</a>
+    </div>
+    <div class="mono">© 2026 HYPERREALITY TEAM ｜ 深空为幕，金光为令，经营即游戏。</div>
+  </div>
+</footer>
+
+<script>
+/* ============ 星野缓漂（规范 §7：90s 循环，位移 ≤60px，可降级） ============ */
+(function(){
+  const cv=document.getElementById('starfield'),cx=cv.getContext('2d');
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W,H,stars=[];
+  function resize(){
+    W=cv.width=innerWidth;H=cv.height=innerHeight;
+    stars=[];
+    const n=Math.min(240,Math.floor(W*H/9000));
+    for(let i=0;i<n;i++){
+      stars.push({x:Math.random()*W,y:Math.random()*H,
+        r:Math.random()*1.3+.3,tw:Math.random()*Math.PI*2,
+        sp:.008+Math.random()*.02,dx:(Math.random()-.5)*.12,dy:(Math.random()-.5)*.06,
+        warm:Math.random()<.14});
+    }
+  }
+  function draw(t){
+    cx.clearRect(0,0,W,H);
+    for(const s of stars){
+      if(!reduced){
+        s.x+=s.dx;s.y+=s.dy;
+        if(s.x<-4)s.x=W+4;if(s.x>W+4)s.x=-4;
+        if(s.y<-4)s.y=H+4;if(s.y>H+4)s.y=-4;
+      }
+      const a=.35+.55*Math.abs(Math.sin(t*s.sp+s.tw));
+      cx.beginPath();cx.arc(s.x,s.y,s.r,0,7);
+      cx.fillStyle=s.warm?`rgba(255,224,163,${a})`:`rgba(234,241,255,${a})`;
+      cx.fill();
+    }
+    if(!reduced)requestAnimationFrame(draw);
+  }
+  addEventListener('resize',resize);resize();
+  if(reduced){draw(0);}else{requestAnimationFrame(draw);}
+})();
+
+/* ============ 入场动效 ============ */
+(function(){
+  const io=new IntersectionObserver(es=>{
+    es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
+  },{threshold:.12});
+  document.querySelectorAll('.rise').forEach(el=>io.observe(el));
+})();
+
+/* ============ 下载渠道徽标：按访问者平台提示 ============ */
+(function(){
+  const el=document.getElementById('dl-channel');
+  const mac=/Mac OS X|Macintosh/.test(navigator.userAgent);
+  el.textContent=mac?'CHANNEL: STABLE · 检测到 macOS ✓':'CHANNEL: STABLE · 当前非 macOS 环境';
+})();
+</script>
+</body>
+</html>

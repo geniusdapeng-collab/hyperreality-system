@@ -1,0 +1,90 @@
+# 营销片管线 · fusion-design §4（前置情报层，后半段与叙事片同构）
+# 每步 = Quest 任务卡；断点续跑继承 dsh replay；每步产物写 biz_events 五元事件
+quest: marketing-film
+name: 营销片管线
+version: v1
+description: 情报五站→档案确认→创意主题→事实红线阻断闸→需求对齐→PRD→叙事片后半段同构→发布计划→全平台发布→监控
+steps:
+  - step_key: intel-collect
+    name: 情报·商品信息采集
+    owner: intel-collector
+    outputs: [dossier]
+  - step_key: intel-review
+    name: 情报·评价挖掘
+    owner: intel-reviewer
+    outputs: [dossier]
+  - step_key: intel-competitor
+    name: 情报·竞品侦察
+    owner: intel-competitor
+    outputs: [dossier]
+  - step_key: intel-verify
+    name: 情报·交叉核验
+    owner: intel-verifier
+    outputs: [dossier]              # 置信度三级 confirmed/reported/inferred
+  - step_key: intel-bind
+    name: 情报·档案装订
+    owner: intel-binder
+    outputs: [dossier]              # Schema 强校验，无源不入库
+  - step_key: g1-dossier-confirm
+    name: 情报档案确认
+    owner: director
+    gate: G1
+    outputs: [dossier]
+  - step_key: creative
+    name: 创意主题生成
+    owner: creative-planner
+    outputs: [theme]
+  - step_key: g2-theme-confirm
+    name: 主题/Brief 确认
+    owner: director
+    gate: G2
+    outputs: [theme]
+  - step_key: truth-check
+    name: 事实红线阻断闸
+    owner: continuity-reviewer
+    outputs: [review_report]        # ProductTruthChecker 一票否决，命中即打回 creative
+  - step_key: insight
+    name: 业务需求对齐
+    owner: insight-analyst
+    outputs: [insight]              # 受众画像/传播场景/风险/参考案例四角色
+  - step_key: g3-insight-confirm
+    name: 对齐清单确认
+    owner: director
+    gate: G3
+    outputs: [insight]
+  - step_key: prd
+    name: PRD 编制
+    owner: prd-specialist
+    outputs: [prd]                  # 5 段式 PRD v3，时长唯一权威源
+  - step_key: g4-prd-confirm
+    name: PRD 确认
+    owner: director
+    gate: G4
+    outputs: [prd]
+  - step_key: production
+    name: 预生产（叙事片同构段）
+    owner: director
+    outputs: [prompt_package, portrait_set, video_project]
+    note: 复用 narrative-film 的 script→…→g7-preproduction 步骤序列（含 G6/G5/G7 门）
+  - step_key: render
+    name: 渲染与后期（叙事片同构段）
+    owner: director
+    outputs: [final_video]
+    note: 复用 narrative-film 的 render-script→…→archive 步骤序列（含 G8 门）
+  - step_key: publish-plan
+    name: 发布计划编排
+    owner: publish-operator
+    outputs: [publish_task]         # 平台/账号/文案/定时，发布包校验
+  - step_key: g9-publish-confirm
+    name: 公网发布审批
+    owner: director
+    gate: G9
+    outputs: [publish_task]
+  - step_key: publish
+    name: 全平台 RPA 发布
+    owner: publish-operator
+    outputs: [publish_task]         # 抖音/TikTok/小红书/视频号/B站/YouTube 回执落账
+  - step_key: watch
+    name: 发布后监控
+    owner: metrics-watcher
+    outputs: [account_metric]

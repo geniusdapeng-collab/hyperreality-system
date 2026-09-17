@@ -1,0 +1,191 @@
+/**
+ * WorkLoom Candy Design System v1.1 — 可复用组件库（框架无关）
+ * ============================================================
+ * 前置：本文件消费 tokens.web.css / tokens.webc.css 中的 CSS 变量（--color-* 等）。
+ * 为方便纯 HTML 演示页单独使用，底部 :root 附带同值回退（与 tokens 同源，禁止改值）。
+ *
+ * 用法（任选其一）：
+ *   1) Tailwind v4 工程：@import "tokens.web.css"; @import "./components.css";
+ *   2) 纯 HTML 演示页：<link rel="stylesheet" href="components.css">（回退变量自动生效）
+ *
+ * 命名约定：全部 `.wl-` 前缀；状态类用 `.is-*`（is-loading / is-disabled / is-active）。
+ * 纪律：组件内禁止硬编码品牌色，一律 var(--color-*)；新增组件先入本文件再使用。
+ */
+
+/* ========== 1. 按钮（四变体 × 四状态） ========== */
+.wl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 18px; border-radius: 999px; border: 1px solid transparent;
+  font-size: 13.5px; font-weight: 600; line-height: 1.4; cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease, opacity .16s ease;
+  user-select: none;
+}
+/* 主按钮：珊瑚渐变 + 白字；每屏最多 1–2 个主动作 */
+.wl-btn-primary {
+  position: relative; overflow: hidden;
+  background: linear-gradient(135deg, var(--color-gold, #ff2442), var(--color-gold2, #ff7a9e));
+  color: var(--color-ongold, #fff);
+  box-shadow: 0 4px 14px rgb(255 36 66 / .28);
+}
+/* 主按钮 sheen 流光（氛围动效，reduced-motion 自动降级为静态渐变） */
+.wl-btn-primary::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -70%; width: 45%;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / .45), transparent);
+  animation: wl-sheen 2.6s ease-in-out infinite;
+}
+@keyframes wl-sheen { 0% { left: -70%; } 55%, 100% { left: 130%; } }
+/* 次按钮：云白底 + 强调描边 + 珊瑚字 */
+.wl-btn-secondary {
+  background: var(--color-bg900, #fff); border-color: var(--color-gline, rgb(255 36 66 / .32));
+  color: var(--color-gold, #ff2442);
+}
+/* 幽灵按钮：蜜桃雾底 + 辅文字 */
+.wl-btn-ghost { background: var(--color-bg800, #fff0f4); color: var(--color-ink2, #8a757d); }
+/* 危险按钮：描边红（不用实底红） */
+.wl-btn-danger {
+  background: transparent; border-color: var(--color-alert, #ff4d6d);
+  color: var(--color-alert, #ff4d6d);
+}
+/* —— 交互状态（全变体通用） —— */
+.wl-btn:hover:not(.is-disabled):not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgb(255 36 66 / .22); }
+.wl-btn-ghost:hover:not(.is-disabled):not(:disabled), .wl-btn-danger:hover:not(.is-disabled):not(:disabled) { box-shadow: none; background: var(--color-bg700, #ffe4ec); }
+.wl-btn:active:not(.is-disabled):not(:disabled) { transform: scale(.97); }
+.wl-btn:focus-visible { outline: 2px solid var(--color-holo, #4d96ff); outline-offset: 2px; }
+.wl-btn.is-disabled, .wl-btn:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+.wl-btn.is-loading { pointer-events: none; opacity: .75; }
+.wl-btn.is-loading::before {
+  content: ""; width: 12px; height: 12px; border-radius: 50%; flex: none;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: wl-spin .7s linear infinite;
+}
+@keyframes wl-spin { to { transform: rotate(360deg); } }
+
+/* ========== 2. 输入框（含 focus / 错误 / 禁用） ========== */
+.wl-input {
+  width: 100%; padding: 9px 14px; border-radius: 12px;
+  background: var(--color-bg900, #fff); border: 1px solid var(--color-line, rgb(255 36 66 / .14));
+  color: var(--color-ink, #33262b); font-size: 13.5px; line-height: 1.5;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.wl-input::placeholder { color: var(--color-ink3, #b9a9b0); }
+.wl-input:focus { outline: none; border-color: var(--color-gline, rgb(255 36 66 / .32)); box-shadow: 0 0 0 3px rgb(255 36 66 / .08); }
+.wl-input.is-error { border-color: var(--color-alert, #ff4d6d); }
+.wl-input.is-error:focus { box-shadow: 0 0 0 3px rgb(255 77 109 / .10); }
+.wl-input:disabled { background: var(--color-bg800, #fff0f4); opacity: .6; cursor: not-allowed; }
+.wl-input-error-msg { margin-top: 4px; font-size: 11px; color: var(--color-alert, #ff4d6d); } /* 错误提示用文字，不用红底 */
+
+/* ========== 3. 卡片（基础 / 强调 / 三级色条） ========== */
+.wl-card {
+  background: var(--color-card, rgb(255 255 255 / .88));
+  border: 1px solid var(--color-line, rgb(255 36 66 / .14));
+  border-radius: 16px; padding: 16px;
+}
+.wl-card--accent { border-color: var(--color-gline, rgb(255 36 66 / .32)); }
+/* 左 3px 分级色条：A=草莓红 B=珊瑚 C=浅灰 */
+.wl-card--lv-a { border-left: 3px solid var(--color-alert, #ff4d6d); }
+.wl-card--lv-b { border-left: 3px solid var(--color-gold, #ff2442); }
+.wl-card--lv-c { border-left: 3px solid var(--color-ink3, #b9a9b0); }
+
+/* ========== 4. 模块色块（页面分区淡底，2026-08 新增） ========== */
+/* 用途：同一页面内按业务模块分区铺淡底，代替生硬分割线。圆角统一 16px。 */
+.wl-tint-peach { background: #fff0f4; border: 1px solid #ebdde0; border-radius: 16px; } /* 蜜桃雾：核心经营 */
+.wl-tint-blue  { background: #f0f7ff; border: 1px solid #dce3ea; border-radius: 16px; } /* 淡蓝莓：信息/数据 */
+.wl-tint-mint  { background: #f0fbf6; border: 1px solid #dce7e2; border-radius: 16px; } /* 淡薄荷：自动化/已完成 */
+.wl-tint-amber { background: #fff6ec; border: 1px solid #ebe2d8; border-radius: 16px; } /* 淡蜜桃：待办/审批 */
+.wl-tint-grape { background: #f7f2ff; border: 1px solid #e3deea; border-radius: 16px; } /* 淡葡萄：需介入/AI */
+
+/* ========== 5. 标签（pill，三色） ========== */
+.wl-tag {
+  display: inline-flex; align-items: center; padding: 1px 9px;
+  border-radius: 999px; border: 1px solid currentColor;
+  font-size: 10px; font-weight: 600; line-height: 1.6; white-space: nowrap;
+}
+.wl-tag--hot  { color: var(--color-alert, #ff4d6d); background: rgb(255 77 109 / .08); }
+.wl-tag--gold { color: var(--color-gold, #ff2442);  background: rgb(255 36 66 / .06); }
+.wl-tag--teal { color: var(--color-go, #22c88a);    background: rgb(34 200 138 / .08); }
+
+/* ========== 6. 弹窗（遮罩 + 弹层 + 入场动效） ========== */
+.wl-modal-mask {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgb(51 38 43 / .32); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.wl-modal {
+  width: min(480px, calc(100vw - 32px)); max-height: 80vh; overflow: auto;
+  background: var(--color-bg900, #fff); border: 1px solid var(--color-line, rgb(255 36 66 / .14));
+  border-radius: 18px; padding: 20px;
+  box-shadow: 0 18px 50px rgb(51 38 43 / .18);
+  animation: wl-pop .28s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+@keyframes wl-pop { from { transform: scale(.92) translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ========== 7. 横幅（模拟态/告警：浅琥珀底 + 深字——D33-4） ========== */
+.wl-banner {
+  padding: 8px 14px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  background: rgb(254 243 199 / .8); color: #92400e; border: 1px solid rgb(217 119 6 / .25);
+}
+
+/* ========== 8. 空态 ========== */
+.wl-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 16px; text-align: center; }
+.wl-empty-icon { font-size: 34px; }
+.wl-empty-title { font-size: 13.5px; font-weight: 600; color: var(--color-ink2, #8a757d); }
+.wl-empty-hint { font-size: 11px; color: var(--color-ink3, #b9a9b0); }
+
+/* ========== 9. 骨架屏 ========== */
+.wl-skeleton {
+  position: relative; overflow: hidden; border-radius: 8px;
+  background: var(--color-bg700, #ffe4ec);
+}
+.wl-skeleton::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .65), transparent);
+  animation: wl-skflow 1.4s ease-in-out infinite;
+}
+@keyframes wl-skflow { from { transform: translateX(-100%); } to { transform: translateX(220%); } }
+
+/* ========== 10. AI 助手 AskRail（PC 右侧通栏，320 展开 / 56 收起） ========== */
+/* 布局协作：主区用 padding-right 让位，禁止内容被通栏遮挡；移动端退化为首 tab 对话页，不渲染通栏 */
+.wl-askrail {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 60;
+  width: 320px; display: flex; flex-direction: column;
+  background: var(--color-bg900, #fff); border-left: 1px solid var(--color-line, rgb(255 36 66 / .14));
+  transition: width .24s ease;
+}
+.wl-askrail.is-collapsed { width: 56px; }
+.wl-askrail-main-pad { padding-right: 320px; transition: padding-right .24s ease; }
+.wl-askrail-main-pad.is-collapsed { padding-right: 56px; }
+@media (max-width: 860px) { .wl-askrail, .wl-askrail-main-pad { display: none; padding-right: 0; } }
+
+/* ========== 11. 手机壳（移动端演示页外框，边框还原版） ========== */
+.wl-phone {
+  width: 390px; max-width: 100vw; min-height: 100vh; margin: 0 auto;
+  background: var(--color-bg950, #fff5f7);
+  border-left: 1px solid #e5dce0; border-right: 1px solid #e5dce0; /* 手机壳边框：浅灰双线，禁丢禁加深 */
+}
+.wl-phone-tabbar {
+  position: sticky; bottom: 0; display: flex;
+  background: rgb(255 255 255 / .96); border-top: 1px solid var(--color-line, rgb(255 36 66 / .14));
+}
+.wl-phone-tabbar .is-active { color: var(--color-gold, #ff2442); }
+
+/* ========== 12. 响应式断点（与 tokens.web.css 同源：1240 / 860） ========== */
+@media (max-width: 1240px) { .wl-bridge { width: calc(100vw - 16px) !important; } } /* 舰桥贴边 */
+@media (max-width: 860px)  { .wl-col-left, .wl-col-right { display: none !important; } } /* 侧栏隐藏，主区全宽 */
+
+/* ========== 13. 全局降级纪律：prefers-reduced-motion ========== */
+@media (prefers-reduced-motion: reduce) {
+  .wl-btn-primary::after, .wl-skeleton::after, .wl-modal { animation: none !important; }
+  .wl-btn, .wl-input, .wl-askrail, .wl-askrail-main-pad { transition: none !important; }
+}
+
+/* ========== :root 回退变量（纯 HTML 演示页独立使用时生效；值与 tokens.web.css 逐值一致，禁止改） ========== */
+:root {
+  --color-bg950: #fff5f7; --color-bg900: #ffffff; --color-bg800: #fff0f4; --color-bg700: #ffe4ec;
+  --color-nebula: #ffe0ec; --color-nebula2: #e8e0ff;
+  --color-gold: #ff2442; --color-gold2: #ff7a9e; --color-goldhi: #d4002a; --color-ongold: #ffffff;
+  --color-holo: #4d96ff; --color-holo2: #6ec6ff;
+  --color-go: #22c88a; --color-warn: #ffaa33; --color-alert: #ff4d6d; --color-need: #b678ff;
+  --color-ink: #33262b; --color-ink2: #8a757d; --color-ink3: #b9a9b0;
+  --color-card: rgb(255 255 255 / .88);
+  --color-line: rgb(255 36 66 / .14); --color-gline: rgb(255 36 66 / .32);
+}

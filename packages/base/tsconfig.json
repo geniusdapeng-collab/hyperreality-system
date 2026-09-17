@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "audit-core",
+    "workdata",
+    "fence-engine",
+    "model-router",
+    "night-shift",
+    "review-console",
+    "tenancy",
+    "service-kb",
+    "service-dialog",
+    "service-ticket",
+    "service-channels",
+    "testing",
+    "computer-use"
+  ]
+}

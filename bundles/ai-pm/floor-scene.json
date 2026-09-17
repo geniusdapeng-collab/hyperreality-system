@@ -1,0 +1,78 @@
+{
+  "name": "AI 产品经理职场",
+  "zones": [
+    {
+      "id": "command",
+      "label": "指挥台",
+      "pos": [
+        0,
+        0.6
+      ],
+      "roles": [
+        "pm-staff-officer"
+      ]
+    },
+    {
+      "id": "intel-corner",
+      "label": "情报角",
+      "pos": [
+        -3.4,
+        -1.0
+      ],
+      "decor": "radar-screen",
+      "roles": [
+        "competitor-scout",
+        "industry-radar"
+      ]
+    },
+    {
+      "id": "data-wall",
+      "label": "数据墙",
+      "pos": [
+        0,
+        -2.6
+      ],
+      "decor": "big-screen",
+      "roles": [
+        "data-insight"
+      ]
+    },
+    {
+      "id": "writing-desk",
+      "label": "文案区",
+      "pos": [
+        3.4,
+        -1.0
+      ],
+      "decor": "desk",
+      "roles": [
+        "doc-writer",
+        "requirement-analyst"
+      ]
+    },
+    {
+      "id": "listening-post",
+      "label": "倾听站",
+      "pos": [
+        -1.8,
+        2.2
+      ],
+      "decor": "headset",
+      "roles": [
+        "user-listener"
+      ]
+    },
+    {
+      "id": "release-gate",
+      "label": "发布闸口",
+      "pos": [
+        2.2,
+        2.4
+      ],
+      "decor": "gate",
+      "roles": [
+        "release-guardian"
+      ]
+    }
+  ]
+}

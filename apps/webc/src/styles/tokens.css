@@ -1,0 +1,183 @@
+/**
+ * C 端 Tailwind 兼容别名。
+ * 基础颜色、状态、焦点和层级的唯一事实源是 @workloom/ui/tokens.css；本文件只把
+ * 旧页面使用的 --color-* 名称映射到共享语义 token，不得再维护另一套视觉体系。
+ */
+@import "tailwindcss";
+
+@theme {
+  --color-bg950: var(--wl-color-bg);
+  --color-bg900: var(--wl-color-surface);
+  --color-bg800: var(--wl-color-surface);
+  --color-bg700: var(--wl-color-surface-muted);
+  --color-nebula: var(--wl-color-surface-muted);
+  --color-nebula2: var(--wl-color-surface-raised);
+  --color-gold: var(--wl-brand-primary);
+  --color-gold2: color-mix(in srgb, var(--wl-brand-primary) 82%, black);
+  --color-goldhi: color-mix(in srgb, var(--wl-brand-primary) 72%, var(--wl-color-text));
+  --color-ongold: var(--wl-brand-on-primary);
+  --color-holo: var(--wl-brand-accent);
+  --color-holo2: color-mix(in srgb, var(--wl-brand-accent) 72%, var(--wl-color-text));
+  --color-go: var(--wl-color-success);
+  --color-warn: var(--wl-color-warning);
+  --color-alert: var(--wl-color-danger);
+  --color-need: var(--wl-color-info);
+  --color-ink: var(--wl-color-text);
+  --color-ink2: var(--wl-color-text-muted);
+  --color-ink3: var(--wl-color-text-muted);
+  --color-card: var(--wl-color-surface);
+  --color-line: var(--wl-color-border);
+  --color-gline: color-mix(in srgb, var(--wl-brand-primary) 42%, var(--wl-color-border));
+
+
+  --font-sans: var(--wl-font-sans);
+  --font-mono: var(--wl-font-mono);
+  --font-orb: var(--wl-font-numeric);
+
+  --animate-typing: typing-dot 1.2s ease-in-out infinite;
+  --animate-sheen: sheen 2.6s ease-in-out infinite;
+  --animate-fadein: fade-up 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: node-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-skeleton: skeleton-shimmer 1.6s ease-in-out infinite;
+  --animate-tabin: tab-in 0.24s ease-out both;
+  --animate-pulse-ring: pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes sheen {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes node-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+@keyframes tab-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgb(233 181 88 / 0.5); }
+  100% { box-shadow: 0 0 0 9px rgb(233 181 88 / 0); }
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-bg950);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* 服务前台按真实视口响应，不在宽屏伪装固定 390px 手机壳。 */
+.phone-shell {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  height: var(--app-height, 100dvh);
+  min-height: var(--app-height, 100dvh);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg800);
+  position: relative;
+  overflow: hidden;
+}
+.phone-shell > .wl-app-shell__main {
+  overflow: hidden;
+}
+.service-bottom-tabs {
+  background: var(--color-bg900);
+  padding-block: 0.25rem max(0.25rem, env(safe-area-inset-bottom));
+}
+.service-bottom-tabs .wl-bottom-tabs__item {
+  gap: 0.125rem;
+  min-block-size: 56px;
+  padding: 0.25rem;
+}
+.service-page-header {
+  background: color-mix(in srgb, var(--color-bg800) 90%, transparent);
+  min-block-size: 56px;
+  padding: 0.5rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(16px);
+}
+.service-page-header .wl-top-context-bar__title {
+  color: var(--color-ink);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.375;
+}
+.service-page-header .wl-top-context-bar__actions {
+  flex: 0 0 auto;
+  inline-size: auto;
+}
+@media (min-width: 641px) {
+  .phone-shell {
+    border-inline: 1px solid var(--color-line);
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+/* 骨架屏：金调流光 */
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    rgb(96 140 255 / 0.08) 25%,
+    rgb(233 181 88 / 0.14) 50%,
+    rgb(96 140 255 / 0.08) 75%
+  );
+  background-size: 400px 100%;
+  animation: var(--animate-skeleton);
+}
+
+/* haptic 风格按压态：缩放 + 快速回弹 */
+.pressable {
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.16s ease, border-color 0.16s ease;
+}
+.pressable:active {
+  transform: scale(0.96);
+}
+
+/* 下拉刷新指示 */
+.pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: height 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

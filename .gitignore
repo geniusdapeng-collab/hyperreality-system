@@ -1,0 +1,33 @@
+# 依赖与产物
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# 环境与密钥（铁律：令牌与密钥永不入库）
+.env
+.env.local
+.env.*.local
+
+# 本地数据（证据快照 / 本地存储）
+data/
+
+# 系统与日志
+.DS_Store
+*.log
+
+# E6 dsh 门禁运行时产物（lockfile 依铁律入库：pin 版本 + lock）
+.dsh-home/
+packages/runtime/dsh-gate/out/
+packages/runtime/dsh-gate/node_modules/
+
+# W2 打包产物
+dist/
+
+# preview:all 运行时产物
+docs/demo/.manifest.json
+
+# Python（computer-use toolkit 运行缓存）
+__pycache__/
+*.pyc
+release/

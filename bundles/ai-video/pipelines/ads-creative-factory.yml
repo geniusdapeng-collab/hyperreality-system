@@ -1,0 +1,36 @@
+# 投流素材工厂管线 · 经营班组 v2
+# 每步 = Quest 任务卡；断点续跑继承 dsh replay；每步产物写 biz_events 五元事件
+quest: ads-creative-factory
+name: 投流素材工厂
+version: v1
+description: 成片→二剪钩子变体→素材入库→投放数据绑定→淘汰清单；加投动作受 G12 必审约束
+steps:
+  - step_key: source-select
+    name: 成片选源
+    owner: post-editor
+    outputs: [final_video]          # 从已发布成片/库存成片选投流候选，IP 授权校验（ip.usage.check）前置
+  - step_key: hook-variants
+    name: 二剪钩子变体
+    owner: post-editor
+    outputs: [ads_creative]         # 前 3 秒钩子 ×3 变体/卖点顺序调换/字幕强化；只改表达不改事实
+  - step_key: precheck
+    name: 素材合规预检
+    owner: compliance-officer
+    outputs: [ads_creative]         # 三级预检：极限词/版权/平台广告规范
+  - step_key: creative-shelve
+    name: 素材入库
+    owner: ads-optimizer
+    outputs: [ads_creative]         # 入库命名：题材_钩子_版本；绑定来源成片链
+  - step_key: launch-bind
+    name: 投放数据绑定
+    owner: ads-optimizer
+    outputs: [ads_campaign]         # 素材↔计划绑定，消耗/转化数据回流到素材粒度
+  - step_key: g12-boost-confirm
+    name: 加投审批
+    owner: director
+    gate: G12
+    outputs: [ads_campaign]         # 任何追加预算必审，涉预算不可降级 auto
+  - step_key: elimination-list
+    name: 淘汰清单
+    owner: ads-optimizer
+    outputs: [ads_creative]         # 连续 3 天 CTR/CVR 双低于基线 → 停投建议清单，周报同步

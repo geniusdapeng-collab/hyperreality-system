@@ -1,0 +1,17 @@
+# E6 · headless profile 用户 patch 层（由 scripts/dsh-gate.sh 占位符替换后拷贝到
+# $DSH_HOME/profiles/headless/cordis.patch.yml）
+# ① 默认模型指向 Mock provider（D4：无真实 Key 全门禁可跑）
+# ② 挂载 WorkLoom 双插件：围栏瀑布（tools/pre-execute）+ 事件桥哈希链（session/event）
+- id: agent-default-model
+  config:
+    provider: workloom-mock
+    model: mock-flash
+- insert:
+    - id: workloom-fence
+      name: '__REPO_ROOT__/packages/runtime/plugins/workloom-fence.plugin.js'
+      config:
+        rulesUrl: 'http://127.0.0.1:8799/rules'
+    - id: workloom-audit
+      name: '__REPO_ROOT__/packages/runtime/plugins/workloom-audit.plugin.js'
+      config:
+        file: '__AUDIT_FILE__'

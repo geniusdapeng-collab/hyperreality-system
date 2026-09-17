@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "workloom.runtime-deps/v1",
+  "product": {
+    "productId": "hyperreality-system",
+    "role": "industry",
+    "repository": "geniusdapeng-collab/hyperreality-system",
+    "includePlatformOps": false
+  },
+  "npmVersion": "11.17.0",
+  "targets": [
+    {
+      "platform": "darwin",
+      "arch": "arm64"
+    },
+    {
+      "platform": "darwin",
+      "arch": "x64"
+    },
+    {
+      "platform": "win32",
+      "arch": "x64"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "apps/server/package.json",
+      "sha256": "ab776d10cabcb6c13ea09bf70d86d7f7019a81c5883caa923905c9609f0e35de"
+    },
+    {
+      "path": "apps/web/package.json",
+      "sha256": "df621e14e0adf04e7e4f165a52a5811eb9093d8f357ae14eee3bedb772310b20"
+    },
+    {
+      "path": "package.json",
+      "sha256": "8419f35e30246d156232dc2cf96e7ae131cebff43d4b168c58c1dbc48f5d9c3e"
+    },
+    {
+      "path": "packages/audit-engine/package.json",
+      "sha256": "05ad4f8d3465ce3a792421f3276d876461a3fa3bda9c74d7638daa285d4709f1"
+    },
+    {
+      "path": "packages/base/package.json",
+      "sha256": "5e3d57099f0cd912676828b2798e2576b33f935071d1e4e0fb8a64d6fc19dd7e"
+    },
+    {
+      "path": "packages/db/package.json",
+      "sha256": "9744ab0544f7f07a041177849b7222e12cd1dba1671b3d8ada44d7a492cbfd3e"
+    },
+    {
+      "path": "packages/industry-contract/package.json",
+      "sha256": "c807e33ef19ce5b727686c705662108c9fd5ce84986c7f2fbfe669bfad7ae482"
+    },
+    {
+      "path": "packages/runtime/package.json",
+      "sha256": "28351633fd63541b4a26f3cf45a88046893bca0e5bd85b90168c82e257d9640b"
+    },
+    {
+      "path": "packages/shared/package.json",
+      "sha256": "be4781eb24c355a1dc1ec10dabb92d161cde5500c472af7b85e25042256d07ec"
+    },
+    {
+      "path": "packages/video-studio/package.json",
+      "sha256": "57dfa5fc361cf5aaeaced72b62d5755eb4bb67ca2d2a8796c9fd5575ee3121bb"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "59d94140f8c914c0a9c4b4ecbf37d00a49e8700c2af6fca5bda5573ba707a9cf"
+    },
+    {
+      "path": "product.manifest.json",
+      "sha256": "94e028b6eb47698c56462af2d537a85bc9c6024d325bcb608d63254d5f480344"
+    },
+    {
+      "path": "scripts/pack-nm-merge.mjs",
+      "sha256": "8e7aa9c1e7fe10e13165802f27c6162bbda9d45ae95c97841e9484e2560856ce"
+    },
+    {
+      "path": "scripts/payload-policy.mjs",
+      "sha256": "d64c2cb3e1a4fe99476cdde438df751de98f3095a029e4d090a7ba691508650a"
+    },
+    {
+      "path": "scripts/product-runtime.mjs",
+      "sha256": "189981fad7f2fc1267564f5a5a9b8f5040d647087b845e83f7533ac88f422349"
+    },
+    {
+      "path": "scripts/runtime-deps-lock.mjs",
+      "sha256": "38d5eba21ae509aec4de97000bda055ca632f0216473e1d1000eeba6b5e0a475"
+    }
+  ],
+  "manifestSha256": "bae08a229cce26438b95966696c66e9e7e285b3dcf6885dc475ecb490faebefb",
+  "packageLockSha256": "97f96e83cb4a3b8e034e5322fcca40ac753c68195206032024afd97f75197fbc"
+}

@@ -1,0 +1,78 @@
+{
+  "$id": "workloom://bundles/hotel/schemas/archive",
+  "title": "一店一档字段组（酒店版 · §2.2 槽①）",
+  "type": "object",
+  "required": [
+    "property",
+    "forbidden"
+  ],
+  "properties": {
+    "property": {
+      "type": "object",
+      "description": "物业基础信息",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        },
+        "rooms": {
+          "type": "integer"
+        },
+        "star": {
+          "type": "string"
+        }
+      }
+    },
+    "brand_guideline": {
+      "type": "object",
+      "description": "品牌规范（文案口径/图片规范/禁用表达）"
+    },
+    "competitors": {
+      "type": "array",
+      "description": "竞对清单（名称/渠道/参考价带）",
+      "items": {
+        "type": "object"
+      }
+    },
+    "audience": {
+      "type": "object",
+      "description": "客群画像（商旅客/亲子/情侣占比等）"
+    },
+    "history_curve": {
+      "type": "object",
+      "description": "历史经营曲线（OCC/ADR/RevPAR 月度）"
+    },
+    "sop": {
+      "type": "array",
+      "description": "门店 SOP 清单",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden": {
+      "type": "array",
+      "description": "禁用承诺清单（L1.6 硬约束，优先级高于任何 Skill 与模型推理）",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule"
+        ],
+        "properties": {
+          "rule": {
+            "type": "string",
+            "description": "如：美团大床房不低于 ¥380"
+          },
+          "scope": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "inspection": {
+      "type": "object",
+      "description": "巡检只读快照（M9/F9.1 探针输入：channels/roomStates/reviews/violations 采样；缺项探针报 nodata 不编造）"
+    }
+  }
+}

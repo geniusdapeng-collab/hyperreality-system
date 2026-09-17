@@ -1,0 +1,67 @@
+# 酒店版基线围栏包（L2.6：行业阈值默认值由行业 Bundle 提供，底座不内置）
+# 单调守卫（F2.3）：is_baseline=true 的规则，任何上层 patch 只可收紧不可放宽
+# DSL 求值语义（阶段二 B4 实现）：match 命中后求值 when 表达式（沙箱，禁任意代码 L2.5）；
+#   命中 → 按 level 判定；block 优先于 review 优先于 auto（deny 优先并集求值 E2.2）；
+#   写类动作无任何规则命中 → 按 default_level 处理；求值异常 → 按 block（宁可错杀 E2.1）
+version: hotel-baseline/v1
+default_level: review
+rules:
+  - rule_id: R1
+    name: 房价单日涨幅自动上限
+    level: auto
+    is_baseline: true
+    match:
+      object_types: [room_price]
+      actions: [price.adjust]
+    when: "abs(after.price - before.price) / before.price <= 0.08"
+    note: 涨幅 ≤8% 自动执行；超过则由 R 系列其他规则或 default_level 接管
+
+  - rule_id: R2
+    name: 保底价熔断
+    level: block
+    is_baseline: true
+    match:
+      object_types: [room_price]
+      actions: [price.adjust]
+    when: "after.price < 380"
+    note: 保底价 ¥380（云栖酒店档案 forbidden 同源）；命中即熔断+告警
+
+  - rule_id: R3
+    name: 新渠道首次改价/发布必审
+    level: review
+    is_baseline: true
+    match:
+      object_types: [room_price, content]
+      actions: [price.adjust, content.publish]
+    when: "context.channel_new == true"
+    note: 新渠道首改必审
+
+  - rule_id: R4
+    name: 大额退款必审
+    level: review
+    is_baseline: true
+    match:
+      object_types: [order]
+      actions: [order.refund]
+    when: "params.amount >= 500"
+    note: 退款 ≥¥500 必审
+
+  - rule_id: R5
+    name: 担保订单异常需介入
+    level: block
+    is_baseline: true
+    match:
+      object_types: [order]
+      actions: [order.reconcile]
+    when: "params.guarantee_anomaly == true"
+    note: 不确定不执行（L4.2），只写「需介入」事件
+
+  - rule_id: R6
+    name: 差评必审
+    level: review
+    is_baseline: true
+    match:
+      object_types: [review]
+      actions: [review.reply]
+    when: "params.rating <= 3"
+    note: 差评 ≤3 分必审

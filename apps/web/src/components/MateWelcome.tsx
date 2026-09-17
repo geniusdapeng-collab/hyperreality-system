@@ -1,0 +1,260 @@
+/**
+ * MateWelcome · 首装欢迎仪式 · 织伴开场序列（S0–S4，方案 v1.2）
+ *
+ * 流程：S0 全身像登场 → S1 简短自我介绍 → S2 行业化系统介绍（按 bundle 切换话术）
+ *      → S3 官方详细自我介绍（通用） → S4 过渡引出团队（鞠躬缩小飞入右下角常驻位）。
+ *
+ * 硬性要求：织伴全程「全身像」完整入镜（MateLive2D frame="full"），舞台独占全屏。
+ * 语音：VoiceEngine（ceremony 优先级，甜妹音色）+ 逐行字幕；口型由 MateLive2D 全局订阅自动驱动。
+ * 交互：单击舞台快进下一段；右下角「跳过开场，直接进入 ›」直达系统首页（onSkipAll）。
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MateLive2D, type MateMood, type MateGesture } from "./loommate/MateLive2D";
+import { VoiceEngine } from "../voice/VoiceEngine";
+import { mateScriptOf, type BundleWelcomeProjection, type MateScript } from "./welcomeScripts";
+import { Icon } from "@workloom/ui";
+
+/** 织伴仪式音色（清晰优先；段间由真实 TTS 完成事件衔接） */
+const CEREMONY_VOICE = {
+  // 音高只做轻微修饰；1.2 会让系统 TTS 出现金属感和齿音。
+  pitch: 1.04,
+  rate: 0.94,
+  female: true,
+  preferredNames: ["Flo", "Tingting", "Xiaoxiao", "Xiaoyi", "Meijia", "Sinji"],
+};
+/** 字幕/语音节奏：约 5.8 字/秒 + 段尾缓冲 */
+const segDuration = (text: string) =>
+  Math.max(3600, Math.min(40000, Math.round((text.length / 5.8) * 1000) + 900));
+
+type SegKey = "enter" | "intro" | "system" | "detail" | "bridge" | "exiting";
+interface Seg {
+  key: SegKey;
+  lines: string[];
+  mood: MateMood;
+  gesture?: Exclude<MateGesture, null>;
+  dur: number;
+}
+
+function buildSegs(script: MateScript): Seg[] {
+  const talk = (key: SegKey, lines: string[], mood: MateMood, gesture?: Seg["gesture"]): Seg => ({
+    key, lines, mood, gesture, dur: segDuration(lines.join("")),
+  });
+  return [
+    { key: "enter", lines: [], mood: "happy", gesture: "handup", dur: 2400 },
+    talk("intro", [script.intro], "happy"),
+    talk("system", script.system, "happy"),
+    talk("detail", script.detail, "love"),
+    talk("bridge", script.bridge, "happy", "thumbup"),
+  ];
+}
+
+/** S2 背景行业关键词的散布位（避开中央舞台人物） */
+const KW_POS = [
+  { left: "9%", top: "18%" }, { left: "80%", top: "16%" }, { left: "6%", top: "44%" },
+  { left: "84%", top: "42%" }, { left: "11%", top: "66%" }, { left: "79%", top: "64%" },
+];
+
+export function MateWelcome({ welcome, onBridge, onSkipAll }: {
+  /** 来自已验证 Bundle UI 的行业介绍；缺省时使用基座通用说明。 */
+  welcome?: BundleWelcomeProjection | null;
+  /** S4 演完（织伴飞入右下角）→ 接入现有团队仪式 */
+  onBridge: () => void;
+  /** 右下角「跳过开场，直接进入」→ 直达系统首页 */
+  onSkipAll: () => void;
+}) {
+  const script = useMemo(() => mateScriptOf(welcome), [welcome]);
+  const segs = useMemo(() => buildSegs(script), [script]);
+  const [idx, setIdx] = useState(0);
+  const [shown, setShown] = useState(0);          // 当前段已揭示字幕行数
+  const [exiting, setExiting] = useState(false);  // S4 结束：缩小飞入右下角
+  const timers = useRef<number[]>([]);
+  const releaseExclusive = useRef<(() => void) | null>(null);
+  const seg = segs[Math.min(idx, segs.length - 1)]!;
+
+  /* 舞台尺寸：全身像占视口高 ~76%，宽度不超车（正方形画布，模型 92% 适配） */
+  const computeSize = () =>
+    Math.round(Math.min(window.innerHeight * 0.76, window.innerWidth * 0.52));
+  const [mateSize, setMateSize] = useState(computeSize);
+  useEffect(() => {
+    releaseExclusive.current = VoiceEngine.acquireExclusive("loommate");
+    return () => { releaseExclusive.current?.(); releaseExclusive.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setMateSize(computeSize());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+
+  /** 段推进：截断当前语音 → 下一段；末段进入退场动画 → onBridge */
+  const advance = useCallback(() => {
+    VoiceEngine.stopAll();
+    clearTimers();
+    setIdx((i) => {
+      if (i >= segs.length - 1) {
+        setExiting(true);
+        return i;
+      }
+      return i + 1;
+    });
+  }, [segs.length]);
+
+  /* 退场完成后再进入团队仪式。
+   * 这个计时器必须独立于分段计时器：exiting 变化会触发上方分段 effect 的 cleanup，
+   * 如果把 onBridge 也放进 timers.current，它会在创建后的同一轮更新里被清掉，页面就会
+   * 永久停在 opacity:0 的黑色退场层。 */
+  useEffect(() => {
+    if (!exiting) return;
+    const timer = window.setTimeout(onBridge, 1150);
+    return () => window.clearTimeout(timer);
+  }, [exiting, onBridge]);
+
+  /* 分段驱动：语音播报（整段一次，口型全局同步）+ 字幕按行比例逐行揭示。
+   * 有 TTS 时必须等真实 onend 才推进；只有无语音降级时才使用估算时长。 */
+  useEffect(() => {
+    if (exiting) return;
+    let cancelled = false;
+    setShown(seg.lines.length === 0 ? 0 : 1);
+    if (seg.lines.length > 0) {
+      void VoiceEngine.speakAndWait({
+        role: "loommate", persona: "织伴", text: seg.lines.join(""),
+        priority: "ceremony", voiceOverride: CEREMONY_VOICE,
+      }).then((result) => {
+        if (cancelled || result === "cancelled") return;
+        const pause = result === "skipped" ? seg.dur : 650;
+        timers.current.push(window.setTimeout(() => { if (!cancelled) advance(); }, pause));
+      });
+    } else {
+      timers.current.push(window.setTimeout(advance, seg.dur));
+    }
+    // 逐行揭示：按行字数占比分布在本段时长内（首行立即）
+    const total = seg.lines.join("").length || 1;
+    let cum = 0;
+    seg.lines.forEach((line, i) => {
+      if (i === 0) { cum += line.length; return; }
+      const at = Math.round((cum / total) * seg.dur * 0.92);
+      cum += line.length;
+      timers.current.push(window.setTimeout(() => setShown(i + 1), at));
+    });
+    return () => { cancelled = true; clearTimers(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, exiting]);
+
+  /* 卸载兜底：停语音清计时 */
+  useEffect(() => () => { VoiceEngine.stopAll(); releaseExclusive.current?.(); clearTimers(); }, []);
+
+  const talkSegIdx = segs.findIndex((s) => s.key === "intro"); // 进度点从 S1 起计
+  const progressIdx = Math.max(0, idx - talkSegIdx);
+
+  return (
+    <div
+      data-welcome-segment={seg.key}
+      data-welcome-exiting={exiting ? "true" : "false"}
+      onClick={exiting ? undefined : advance}
+      style={{
+        position: "absolute", inset: 0, zIndex: 30, overflow: "hidden",
+        background: "radial-gradient(ellipse 75% 60% at 50% 32%, rgba(60,68,80,.55), rgba(11,13,16,0) 70%), #0b0d10",
+        cursor: exiting ? "default" : "pointer", userSelect: "none",
+      }}
+      aria-label="织伴开场介绍（单击快进）"
+    >
+      {/* 顶部聚光 */}
+      <div style={{
+        position: "absolute", left: "50%", top: -80, width: mateSize * 1.5, height: mateSize * 0.9,
+        transform: "translateX(-50%)",
+        background: "radial-gradient(ellipse at 50% 0%, rgba(255,233,184,.14), transparent 65%)",
+        pointerEvents: "none",
+      }} />
+
+      {/* S2 行业关键词散布（淡入） */}
+      {seg.key === "system" && !exiting && script.keywords.map((kw, i) => (
+        <div key={kw} style={{
+          position: "absolute", ...(KW_POS[i % KW_POS.length] ?? { left: "8%", top: "30%" }),
+          padding: "8px 18px", borderRadius: 999, zIndex: 5,
+          color: "rgba(214,220,228,.5)", fontSize: 14, letterSpacing: 2,
+          border: "1px solid rgba(214,220,228,.16)", background: "rgba(21,24,28,.5)",
+          animation: `mw-kw-in .8s ease ${i * 0.45}s both`,
+        }}>{kw}</div>
+      ))}
+      <style>{`
+        @keyframes mw-kw-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        @keyframes mw-line-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes mw-enter { from { opacity: 0; transform: translateY(36px) scale(.96); } to { opacity: 1; transform: none; } }
+      `}</style>
+
+      {/* 织伴全身像舞台位（退场：缩小飞入右下角常驻位，叙事闭环） */}
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "center",
+        paddingBottom: 168, transition: "all 1.1s cubic-bezier(.5,0,.8,.4)",
+        transform: exiting ? "translate(38vw, 26vh) scale(.14)" : "none",
+        opacity: exiting ? 0 : 1,
+        animation: exiting ? undefined : "mw-enter .9s cubic-bezier(.2,1,.3,1) both",
+      }}>
+        <div style={{ position: "relative" }}>
+          <MateLive2D
+            size={mateSize}
+            frame="full"
+            mood={seg.mood}
+            gesture={seg.gesture ?? null}
+          />
+          {/* 脚下舞台地面光晕（脚底位置） */}
+          <div style={{
+            position: "absolute", left: "50%", bottom: -6, width: mateSize * 0.86, height: 74,
+            transform: "translateX(-50%)", borderRadius: "50%",
+            background: "radial-gradient(ellipse, rgba(214,220,228,.20), rgba(255,217,138,.06) 55%, transparent 75%)",
+            pointerEvents: "none",
+          }} />
+        </div>
+      </div>
+
+      {/* 进度点（S1–S4） */}
+      {!exiting && (
+        <div style={{ position: "absolute", left: 40, bottom: 44, display: "flex", gap: 8, zIndex: 40 }}>
+          {["intro", "system", "detail", "bridge"].map((k, i) => (
+            <div key={k} style={{
+              width: i === progressIdx ? 22 : 7, height: 7, borderRadius: 99, transition: "all .35s",
+              background: i <= progressIdx ? "#ffd98a" : "rgba(214,220,228,.25)",
+            }} />
+          ))}
+        </div>
+      )}
+
+      {/* 字幕区（底部居中，最近 4 行，最新行高亮） */}
+      {!exiting && seg.lines.length > 0 && (
+        <div style={{
+          position: "absolute", left: "50%", bottom: 34, transform: "translateX(-50%)",
+          width: "min(880px, 86vw)", zIndex: 40, textAlign: "center", cursor: "default",
+        }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ color: "#8a939e", fontSize: 14, letterSpacing: 3, marginBottom: 10 }}>
+            织伴 · {seg.key === "system" ? "系统介绍" : seg.key === "detail" ? "正式自我介绍" : seg.key === "bridge" ? "引出团队" : "开场"}
+          </div>
+          {seg.lines.slice(Math.max(0, shown - 4), shown).map((line, i, arr) => (
+            <div key={`${seg.key}-${i}`} style={{
+              color: i === arr.length - 1 ? "#e8ebef" : "rgba(154,162,172,.55)",
+              fontSize: i === arr.length - 1 ? 19 : 14.5,
+              lineHeight: 1.85, letterSpacing: .6,
+              textShadow: "0 2px 14px rgba(0,0,0,.6)",
+              animation: "mw-line-in .5s ease both",
+            }}>{line}</div>
+          ))}
+          <div style={{ marginTop: 12, color: "#68707a", fontSize: 14, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>单击画面快进 <Icon name="chevron" size={13} /></div>
+        </div>
+      )}
+
+      {/* 右下角：跳过开场，直接进入系统首页 */}
+      {!exiting && (
+        <button
+          onClick={(e) => { e.stopPropagation(); VoiceEngine.stopAll(); onSkipAll(); }}
+          style={{
+            position: "absolute", right: 40, bottom: 38, zIndex: 50, cursor: "pointer",
+            color: "#c3ccd8", fontSize: 14, letterSpacing: 2,
+            background: "rgba(21,24,28,.72)", border: "1px solid rgba(214,220,228,.28)",
+            borderRadius: 10, padding: "10px 20px",
+          }}
+        >跳过开场，直接进入 <Icon name="chevron" size={13} style={{ display: "inline" }} /></button>
+      )}
+    </div>
+  );
+}

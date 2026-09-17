@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+onlyBuiltDependencies:
+  - electron-winstaller
+  - esbuild
+  - node-pty
+overrides:
+  '@workloom/ui@0.1.1': https://github.com/geniusdapeng-collab/workloom-im/releases/download/ui-v0.1.1/workloom-ui-0.1.1.tgz

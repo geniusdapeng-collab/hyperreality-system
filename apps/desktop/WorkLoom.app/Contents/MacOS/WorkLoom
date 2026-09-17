@@ -1,0 +1,19 @@
+#!/bin/bash
+# WorkLoom 织元 · macOS 应急浏览器壳
+# 数据库、载荷、迁移、围栏与退出清理由 Electron 发行线同一 bootstrap.cjs 负责；
+# 禁止在此复制另一套 initdb/helper/停止逻辑，避免安全策略漂移。
+set -u
+
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCES="$(cd "$SELF_DIR/../Resources" && pwd)"
+SUPPORT="$HOME/Library/Application Support/WorkLoom"
+NODE="$RESOURCES/node/bin/node"
+BOOTSTRAP="$RESOURCES/bootstrap.cjs"
+
+[ -x "$NODE" ] || { printf '%s\n' "WorkLoom package is incomplete: embedded Node is missing." >&2; exit 1; }
+[ -f "$BOOTSTRAP" ] || { printf '%s\n' "WorkLoom package is incomplete: bootstrap.cjs is missing." >&2; exit 1; }
+
+if [ "${WORKLOOM_SMOKE:-0}" = "1" ]; then
+  exec "$NODE" "$BOOTSTRAP" --smoke --resources "$RESOURCES" --support "$SUPPORT"
+fi
+exec "$NODE" "$BOOTSTRAP" --resources "$RESOURCES" --support "$SUPPORT"

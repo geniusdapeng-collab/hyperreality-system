@@ -1,0 +1,50 @@
+/**
+ * NightStatusPill 夜班状态胶囊（设计规范 §5.9；顶栏常驻，等价 IM 在线状态）
+ * 四态：cruising 巡航中（青·1.6s 呼吸）/ ready 已就绪（青）/ paused 已制动（琥珀·2s 呼吸）
+ *      / unconfigured 未配置（灰）
+ * 传入 onClick 时可作为页面内快捷动作；未传入时为纯状态，不制造顶栏隐式导航。
+ */
+export type NightPillState = "cruising" | "ready" | "paused" | "completed" | "unconfigured";
+
+const STATE_META: Record<NightPillState, { text: string; dot: string; border: string; bg: string; anim: string; glow: string }> = {
+  cruising: { text: "夜班中心 · 巡航中", dot: "bg-holo", border: "border-holo/40", bg: "bg-holo/7", anim: "animate-pulse-hud", glow: "var(--color-holo)" },
+  ready: { text: "夜班 · 已就绪 22:00 出征", dot: "bg-holo", border: "border-holo/40", bg: "bg-holo/7", anim: "animate-pulse-hud", glow: "var(--color-holo)" },
+  paused: { text: "夜班 · 已制动", dot: "bg-warn", border: "border-warn/45", bg: "bg-warn/7", anim: "animate-pulse-warn", glow: "var(--color-warn)" },
+  completed: { text: "夜班 · 交接包已生成", dot: "bg-go", border: "border-go/40", bg: "bg-go/7", anim: "", glow: "var(--color-go)" },
+  unconfigured: { text: "夜班 · 未配置", dot: "bg-ink3", border: "border-line", bg: "bg-bg700/50", anim: "", glow: "transparent" },
+};
+
+export function NightStatusPill({
+  state = "ready",
+  window: win,
+  parallel,
+  onClick,
+}: {
+  state?: NightPillState;
+  /** 时段（如 22:00–08:00） */
+  window?: string;
+  /** 并行数 */
+  parallel?: number;
+  onClick?: () => void;
+}) {
+  const m = STATE_META[state];
+  const content = (
+    <>
+      <span
+        className={`inline-block h-2 w-2 rounded-full ${m.dot} ${m.anim}`}
+        style={{ boxShadow: state === "unconfigured" ? "none" : `0 0 10px ${m.glow}` }}
+      />
+      <b className={`font-semibold ${state === "paused" ? "text-warn" : state === "completed" ? "text-go" : state === "unconfigured" ? "text-ink3" : "text-holo"}`}>
+        {m.text}
+      </b>
+      {(win || parallel !== undefined) && (
+        <span className="font-mono text-body text-ink3">
+          {win}{parallel !== undefined ? ` · ×${parallel}` : ""}
+        </span>
+      )}
+    </>
+  );
+  const className = `inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-body transition-colors ${m.border} ${m.bg}`;
+  if (!onClick) return <span role="status" className={className}>{content}</span>;
+  return <button type="button" onClick={onClick} title="进入夜班中心" className={`${className} cursor-pointer`}>{content}</button>;
+}

@@ -1,0 +1,82 @@
+# ============================================================
+# WorkLoom CI 质量门禁（审计第 5 轮接入）
+# 触发：push / PR to main
+# 内容：typecheck + 三包测试（含 DB 集成）+ 全场景套件（326 用例）+ dsh-gate E6
+# 注意：DB 集成测试必须真实 PG（RUN_DB_TESTS=1）——0.1.1 前全部 skip 曾掩盖 P0（#22）
+# ============================================================
+name: ci-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: workloom
+          POSTGRES_DB: workloom
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:workloom@localhost:5432/workloom
+      DATABASE_APP_URL: postgres://workloom_app:workloom_dev_app@localhost:5432/workloom
+      DATABASE_GATEWAY_URL: postgres://workloom_gateway:workloom_dev_gateway@localhost:5432/workloom
+      APP_DB_PASSWORD: workloom_dev_app
+      GATEWAY_DB_PASSWORD: workloom_dev_gateway
+      JWT_SECRET: ci-gate-secret
+      LLM_PROVIDER: mock
+      IM_DRIVER: mock
+      RUN_DB_TESTS: "1"
+      TOOL_UNVERIFIED_RATE: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 24 + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable && corepack prepare pnpm@10.14.0 --activate
+
+      - name: 依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: typecheck 全包
+        run: pnpm -r --if-present typecheck
+
+      - name: 迁移 + 种子（H-1 完整率 100%）
+        run: |
+          cp .env.example .env
+          pnpm db:migrate
+          pnpm db:seed
+          pnpm db:seed # 幂等复跑（L1.4：全部冲突丢弃）
+
+      - name: 哈希链全库验证（#32 口径）
+        run: pnpm db:verify-chain
+
+      - name: shared/base/runtime 测试（DB 集成全开）
+        run: |
+          pnpm -C packages/shared test
+          pnpm -C packages/base test
+          pnpm -C packages/runtime test
+
+      - name: 全场景套件（326 用例）
+        run: pnpm suite
+
+      - name: web 构建
+        run: pnpm -C apps/web build
+
+      - name: dsh-gate E6（围栏瀑布 + 事件桥 + H-5 崩溃重放）
+        run: bash scripts/dsh-gate.sh

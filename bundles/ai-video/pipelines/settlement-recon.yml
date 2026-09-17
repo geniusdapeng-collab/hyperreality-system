@@ -1,0 +1,31 @@
+# 分账对账管线 · 经营班组 v2（夜班 T+1）
+# 每步 = Quest 任务卡；断点续跑继承 dsh replay；每步产物写 biz_events 五元事件
+quest: settlement-recon
+name: 分账对账管线
+version: v1
+description: 平台抓账→合同拆分→差异标红→超 ±10% 告警（G13，告警不阻断）；比例公开、基数不公开
+schedule: 7x24
+steps:
+  - step_key: fetch-statements
+    name: 平台抓账
+    owner: settlement-clerk
+    cron: "30 1 * * *"              # 每日 01:30 拉取 T+1 账单
+    outputs: [settlement_statement] # 平台结算单 + 商单回款，原始快照留档可复算
+  - step_key: contract-split
+    name: 合同拆分
+    owner: settlement-clerk
+    outputs: [settlement_statement] # 按 deal_order 合同条款拆分（比例/保底/阶梯），口径留痕
+  - step_key: diff-mark
+    name: 差异比对标红
+    owner: settlement-clerk
+    outputs: [settlement_statement] # 应结 vs 实结逐笔比对；差异标红 + 原因假设；信息不足挂起不臆造
+  - step_key: g13-diff-alert
+    name: 差异超 ±10% 告警
+    owner: settlement-clerk
+    gate: G13
+    outputs: [settlement_statement] # auto 告警不阻断；附双方口径快照，处置建议交主理人
+  - step_key: monthly-close
+    name: 月度结账汇总
+    owner: settlement-clerk
+    cron: "0 2 1 * *"               # 每月 1 日 02:00
+    outputs: [settlement_statement] # 月结对账汇总入 budget_ledger，供季度宪章复核引用
