@@ -69,12 +69,12 @@ function fixture({ withPlatformOps = true, conflictingZod = false, withoutLock =
 const basePolicy = payloadPolicyFor({
   productId: "workloom-im",
   role: "base",
-  repository: "geniusdapeng-collab/workloom-im",
+  repository: "workloom-ai/workloom-im",
 });
 const andromedaPolicy = payloadPolicyFor({
   productId: "workroom-andromeda",
   role: "operations-hub",
-  repository: "geniusdapeng-collab/workroom-andromeda",
+  repository: "workloom-ai/workroom-andromeda",
 });
 
 test("pnpm 锁文件在 Windows CRLF 检出后保持同一解析语义", () => {

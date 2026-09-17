@@ -15,7 +15,7 @@ import { loadProductRuntime } from "./product-runtime.mjs";
 const ANDROMEDA_IDENTITY = Object.freeze({
   productId: "workroom-andromeda",
   role: "operations-hub",
-  repository: "geniusdapeng-collab/workroom-andromeda",
+  repository: "workloom-ai/workroom-andromeda",
 });
 
 const PLATFORM_OPS_RUNTIME_PATHS = Object.freeze([

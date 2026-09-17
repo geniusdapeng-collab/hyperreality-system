@@ -287,7 +287,7 @@ HyperReality完成餐饮行业的竞品调研和一线作业调研后，需要�
 |--------|------|------|
 | 技能一产出 | 行业标杆竞品深度调研文档 | 技能一输出 |
 | 技能二产出 | 行业一线作业调研文档 | 技能二输出 |
-| **HyperReality代码摸排产出** | 《代码能力清单与行业可配置范围》（按方法一产出，主事实源） | 本技能前置摸排（仓库：github.com/geniusdapeng-collab/workloom-im） |
+| **HyperReality代码摸排产出** | 《代码能力清单与行业可配置范围》（按方法一产出，主事实源） | 本技能前置摸排（仓库：github.com/workloom-ai/workloom-im） |
 
 ### 4.2 推荐输入
 
@@ -502,7 +502,7 @@ flowchart LR
 
 ### A.1 前置环节：HyperReality最新代码动态轻量读取（强制）
 
-**读取目标**：HyperReality开源仓库 `https://github.com/geniusdapeng-collab/workloom-im`（主干即可，无需全量clone历史）。
+**读取目标**：HyperReality开源仓库 `https://github.com/workloom-ai/workloom-im`（主干即可，无需全量clone历史）。
 
 **轻量读取清单**（按优先级，预计10-20分钟）：
 

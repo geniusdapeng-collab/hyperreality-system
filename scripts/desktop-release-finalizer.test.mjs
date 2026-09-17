@@ -15,7 +15,7 @@ const identity = {
   tag: "v1.2.3",
   sha: "a".repeat(40),
   platformSigning: "unsigned",
-  repository: "geniusdapeng-collab/example-industry",
+  repository: "workloom-ai/example-industry",
 };
 
 function fixture() {

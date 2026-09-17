@@ -4,7 +4,7 @@
   "role": "industry",
   "displayName": "HyperReality 智能视频经营系统",
   "packageName": "hyperreality",
-  "repository": "geniusdapeng-collab/hyperreality-system",
+  "repository": "workloom-ai/hyperreality-system",
   "defaultBundle": "ai-video",
   "demoWorkspaceSlug": "video-studio",
   "demoMemberNo": "MEM-V01",

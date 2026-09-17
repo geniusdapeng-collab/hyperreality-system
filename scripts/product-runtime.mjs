@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PRODUCT_ROOT = resolve(HERE, "..");
-const BASE_REPOSITORY = "geniusdapeng-collab/workloom-im";
+const BASE_REPOSITORY = "workloom-ai/workloom-im";
 
 function isOrdinaryFile(path) {
   try {

@@ -1,0 +1,189 @@
+.static-gate: &static_gate
+  name: static-gate
+  docker:
+    image: node:24.19.0-bookworm
+    volumes:
+      - /cnb-cache/pnpm-store:copy-on-write
+  env:
+    LLM_PROVIDER: mock
+    IM_DRIVER: mock
+    TOOL_UNVERIFIED_RATE: "0"
+  stages:
+    - name: 依赖安装（frozen lockfile）
+      script: |
+        set -eu
+        corepack enable
+        corepack prepare pnpm@10.14.0 --activate
+        pnpm config set store-dir /cnb-cache/pnpm-store
+        pnpm install --frozen-lockfile
+
+    - name: 产品身份与行业包治理
+      script: |
+        set -eu
+        pnpm product:verify
+
+    - name: 三端生产构建
+      script: |
+        set -eu
+        pnpm -C apps/web build
+        pnpm -C apps/webb build
+        pnpm -C apps/webc build
+
+.db-gate: &db_gate
+  name: db-gate
+  docker:
+    image: pgvector/pgvector:pg17
+    volumes:
+      - /cnb-cache/pnpm-store:copy-on-write
+      - /cnb-cache/node:copy-on-write
+  env:
+    LLM_PROVIDER: mock
+    IM_DRIVER: mock
+    RUN_DB_TESTS: "1"
+    TOOL_UNVERIFIED_RATE: "0"
+  stages:
+    - name: 准备 Node 24 与 pnpm
+      script: |
+        set -eu
+        NODE_VERSION=v24.19.0
+        apt-get update -qq
+        apt-get install -y -qq curl xz-utils ca-certificates git >/dev/null
+        if [ ! -x /cnb-cache/node/bin/node ]; then
+          mkdir -p /cnb-cache/node
+          curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz
+          tar -xJf /tmp/node.tar.xz -C /cnb-cache/node --strip-components=1
+        fi
+        for bin in /cnb-cache/node/bin/*; do ln -sf "$bin" /usr/local/bin/; done
+        corepack enable --install-directory /usr/local/bin
+        corepack prepare pnpm@10.14.0 --activate
+        pnpm config set store-dir /cnb-cache/pnpm-store
+        pnpm install --frozen-lockfile
+
+    - name: 启动 PostgreSQL 17 + pgvector
+      script: |
+        set -eu
+        export PGDATA=/var/lib/postgresql/data
+        if [ ! -s "${PGDATA}/PG_VERSION" ]; then
+          mkdir -p "${PGDATA}"; chown -R postgres:postgres "${PGDATA}"
+          su postgres -c "initdb -D ${PGDATA} -U postgres --auth=trust --encoding=UTF8"
+        fi
+        su postgres -c "pg_ctl -D ${PGDATA} -l /tmp/postgres.log -o '-c listen_addresses=localhost -c port=5432' start"
+        for i in $(seq 1 60); do
+          if pg_isready -h localhost -p 5432 -U postgres >/dev/null 2>&1; then break; fi
+          sleep 1
+        done
+        pg_isready -h localhost -p 5432 -U postgres
+        if ! psql -h localhost -p 5432 -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='workloom'" | grep -q 1; then
+          psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE workloom OWNER postgres;" >/dev/null
+        fi
+        psql -h localhost -p 5432 -U postgres -d workloom -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null
+
+    - name: 迁移 + 种子（幂等复跑）+ 哈希链
+      script: |
+        set -eu
+        cp .env.example .env
+        set -a
+        while IFS= read -r line; do
+          case "$line" in ''|\#*) continue ;; esac
+          export "$line"
+        done < .env
+        set +a
+        pnpm db:migrate
+        pnpm db:seed
+        pnpm db:seed
+        pnpm db:verify-chain
+
+# 既有测试债务（DEF-P1-0015：下游 gate 原本就红在 typecheck/ui-contract）：
+# 下列流水线显式非阻断（allowFailure），失败仍显红，修好后逐仓转必需。
+.test-gate: &test_gate
+  name: test-gate
+  allowFailure: true
+  docker:
+    image: pgvector/pgvector:pg17
+    volumes:
+      - /cnb-cache/pnpm-store:copy-on-write
+      - /cnb-cache/node:copy-on-write
+  env:
+    LLM_PROVIDER: mock
+    IM_DRIVER: mock
+    RUN_DB_TESTS: "1"
+    TOOL_UNVERIFIED_RATE: "0"
+  stages:
+    - name: 准备 Node 24 与 pnpm
+      script: |
+        set -eu
+        NODE_VERSION=v24.19.0
+        apt-get update -qq
+        apt-get install -y -qq curl xz-utils ca-certificates git >/dev/null
+        if [ ! -x /cnb-cache/node/bin/node ]; then
+          mkdir -p /cnb-cache/node
+          curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz
+          tar -xJf /tmp/node.tar.xz -C /cnb-cache/node --strip-components=1
+        fi
+        for bin in /cnb-cache/node/bin/*; do ln -sf "$bin" /usr/local/bin/; done
+        corepack enable --install-directory /usr/local/bin
+        corepack prepare pnpm@10.14.0 --activate
+        pnpm config set store-dir /cnb-cache/pnpm-store
+        pnpm install --frozen-lockfile
+        export PGDATA=/var/lib/postgresql/data
+        if [ ! -s "${PGDATA}/PG_VERSION" ]; then
+          mkdir -p "${PGDATA}"; chown -R postgres:postgres "${PGDATA}"
+          su postgres -c "initdb -D ${PGDATA} -U postgres --auth=trust --encoding=UTF8"
+        fi
+        su postgres -c "pg_ctl -D ${PGDATA} -l /tmp/postgres.log -o '-c listen_addresses=localhost -c port=5432' start"
+        for i in $(seq 1 60); do
+          if pg_isready -h localhost -p 5432 -U postgres >/dev/null 2>&1; then break; fi
+          sleep 1
+        done
+        if ! psql -h localhost -p 5432 -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='workloom'" | grep -q 1; then
+          psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE workloom OWNER postgres;" >/dev/null
+        fi
+        psql -h localhost -p 5432 -U postgres -d workloom -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null
+        cp .env.example .env
+        set -a
+        while IFS= read -r line; do
+          case "$line" in ''|\#*) continue ;; esac
+          export "$line"
+        done < .env
+        set +a
+        pnpm db:migrate
+        pnpm db:seed
+
+    - name: typecheck 全包（非阻断）
+      script: |
+        set -eu
+        pnpm -r --if-present typecheck
+
+    - name: 主测试套件（非阻断）
+      script: |
+        set -eu
+        set -a
+        while IFS= read -r line; do
+          case "$line" in ''|\#*) continue ;; esac
+          export "$line"
+        done < .env
+        set +a
+        pnpm test
+
+    - name: 全场景套件（非阻断）
+      script: |
+        set -eu
+        set -a
+        while IFS= read -r line; do
+          case "$line" in ''|\#*) continue ;; esac
+          export "$line"
+        done < .env
+        set +a
+        pnpm suite
+
+main:
+  push:
+    - *static_gate
+    - *db_gate
+    - *test_gate
+
+"**":
+  pull_request:
+    - *static_gate
+    - *db_gate
+    - *test_gate

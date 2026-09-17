@@ -8,7 +8,7 @@
 你只做三件事：**定方向、拍板、收钱。**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-9A7B2D)](LICENSE)
-[![GitHub](https://img.shields.io/badge/repo-hyperreality--system-1B2A4E)](https://github.com/geniusdapeng-collab/hyperreality-system)
+[![GitHub](https://img.shields.io/badge/repo-hyperreality--system-1B2A4E)](https://github.com/workloom-ai/hyperreality-system)
 
 </div>
 
@@ -168,7 +168,7 @@ HyperReality 的答案，是把「生成后筛选」变成「生成前锁定」�
 ### 一键跑起来（推荐）
 
 ```bash
-git clone https://github.com/geniusdapeng-collab/hyperreality-system.git
+git clone https://github.com/workloom-ai/hyperreality-system.git
 cd hyperreality-system
 pnpm setup && pnpm preview:all
 ```

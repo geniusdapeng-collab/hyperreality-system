@@ -22,7 +22,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/geniusdapeng-collab/hyperreality-system.git"
+    "url": "https://github.com/workloom-ai/hyperreality-system.git"
   },
   "engines": {
     "node": ">=18.0.0"

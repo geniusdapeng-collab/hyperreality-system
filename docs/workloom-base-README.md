@@ -13,9 +13,9 @@
 > 想更直观地了解这个项目？官网有完整的产品故事、系统架构、技能市场案例与实机截图。
 
 
-[![Release](https://img.shields.io/github/v/release/geniusdapeng-collab/workloom-im?display_name=tag&color=1B2A4E)](https://github.com/geniusdapeng-collab/workloom-im/releases)
+[![Release](https://img.shields.io/github/v/release/workloom-ai/workloom-im?display_name=tag&color=1B2A4E)](https://github.com/workloom-ai/workloom-im/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-9A7B2D)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%C2%B7%20Apple%20Silicon-black)](https://github.com/geniusdapeng-collab/workloom-im/releases)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%C2%B7%20Apple%20Silicon-black)](https://github.com/workloom-ai/workloom-im/releases)
 [![Runtime](https://img.shields.io/badge/runtime%20foundation-DeepSeek%20Harness-4C6FFF)](https://www.npmjs.com/package/@deepseek-ai/dsh)
 [![Tests](https://img.shields.io/badge/tests-168%20vitest%20%2B%20371%20suite%20%2B%20dsh--gate-green)]()
 [![Data](https://img.shields.io/badge/data%20sovereignty-local--first%20PG17-blueviolet)]()
@@ -350,7 +350,7 @@ WorkLoom 把 IM 通道适配层抽成了独立的 dsh 插件 [`vendor/dsh-im`](v
 
 ## 三分钟启航（Mac 用户）
 
-1. **下载**：到 [Releases](https://github.com/geniusdapeng-collab/workloom-im/releases) 下载 `WorkLoom-macOS.zip`（约 208 MB，sha256 随附可校验）。
+1. **下载**：到 [Releases](https://github.com/workloom-ai/workloom-im/releases) 下载 `WorkLoom-macOS.zip`（约 208 MB，sha256 随附可校验）。
 2. **解压拖入应用程序**：首次打开如遇 Gatekeeper 提示，在「系统设置 → 隐私与安全性」点一次「仍要打开」即可——这是唯一一次需要手动授权。
 3. **双击 WorkLoom.app**：启动器自动完成一切——内嵌 PostgreSQL 17 + pgvector 初始化、数据库迁移、服务拉起、工作台打开。无需安装任何依赖，无需命令行。
 
@@ -372,7 +372,7 @@ WorkLoom 把 IM 通道适配层抽成了独立的 dsh 插件 [`vendor/dsh-im`](v
 环境：Node 24 LTS（corepack 自带 pnpm 10）+ PostgreSQL 17 + pgvector 0.8。
 
 ```bash
-git clone https://github.com/geniusdapeng-collab/workloom-im.git
+git clone https://github.com/workloom-ai/workloom-im.git
 cd workloom-im
 corepack enable && pnpm install && cp .env.example .env
 

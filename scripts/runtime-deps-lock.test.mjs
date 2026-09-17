@@ -155,7 +155,7 @@ test("正式与应急装配线统一使用每产品 lock、目标 OS/CPU 和身�
   assert.match(macos, /x86_64\|x64\) NATS_ARCH="amd64"/u);
   assert.doesNotMatch(windows, /\bcopy_nm\b/u);
   const product = loadProductRuntime(REPOSITORY_ROOT);
-  if (product.repository === "geniusdapeng-collab/workloom-im") {
+  if (product.repository === "workloom-ai/workloom-im") {
     const workflow = readFileSync(join(REPOSITORY_ROOT, ".github/workflows/desktop-production-release.yml"), "utf8");
     assert.doesNotMatch(workflow, /node-version:\s*24(?:\s|,|$)/u);
     assert.match(workflow, /node-version:\s*24\.19\.0/u);

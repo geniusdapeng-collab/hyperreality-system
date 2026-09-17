@@ -3,7 +3,7 @@
   "product": {
     "productId": "hyperreality-system",
     "role": "industry",
-    "repository": "geniusdapeng-collab/hyperreality-system",
+    "repository": "workloom-ai/hyperreality-system",
     "includePlatformOps": false
   },
   "npmVersion": "11.17.0",

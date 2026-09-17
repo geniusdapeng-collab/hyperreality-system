@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { svcQuery, serviceTx } from "./events.js";
 import { llmCall } from "./llm.js";
 
-const UA = { "User-Agent": "WorkLoom-AIPM/1.0 (+https://github.com/geniusdapeng-collab/workloom-im)" };
+const UA = { "User-Agent": "WorkLoom-AIPM/1.0 (+https://github.com/workloom-ai/workloom-im)" };
 
 /* ---------------- 凭据读取（仅服务端；secret 不出进程） ---------------- */
 async function readCredential(workspaceId: string, provider: string): Promise<string | null> {

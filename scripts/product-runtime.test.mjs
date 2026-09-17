@@ -149,7 +149,7 @@ test("受控 pathPrefix 产品从仓根身份构建，但必须由完整同步 s
   mkdirSync(scripts, { recursive: true });
   writeFileSync(join(repository, "product.manifest.json"), `${JSON.stringify(manifest({ productId: "nested-product" }))}\n`);
   writeFileSync(join(repository, ".workloom-base-sync.json"), `${JSON.stringify({
-    baseRepo: "geniusdapeng-collab/workloom-im",
+    baseRepo: "workloom-ai/workloom-im",
     lastSyncedBaseSha: "a".repeat(40),
     lastSyncMode: "full",
     pathPrefix: "governance",
@@ -193,7 +193,7 @@ test("pathPrefix state 的来源、模式、SHA 或目录任一不可信时不�
     mkdirSync(scripts, { recursive: true });
     writeFileSync(join(repository, "product.manifest.json"), `${JSON.stringify(manifest({ productId: "outer-product" }))}\n`);
     writeFileSync(join(repository, ".workloom-base-sync.json"), `${JSON.stringify({
-      baseRepo: "geniusdapeng-collab/workloom-im",
+      baseRepo: "workloom-ai/workloom-im",
       lastSyncedBaseSha: "a".repeat(40),
       lastSyncMode: "full",
       pathPrefix: "governance",

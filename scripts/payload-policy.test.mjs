@@ -20,7 +20,7 @@ function product(overrides = {}) {
     role: "base",
     displayName: "WorkLoom 织元",
     packageName: "workloom-im",
-    repository: "geniusdapeng-collab/workloom-im",
+    repository: "workloom-ai/workloom-im",
     demoWorkspaceSlug: "ai-pm-demo",
     demoMemberNo: "MEM-001",
     desktop: { portOffset: 0 },
@@ -54,7 +54,7 @@ test("只有仙女座精确身份允许携带 platform-ops", () => {
   const andromeda = payloadPolicyFor(product({
     productId: "workroom-andromeda",
     role: "operations-hub",
-    repository: "geniusdapeng-collab/workroom-andromeda",
+    repository: "workloom-ai/workroom-andromeda",
   }));
   assert.equal(andromeda.includePlatformOps, true);
   assert.deepEqual(andromeda.forbiddenRuntimePaths, []);
@@ -63,7 +63,7 @@ test("只有仙女座精确身份允许携带 platform-ops", () => {
     product({ role: "operations-hub" }),
     product({ productId: "workroom-andromeda", role: "operations-hub" }),
     product({ productId: "workroom-andromeda", role: "operations-hub", repository: "attacker/workroom-andromeda" }),
-    product({ productId: "hotel", role: "industry", repository: "geniusdapeng-collab/workloom-hotel" }),
+    product({ productId: "hotel", role: "industry", repository: "workloom-ai/workloom-hotel" }),
   ]) {
     const policy = payloadPolicyFor(forged);
     assert.equal(policy.includePlatformOps, false);
@@ -121,7 +121,7 @@ test("仙女座载荷检查允许平台源码，但不放宽其他产品", () =>
   const andromedaManifest = product({
     productId: "workroom-andromeda",
     role: "operations-hub",
-    repository: "geniusdapeng-collab/workroom-andromeda",
+    repository: "workloom-ai/workroom-andromeda",
   });
   const root = fixture(andromedaManifest);
   const runtime = join(root, "runtime");

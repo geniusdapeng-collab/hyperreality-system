@@ -1,6 +1,6 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
-  "baseRepository": "geniusdapeng-collab/workloom-im",
+  "baseRepository": "workloom-ai/workloom-im",
   "version": "0.1.1",
   "sourceRef": "refs/tags/ui-v0.1.1",
   "sourceCommit": "a96ac33c8c17f93f4d15c73679c1026c5e6198f0",
