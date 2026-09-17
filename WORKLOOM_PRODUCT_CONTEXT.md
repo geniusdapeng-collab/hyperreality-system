@@ -1,14 +1,16 @@
 <!--
 document_schema: workloom.product-context/v1
 document_id: workloom-product-and-code-panorama
-context_version: 2026-09-17.2
-snapshot_date: 2026-09-17
+context_version: 2026-09-18.1
+snapshot_date: 2026-09-18
 timezone: Asia/Shanghai
 canonical_repository: cnb.cool/workloom-ai/workloom-im
 canonical_path: /WORKLOOM_PRODUCT_CONTEXT.md
 distribution: controlled-base-sync
 verified_host: cnb.cool/workloom-ai
 verified_repositories: 9
+ci_platform: cnb (.cnb.yml; 基座 3 条必需闸门)
+ui_artifact_host: cnb-release (ui-v0.1.1)
 read_depth: deep (module-level; not test-executed)
 audit_program: WORKLOOM-AUDIT-2026-09 (ledger local-only)
 previous_source_sha256: 37136e2327df6bdca60db19d969eb86de9b3f215bb39dcabafa243c94f5011ef
@@ -298,16 +300,24 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 ## 9. 已发现、需要优先核实的漂移
 
-### 9.1 托管迁移后的引用失配（优先级最高）
+### 9.1 托管迁移后的引用失配（2026-09-18 已解决）
 
-九仓已迁至 `cnb.cool/workloom-ai`，但仓内仍大量引用已失效的 GitHub 组织 `geniusdapeng-collab`：
+**已修复**：九仓 `product.manifest.json#repository`、`.workloom-runtime-deps/metadata.json#product.repository`、`.workloom-base-sync.json#baseRepo`、`sync/child-repos.json`（baseRepo 与 8 个 children）、同步器/校验器常量与测试夹具、README 与官网链接全部切到 `cnb.cool/workloom-ai`；`runtime:deps:verify` 的输入摘要已随标识迁移刷新。
 
-- 九个 `product.manifest.json` 的 `repository` 字段、`sync/base-scope.json` 的 `baseRepo`、`sync/child-repos.json` 的 `baseRepo` 与全部 children 条目仍指向 GitHub；
-- 各仓 README 徽章、Release 链接与部分文档链接仍指向 GitHub；
-- 迁移后的 `main` 只有一次 “rescue: preserve … local tree” 提交，**历史提交不可用**，依赖 `git log`/blame 的审计与回滚路径需重新设计；
-- 审计台账与发布工作流（GitHub Actions、PR/CI、Release secrets）全都建立在 GitHub 之上，迁移后需要重新落点。
+**仍待处理**：
 
-影响：`base-sync` 与自动 fanout 目前解析到的远端不可用，跨仓同步与 UI 分波升级存在直接失败风险。开发前应先把 baseRepo/child-repos/manifest/README 统一切换到 CNB，并确认 CI、凭据与镜像落点。
+- 迁移后的 `main` 历史仍是单次 “rescue” 提交（CNB 侧保留），依赖 `git log`/blame 的审计路径需另行设计；
+- `.github/workflows/*` 保留为遗留（CNB 上不生效），发布类工作流需按需迁移；
+- 自动 fanout 的 GitHub App 未配置（DEF-P2-0016），跨仓同步暂以受控脚本 + PR 执行。
+
+### 9.1.1 CNB 闸门落地（2026-09-18）
+
+九仓已全部在 CNB 上建立流水线（`.cnb.yml`）：
+
+- **基座 `workloom-im`**：`static-gate`（安装/秘密扫描/runtime 锁/typecheck/UI 治理/供应链与发布策略/base-sync 与客户端接入/三端构建）、`db-gate`（PG17+pgvector/迁移种子幂等/哈希链/集成测试/server E2E/全场景套件）、`ui-gate`（三端构建 + Playwright 响应式/视觉/无障碍）三条均为**必需检查**；`ui-release`（`api_trigger_ui_release`）负责构建并发布 `@workloom/ui` 到 CNB Release；
+- **八个子仓**：`static-gate`（安装/产品身份/三端构建）与 `db-gate`（PG17+pgvector/迁移/种子幂等/验链）为**阻断**；`test-gate`（typecheck/主测试/全场景套件）为**显式非阻断**，登记既有债务；
+- **UI 制品**：`@workloom/ui` 已从失效的 GitHub Release 迁移到 CNB Release（`ui-v0.1.1`，91,187 字节），`integrityByVersion` 同步更新；这是台账 DEF-P1-0015「下游 CI 既有红灯」的根因修复；
+- **视觉基线**：Linux 基线在 CNB 同镜像内重生成后入库，`ui-gate` 由非阻断转为必需（实测约 4 分钟全绿）。
 
 ### 9.2 `bundles/platform` 双份漂移
 
@@ -370,7 +380,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
    - `vendor/supermickey/`：视频制作引擎（约 11MB，四层架构：剧本→制作→渲染→后期，含 `architecture-v2`、`seedance-micromotion`、`systems`、`templates`），**只在 `hyperreality-system` 与 `workloom`（获客）** 中。
    - `packages/base/computer-use/toolkit/`（约 296KB）：Anthropic computer-use 能力栈的仓内 vendored 形态，与 65 动作三层感知同栈。
    - 数字人素材：`apps/web/public/models/kaykit/`（5 个 GLB 角色 + 道具，**CC0 可商用**，76 组骨骼动画）；`apps/web/public/live2d/`（Mao 模型 4.4MB + shizuku 备份，**Live2D Free Material License，可商用**），配 `apps/web/src/components/loommate/`（Live2D 主后端 + 兜底海报 + 口型/表情/动作驱动四要素，登记文档 `VENDOR.md`）。写实 3D TalkingHead 路径因许可与观感问题已于 2026-09-06 移除。
-2. **npm 依赖（锁定但不随仓携带）**：React、Hono、tRPC、Vite、Tailwind、Three Fiber、Pixi/Live2D 渲染插件、pg、zod 等，由 `package.json` + `pnpm-lock.yaml` 锁定，安装时从 registry 获取。
+2. **npm 依赖（锁定但不随仓携带）**：React、Hono、tRPC、Vite、Tailwind、Three Fiber、Pixi/Live2D 渲染插件、pg、zod 等，由 `package.json` + `pnpm-lock.yaml` 锁定，安装时从 registry 获取；共享 UI 包 `@workloom/ui` 作为**版本化制品**分发（2026-09-18 起托管在 CNB Release：`https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.1/workloom-ui-0.1.1.tgz`，由 `ui-release` 流水线构建发布，`integrityByVersion` 记录 SHA-512）。
 3. **安装期受控下载（带 sha256，不随仓携带）**：Node 24.19.0（darwin arm64/x64、win x64）、npm 11.17.0、PostgreSQL 17（PostgresApp / zonky 嵌入包）、nats-server 2.11.4 等，登记在 `scripts/release-assets.json` 与各仓 `.workloom-runtime-deps/`（含 `metadata.json` 与 `package-lock.json` 的精确闭包；B-01.SC-4 已做到每产品 runtime lock + 三目标 os/cpu 闭包 + 12 直接依赖 verify）。
 
 补充机制：`oss-components.json`（根目录）是受监测开源组件清单（name / repo / channel / current / cadence / gate / scope / notes），配 `skills/oss-watch/SKILL.md`、`scripts/oss-watch.sh` 与 `.oss-watch-state.json`，实现“清单登记 → 周期扫描 → 更新计划 → 一键执行 → 全量门禁 → 发布”，铁律是**扫描可自动、升级永不自动**。清单里相当一部分是“选型在案、未进运行时”（如 mem0、presidio、langfuse、deepeval、promptfoo、skyvern、gui-agents、wrenai、lago、copilotkit、tauri、litestream 等），不要把清单条目等同于已集成组件。
@@ -381,9 +391,15 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 - **但“仓库完整”不等于“制品自包含”**：npm 依赖与 Node/PG/NATS 二进制不在仓内（这是刻意设计，且有摘要锁与供应链门禁）；LLM 密钥、平台连接器凭据、桌面签名证书均不在仓内。
 - **开源组件是否在仓里，取决于通道**：dsh / dsh-im / supermickey / computer-use toolkit / 数字人素材（KayKit、Live2D）在仓内；React/Hono 等在 npm；Node/PG/NATS 在安装期下载；其余是选型登记。
 
-## 13. 审计程序与验证成熟度（2026-09-15/16 → 09-17）
+## 13. 审计程序与验证成熟度（2026-09-15/16 → 09-18）
 
 产品所有者于 2026-09-15/16 运行了多仓审计程序 `WORKLOOM-AUDIT-2026-09`（台账 `AUDIT_PROGRESS.md`、高优清单 `WorkLoom-高优核心能力审计执行清单.md`），冻结基座 `main@4f2296f…`，并要求“公共根因先在 WorkLoom IM 修复、再受控同步下游”。截至本版核验：
+
+**工程化落地（2026-09-18 新增）**
+
+- CNB 闸门已接管原 GitHub Actions 的角色：基座三条必需流水线 + 子仓分层闸门（详见 §9.1.1）；
+- `@workloom/ui` 制品、仓库标识、九仓闸门三件事已全部完成并实测；
+- 仍需人工配置：CNB 分支保护规则（当前令牌无仓库设置权限）；桌面签名/公证 secrets（BLK-B-01-003）。
 
 **已合并并有门禁证据的修复（代码中可验证）**
 
