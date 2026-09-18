@@ -26,6 +26,14 @@
         node scripts/ci/verify-commit-msg.mjs
         node scripts/ci/verify-lock-conflict.mjs
 
+    - name: 开源组件清单一致性（oss-watch）
+      script: |
+        set -eu
+        # 依赖变更（package.json / pnpm-lock.yaml / requirements.txt）必须同步刷新清单；
+        # 未刷新即红灯：node scripts/oss-inventory.mjs --write 后一并提交。
+        node --test scripts/oss-inventory.test.mjs
+        pnpm oss:check
+
     - name: 产品身份与行业包治理
       script: |
         set -eu
@@ -196,3 +204,17 @@ main:
     - *static_gate
     - *db_gate
     - *test_gate
+
+# 每周开源组件上游扫描（周一 07:00，CNB crontab 使用 Asia/Shanghai 时区）：
+#   刷新「当前版本 + 上游最新版本」清单与更新计划；有变化即开 chore/oss-watch-* PR（只提议不合并）。
+$:
+  "crontab: 0 7 * * 1":
+    - name: oss-watch-weekly
+      docker:
+        image: node:24.19.0-bookworm
+      stages:
+        - name: 扫描上游最新版本并开刷新 PR
+          script: |
+            set -eu
+            node scripts/oss-inventory.mjs --self-test
+            node scripts/oss-watch-ci.mjs --exit-zero

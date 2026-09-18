@@ -59,7 +59,10 @@
     "projections:check": "tsx scripts/generate-client-projections.mts",
     "bundle:governance": "tsx scripts/bundle-governance.mts",
     "bundle:release": "tsx scripts/bundle-governance.mts --refresh-digests --release",
-    "desktop:release:contract": "node --test scripts/unsigned-desktop-release.test.mjs scripts/desktop-release-finalizer.test.mjs"
+    "desktop:release:contract": "node --test scripts/unsigned-desktop-release.test.mjs scripts/desktop-release-finalizer.test.mjs",
+    "oss:inventory": "bash scripts/oss-watch.sh --inventory",
+    "oss:check": "bash scripts/oss-watch.sh --check",
+    "test:oss": "node --test scripts/oss-inventory.test.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
