@@ -95,6 +95,7 @@ function isAncestorOfHead(sha) {
 }
 
 async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
+  let resolvedSelfNumber = selfNumber && selfNumber !== "true" ? String(selfNumber) : null;
   const pulls = await apiJson(`${API}/${repoSlug}/-/pulls?state=open`);
   const list = Array.isArray(pulls) ? pulls : (pulls?.data ?? []);
   const result = [];
@@ -114,15 +115,16 @@ async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
     });
     if (isSelf) {
       console.log(`- 跳过自身 PR #${number}（head=${headSha.slice(0, 12)} ref=${headRef}）`);
+      if (selfHeadSha && headSha === selfHeadSha) resolvedSelfNumber = number;
       continue;
     }
     const files = await apiJson(`${API}/${repoSlug}/-/pulls/${number}/files`);
     const paths = (Array.isArray(files) ? files : (files?.data ?? []))
       .map(fullPathOf)
       .filter(Boolean);
-    result.push({ number, title: pull?.title ?? "", paths });
+    result.push({ number, title: pull?.title ?? "", paths, headSha });
   }
-  return result;
+  return { prs: result, selfNumber: resolvedSelfNumber };
 }
 
 function selfTest() {
@@ -206,7 +208,12 @@ async function main() {
 
   let others;
   try {
-    others = await openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha);
+    const scanned = await openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha);
+    others = scanned.prs;
+    if (scanned.selfNumber) {
+      selfNumber = scanned.selfNumber;
+      console.log(`  自身 PR 编号：#${selfNumber}（先到先得判定依据）`);
+    }
   } catch (error) {
     console.warn(`! 查询 open PR 失败，跳过冲突检测：${String(error).slice(0, 200)}`);
     if (strict) process.exit(1);
@@ -218,16 +225,28 @@ async function main() {
   for (const other of others) {
     const moduleConflicts = findModuleConflicts(mine, other.paths);
     const overlaps = findFileOverlaps(mine, other.paths);
+    // 先到先得：编号小的 PR 优先合并；编号大的（后到者）自行排队；无法判定自身编号时保持对称拦截
+    const mineNumber = Number(selfNumber);
+    const theirNumber = Number(other.number);
+    const iAmLater = Number.isFinite(mineNumber) && Number.isFinite(theirNumber)
+      ? theirNumber < mineNumber
+      : true;
     if (moduleConflicts.length) {
-      failed += 1;
-      console.error(`✗ 与 PR #${other.number}「${other.title}」互斥模块冲突：${moduleConflicts.join(", ")}`);
-      console.error("   模块级互斥路径同一时刻只允许一个任务（协议 §4）——请排队等其合并后 rebase。");
+      if (iAmLater) {
+        failed += 1;
+        console.error(`✗ 与 PR #${other.number}「${other.title}」互斥模块冲突：${moduleConflicts.join(", ")}`);
+        console.error("   模块级互斥路径同一时刻只允许一个任务（协议 §4）——你是后到者，请排队等其合并后 rebase。");
+      } else {
+        console.warn(`! 与 PR #${other.number}「${other.title}」同改互斥模块 ${moduleConflicts.join(", ")}：该 PR 编号更大（后到），由它排队。`);
+      }
     }
     if (overlaps.length) {
       const head = `PR #${other.number}「${other.title}」同时修改：${overlaps.slice(0, 5).join(", ")}${overlaps.length > 5 ? " …" : ""}`;
-      if (overlapMode === "fail") {
+      if (overlapMode === "fail" && iAmLater) {
         failed += 1;
         console.error(`✗ ${head}`);
+      } else if (overlapMode === "fail") {
+        console.warn(`! ${head}（该 PR 后到，由它排队）`);
       } else {
         console.warn(`! ${head}（LOCK_OVERLAP_MODE=warn，仅告警）`);
       }
