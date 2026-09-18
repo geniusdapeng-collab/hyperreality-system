@@ -11,6 +11,7 @@
 import { kbEntriesOf, skillExistsInView, thresholdBoundsFor, thresholdOf, type BundleAssetView } from "./merge.js";
 import type { OverlayDoc, OverlayItem } from "./model.js";
 import { boundsWithin } from "./threshold-policy.js";
+import { fenceRulesOf } from "../fence-engine/dsl.js";
 
 export type RebaseVerdict = "compatible" | "auto_fallback" | "needs_decision";
 
@@ -40,7 +41,7 @@ function presetKeys(view: BundleAssetView): Set<string> {
 }
 function fenceRule(view: BundleAssetView, ruleId: string): { level?: string } | null {
   for (const p of view.fencePacks ?? []) {
-    for (const f of p.fences ?? []) {
+    for (const f of fenceRulesOf(p)) {
       if (String(f.rule_id) === ruleId) return f as { level?: string };
     }
   }

@@ -52,6 +52,48 @@ export function registerWriteActions(actions: string[]): void {
   }
 }
 
+/**
+ * HP-02：只读动作登记。装配期按 Bundle preset 的 `access: read` 工具清单注入。
+ * 语义：动作分类只有三态——显式写 / 显式读 / 未分类；**未分类一律按写处理**（fail-closed），
+ * 这样"忘记声明"的最坏后果是要求围栏声明与审批，而不是静默放行（F2.10/L3.5）。
+ */
+const declaredReadActions: Set<string> = new Set();
+const declaredReadPrefixes: string[] = [];
+/**
+ * 只读动词启发式（HP-02）：仅覆盖"读"方向，且只在动作未被登记为写时生效。
+ * 取值保守（list/read/get/fetch/query/search/describe）——`export`/`inspect` 等
+ * 可能落库或改变状态的动作不在此列，未分类时一律按写处理。
+ */
+const READ_VERB_SUFFIXES = new Set(["list", "read", "get", "fetch", "query", "search", "describe"]);
+
+export function registerReadActions(actions: string[]): void {
+  for (const a of actions) {
+    if (!a) continue;
+    if (a.endsWith(".")) {
+      if (!declaredReadPrefixes.includes(a)) declaredReadPrefixes.push(a);
+    } else {
+      declaredReadActions.add(a);
+    }
+  }
+}
+
+export function isReadAction(action: string): boolean {
+  if (isWriteAction(action)) return false; // 写优先：同名既读又写时按写处理
+  if (declaredReadActions.has(action)) return true;
+  if (declaredReadPrefixes.some((p) => action.startsWith(p))) return true;
+  const verb = action.split(".").pop() ?? "";
+  return READ_VERB_SUFFIXES.has(verb);
+}
+
+export type ActionClass = "read" | "write" | "unknown";
+
+/** 动作分类（HP-02 单一口径）：显式写 > 显式读 > 未知；未知按写处理见 checkPermission/段③ */
+export function classifyAction(action: string): ActionClass {
+  if (isWriteAction(action)) return "write";
+  if (isReadAction(action)) return "read";
+  return "unknown";
+}
+
 export function isWriteAction(action: string): boolean {
   if (WRITE_ACTION_PREFIXES.some((p) => action === p || action.startsWith(p))) return true;
   if (extraWriteActions.has(action)) return true;
@@ -124,7 +166,10 @@ export function checkPermission(actor: ActorInfo, event: EventDraft): void {
   // 人类权限矩阵在 B5（tenancy+鉴权）落地；白名单系统组件走系统通道豁免（M5）
   if (actor.type === "human" || isWhitelistedSystemActor(actor)) return;
   // 其余（agent + 未白名单的 system 伪装身份）走全检查
-  if (!isWriteAction(action)) return; // 只读动作放行
+  // HP-02 口径：段①按「显式写」约束（装配期已把 Bundle 声明的 write 工具登记为显式写，
+  // 行业工具名不再漏判）；未分类动作不在此处拦截，交由判定器按写兜底（judge 的
+  // "未知 → default_level" 才是 fail-closed 的落点，避免误伤基座内部只读动作）。
+  if (!isWriteAction(action)) return;
   if (actor.readonly) {
     throw new GatewayReject(
       "permission",
@@ -169,6 +214,7 @@ export async function checkHighRiskAuthorization(
   approvalRef?: string,
 ): Promise<void> {
   if (actor.type !== "agent" || !actor.highRisk) return;
+  // 同段①口径：显式写（含装配期登记的行业工具）才要求逐次授权
   if (!isWriteAction(event.decision.action)) return;
   if (!approvalRef) {
     throw new GatewayReject(
