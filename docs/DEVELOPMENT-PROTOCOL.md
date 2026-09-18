@@ -1,6 +1,6 @@
 # WorkLoom 开发协作协议（轻量版 v1）
 
-> 生效范围：workloom-im 唯一定义，base-sync 分发九仓只读副本。
+> 生效范围：workloom-im 唯一定义，base-sync 分发各仓只读副本（舰队清单见 `sync/child-repos.json`；新仓由每日舰队扫描自动纳管）。
 > 定位：**不新造系统**——用 CNB 原生能力（Issue / 分支保护 / 流水线 / PR）+ 三个校验脚本，管住"谁在改什么、别撞车、会话断了能接上"。
 > 优先级：十二条系统不变量（《产品与代码全景认知》§8）> 本协议 > 本仓 `AGENTS.md` > 会话内临时指令。
 > 与《WorkLoom 分布式 AI 开发 Agent 协作机制 v0.1》的关系：本文件是它的**最小可执行子集**；账本服务、租约看门狗、考试院、错题本、蜂群经验属"重装备"，触发条件见 §7，未触发前不建。
@@ -84,6 +84,91 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 满足**任一**条件才评估（否则不建）：① 真实并行账号/人 ≥3；② 跨终端交接每周 >2 次；③ 出现"无回执导致返工"≥2 次；④ 并发任务 >10。
 
 届时再评估：事件账本服务、租约看门狗、协议考试院、错题本、多模型绩效路由、蜂群经验上行。
+
+## 10. 实验车道（fox / growth 等深度定制仓）
+
+问题：`workroom-fox` 与 `WorkLoom-growth` 在共享壳之上做了**深度游戏化定制**（fox：3D 汇报舞台 + 实景商业游戏 M2-a；growth：hud/star-ring/P0 的经营游戏化）。这些**不是基座能力**，如果强行与基座保持一致，会被两类机制抹掉或卡死：
+
+1. **普通 base-sync**：若实验路径落在 `include` 内，同步会覆盖；
+2. **三端客户端基座升级**：受管根 `apps/{web,webb,webc}` 内的差异，只要不在 `allowedIndustryExtensionPaths` 白名单里，就会被判 `ILLEGAL_INDUSTRY_APP_PATH` / `MANAGED_FILE_MODIFIED` 并 **fail-close**（升级被拒）。
+
+### 10.1 解法：三层资产 + 声明式实验路径 + 双向护栏
+
+| 层 | 内容 | 规则 |
+|---|---|---|
+| L0 公共能力 | `packages/{base,runtime,shared,db,ui}`、`apps/server/src`、`scripts/**` | 基座唯一下发，禁止实验语义回流 |
+| L1 行业语义 | 各行业 bundle / seed / 服务前台 | 经 bundle 槽位注入，可下发 |
+| L2 实验语义 | fox 的游戏舞台与赛季引擎、growth 的经营游戏化 | **只在该仓存在**：不下发、不覆盖、不回流（要进基座必须先走提案任务卡） |
+
+实验仓在 `sync/child-repos.json` 里显式声明（`sync/child-repos.json` 是机器可读事实源）：
+
+```json
+{
+  "repo": "workloom-ai/workroom-fox",
+  "lane": "experiment",
+  "experimentNote": "为何属于实验语义",
+  "experimentPaths": ["apps/web/src/campaign/**", "apps/web/src/components/fox-campaign/**"],
+  "industryExtensionPaths": ["apps/*/src/campaign/**", "apps/*/src/components/fox-campaign/**"]
+}
+```
+
+- `experimentPaths`：实验定制的**实际路径**（护栏据此检查）；
+- `industryExtensionPaths`：**仓级扩展白名单**，被 `client-foundation` 合并进全局白名单 → 这些路径在 UI 升级时不再被判分叉、也不会被覆盖；
+- 命令：`node scripts/tools/experiment-guard.mjs [--check]` 校验这两件事（每日 cron 自动跑；违规即红）。
+
+### 10.2 实验仓的三条纪律
+
+1. **只增不改基座契约**：可以新增实验目录（并登记进 `experimentPaths`），但不修改 `packages/**`、`apps/server/src/**` 的公共行为；
+2. **公共化必须提案**：实验里验证成功的通用交互能力，先写提案任务卡（L2→L1→L0），不得整包搬进基座；
+3. **新实验仓接入即声明**：舰队扫描发现新仓 → 纳管时同步填写 `lane/experimentNote/experimentPaths/industryExtensionPaths`，否则护栏会报警（`MISSING_NOTE` / `MISSING_PATHS` / `UI_UPGRADE_WOULD_FAIL`）。
+
+## 9. 舰队维护与自动化（2026-09-18 新增）
+
+### 9.1 自动 vs 人工（边界写死）
+
+| 环节 | 谁来做 | 怎么实现 |
+|---|---|---|
+| 提交规范校验 | **自动** | `.cnb.yml` 协议门禁 stage → `scripts/ci/verify-commit-msg.mjs` |
+| 并发冲突检测（同文件/同互斥模块） | **自动** | 同上 → `scripts/ci/verify-lock-conflict.mjs`（比对同仓 open PR） |
+| 合并前闸门（类型/测试/构建/迁移种子验链/视觉） | **自动** | 各仓 `.cnb.yml`（基座 static/db/ui 三道必需） |
+| 分支保护（禁直推/禁强推/必需状态检查） | **自动** | CNB 平台规则（九仓已配） |
+| 新仓发现与纳管 | **自动** | 每日 cron：`scripts/tools/fleet-scan.mjs --issue --provision` → 开扫描卡 + 建纳管 PR |
+| 任务卡创建/回执/关单 | **半自动** | `scripts/tools/task.mjs new|receipt|close`（一条命令，不再手写 JSON） |
+| 分支创建、提交、提 PR | 由 AI/人执行 | 用任务号命名分支即可 |
+| **合并** | **人来**（串行，一次一个） | 协议 §1 硬规则；CNB 未开自动合并 |
+| 高风险裁决、协议版本发布 | **人来** | 协议 §3/§8 |
+
+结论：门禁、扫描、纳管是自动的；**唯一必须由人按的按钮是"合并"和"高风险裁决"**。
+
+### 9.2 工具用法
+
+```bash
+# 任务卡：建卡（自动分配 T-YYYYMMDD-XXXX，打 t/draft）
+node scripts/tools/task.mjs new --repo workloom-ai/workloom-hotel --title "修复差评 SLA" \
+  --q1 industry --q3 workloom-hotel --q4 "单测+打包门禁；回滚=revert"
+# 任务卡：回执 + 关单
+node scripts/tools/task.mjs receipt --repo workloom-ai/workloom-hotel --id T-20260919-0001 \
+  --progress "..." --decisions "..." --next "..." --close
+
+# 舰队扫描：列出组织内所有 WorkLoom 仓，标出未纳管的新仓
+node scripts/tools/fleet-scan.mjs                 # 人读报告
+node scripts/tools/fleet-scan.mjs --json          # 机器可读
+node scripts/tools/fleet-scan.mjs --check         # 有新仓则退出码 1（可做门禁）
+node scripts/tools/fleet-scan.mjs --issue --provision   # 开扫描卡 + 自动纳管（cron 用的就是这条）
+
+# 单仓纳管（幂等）：标签 + 分支保护 + 协议资产 + 门禁 stage + PR
+node scripts/tools/provision-protocol.mjs --repo workloom-ai/<name> [--dry-run]
+```
+
+纳管判定规则（`scripts/tools/fleet-rules.mjs`）：仓库根 `product.manifest.json` 的 `schemaVersion` 以 `workloom.product/` 开头 → WorkLoom 仓；缺失时退化为 `.workloom-base-sync.json` 或 `bundles/*/bundle.json` 的 schema 标记。已纳管集合 = 基座仓 + `sync/child-repos.json` 的 children。
+
+### 9.3 新仓纳管后的三件事（自动完成，人工只需审 PR）
+
+1. 标签体系（10 个）+ `main` 分支保护（强制 PR + 必需状态检查 + 禁强推/删除）；
+2. 协议资产副本 + `.cnb.yml` 协议门禁 stage；
+3. 本仓写入 `sync/child-repos.json`（舰队清单），后续 base-sync 波次照常覆盖。
+
+> 注意：新仓若与既有仓同 `productId`（例如 `WorkLoom-growth` 与 `workloom` 都是 `workloom-ai-acquisition`），说明它是同一产品的第二实例或副本——纳管只保证协议一致，**产品身份（productId/端口/演示工作区）需要人确认后统一**。
 
 ## 8. 落地检查（每周一次，1 分钟）
 
