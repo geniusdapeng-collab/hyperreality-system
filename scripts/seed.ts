@@ -823,6 +823,10 @@ async function main(): Promise<void> {
   for (const [idx, row] of reviewEvents.rows.entries()) {
     const p = row.payload as SeedEvent;
     const status = idx === 0 ? "pending" : "approved";
+    // D21 通用裁决判据：行业只声明 key/value，基座负责比较（不再依赖行业私有 base_price 字段）
+    const beforeValue = Number((p.decision.before as Record<string, unknown> | null)?.price);
+    const afterValue = Number((p.decision.after as Record<string, unknown> | null)?.price);
+    const hasChangeRatio = Number.isFinite(beforeValue) && beforeValue !== 0 && Number.isFinite(afterValue);
     await gw.query(
       `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, gesture, snapshot, decided_by, decided_at)
        VALUES ($1,$2,$3,$4,'inapp',$5,$6,$7,$8,$9)
@@ -843,6 +847,8 @@ async function main(): Promise<void> {
           action: p.decision.action,
           params: p.decision.params ?? {},
           base_price: (p.decision.before as Record<string, unknown> | null)?.price ?? null,
+          autonomy_range_key: hasChangeRatio ? "price-change-ratio" : undefined,
+          autonomy_range_value: hasChangeRatio ? afterValue / beforeValue : undefined,
           expires_at: iso(new Date(Date.now() + 24 * 3600 * 1000)), // G6：24h
         }),
         status === "approved" ? "MEM-001" : null,
