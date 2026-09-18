@@ -1,391 +1,1592 @@
 {
   "meta": {
-    "name": "WorkLoom 开源组件清单（oss-watch）",
-    "version": 1,
-    "updated": "2026-09-03",
-    "rule": "凡进入运行时的开源组件必须登记于此；四仓底座公共段保持一致；AGPL 仅独立进程形态"
+    "schema": "workloom.oss-components/v2",
+    "name": "WorkLoom 开源组件登记表（oss-watch）",
+    "updated": "2026-09-18",
+    "doc": "docs/OPEN_SOURCE_COMPONENTS.md",
+    "plan": "docs/oss-update-plan.md",
+    "state": ".oss-watch-state.json",
+    "scanner": "scripts/oss-watch.sh",
+    "generator": "scripts/oss-inventory.mjs",
+    "rule": "凡进入运行时的开源组件必须登记于此：name/repo/license/current/latest/usage/notes 六要素齐全；当前版本由扫描器从锁定事实（vendor/VENDOR.md、lockfile、编排文件、引脚脚本）自动探测，严禁手抄；上游最新版本由 pnpm oss:watch 周期刷新；AGPL 仅以独立进程形态使用，不链接进分发包；升级永不自动。",
+    "registries": {
+      "npm": "https://registry.npmmirror.com",
+      "pypi": "https://pypi.tuna.tsinghua.edu.cn/pypi",
+      "github": "https://api.github.com",
+      "docker": "https://hub.docker.com"
+    },
+    "evidence": "current=A 级（锁定事实文件）｜latest=B 级（上游 registry/release API）｜未扫描项在清单中显式标注",
+    "repo": "workloom-ai/hyperreality-system"
   },
   "components": [
     {
-      "name": "@deepseek-ai/dsh",
-      "repo": "https://github.com/deepseek-ai/harness",
+      "name": "DeepSeek Harness（dsh）",
+      "package": "@deepseek-ai/dsh",
+      "repo": "https://github.com/deepseek-ai/deepseek-harness",
+      "license": "MIT",
       "channel": "npm",
-      "current": "0.1.2-rc.1",
+      "usage": "runtime",
+      "probe": {
+        "kind": "vendor",
+        "file": "vendor/dsh/package.json"
+      },
+      "scope": [
+        "vendor/dsh（审计基线）",
+        "packages/runtime/dsh-gate（锁定运行时）"
+      ],
       "cadence": "weekly",
       "gate": "runtime-gate",
-      "scope": "packages/runtime/dsh-gate",
-      "notes": "Agent 运行时地基（DeepSeek Harness）锁版+内部 fork；永远单独一批升级，必过 E6 回归与 H-5 kill -9 重放"
+      "notes": "Agent 运行时地基：锁版 + 内部 fork 镜像，任何新版本（含 rc 预发布）即触发升级；永远单独一批，必过 E6 回归与 H-5 kill -9 重放；升级前必须 diff 依赖树（0.1.2-rc.1 已移除 node-pty；rc.2 起要求 Node ≥24 的 zstd API）",
+      "latest": "0.1.5-rc.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "computer-use",
-      "repo": "https://github.com/anthropics/computer-use（已 vendor 进仓：packages/base/computer-use/toolkit，与沙箱技能同栈）",
-      "channel": "skill",
-      "current": "repo-vendored-2026-08",
+      "name": "Cordis（插件元框架）",
+      "package": "@deepseek-ai/cordis",
+      "repo": "https://github.com/cordiverse/cordis",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "probe": {
+        "kind": "lockfile",
+        "file": "packages/runtime/dsh-gate/pnpm-lock.yaml",
+        "package": "@deepseek-ai/cordis"
+      },
+      "scope": [
+        "随 dsh 分发（插件元框架）",
+        "packages/runtime/plugins"
+      ],
       "cadence": "weekly",
+      "gate": "runtime-gate",
+      "notes": "插件可撤销效果是技能绑定围栏、插件卸载即撤销的运行时保证；实际版本以 dsh 锁定树为准（上游独立仓为 4.0.0-rc 线，跟随 dsh 升级）",
+      "latest": "4.0.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Schemastery",
+      "package": "@deepseek-ai/schemastery",
+      "repo": "https://github.com/deepseek-ai/deepseek-harness",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "probe": {
+        "kind": "lockfile",
+        "file": "packages/runtime/dsh-gate/pnpm-lock.yaml",
+        "package": "@deepseek-ai/schemastery"
+      },
+      "scope": [
+        "随 dsh 分发（配置 schema 引擎）"
+      ],
+      "cadence": "monthly",
       "gate": "standard",
-      "scope": "packages/base/computer-use",
-      "notes": "三层感知（CDP/AXTree/截图）；生产工作站能力底座；publish-rpa 的 BrowserDriver 上游"
+      "notes": "配置文件校验引擎；随 dsh 锁定树升级，不单独升级",
+      "latest": "3.18.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "playwright",
-      "repo": "https://github.com/microsoft/playwright",
+      "name": "node-addon-require-builtin",
+      "package": "node-addon-require-builtin",
+      "repo": "https://github.com/deepseek-ai/deepseek-harness",
+      "license": "MIT",
       "channel": "npm",
-      "current": "（随 computer-use 运行环境）",
-      "cadence": "weekly",
+      "usage": "runtime",
+      "probe": {
+        "kind": "lockfile",
+        "file": "packages/runtime/dsh-gate/pnpm-lock.yaml",
+        "package": "node-addon-require-builtin"
+      },
+      "scope": [
+        "随 dsh 分发（原生插件加载）"
+      ],
+      "cadence": "monthly",
       "gate": "standard",
-      "scope": "packages/base/computer-use",
-      "notes": "computer-use 浏览器驱动层；publish-rpa 适配器经 BrowserDriver 接口隔离不直 import"
+      "notes": "dsh 原生插件加载依赖；随 dsh 锁定树升级",
+      "latest": "0.1.6",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "stagehand",
-      "repo": "https://github.com/browserbase/stagehand",
-      "channel": "github",
-      "current": "选型在案（剧本主路径）",
-      "cadence": "weekly",
-      "gate": "smoke",
-      "scope": "浏览器自动化分层执行面",
-      "notes": "MIT，2026-07 复核活跃"
-    },
-    {
-      "name": "browser-use",
-      "repo": "https://github.com/browser-use/browser-use",
-      "channel": "github",
-      "current": "选型在案（长尾冷启动探索）",
-      "cadence": "weekly",
-      "gate": "smoke",
-      "scope": "浏览器自动化分层执行面",
-      "notes": "MIT，78k+ stars"
-    },
-    {
-      "name": "vite",
-      "repo": "https://github.com/vitejs/vite",
+      "name": "dsh-im 多平台 IM 接入插件",
+      "package": "@xmanrui/dsh-im",
+      "repo": "https://github.com/xmanrui/dsh-im",
+      "license": "MIT",
       "channel": "npm",
-      "current": "8.2.2",
-      "cadence": "weekly",
+      "usage": "runtime",
+      "probe": {
+        "kind": "regex",
+        "file": "vendor/dsh-im/VENDOR.md",
+        "pattern": "\\| 锁定版本 \\| `([0-9][^`]*)`"
+      },
+      "scope": [
+        "vendor/dsh-im（文档锁定）",
+        "scripts/install-im-channels.sh"
+      ],
+      "cadence": "monthly",
       "gate": "standard",
-      "scope": "apps/web, apps/webc",
-      "notes": "前端工具链，与 @vitejs/plugin-react、@tailwindcss/vite 同批联动"
+      "notes": "钉钉/企微/飞书官方通道首批启用；安装走 pin 版本 + integrity 校验；观察名单（微信 iLink、WhatsApp baileys 等非官方协议）不启用；Slack 枚举位保留未接线",
+      "latest": "4.21.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "react",
-      "repo": "https://github.com/facebook/react",
-      "channel": "npm",
-      "current": "19.2.8",
-      "cadence": "monthly",
-      "gate": "full",
-      "scope": "apps/web, apps/webc",
-      "notes": "React 19，与 react-dom 同批"
-    },
-    {
-      "name": "react-router",
-      "repo": "https://github.com/remix-run/react-router",
-      "channel": "npm",
-      "current": "8.3.0",
-      "cadence": "monthly",
-      "gate": "full",
-      "scope": "apps/web",
-      "notes": ""
-    },
-    {
-      "name": "@tanstack/react-query",
-      "repo": "https://github.com/TanStack/query",
-      "channel": "npm",
-      "current": "5.102.5",
-      "cadence": "monthly",
-      "gate": "full",
-      "scope": "apps/web",
-      "notes": ""
-    },
-    {
-      "name": "@trpc/server",
-      "repo": "https://github.com/trpc/trpc",
-      "channel": "npm",
-      "current": "11.18.0",
-      "cadence": "monthly",
-      "gate": "full",
-      "scope": "apps/server, apps/web(@trpc/client)",
-      "notes": "server/client 必须同版同批"
-    },
-    {
-      "name": "hono",
+      "name": "Hono",
+      "package": "hono",
       "repo": "https://github.com/honojs/hono",
+      "license": "MIT",
       "channel": "npm",
-      "current": "4.13.5",
+      "usage": "runtime",
+      "scope": [
+        "apps/server"
+      ],
       "cadence": "monthly",
       "gate": "full",
-      "scope": "apps/server",
-      "notes": "MIT；与 @hono/node-server 同批"
+      "notes": "HTTP 服务层；与 @hono/node-server 同批升级",
+      "latest": "4.13.8",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "tailwindcss",
-      "repo": "https://github.com/tailwindlabs/tailwindcss",
+      "name": "@hono/node-server",
+      "package": "@hono/node-server",
+      "repo": "https://github.com/honojs/node-server",
+      "license": "MIT",
       "channel": "npm",
-      "current": "4.3.3",
+      "usage": "runtime",
+      "scope": [
+        "apps/server"
+      ],
       "cadence": "monthly",
-      "gate": "standard",
-      "scope": "apps/web, apps/webc",
-      "notes": "v4 令牌制，升级后须过 Candy 设计系统纯色验证"
+      "gate": "full",
+      "notes": "随 hono 同批升级；服务端启动路径变更需过 server 契约与 E2E",
+      "latest": "2.1.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "pg",
+      "name": "tRPC",
+      "package": "@trpc/server",
+      "repo": "https://github.com/trpc/trpc",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/server（@trpc/server）",
+        "apps/web（@trpc/client）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "server/client 必须同版同批升级，跨版本混用会直接破坏三端类型契约",
+      "latest": "11.19.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Drizzle ORM",
+      "package": "drizzle-orm",
+      "repo": "https://github.com/drizzle-team/drizzle-orm",
+      "license": "Apache-2.0",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "packages/db（client.ts / schema.ts）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "类型源与查询构造；DDL 事实源仍是手写 SQL migrations（D5 纪律：schema.ts 只做类型映射，禁止用 drizzle-kit 生成迁移）",
+      "latest": "0.45.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "node-postgres（pg）",
+      "package": "pg",
       "repo": "https://github.com/brianc/node-postgres",
+      "license": "MIT",
       "channel": "npm",
-      "current": "8.23.0",
+      "usage": "runtime",
+      "scope": [
+        "packages/db",
+        "packages/base",
+        "apps/server"
+      ],
       "cadence": "monthly",
       "gate": "full",
-      "scope": "root, packages/base",
-      "notes": "PG 驱动；现方案为原生 pg（原方案 drizzle 选型未启用，见 notes）"
+      "notes": "PG 驱动；每个 workspace 必须同版，避免多实例连接池语义漂移",
+      "latest": "8.23.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "zod",
+      "name": "Zod",
+      "package": "zod",
       "repo": "https://github.com/colinhacks/zod",
+      "license": "MIT",
       "channel": "npm",
-      "current": "4.4.3",
+      "usage": "runtime",
+      "scope": [
+        "apps/server",
+        "packages/base",
+        "packages/runtime"
+      ],
       "cadence": "monthly",
       "gate": "standard",
-      "scope": "apps/server, packages/base",
-      "notes": ""
+      "notes": "事件与契约校验；v4 与 v3 API 差异大，升级必须全量跑契约测试",
+      "latest": "4.6.5",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "jose",
+      "name": "jose（JWT/JWS）",
+      "package": "jose",
       "repo": "https://github.com/panva/jose",
+      "license": "MIT",
       "channel": "npm",
-      "current": "6.2.10",
+      "usage": "runtime",
+      "scope": [
+        "apps/server",
+        "packages/base"
+      ],
       "cadence": "monthly",
-      "gate": "standard",
-      "scope": "apps/server, packages/base",
-      "notes": "JWT/JWS"
-    },
-    {
-      "name": "tsx",
-      "repo": "https://github.com/privatenumber/tsx",
-      "channel": "npm",
-      "current": "4.23.12",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "root, apps/server",
-      "notes": ""
-    },
-    {
-      "name": "vitest",
-      "repo": "https://github.com/vitest-dev/vitest",
-      "channel": "npm",
-      "current": "4.1.11",
-      "cadence": "monthly",
-      "gate": "standard",
-      "scope": "root, packages/base",
-      "notes": ""
-    },
-    {
-      "name": "typescript",
-      "repo": "https://github.com/microsoft/TypeScript",
-      "channel": "npm",
-      "current": "7.0.2",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "全仓",
-      "notes": ""
-    },
-    {
-      "name": "litellm",
-      "repo": "https://github.com/BerriAI/litellm",
-      "channel": "docker",
-      "current": "v1.89.3-stable（哈希 pin）",
-      "cadence": "event",
       "gate": "full",
-      "scope": "模型网关（VPC）",
-      "notes": "⚠ 2026-03 PyPI 供应链投毒史 + CVE-2026-42208（KEV）——强制哈希 pin + cosign 验签；安全告警即查不等周期"
+      "notes": "会话与租户令牌签发/校验；升级后必须过登录、跨租户越权（RLS）用例",
+      "latest": "6.2.12",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "mem0",
-      "repo": "https://github.com/mem0ai/mem0",
-      "channel": "docker",
-      "current": "自托管内核（选型在案）",
-      "cadence": "monthly",
-      "gate": "standard",
-      "scope": "组织记忆引擎",
-      "notes": "Apache-2.0"
-    },
-    {
-      "name": "presidio",
-      "repo": "https://github.com/microsoft/presidio",
-      "channel": "docker",
-      "current": "独立服务进程（选型在案）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "PII 识别与脱敏",
-      "notes": "MIT"
-    },
-    {
-      "name": "langfuse",
-      "repo": "https://github.com/langfuse/langfuse",
-      "channel": "docker",
-      "current": "v3 自托管（选型在案）",
-      "cadence": "monthly",
-      "gate": "standard",
-      "scope": "可观测性",
-      "notes": "2026-01 被 ClickHouse 收购；v3 footprint 重，边缘节点轻量导出契约对接"
-    },
-    {
-      "name": "deepeval",
-      "repo": "https://github.com/confident-ai/deepeval",
-      "channel": "github",
-      "current": "CI 质量门（选型在案）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "LLM 回归评测",
-      "notes": "Apache-2.0"
-    },
-    {
-      "name": "promptfoo",
-      "repo": "https://github.com/promptfoo/promptfoo",
+      "name": "yaml",
+      "package": "yaml",
+      "repo": "https://github.com/eemeli/yaml",
+      "license": "ISC",
       "channel": "npm",
-      "current": "红队评测（选型在案）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "LLM 红队/多模型对比",
-      "notes": "MIT"
-    },
-    {
-      "name": "skyvern",
-      "repo": "https://github.com/Skyvern-AI/skyvern",
-      "channel": "docker",
-      "current": "选型在案（视觉抗改版）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "浏览器自动化分层执行面",
-      "notes": "⚠ AGPL-3.0，仅独立进程"
-    },
-    {
-      "name": "gui-agents",
-      "repo": "https://github.com/simular-ai/gui-agents",
-      "channel": "github",
-      "current": "选型在案（Agent-S3）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "桌面 GUI 操控",
-      "notes": "Apache-2.0；与沙箱 computer-use 能力对照复核"
-    },
-    {
-      "name": "openadapt",
-      "repo": "https://github.com/OpenAdaptAI/OpenAdapt",
-      "channel": "github",
-      "current": "选型在案（录制回放）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "流程固化",
-      "notes": "MIT"
-    },
-    {
-      "name": "wrenai",
-      "repo": "https://github.com/Canner/WrenAI",
-      "channel": "docker",
-      "current": "独立进程（选型在案）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "消息图谱 NL 检索（G1）",
-      "notes": "Apache-2.0；仅用 governed text-to-SQL 引擎"
-    },
-    {
-      "name": "lago",
-      "repo": "https://github.com/getlago/lago",
-      "channel": "docker",
-      "current": "停车场（可选独立计费进程）",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "计量计费",
-      "notes": "⚠ AGPL-3.0，仅独立部署"
-    },
-    {
-      "name": "copilotkit",
-      "repo": "https://github.com/CopilotKit/CopilotKit",
-      "channel": "npm",
-      "current": "选型在案（AG-UI 组件库）",
+      "usage": "runtime",
+      "scope": [
+        "bundle/preset 解析",
+        "skills 声明",
+        "根脚本"
+      ],
       "cadence": "monthly",
       "gate": "standard",
-      "scope": "Agent 卡片/审批组件",
-      "notes": "MIT；仅作组件库，消息流由 dsh 承接"
+      "notes": "bundle 与技能 YAML 解析器；与 yaml-governance（治理固定解析器）保持 2.9.0 同版",
+      "latest": "2.9.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "echarts",
-      "repo": "https://github.com/apache/echarts",
+      "name": "js-yaml",
+      "package": "js-yaml",
+      "repo": "https://github.com/nodeca/js-yaml",
+      "license": "MIT",
       "channel": "npm",
-      "current": "选型在案",
-      "cadence": "monthly",
-      "gate": "smoke",
-      "scope": "工作台图表",
-      "notes": "Apache-2.0"
-    },
-    {
-      "name": "tauri",
-      "repo": "https://github.com/tauri-apps/tauri",
-      "channel": "github",
-      "current": "2.x（桌面壳）",
+      "usage": "runtime",
+      "scope": [
+        "随 dsh 分发（CLI 配置解析）"
+      ],
       "cadence": "monthly",
       "gate": "standard",
-      "scope": "apps/desktop",
-      "notes": "Apache-2.0/MIT",
-      "tag_prefix": "tauri-v"
+      "notes": "dsh CLI 配置解析依赖；随 dsh 锁定树升级",
+      "latest": "5.4.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Commander",
+      "package": "commander",
+      "repo": "https://github.com/tj/commander.js",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "随 dsh 分发（CLI 参数）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "dsh CLI 参数解析；随 dsh 锁定树升级",
+      "latest": "15.0.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Execa",
+      "package": "execa",
+      "repo": "https://github.com/sindresorhus/execa",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "随 dsh 分发（子进程执行）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "子进程调用封装；升级注意 ESM-only 与 Node 版本要求",
+      "latest": "10.0.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "ws",
+      "package": "ws",
+      "repo": "https://github.com/websockets/ws",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/server（实时通道）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "WebSocket 服务端；升级后过实时通道与重连用例",
+      "latest": "8.21.3",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Agent Client Protocol SDK",
+      "package": "@agentclientprotocol/sdk",
+      "repo": "https://github.com/zed-industries/agent-client-protocol",
+      "license": "Apache-2.0",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/server",
+        "packages/runtime"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "外部客户端（编辑器）接入协议；协议字段演进需与 dsh 的 acp 形态联调",
+      "latest": "1.4.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "PostgreSQL",
+      "repo": "https://github.com/postgres/postgres",
+      "license": "PostgreSQL License",
+      "channel": "docker",
+      "usage": "runtime",
+      "probe": {
+        "kind": "regex",
+        "file": "scripts/devbox.sh",
+        "pattern": "postgresql-17_([0-9.]+)-1"
+      },
+      "scope": [
+        "桌面内嵌 PG（pack-macos / pack-windows）",
+        "docker-compose（CI/开发）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "桌面载荷内嵌 17.x（Postgres.app 2.9.6-17 / EDB 树），CI 用 pgvector/pgvector:pg17 镜像；小版本升级必须重跑迁移与 RLS 用例；服务器小版本以 PGDG 发布人工复核"
     },
     {
       "name": "pgvector",
       "repo": "https://github.com/pgvector/pgvector",
-      "channel": "docker",
-      "current": "PG17+pgvector（docker workloom-im-pg）",
+      "license": "PostgreSQL License",
+      "channel": "github",
+      "usage": "runtime",
+      "probe": {
+        "kind": "regex",
+        "file": "scripts/devbox.sh",
+        "pattern": "postgresql-17-pgvector_([0-9.]+)-1"
+      },
+      "scope": [
+        "docker-compose 镜像 pgvector/pgvector:pg17",
+        "桌面内嵌（vector.dylib / vector.dll）"
+      ],
       "cadence": "monthly",
       "gate": "full",
-      "scope": "数据存储",
-      "notes": "PostgreSQL License"
+      "notes": "向量检索扩展；扩展版本与 PG 主版本绑定，升级必须同时更新镜像与桌面载荷并跑检索用例",
+      "latest": "v0.8.6",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "litestream",
-      "repo": "https://github.com/benbjohnson/litestream",
+      "name": "NATS Server（内嵌事件总线）",
+      "repo": "https://github.com/nats-io/nats-server",
+      "license": "Apache-2.0",
       "channel": "github",
-      "current": "选型在案（社区版备份）",
+      "usage": "binary",
+      "probe": {
+        "kind": "regex",
+        "file": "scripts/embedded-nats.mjs",
+        "pattern": "NATS_VERSION\\s*=\\s*\"([^\"]+)\""
+      },
+      "scope": [
+        "scripts/embedded-nats.mjs",
+        "pack-macos / pack-windows（随包二进制）",
+        "apps/desktop/electron/bootstrap.cjs"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "官方二进制 pin 版本 + 校验下载；桌面端以 JetStream 形态拉起；二进制缺失时显式降级 memory 形态（事件总线不是启动阻断项）；升级需复核事件重放与 outbox 语义",
+      "latest": "v2.15.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "SQLite（经 dsh 会话索引）",
+      "repo": "https://github.com/sqlite/sqlite",
+      "license": "Public Domain",
+      "channel": "github",
+      "usage": "runtime",
+      "current": "随 dsh（Node 内建 sqlite，无独立版本）",
+      "currentSource": "packages/runtime/dsh-gate/pnpm-lock.yaml",
+      "scope": [
+        "@deepseek-ai/dsh-session-query-sqlite（随 dsh）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "会话检索索引；由 dsh 内部使用 Node 内建 sqlite，无第三方 npm 依赖；升级随 dsh 批次"
+    },
+    {
+      "name": "Redis（事件总线备选后端）",
+      "repo": "https://github.com/redis/redis",
+      "license": "RSALv2 / SSPLv1 / AGPLv3",
+      "channel": "github",
+      "usage": "parked",
+      "current": "适配器已实现（自研 RESP2 客户端），服务未部署",
+      "currentSource": "packages/base/event-bus/adapters/redis.ts",
+      "scope": [
+        "packages/base/event-bus/adapters/redis.ts（生产备选）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "⚠ 许可证非 OSI 标准许可：只允许独立服务进程形态，不得链接进分发包；实现走自研 RESP2（node:net），不引入第三方 redis 客户端；启用前必须过崩溃恢复（PEL/XPENDING）与延迟队列用例",
+      "latest": "8.10.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "React",
+      "package": "react",
+      "repo": "https://github.com/facebook/react",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web",
+        "apps/webc",
+        "apps/webb",
+        "packages/ui"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "React 19；与 react-dom、@types/react 同批升级；升级后必须过三端视觉与交互门禁",
+      "latest": "19.3.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "react-dom",
+      "package": "react-dom",
+      "repo": "https://github.com/facebook/react",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web",
+        "apps/webc",
+        "apps/webb"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "必须与 react 严格同版",
+      "latest": "19.3.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "React Router",
+      "package": "react-router",
+      "repo": "https://github.com/remix-run/react-router",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "路由与数据加载；大版本升级需核对路由表与深链（含 bare 路由返回出口）",
+      "latest": "8.4.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "TanStack Query",
+      "package": "@tanstack/react-query",
+      "repo": "https://github.com/TanStack/query",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "服务端状态缓存；升级复核轮询失效策略（心跳类页面）",
+      "latest": "5.103.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Vite",
+      "package": "vite",
+      "repo": "https://github.com/vitejs/vite",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "apps/web",
+        "apps/webc",
+        "apps/webb"
+      ],
+      "cadence": "weekly",
+      "gate": "standard",
+      "notes": "构建工具链；与 @vitejs/plugin-react、@tailwindcss/vite 同批联动；v8 走 rolldown 内核，升级后必须过三端生产构建",
+      "latest": "8.3.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "@vitejs/plugin-react",
+      "package": "@vitejs/plugin-react",
+      "repo": "https://github.com/vitejs/vite-plugin-react",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "apps/web",
+        "apps/webc",
+        "apps/webb"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与 vite 同批升级",
+      "latest": "6.1.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Tailwind CSS",
+      "package": "tailwindcss",
+      "repo": "https://github.com/tailwindlabs/tailwindcss",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "apps/web",
+        "apps/webc",
+        "apps/webb",
+        "packages/ui"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "v4 令牌制；升级后必须过 Candy 设计系统纯色验证与三端视觉基线",
+      "latest": "4.3.3",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "@tailwindcss/vite",
+      "package": "@tailwindcss/vite",
+      "repo": "https://github.com/tailwindlabs/tailwindcss",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "apps/web",
+        "apps/webc",
+        "apps/webb"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "必须与 tailwindcss 严格同版",
+      "latest": "4.3.3",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "three.js",
+      "package": "three",
+      "repo": "https://github.com/mrdoob/three.js",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web（3D 舞台/数字人）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "3D 渲染；与 @react-three/fiber、drei、postprocessing、three-stdlib 同批升级（版本矩阵敏感），升级后必须过真实渲染截图",
+      "latest": "0.186.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "@react-three/fiber",
+      "package": "@react-three/fiber",
+      "repo": "https://github.com/pmndrs/react-three-fiber",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "React 19 适配线；与 three 主版本绑定，同批升级",
+      "latest": "9.7.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "@react-three/drei",
+      "package": "@react-three/drei",
+      "repo": "https://github.com/pmndrs/drei",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "随 fiber/three 同批升级",
+      "latest": "10.7.8",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "@react-three/postprocessing",
+      "package": "@react-three/postprocessing",
+      "repo": "https://github.com/pmndrs/react-postprocessing",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "后处理特效；随 three 同批升级",
+      "latest": "3.1.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "three-stdlib",
+      "package": "three-stdlib",
+      "repo": "https://github.com/pmndrs/three-stdlib",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "three 官方 examples 的 TS 移植；与 three 主版本对齐",
+      "latest": "2.36.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "pixi.js",
+      "package": "pixi.js",
+      "repo": "https://github.com/pixijs/pixijs",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web（数字人/2D 舞台）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "当前锁 v6 线（pixi-live2d-display 兼容上限）；升级 v7/v8 必须同步替换 live2d 显示层",
+      "latest": "8.21.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "pixi-live2d-display",
+      "package": "pixi-live2d-display",
+      "repo": "https://github.com/guansss/pixi-live2d-display",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/web（Live2D 数字人）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "0.4.0 仅支持 pixi v6 线；升级前先确认上游是否已适配 pixi v7+，否则锁版不动",
+      "latest": "0.4.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Electron",
+      "package": "electron",
+      "repo": "https://github.com/electron/electron",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "apps/desktop"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "桌面壳（正式产品形态）；升级必须过打包载荷校验、真实窗口响应式与托盘/夜班行为验收",
+      "latest": "44.4.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "electron-builder",
+      "package": "electron-builder",
+      "repo": "https://github.com/electron-userland/electron-builder",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "apps/desktop（打包/签名）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "安装包与签名链路；升级后过 app:pack / app:dist 与发布资产校验",
+      "latest": "26.15.3",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Playwright",
+      "package": "@playwright/test",
+      "repo": "https://github.com/microsoft/playwright",
+      "license": "Apache-2.0",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "三端 E2E（apps/*）",
+        "packages/base/computer-use/toolkit（Python 版，随工具链安装）"
+      ],
+      "cadence": "weekly",
+      "gate": "full",
+      "notes": "E2E 与 computer-use 浏览器驱动共用；升级必须重建 Linux 视觉基线（CNB ui-gate 在同一镜像内跑）；Python 侧版本由 toolkit/requirements.txt 约束",
+      "latest": "1.63.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "@axe-core/playwright",
+      "package": "@axe-core/playwright",
+      "repo": "https://github.com/dequelabs/axe-core-npm",
+      "license": "MPL-2.0",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "三端无障碍门禁"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与 @playwright/test 版本矩阵敏感，同批升级",
+      "latest": "4.13.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Vitest",
+      "package": "vitest",
+      "repo": "https://github.com/vitest-dev/vitest",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "packages/*、apps/server"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "各 workspace 版本需对齐（历史存在 v3/v4 混用）；升级后全量跑 pnpm test",
+      "latest": "5.0.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "tsx",
+      "package": "tsx",
+      "repo": "https://github.com/privatenumber/tsx",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "根脚本",
+        "apps/server"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "TS 直跑器；升级后过 db:migrate/db:seed 与 server 启动",
+      "latest": "4.23.13",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "TypeScript",
+      "package": "typescript",
+      "repo": "https://github.com/microsoft/TypeScript",
+      "license": "Apache-2.0",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "全仓 typecheck"
+      ],
       "cadence": "monthly",
       "gate": "smoke",
-      "scope": "边缘节点 SQLite 备份",
-      "notes": "Apache-2.0"
+      "notes": "7.0 原生化工具链；部分包仍锁 5.9（治理/UI 消费校验），升级按包分批，避免一次全仓",
+      "latest": "7.0.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "browserskill",
-      "repo": "https://github.com/Tencent/BrowserSkill",
-      "channel": "github",
-      "current": "观察项（2026-08-26 评估：Borrow 协议可借鉴）",
+      "name": "typescript-governance（别名固定解析器）",
+      "package": "typescript-governance",
+      "repo": "https://github.com/microsoft/TypeScript",
+      "license": "Apache-2.0",
+      "channel": "npm",
+      "usage": "ci",
+      "scope": [
+        "UI 治理/消费校验固定解析器（npm:typescript@5.9.3）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "治理脚本的固定解析器，不随主 TypeScript 升级；改动需与 sync/install-ui-governance.mjs 的 dependency 声明同步",
+      "registryPackage": "typescript"
+    },
+    {
+      "name": "yaml-governance（别名固定解析器）",
+      "package": "yaml-governance",
+      "repo": "https://github.com/eemeli/yaml",
+      "license": "ISC",
+      "channel": "npm",
+      "usage": "ci",
+      "scope": [
+        "UI 治理脚本固定 YAML 解析器（npm:yaml@2.9.0）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与 sync/base-scope.json#uiGovernanceCapability.yamlDependency 保持同版",
+      "registryPackage": "yaml"
+    },
+    {
+      "name": "concurrently",
+      "package": "concurrently",
+      "repo": "https://github.com/open-cli-tools/concurrently",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "pnpm dev（多进程编排）"
+      ],
       "cadence": "monthly",
       "gate": "smoke",
-      "scope": "浏览器桥接对照组",
-      "notes": "MIT；publish-rpa 真机发布的权限模型参照，暂不入运行时"
+      "notes": "开发编排；升级不影响生产载荷",
+      "latest": "10.0.5",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     },
     {
-      "name": "browseract",
+      "name": "jsdom",
+      "package": "jsdom",
+      "repo": "https://github.com/jsdom/jsdom",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "前端单测环境"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "DOM 测试环境；升级后跑三端单测",
+      "latest": "30.1.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "esbuild",
+      "package": "esbuild",
+      "repo": "https://github.com/evanw/esbuild",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "runtime",
+      "scope": [
+        "桌面运行载荷（native 构建产物随包）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "传递依赖（vite/tsx 链路）随包分发；桌面载荷锁三平台二进制，升级必须重跑 runtime:deps:refresh + 载荷边界校验",
+      "latest": "0.28.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "rolldown",
+      "package": "rolldown",
+      "repo": "https://github.com/rolldown/rolldown",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "vite 8 打包内核（native 二进制）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "随 vite 升级；桌面载荷含三平台绑定，注意 onlyBuiltDependencies 白名单",
+      "latest": "1.2.9",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "lightningcss",
+      "package": "lightningcss",
+      "repo": "https://github.com/parcel-bundler/lightningcss",
+      "license": "MPL-2.0",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "vite 8 CSS 管线（native 二进制）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "随 vite 升级；MPL 属弱 copyleft，仅构建期使用，不分发源码",
+      "latest": "1.33.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "@tailwindcss/oxide",
+      "package": "@tailwindcss/oxide",
+      "repo": "https://github.com/tailwindlabs/tailwindcss",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "scope": [
+        "tailwind v4 原生引擎（native 二进制）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与 tailwindcss 同批升级；三平台二进制进载荷白名单",
+      "latest": "4.3.3",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "LiteLLM Proxy",
+      "package": "litellm",
+      "repo": "https://github.com/BerriAI/litellm",
+      "license": "MIT",
+      "channel": "pypi",
+      "usage": "parked",
+      "current": "停车场（VPC 模型网关未接入运行时）",
+      "currentSource": "docker-compose.yml 阶段一注释",
+      "scope": [
+        "模型网关（VPC 本地模型/第三方聚合，规划位）"
+      ],
+      "cadence": "event",
+      "gate": "full",
+      "notes": "⚠ 2026-03 PyPI 供应链投毒（1.82.7/1.82.8）+ CVE-2026-42208 SQL 注入（修复于 1.83.7，CISA KEV 在列）：接入时强制镜像哈希 pin + cosign 验签 + 仅内网监听 + 虚拟密钥分域轮换；安全告警即查不等周期",
+      "latest": "1.43.10",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "mem0",
+      "package": "mem0ai",
+      "repo": "https://github.com/mem0ai/mem0",
+      "license": "Apache-2.0",
+      "channel": "pypi",
+      "usage": "parked",
+      "current": "停车场（组织记忆现由自研 workdata 承担）",
+      "currentSource": "packages/base/workdata/memory.ts",
+      "scope": [
+        "组织记忆引擎（规划位）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "★ 当前组织记忆由自研 workdata 实现；若引入，必须保留自有归因/脱敏层，且只作独立服务进程",
+      "latest": "0.0.18",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Microsoft Presidio",
+      "package": "presidio-analyzer",
+      "repo": "https://github.com/microsoft/presidio",
+      "license": "MIT",
+      "channel": "pypi",
+      "usage": "parked",
+      "current": "停车场（D7 决策：中文 PII 用薄自研正则 + 占位符协议替代）",
+      "currentSource": "packages/base/workdata/pii.ts",
+      "scope": [
+        "PII 识别与脱敏（规划位）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "★ 现网走自研中文 PII 正则（零出站）；引入 Presidio 时必须作为独立服务进程，且出站脱敏强制段保持不变",
+      "latest": "2.2.355",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Langfuse",
+      "repo": "https://github.com/langfuse/langfuse",
+      "license": "MIT（ee/ 目录除外）",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（观测导出按 OTEL GenAI 语义预留契约）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#可观测性",
+      "scope": [
+        "可观测性/评测平台（规划位）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "2026-01 被 ClickHouse 收购；v3 自托管 footprint 重（PG+ClickHouse+Redis+S3），边缘节点只按轻量导出契约对接；ee/ 目录为商业许可，不得使用",
+      "latest": "v4.38.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "DeepEval",
+      "package": "deepeval",
+      "repo": "https://github.com/confident-ai/deepeval",
+      "license": "Apache-2.0",
+      "channel": "pypi",
+      "usage": "parked",
+      "current": "停车场（评测数据飞轮长期预留）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#评估",
+      "scope": [
+        "LLM 回归评测（规划位）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "长期预留：审批手势/驳回原因/轨迹回放已沉淀在消息流，按导出契约接评测，不提前建设管道",
+      "latest": "1.0.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Promptfoo",
+      "package": "promptfoo",
+      "repo": "https://github.com/promptfoo/promptfoo",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（红队/多模型对比，规划位）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#评测",
+      "scope": [
+        "LLM 红队评测（规划位）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "仅作 CI 评测工具（devDependency 形态），不进运行时载荷",
+      "latest": "0.123.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Stagehand",
+      "package": "@browserbasehq/stagehand",
+      "repo": "https://github.com/browserbase/stagehand",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（L3 执行面主路径剧本，规划位）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#执行面五级分层",
+      "scope": [
+        "浏览器自动化分层执行面（L3 剧本）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "L3 主路径：确定性代码 + LLM 局部决策；接入时须走 PlatformAdapter 统一抽象，禁止业务直接 import",
+      "latest": "4.1.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "browser-use",
+      "package": "browser-use",
+      "repo": "https://github.com/browser-use/browser-use",
+      "license": "MIT",
+      "channel": "pypi",
+      "usage": "parked",
+      "current": "停车场（L4 冷启动探索，规划位）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#执行面五级分层",
+      "scope": [
+        "浏览器自动化分层执行面（L4 探索）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "只用于新平台冷启动，探明后必须固化为 L3 剧本；不得直接进生产主路径",
+      "latest": "0.13.10",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Skyvern",
+      "package": "skyvern",
+      "repo": "https://github.com/Skyvern-AI/skyvern",
+      "license": "AGPL-3.0",
+      "channel": "pypi",
+      "usage": "parked",
+      "current": "停车场（视觉抗改版降级路径，规划位）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#执行面五级分层",
+      "scope": [
+        "浏览器自动化（视觉驱动降级路径）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "⚠ AGPL-3.0：只允许独立进程形态，禁止链接进分发包；启用前过法务与出站声明",
+      "latest": "1.0.48",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "computer-use（vendored 工具箱）",
+      "repo": "https://github.com/anthropics/anthropic-quickstarts",
+      "license": "MIT",
+      "channel": "vendor",
+      "usage": "runtime",
+      "current": "repo-vendored-2026-08",
+      "currentSource": "packages/base/computer-use/toolkit",
+      "scope": [
+        "packages/base/computer-use（三层感知：CDP/AXTree/截图）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "vendored 进仓并本地加固；上游为参考实现（无版本号），升级=人工比对；生产部署纪律见 docs/computer-use-production.md；publish-rpa 的 BrowserDriver 上游"
+    },
+    {
+      "name": "BrowserAct 技能包",
       "repo": "https://github.com/browser-act/skills",
+      "license": "MIT",
       "channel": "github",
-      "current": "选型入库（技能市场执行面技能 · 可选）",
-      "cadence": "weekly",
+      "usage": "watch",
+      "current": "观察项（技能市场执行面技能，L2 审批安装）",
+      "currentSource": "skills/registry/browser-act",
+      "scope": [
+        "skills/registry/browser-act（执行面技能·可选）"
+      ],
+      "cadence": "monthly",
       "gate": "standard",
-      "scope": "skills/registry/browser-act（执行面技能，L2 审批安装）",
-      "notes": "MIT；freemium 云依赖（stealth>5/代理/打码付费）——适配纪律：proxyMode=custom-only、凭据客户本机、出站 api.browseract.com 全声明过三段瀑布；集成评估与适配见 skills/official/component-integration"
+      "notes": "freemium 云依赖（stealth/代理/打码付费）：适配纪律 proxyMode=custom-only、凭据留在客户本机、出站 api.browseract.com 全声明；未进入默认运行时"
     },
     {
-      "name": "scrapling",
-      "repo": "https://github.com/D4Vinci/Scrapling",
+      "name": "Tencent BrowserSkill",
+      "repo": "https://github.com/Tencent/BrowserSkill",
+      "license": "MIT",
       "channel": "github",
-      "current": "选型入库（技能市场执行面技能）",
-      "cadence": "weekly",
-      "gate": "standard",
-      "scope": "skills/registry/scrapling-collector",
-      "notes": "BSD-3-Clause；纯本地零出站；经 skill:forge 集成"
-    },
-    {
-      "name": "kaykit-adventurers",
-      "repo": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
-      "channel": "github",
-      "current": "运行时素材（真人风数字员工角色/动画/道具）",
+      "usage": "watch",
+      "current": "观察项（2026-08-26 评估：Borrow 协议可借鉴）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#浏览器桥接",
+      "scope": [
+        "浏览器桥接对照组（publish-rpa 权限模型参照）"
+      ],
       "cadence": "monthly",
       "gate": "smoke",
-      "scope": "apps/web/public/models/kaykit（5 角色 GLB + 道具，CC0 可商用免署名）",
-      "notes": "CC0 许可证；76 组骨骼动画；贴图内嵌单文件；装备节点显隐做外观差异化"
+      "notes": "只作对照评估，暂不入运行时；publish-rpa 真机发布的权限模型参照对象",
+      "latest": "cli-v0.3.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Scrapling",
+      "repo": "https://github.com/D4Vinci/Scrapling",
+      "license": "BSD-3-Clause",
+      "channel": "github",
+      "usage": "watch",
+      "current": "观察项（技能市场执行面技能）",
+      "currentSource": "skills/registry/scrapling-collector",
+      "scope": [
+        "skills/registry/scrapling-collector（纯本地零出站）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "纯本地零出站采集技能；经 skill:forge 集成，随技能市场分发",
+      "latest": "v0.4.15",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "OpenAdapt",
+      "repo": "https://github.com/OpenAdaptAI/OpenAdapt",
+      "license": "MIT",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（录制回放/流程固化规划位）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#流程固化",
+      "scope": [
+        "流程固化（人工流程→确定性剧本）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与意识系统构成「检测高频任务→建议固化→录制编译→剧本上线」管道，未接运行时",
+      "latest": "v1.16.0",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "Agent-S3（gui-agents）",
+      "repo": "https://github.com/simular-ai/Agent-S",
+      "license": "Apache-2.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（桌面 GUI 操控对照实现）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#桌面GUI",
+      "scope": [
+        "桌面 GUI 操控（对照/备选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与自有 computer-use 能力对照复核；若引入只作独立进程，虚拟输入通道不得劫持真实鼠标",
+      "latest": "v0.3.2",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "WrenAI",
+      "repo": "https://github.com/Canner/WrenAI",
+      "license": "Apache-2.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（G1 消息图谱 NL 检索：现走薄自译 NL→结构化过滤器）",
+      "currentSource": "packages/base/workdata/recall.ts",
+      "scope": [
+        "消息图谱 NL 检索（规划位）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "只允许使用其 governed text-to-SQL 引擎能力，且必须独立进程；现网结构回归由薄自译实现承担",
+      "latest": "wren-core-py-v0.8.0",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "Lago",
+      "repo": "https://github.com/getlago/lago",
+      "license": "AGPL-3.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（计量计费由自研计量承担）",
+      "currentSource": "packages/base/model-router/credits*.ts",
+      "scope": [
+        "计量计费（可选独立进程）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "⚠ AGPL-3.0 独立部署；现网计量=自研遥测 seam 逐消息 + 账单投影，未引入",
+      "latest": "v1.53.0",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "E2B（执行沙箱 SDK）",
+      "repo": "https://github.com/e2b-dev/E2B",
+      "license": "Apache-2.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（不可信代码执行隔离规划位）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#执行沙箱",
+      "scope": [
+        "执行沙箱（SaaS 默认形态规划）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "若启用 SaaS 形态，客户代码外发必须经出站声明与审批；首选仍是本地沙箱策略",
+      "latest": "e2b@2.51.0",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "Daytona",
+      "repo": "https://github.com/daytonaio/daytona",
+      "license": "AGPL-3.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（VPC 自托管沙箱规划位）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#执行沙箱",
+      "scope": [
+        "执行沙箱（VPC 自托管，Kata 强化隔离）"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "⚠ AGPL-3.0 独立进程；仅在客户 VPC 内自托管形态评估",
+      "latest": "v0.190.0",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "Tauri",
+      "repo": "https://github.com/tauri-apps/tauri",
+      "license": "Apache-2.0 / MIT",
+      "channel": "github",
+      "usage": "parked",
+      "tag_prefix": "tauri-v",
+      "current": "停车场（桌面壳候选，正式形态已选 Electron）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#前端与多端",
+      "scope": [
+        "桌面壳（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "双轨 tag（tauri-v2.x / v1.x）需 tag_prefix 收敛；当前桌面形态为 Electron，Tauri 仅保留为低配门店候选",
+      "latest": "tauri-v3.0.0-alpha.1",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "Taro",
+      "package": "@tarojs/taro",
+      "repo": "https://github.com/NervJS/taro",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（小程序端候选，移动端现走响应式 Web）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#前端与多端",
+      "scope": [
+        "微信小程序（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "若启用需一套 React 码出小程序（只读+审批+一键暂停），当前未接入",
+      "latest": "4.2.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "CopilotKit",
+      "package": "@copilotkit/react-core",
+      "repo": "https://github.com/CopilotKit/CopilotKit",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（Agent 卡片/审批组件候选）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#前端与多端",
+      "scope": [
+        "Agent 对话/审批组件（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "仅作组件库复用（AG-UI 协议），消息流必须由 dsh 承接；引入前核对与自有 review-console 的边界",
+      "latest": "1.72.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "ECharts",
+      "package": "echarts",
+      "repo": "https://github.com/apache/echarts",
+      "license": "Apache-2.0",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（工作台图表候选，现网图表为自研轻量组件）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#工作台组件",
+      "scope": [
+        "工作台图表（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "体积较大（需按需引入）；若引入需过三端视觉门禁与首屏预算",
+      "latest": "6.1.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "TipTap",
+      "package": "@tiptap/core",
+      "repo": "https://github.com/ueberdosis/tiptap",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（写作编辑器候选）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#工作台组件",
+      "scope": [
+        "工作台写作编辑器（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "编辑器事务→防抖合并→事件流的约定在引入时必须保留（文档即事件）",
+      "latest": "3.31.3",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "SheetJS",
+      "package": "xlsx",
+      "repo": "https://git.sheetjs.com/sheetjs/sheetjs",
+      "license": "Apache-2.0",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（表格导入导出候选）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#工作台组件",
+      "scope": [
+        "数据表格导入导出（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "npm 上的 xlsx 为旧版快照，官方已迁至自建源（cdn.sheetjs.com）；引入时从官方源锁定版本",
+      "latest": "0.18.5",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "PptxGenJS",
+      "package": "pptxgenjs",
+      "repo": "https://github.com/gitbrent/PptxGenJS",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（现网用 python-pptx 服务端生成）",
+      "currentSource": "scripts/build-capability-pptx.py",
+      "scope": [
+        "工作台幻灯片导出（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "若引入，与 python-pptx 二选一，避免两套 PPT 生成链路",
+      "latest": "4.0.1",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Fabric.js",
+      "package": "fabric",
+      "repo": "https://github.com/fabricjs/fabric.js",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "parked",
+      "current": "停车场（设计画布候选）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#工作台组件",
+      "scope": [
+        "设计画布（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "注意与自研 dev-bridge/devfabric 命名区分（同名非同一组件）；Canvas 性能需在低配门店 PC 验证",
+      "latest": "7.4.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "WeasyPrint",
+      "package": "weasyprint",
+      "repo": "https://github.com/Kozea/WeasyPrint",
+      "license": "BSD-3-Clause",
+      "channel": "pypi",
+      "usage": "parked",
+      "current": "停车场（服务端 PDF 渲染候选，现网审计导出为自研）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#报告导出",
+      "scope": [
+        "审计报告 PDF 服务端渲染（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "引入前提：确定性渲染 ≤30s、仅独立进程（依赖系统 libpango/cairo）",
+      "latest": "62.3",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Litestream",
+      "repo": "https://github.com/benbjohnson/litestream",
+      "license": "Apache-2.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（边缘节点 SQLite 备份候选）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#数据存储",
+      "scope": [
+        "边缘节点 SQLite 连续备份（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "边缘/社区版形态未启用；启用前定义恢复演练与保留策略",
+      "latest": "v0.5.17",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "sqlite-vec",
+      "repo": "https://github.com/asg017/sqlite-vec",
+      "license": "MIT / Apache-2.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（边缘向量索引候选）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#数据存储",
+      "scope": [
+        "边缘节点向量检索（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与 pgvector 保留同一检索契约，避免双实现语义漂移",
+      "latest": "v0.1.9",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "SeaweedFS",
+      "repo": "https://github.com/seaweedfs/seaweedfs",
+      "license": "Apache-2.0",
+      "channel": "github",
+      "usage": "parked",
+      "current": "停车场（VPC 对象存储候选）",
+      "currentSource": "WORKLOOM_PRODUCT_CONTEXT.md#数据存储",
+      "scope": [
+        "VPC 对象存储（候选）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "SaaS 形态默认走云 OSS/S3；自托管仅在客户 VPC 方案中评估",
+      "latest": "4.47",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "KayKit Adventurers（3D 素材）",
+      "repo": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+      "license": "CC0-1.0",
+      "channel": "vendor",
+      "usage": "asset",
+      "current": "kaykit-2026-08（5 角色 GLB + 道具）",
+      "currentSource": "apps/web/public/models/kaykit",
+      "scope": [
+        "apps/web/public/models/kaykit（真人风数字员工角色/动画）"
+      ],
+      "cadence": "monthly",
+      "gate": "smoke",
+      "notes": "CC0 可商用免署名；76 组骨骼动画、贴图内嵌单文件；装备节点显隐做外观差异化，新增素材需过三端渲染截图"
+    },
+    {
+      "name": "Node.js",
+      "repo": "https://github.com/nodejs/node",
+      "license": "MIT",
+      "channel": "github",
+      "usage": "binary",
+      "probe": {
+        "kind": "regex",
+        "file": ".cnb.yml",
+        "pattern": "NODE_VERSION=v([0-9.]+)"
+      },
+      "scope": [
+        "CI 构建镜像与桌面载荷内嵌运行时"
+      ],
+      "cadence": "monthly",
+      "gate": "full",
+      "notes": "引擎下限 >=24（dsh 的 zstd 会话持久化要求）；桌面载荷内嵌 24.19.0，升级需重建载荷并过 app 冒烟",
+      "latest": "v26.9.0",
+      "latest_checked_at": "2026-09-18T15:58:36.000Z"
+    },
+    {
+      "name": "pnpm",
+      "package": "pnpm",
+      "repo": "https://github.com/pnpm/pnpm",
+      "license": "MIT",
+      "channel": "npm",
+      "usage": "dev",
+      "probe": {
+        "kind": "regex",
+        "file": "package.json",
+        "pattern": "pnpm@([0-9.]+)"
+      },
+      "scope": [
+        "包管理与 lockfile 格式"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "lockfile v9 格式；升级必须九仓同步（packageManager 字段），否则 frozen-lockfile 安装失败",
+      "latest": "12.4.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "npm（桌面载荷安装器）",
+      "package": "npm",
+      "repo": "https://github.com/npm/cli",
+      "license": "Artistic-2.0",
+      "channel": "npm",
+      "usage": "binary",
+      "probe": {
+        "kind": "regex",
+        "file": ".workloom-runtime-deps/metadata.json",
+        "pattern": "\"npmVersion\": \"([^\"]+)\""
+      },
+      "scope": [
+        ".workloom-runtime-deps（受控 npm ci 安装桌面运行载荷）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "载荷安装器版本与 package-lock.json 绑定；升级需重跑 runtime:deps:refresh/verify",
+      "latest": "12.0.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "python-pptx",
+      "package": "python-pptx",
+      "repo": "https://github.com/scanny/python-pptx",
+      "license": "MIT",
+      "channel": "pypi",
+      "usage": "dev",
+      "current": "按需安装（未锁定版本）",
+      "currentSource": "scripts/build-capability-pptx.py",
+      "scope": [
+        "scripts/build-capability-pptx.py（能力清单 PPT 生成）"
+      ],
+      "cadence": "monthly",
+      "gate": "smoke",
+      "notes": "本地工具链依赖，不随产品分发；版本未锁定属已知缺口（建议后续补 requirements 引脚）",
+      "latest": "1.0.2",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
+    },
+    {
+      "name": "Playwright（Python · computer-use 工具链）",
+      "package": "playwright",
+      "repo": "https://github.com/microsoft/playwright-python",
+      "license": "Apache-2.0",
+      "channel": "pypi",
+      "usage": "dev",
+      "probe": {
+        "kind": "regex",
+        "file": "packages/base/computer-use/toolkit/requirements.txt",
+        "pattern": "playwright\\s*(>=[^\\s]+)"
+      },
+      "scope": [
+        "packages/base/computer-use/toolkit（安装脚本按 requirements 拉取）"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "与 Node 侧 @playwright/test 独立版本线；浏览器二进制由 playwright install 管理，升级需同步预检脚本断言",
+      "currentSource": "packages/base/computer-use/toolkit/requirements.txt",
+      "latest": "1.46.0",
+      "latest_checked_at": "2026-09-18T16:00:21.000Z"
     }
   ]
 }
