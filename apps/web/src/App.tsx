@@ -71,6 +71,7 @@ function LegacyAgentRedirect() {
 /** 开发组件矩阵只在显式开启的本地开发环境可达，生产构建永远关闭。 */
 function UiDiagnosticsRoute() {
   const enabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_UI_DIAGNOSTICS === "true";
+  // 返回出口由 DevMatrix 自身提供（/dev 是 bare 路由，无常驻导航）。
   return enabled ? <Bridge><DevMatrix /></Bridge> : <NotFound />;
 }
 

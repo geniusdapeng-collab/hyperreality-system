@@ -62,7 +62,40 @@ function fullPathOf(entry) {
   return match ? decodeURIComponent(match[1]) : String(entry?.filename ?? "");
 }
 
+/**
+ * 自身 PR 判定（协议 §4 三重排除 + 祖先兜底）。
+ *
+ * CNB 实测：当分支 tip 由流水线回推（如视觉基线重生成提交）时，`pulls` 接口在数分钟内
+ * 仍返回旧的 head.sha，而构建检出的 HEAD 已是新 tip —— 仅按编号/分支/SHA 相等判定会把
+ * 自己的 PR 当成"别人的 PR"，报出与自身路径冲突的假红灯（2026-09-18 审计批次实测）。
+ * 因此追加：PR 记录的 head 是本地 HEAD 的祖先时同样视为自身（本地分支已包含其全部提交）。
+ */
+export function isSelfPull({ number, headRef, headSha, selfNumber, selfBranch, selfHeadSha, ancestorOfHead = false }) {
+  const short = (value) => String(value ?? "").slice(0, 12);
+  if (number && selfNumber && String(number) === String(selfNumber)) return true;
+  if (selfBranch && headRef && String(headRef).replace(/^refs\/heads\//, "") === String(selfBranch)) return true;
+  if (selfHeadSha && headSha) {
+    if (String(headSha) === String(selfHeadSha)) return true;
+    if (short(headSha) === short(selfHeadSha)) return true;
+    if (short(headSha) && short(selfHeadSha) && String(headSha).startsWith(short(selfHeadSha))) return true;
+    if (short(headSha) && short(selfHeadSha) && String(selfHeadSha).startsWith(short(headSha))) return true;
+  }
+  return Boolean(selfHeadSha && headSha && ancestorOfHead);
+}
+
+/** PR 记录的 head 是否为本地 HEAD 的祖先（本地分支已包含该提交）。 */
+function isAncestorOfHead(sha) {
+  if (!sha) return false;
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", sha, "HEAD"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
+  let resolvedSelfNumber = selfNumber && selfNumber !== "true" ? String(selfNumber) : null;
   const pulls = await apiJson(`${API}/${repoSlug}/-/pulls?state=open`);
   const list = Array.isArray(pulls) ? pulls : (pulls?.data ?? []);
   const result = [];
@@ -71,23 +104,27 @@ async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
     if (!number) continue;
     const headRef = String(pull?.head?.ref ?? "").replace(/^refs\/heads\//, "");
     const headSha = String(pull?.head?.sha ?? "");
-    const isSelf =
-      number === String(selfNumber ?? "")
-      || (selfBranch && headRef === selfBranch)
-      || (selfHeadSha && headSha === selfHeadSha)
-      || (selfHeadSha && headSha && headSha.startsWith(selfHeadSha.slice(0, 12)))
-      || (selfHeadSha && headSha && selfHeadSha.startsWith(headSha.slice(0, 12)));
+    const isSelf = isSelfPull({
+      number,
+      headRef,
+      headSha,
+      selfNumber,
+      selfBranch,
+      selfHeadSha,
+      ancestorOfHead: headSha !== selfHeadSha && isAncestorOfHead(headSha),
+    });
     if (isSelf) {
       console.log(`- 跳过自身 PR #${number}（head=${headSha.slice(0, 12)} ref=${headRef}）`);
+      if (selfHeadSha && headSha === selfHeadSha) resolvedSelfNumber = number;
       continue;
     }
     const files = await apiJson(`${API}/${repoSlug}/-/pulls/${number}/files`);
     const paths = (Array.isArray(files) ? files : (files?.data ?? []))
       .map(fullPathOf)
       .filter(Boolean);
-    result.push({ number, title: pull?.title ?? "", paths });
+    result.push({ number, title: pull?.title ?? "", paths, headSha });
   }
-  return result;
+  return { prs: result, selfNumber: resolvedSelfNumber };
 }
 
 function selfTest() {
@@ -104,7 +141,23 @@ function selfTest() {
     console.error("✗ self-test: 文件重叠判定错误");
     process.exit(1);
   }
-  console.log("✓ verify-lock-conflict self-test 通过（模块互斥 / 文件重叠 / 无冲突 3 例）");
+  const selfCases = [
+    // 编号一致 → 自身
+    [{ number: "27", headRef: "audit/x", headSha: "aaaaaaaaaaaa", selfNumber: "27", selfHeadSha: "bbbbbbbbbbbb" }, true],
+    // head 与本地 HEAD 一致 → 自身
+    [{ number: "27", headRef: "audit/x", headSha: "bbbbbbbbbbbb", selfNumber: null, selfHeadSha: "bbbbbbbbbbbb" }, true],
+    // 平台 head.sha 滞后（旧提交是本地 HEAD 的祖先）→ 仍视为自身，避免自比对假红灯
+    [{ number: "27", headRef: "audit/x", headSha: "aaaaaaaaaaaa", selfNumber: null, selfHeadSha: "bbbbbbbbbbbb", ancestorOfHead: true }, true],
+    // 真并发 PR：既非同一编号，也非祖先 → 不排除
+    [{ number: "25", headRef: "task/T-1", headSha: "cccccccccccc", selfNumber: null, selfHeadSha: "bbbbbbbbbbbb", ancestorOfHead: false }, false],
+  ];
+  for (const [input, expected] of selfCases) {
+    if (isSelfPull(input) !== expected) {
+      console.error(`✗ self-test: 自身 PR 判定错误 ${JSON.stringify(input)} 期望 ${expected}`);
+      process.exit(1);
+    }
+  }
+  console.log("✓ verify-lock-conflict self-test 通过（模块互斥 / 文件重叠 / 无冲突 / 自身 PR 判定 4 例）");
 }
 
 async function main() {
@@ -155,7 +208,12 @@ async function main() {
 
   let others;
   try {
-    others = await openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha);
+    const scanned = await openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha);
+    others = scanned.prs;
+    if (scanned.selfNumber) {
+      selfNumber = scanned.selfNumber;
+      console.log(`  自身 PR 编号：#${selfNumber}（先到先得判定依据）`);
+    }
   } catch (error) {
     console.warn(`! 查询 open PR 失败，跳过冲突检测：${String(error).slice(0, 200)}`);
     if (strict) process.exit(1);
@@ -167,16 +225,28 @@ async function main() {
   for (const other of others) {
     const moduleConflicts = findModuleConflicts(mine, other.paths);
     const overlaps = findFileOverlaps(mine, other.paths);
+    // 先到先得：编号小的 PR 优先合并；编号大的（后到者）自行排队；无法判定自身编号时保持对称拦截
+    const mineNumber = Number(selfNumber);
+    const theirNumber = Number(other.number);
+    const iAmLater = Number.isFinite(mineNumber) && Number.isFinite(theirNumber)
+      ? theirNumber < mineNumber
+      : true;
     if (moduleConflicts.length) {
-      failed += 1;
-      console.error(`✗ 与 PR #${other.number}「${other.title}」互斥模块冲突：${moduleConflicts.join(", ")}`);
-      console.error("   模块级互斥路径同一时刻只允许一个任务（协议 §4）——请排队等其合并后 rebase。");
+      if (iAmLater) {
+        failed += 1;
+        console.error(`✗ 与 PR #${other.number}「${other.title}」互斥模块冲突：${moduleConflicts.join(", ")}`);
+        console.error("   模块级互斥路径同一时刻只允许一个任务（协议 §4）——你是后到者，请排队等其合并后 rebase。");
+      } else {
+        console.warn(`! 与 PR #${other.number}「${other.title}」同改互斥模块 ${moduleConflicts.join(", ")}：该 PR 编号更大（后到），由它排队。`);
+      }
     }
     if (overlaps.length) {
       const head = `PR #${other.number}「${other.title}」同时修改：${overlaps.slice(0, 5).join(", ")}${overlaps.length > 5 ? " …" : ""}`;
-      if (overlapMode === "fail") {
+      if (overlapMode === "fail" && iAmLater) {
         failed += 1;
         console.error(`✗ ${head}`);
+      } else if (overlapMode === "fail") {
+        console.warn(`! ${head}（该 PR 后到，由它排队）`);
       } else {
         console.warn(`! ${head}（LOCK_OVERLAP_MODE=warn，仅告警）`);
       }
@@ -194,4 +264,3 @@ main().catch((error) => {
   console.error(`锁冲突检测异常：${error?.message ?? error}`);
   process.exit(1);
 });
-

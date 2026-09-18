@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.1",
-  "sourceRef": "refs/tags/ui-v0.1.1",
-  "sourceCommit": "a96ac33c8c17f93f4d15c73679c1026c5e6198f0",
+  "version": "0.1.3",
+  "sourceRef": "refs/tags/ui-v0.1.3",
+  "sourceCommit": "c43b79ed88d31409b0bb8a5c22257a6d67d1c170",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "df621e14e0adf04e7e4f165a52a5811eb9093d8f357ae14eee3bedb772310b20",
+      "sha256": "c519e704714f193581323226d4d4d7a22a11e3c9dc0ca273f1f01fc22ac69a5d",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -275,7 +275,7 @@
       "mode": 420
     },
     "apps/web/src/App.tsx": {
-      "sha256": "1985f884cea996908d24aa5b285ca15bec716d45c9af6d4d0c31c77f52c604f9",
+      "sha256": "1323dd1957ab83d12a710f41ca38dfbefe01f0c41b8e31f76b67c06b3c568ef4",
       "mode": 420
     },
     "apps/web/src/audio/ambience.ts": {
@@ -467,7 +467,7 @@
       "mode": 420
     },
     "apps/web/src/components/WelcomeCeremony.tsx": {
-      "sha256": "2a1797cda6ae00dbe20b31efcf0f0ce6e3d5f6b1f5aab3c46abcd34ead3675e7",
+      "sha256": "a257a56e52db4a13aee4025e253eb718a2c814ea7c51a656acf0d9ea42df6fc5",
       "mode": 420
     },
     "apps/web/src/components/welcomeScripts.test.ts": {
@@ -538,12 +538,16 @@
       "sha256": "7fd7d13de268aa7ad77cebb7e777304474a35b4d3ee1998e3adec10ed8c967a6",
       "mode": 420
     },
+    "apps/web/src/pages/accounts/bare-routes-exit.test.tsx": {
+      "sha256": "82bf83c70ecd3a1f3e88ae88932d8cb2d5d7e99ff25b2467b5635be915b56379",
+      "mode": 420
+    },
     "apps/web/src/pages/accounts/InviteAccept.tsx": {
-      "sha256": "6ef95b18e2031a61cf0da01985f5195cd3297ae5a6eb482e953914affb8102be",
+      "sha256": "4254957c4a8c33ebbde5f5f36d2a47fe4c448bcad3adbc1803aebaac117f0ff3",
       "mode": 420
     },
     "apps/web/src/pages/accounts/Login.tsx": {
-      "sha256": "9ce01c77faae50681bef9608e5a882b654c8176d581dc12375d3783409e2413d",
+      "sha256": "89cd50eb82af91a4cfb5969c4a77f0e6c5e7bcb994c49f0eed417dede360f8ac",
       "mode": 420
     },
     "apps/web/src/pages/accounts/systemText.test.ts": {
@@ -559,7 +563,7 @@
       "mode": 420
     },
     "apps/web/src/pages/dev/DevMatrix.tsx": {
-      "sha256": "c5f764199ec3aa8fa5f69e49f315ad52e238c5df1f065cda2c3cff6e6ca32956",
+      "sha256": "c86f0aa428830b55cf50fb0768fab403d570388cff934903bcaeea929d99cab6",
       "mode": 420
     },
     "apps/web/src/pages/observability/Observability.tsx": {
@@ -739,7 +743,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "f0148f7b05d9e36796fc11e6c3f337b876bc7dbd9de99cd1b4454f13120db52c",
+      "sha256": "90ee5d4f1d617a467a3b6d602c4a790b5d2a2ad1ecf76ff1f8ffb6e7ce46bfab",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -803,7 +807,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "a9278a471203bfee5b9b47335b52af2b191af86b22ba13535c29499fe227f652",
+      "sha256": "4fdabf90e95147815b7993432bcc54fe76169c4be5ead94e418c68ad733e7fa3",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {

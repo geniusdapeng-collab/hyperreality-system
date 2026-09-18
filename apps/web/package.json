@@ -20,7 +20,7 @@
     "@workloom/industry-contract": "workspace:*",
     "@workloom/server": "workspace:*",
     "@workloom/shared": "workspace:*",
-    "@workloom/ui": "0.1.2",
+    "@workloom/ui": "0.1.3",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
     "react": "19.2.8",
@@ -36,6 +36,7 @@
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "6.1.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "4.3.3",
     "typescript": "^7.0.2",
     "vite": "8.2.2"

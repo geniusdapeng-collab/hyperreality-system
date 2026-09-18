@@ -72,6 +72,8 @@ export default function Login() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md min-w-0 flex-col justify-center px-4 py-10 sm:px-6">
+      {/* 游客浮标会直达本页（F-GUEST1）；登录页也必须给出可见返回出口，不能只靠浏览器后退。 */}
+      <Button className="mb-4 w-fit text-neutral-300 underline" variant="quiet" onClick={() => nav("/")}>← 返回经营首页</Button>
       <h1 className="mb-1 break-words text-2xl font-bold">登录 {PRODUCT_NAME}</h1>
       <p className="mb-6 break-words text-body leading-relaxed text-neutral-300">登录后可查看并切换您有权限访问的工作区。</p>
 
