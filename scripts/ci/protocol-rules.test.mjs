@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  validateCommit,
   exclusiveModuleOf,
   findFileOverlaps,
   findModuleConflicts,
@@ -11,27 +12,42 @@ import {
 
 describe("提交信息规则", () => {
   it("接受合法提交并拒绝缺任务号", () => {
-    assert.deepEqual(validateSubject("feat(hotel): 徽章自动生成 [T-2026-0918-0042]", { repoSlug: "workloom-hotel" }), []);
+    const ok = validateSubject("feat(hotel): 徽章自动生成 [T-2026-0918-0042]", { repoSlug: "workloom-hotel" });
+    assert.deepEqual(ok.errors, []);
+    assert.deepEqual(ok.warnings, []);
     const missing = validateSubject("feat(hotel): 徽章自动生成", { repoSlug: "workloom-hotel" });
-    assert.ok(missing.some((error) => error.includes("任务号")));
+    assert.ok(missing.errors.some((error) => error.includes("任务号")));
   });
 
-  it("拒绝未知 type 与错层 layer", () => {
-    assert.ok(validateSubject("ciish(hotel): x [T-2026-0918-0042]", { repoSlug: "workloom-hotel" }).length >= 1);
+  it("未知 type 失败；layer 不符仅告警", () => {
+    assert.ok(validateSubject("ciish(hotel): x [T-2026-0918-0042]", { repoSlug: "workloom-hotel" }).errors.length >= 1);
     const wrongLayer = validateSubject("feat(base): x [T-2026-0918-0042]", { repoSlug: "workloom-hotel" });
-    assert.ok(wrongLayer.some((error) => error.includes("与本仓不符")));
+    assert.deepEqual(wrongLayer.errors, []);
+    assert.ok(wrongLayer.warnings.some((warning) => warning.includes("与本仓不符")));
+  });
+
+  it("过渡期祖父规则：早于阈值的提交只校 type", () => {
+    const legacy = validateCommit({ subject: "chore(ui): 升级共享 UI 0.1.2", date: "2026-09-18T12:00:00+08:00" }, { repoSlug: "workloom-hotel" });
+    assert.deepEqual(legacy.errors, []);
+    assert.ok(legacy.warnings.length >= 1);
+    const strict = validateCommit({ subject: "chore(ui): 升级共享 UI 0.1.2", date: "2026-09-19T12:00:00+08:00" }, { repoSlug: "workloom-hotel" });
+    assert.ok(strict.errors.some((error) => error.includes("任务号")));
   });
 
   it("豁免自动化与审计提交", () => {
     for (const subject of ["sync(base): 基座下发", "chore(ci): 调整流水线", "HP-31 共同根因", "Merge branch 'main'", "Revert \"fix: x\"", "rescue: preserve tree"]) {
       assert.equal(isExemptSubject(subject), true, subject);
-      assert.deepEqual(validateSubject(subject, { repoSlug: "workloom-im" }), []);
+      const result = validateSubject(subject, { repoSlug: "workloom-im" });
+      assert.deepEqual(result.errors, []);
+      assert.deepEqual(result.warnings, []);
     }
   });
 
   it("过渡开关允许缺任务号但保留格式校验", () => {
-    assert.deepEqual(validateSubject("docs(base): 说明", { repoSlug: "workloom-im", requireTaskId: false }), []);
-    assert.ok(validateSubject("docs: 说明", { repoSlug: "workloom-im", requireTaskId: false }).length >= 1);
+    const ok = validateSubject("docs(base): 说明", { repoSlug: "workloom-im", requireTaskId: false });
+    assert.deepEqual(ok.errors, []);
+    const bad = validateSubject("docs: 说明", { repoSlug: "workloom-im", requireTaskId: false });
+    assert.ok(bad.errors.length >= 1);
   });
 
   it("layer 映射覆盖九仓", () => {

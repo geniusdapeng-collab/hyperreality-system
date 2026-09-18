@@ -45,10 +45,12 @@
 <type>(<layer>): <摘要> [T-YYYYMMDD-XXXX]
 ```
 
-- `type`：`feat | fix | sync | protocol | exam | docs | chore | ci`（`ci` 为流水线/脚本类新增）
+- `type`：`feat | fix | sync | protocol | exam | docs | test | chore | ci`（`test` 测试类、`ci` 流水线/脚本类）
 - `layer`：`base | platform | hotel | video | growth | ecom | tiger | eagle | fox`（按仓库映射，脚本自动推断）
 - **豁免**（无需任务号）：`Merge` / `Revert` 提交、`sync(...)` 同步器产出、`chore(ci)`、`rescue:`、`HP-<数字>` 审计批次、`chore(deps)`。
+- **过渡期祖父规则**：早于 `2026-09-19T00:00+08:00` 的提交只校验 `type`（存量分支与并行车道不追溯；layer/任务号问题降级为告警）；此后的新提交必须满足 type + layer + 任务号。
 - 过渡开关：`PROTOCOL_TASK_ID_OPTIONAL=1` 时只校格式、不强制任务号。
+- layer 与目标仓不一致时按**告警**处理（不阻断合并），仅 `type` 非法与缺任务号（过渡期后）属于硬失败。
 - body 建议附：四问的 q1/q3 摘要 + Issue 链接。本地 hook 可选（`core.hooksPath`），**CI 才是真闸门**。
 
 ## 5.1 任务卡标签体系（CNB 实测上限：每仓 10 个标签）

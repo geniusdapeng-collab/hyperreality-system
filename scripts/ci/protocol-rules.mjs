@@ -4,7 +4,7 @@
  * 规则定义见 docs/DEVELOPMENT-PROTOCOL.md §4、§5。
  */
 
-export const TYPES = ["feat", "fix", "sync", "protocol", "exam", "docs", "chore", "ci"];
+export const TYPES = ["feat", "fix", "sync", "protocol", "exam", "docs", "test", "chore", "ci"];
 
 /** 仓库 → 提交信息里的 layer 短名 */
 export const LAYER_BY_REPO = {
@@ -20,6 +20,13 @@ export const LAYER_BY_REPO = {
 };
 
 export const TASK_ID_RE = /\[T-\d{4}-\d{4}-\d{4}\]/;
+
+/**
+ * 过渡期祖父规则：早于该时刻的提交只校验 type（存量分支与并行车道不追溯）；
+ * 之后的新提交必须满足 type + 任务号；layer 仅作告警。
+ */
+export const STRICT_COMMIT_SINCE = "2026-09-19T00:00:00+08:00";
+
 export const SUBJECT_RE = /^([a-z][a-z-]*)\(([a-z][a-z-]*)\): (.+)$/;
 
 /** 豁免：自动化 / 回滚 / 审计批次提交不受提交规范约束 */
@@ -37,6 +44,13 @@ export function isExemptSubject(subject) {
   return EXEMPT_SUBJECT_RES.some((re) => re.test(String(subject ?? "")));
 }
 
+export function isLegacyCommit(dateIso) {
+  if (!dateIso) return false;
+  const time = Date.parse(dateIso);
+  if (Number.isNaN(time)) return false;
+  return time < Date.parse(STRICT_COMMIT_SINCE);
+}
+
 export function layerForRepo(slug) {
   const name = String(slug ?? "").split("/").pop();
   return LAYER_BY_REPO[name] ?? null;
@@ -44,31 +58,66 @@ export function layerForRepo(slug) {
 
 /**
  * 校验单条提交标题。
- * @returns {string[]} 错误列表（空数组 = 通过）
+ * 硬失败：格式、type 非法、摘要为空、缺任务号（过渡期后）。
+ * 仅告警：layer 不在标准集合 / 与本仓不一致。
+ * @returns {{errors: string[], warnings: string[]}}
  */
 export function validateSubject(subject, options = {}) {
   const { repoSlug = null, requireTaskId = true } = options;
   const errors = [];
+  const warnings = [];
   const text = String(subject ?? "").trim();
-  if (!text) return ["提交标题为空"];
-  if (isExemptSubject(text)) return errors;
+  if (!text) return { errors: ["提交标题为空"], warnings };
+  if (isExemptSubject(text)) return { errors, warnings };
 
   const match = SUBJECT_RE.exec(text);
   if (!match) {
-    errors.push(`格式不符：期望 "<type>(<layer>): <摘要> [T-YYYYMMDD-XXXX]"，实际 "${text}"`);
-    return errors;
+    return {
+      errors: [`格式不符：期望 "<type>(<layer>): <摘要> [T-YYYYMMDD-XXXX]"，实际 "${text}"`],
+      warnings,
+    };
   }
   const [, type, layer, summary] = match;
   if (!TYPES.includes(type)) errors.push(`type "${type}" 不在允许集合 [${TYPES.join("|")}]`);
+
   const allowedLayers = Object.values(LAYER_BY_REPO);
-  if (!allowedLayers.includes(layer)) errors.push(`layer "${layer}" 不在允许集合 [${allowedLayers.join("|")}]`);
+  if (!allowedLayers.includes(layer)) {
+    warnings.push(`layer "${layer}" 不在标准集合 [${allowedLayers.join("|")}]（仅告警）`);
+  }
   const expected = repoSlug ? layerForRepo(repoSlug) : null;
-  if (expected && layer !== expected) errors.push(`layer "${layer}" 与本仓不符：${repoSlug} 应使用 "${expected}"`);
+  if (expected && layer !== expected) {
+    warnings.push(`layer "${layer}" 与本仓不符：${repoSlug} 建议使用 "${expected}"（仅告警）`);
+  }
   if (!summary.trim()) errors.push("摘要为空");
   if (requireTaskId && !TASK_ID_RE.test(text)) {
     errors.push("缺少任务号 [T-YYYYMMDD-XXXX]（临时放宽可设 PROTOCOL_TASK_ID_OPTIONAL=1）");
   }
-  return errors;
+  return { errors, warnings };
+}
+
+/**
+ * 按提交粒度校验：过渡期内的提交只要求 type 合法；之后按完整规则。
+ * @returns {{errors: string[], warnings: string[]}}
+ */
+export function validateCommit({ subject, date }, options = {}) {
+  const text = String(subject ?? "").trim();
+  if (isExemptSubject(text)) return { errors: [], warnings: [] };
+  const match = SUBJECT_RE.exec(text);
+  if (!match) {
+    return { errors: [`格式不符：期望 "<type>(<layer>): <摘要> [T-YYYYMMDD-XXXX]"，实际 "${text}"`], warnings: [] };
+  }
+  const [, type] = match;
+  if (!TYPES.includes(type)) return { errors: [`type "${type}" 不在允许集合 [${TYPES.join("|")}]`], warnings: [] };
+
+  if (isLegacyCommit(date)) {
+    const full = validateSubject(text, options);
+    const warnings = full.warnings.slice();
+    for (const error of full.errors) {
+      warnings.push(`过渡期宽限（提交早于 ${STRICT_COMMIT_SINCE}）：${error}`);
+    }
+    return { errors: [], warnings };
+  }
+  return validateSubject(text, options);
 }
 
 /** 模块级互斥路径：命中即全局独占，任何其它任务都不得同时改动 */
@@ -128,8 +177,7 @@ export function parseCommitLog(output) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [sha, ...rest] = line.split("\u001f");
-      return { sha: (sha ?? "").slice(0, 12), subject: rest.join("\u001f") };
+      const [sha, date, ...rest] = line.split("\u001f");
+      return { sha: (sha ?? "").slice(0, 12), date: date ?? "", subject: rest.join("\u001f") };
     });
 }
-
