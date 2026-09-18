@@ -21,7 +21,7 @@ import {
 } from "@workloom/base/tenancy";
 import { gatewayAppend, gatewayAppendOnClient, MockEmbedder, upsertMemoryInTx } from "@workloom/base/workdata";
 import { makeReadableId } from "@workloom/shared";
-import { capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, sessionProcedure, writeProcedure } from "./context.js";
+import { actionProcedure, capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, sessionProcedure, writeProcedure } from "./context.js";
 import { accountsRouter } from "./accounts-router.js";
 import {
   ApprovalError,
@@ -134,7 +134,11 @@ import {
   resolveAuthoritativeClientAccess,
 } from "../service/access-authority.js";
 import {
+  assignWizardDraft,
+  completeWizardDraft,
+  getWizardDraft,
   replayWelcome,
+  saveWizardDraft,
   saveWelcomeProgress,
   welcomeProgress,
   WELCOME_STEPS,
@@ -145,9 +149,17 @@ import {
   disableMemory,
   editMemoryContent,
   getFeedbackEnums,
+  previewMemoryImpact,
+  reactivateMemory,
   recallMemoriesByMember,
+  restoreMemories,
   runMemoryMinerBeat,
 } from "@workloom/base/evolve";
+import {
+  bundledServiceFrontAvailable,
+  resolveServiceFrontPublication,
+} from "../service/service-front-publication.js";
+import { overlayRouter } from "./overlay-router.js";
 import { getMemorySources, searchMemories } from "@workloom/base/workdata";
 
 /** system router：健康检查（公开） */
@@ -275,6 +287,58 @@ const onboardingRouter = router({
     memberId: ctx.identity.memberId,
     memberNo: ctx.identity.memberNo,
     role: ctx.identity.role,
+  })),
+
+  /**
+   * 标准落地向导草稿（HP-31 类型漂移修复：补齐基座 procedure，apps/web onboarding 页调用）：
+   * 显式版本号防多人覆盖，payload 白名单不接收密钥和文档正文。
+   */
+  wizardDraft: protectedProcedure.query(({ ctx }) => getWizardDraft(ctx.identity.workspaceId)),
+
+  saveWizardDraft: writeProcedure
+    .input(z.object({
+      expectedVersion: z.number().int().min(0),
+      currentStep: z.number().int().min(0).max(4),
+      payload: z.object({
+        provider: z.string().max(40).optional(),
+        baseUrl: z.string().max(200).optional(),
+        model: z.string().max(80).optional(),
+        businessName: z.string().max(60).optional(),
+        industry: z.string().max(40).optional(),
+        note: z.string().max(300).optional(),
+        siteUrl: z.string().max(500).optional(),
+        documentTitle: z.string().max(120).optional(),
+        testQuestion: z.string().max(500).optional(),
+      }).strict(),
+    }))
+    .mutation(({ ctx, input }) => saveWizardDraft(ctx.identity.workspaceId, {
+      memberId: ctx.identity.memberId,
+      memberNo: ctx.identity.memberNo,
+      role: ctx.identity.role,
+    }, input)),
+
+  /** 指派向导草稿给具体成员推进（HP-31 类型漂移修复：补齐基座 procedure）。 */
+  assignWizardDraft: writeProcedure
+    .input(z.object({ memberId: z.string().min(1), expectedVersion: z.number().int().min(1) }))
+    .mutation(({ ctx, input }) => assignWizardDraft(ctx.identity.workspaceId, {
+      memberId: ctx.identity.memberId,
+      memberNo: ctx.identity.memberNo,
+      role: ctx.identity.role,
+    }, input)),
+
+  /** 完成向导草稿（版本号乐观锁；过期即拒）。 */
+  completeWizardDraft: writeProcedure
+    .input(z.object({ expectedVersion: z.number().int().min(1) }))
+    .mutation(({ ctx, input }) => completeWizardDraft(ctx.identity.workspaceId, {
+      memberId: ctx.identity.memberId,
+      memberNo: ctx.identity.memberNo,
+      role: ctx.identity.role,
+    }, input.expectedVersion)),
+
+  /** C 端发布结果必须来自部署环境、工作区路由和渠道接入事实（HP-31 类型漂移修复：补齐基座 procedure）。 */
+  serviceFrontPublication: protectedProcedure.query(({ ctx }) => resolveServiceFrontPublication({
+    workspaceId: ctx.identity.workspaceId,
+    bundledClientAvailable: bundledServiceFrontAvailable(),
   })),
 
   /** 运行态总览（P0 横幅/落地向导同一事实源）：数据模式 + LLM 装配 + 工作区规模 */
@@ -2584,10 +2648,20 @@ const captainRouter = router({
   grant: capabilityWriteProcedure("quest")
     .input(z.object({
       clauses: z.array(z.string()),
+      // HP-31 类型漂移修复：自治边界与基座 Charter 契约同形（{ ranges, caps }），
+      // 页面（apps/web P21）已按该契约提交；旧 { price_band, procurement_cap, campaign_cap }
+      // 形状由基座统一演进替换，本路由不再做二次映射。
       autonomy: z.object({
-        price_band: z.tuple([z.number(), z.number()]),
-        procurement_cap: z.number(),
-        campaign_cap: z.number(),
+        ranges: z.record(z.string(), z.object({
+          label: z.string().min(1).max(80),
+          lower: z.number(),
+          upper: z.number(),
+          anchor: z.number(),
+        })),
+        caps: z.record(z.string(), z.object({
+          label: z.string().min(1).max(80),
+          limit: z.number().nonnegative(),
+        })),
       }),
       shadowDays: z.number().int().min(1).max(14).default(3),
       trialDays: z.number().int().min(3).max(30).default(7),
@@ -2613,7 +2687,8 @@ const captainRouter = router({
         );
         const charter = parseCharter(row.rows[0]?.archive?.charter);
         const grantedAt = new Date().toISOString();
-        const next = transition({ ...charter, autonomy: input.autonomy }, {
+        const autonomy = input.autonomy;
+        const next = transition({ ...charter, autonomy }, {
           kind: "grant",
           grant: {
             event_id: "", granted_by: ctx.identity.memberNo, granted_at: grantedAt,
@@ -2629,7 +2704,7 @@ const captainRouter = router({
           object: { type: "company_ceo", id: scope.workspaceId },
           decision: {
             action: "captain.grant",
-            params: { disclosure_version: RISK_DISCLOSURE_VERSION, clauses: input.clauses, autonomy: input.autonomy, shadow_days: input.shadowDays, trial_days: input.trialDays },
+            params: { disclosure_version: RISK_DISCLOSURE_VERSION, clauses: input.clauses, autonomy, shadow_days: input.shadowDays, trial_days: input.trialDays },
             after: { mode: next.mode },
             basis: ["深度授权六步完成：风险揭示/逐项确认/边界设定/试用计划/身份核验/签署", "此记录不可篡改不可删除（§12.2 第⑥步）"],
           },
@@ -3100,6 +3175,39 @@ const memoryRouter = router({
       );
     }),
 
+  /** 停用/来源清算前读取真实影响关系；无引用时返回空数组而非推测（HP-31 类型漂移修复：补齐基座 procedure）。 */
+  impact: protectedProcedure
+    .input(z.object({
+      memoryId: z.string().optional(),
+      memberId: z.string().optional(),
+    }).refine((input) => Boolean(input.memoryId) !== Boolean(input.memberId), "必须且只能指定一条记忆或一名来源成员"))
+    .query(async ({ ctx, input }) => {
+      return previewMemoryImpact(getAppPool(), scopeOf(ctx.identity), {
+        memoryIds: input.memoryId ? [input.memoryId] : undefined,
+        sourceMemberId: input.memberId,
+      });
+    }),
+
+  /** 回收区单条重新启用，恢复本身写独立校准事件。 */
+  reactivate: actionProcedure("memory.manage")
+    .input(z.object({ memoryId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return reactivateMemory(
+        getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
+        { memberNo: ctx.identity.memberNo }, input.memoryId,
+      );
+    }),
+
+  /** 撤销最近一批来源清算；只恢复请求中仍处于回收区的本工作区记忆。 */
+  restore: actionProcedure("memory.manage")
+    .input(z.object({ memoryIds: z.array(z.string()).min(1).max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      return restoreMemories(
+        getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
+        { memberNo: ctx.identity.memberNo }, input.memoryIds,
+      );
+    }),
+
   /** 手动触发提炼节拍（演示/联调用；生产由夜班调度触发） */
   mineNow: writeProcedure.mutation(async ({ ctx }) => {
     return runMemoryMinerBeat(getAppPool(), getGatewayPool(), scopeOf(ctx.identity));
@@ -3147,6 +3255,8 @@ export const appRouter = router({
   modelFeedback: modelFeedbackRouter,
   memory: memoryRouter,
   evolution: evolutionRouter,
+  // HP-31 类型漂移修复：基座 HP-01 新增的租户覆盖层路由（apps/web P26/P27 已按基座契约调用）
+  overlay: overlayRouter,
 });
 
 export type AppRouter = typeof appRouter;

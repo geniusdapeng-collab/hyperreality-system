@@ -323,7 +323,8 @@ export async function searchKB(input: { workspaceId: string; query: string; limi
   return rows
     .map((x) => ({
       content: x.content, heading: x.heading, documentTitle: x.title, documentId: x.document_id,
-      score: scoreChunkFallback(input.query, { heading: x.heading, content: x.content }, HOTEL_WEAK_TOKENS),
+      // 基座契约：KbSearchLexicon = { synonyms?, weakTokens? }（此前误传 ReadonlySet）
+      score: scoreChunkFallback(input.query, { heading: x.heading, content: x.content }, { weakTokens: [...HOTEL_WEAK_TOKENS] }),
     }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)

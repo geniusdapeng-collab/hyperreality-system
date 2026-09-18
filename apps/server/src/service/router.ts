@@ -465,11 +465,23 @@ const bundleRouter = router({
   generateStaffing: writeProcedure
     .input(z.object({ industryText: z.string().min(4).max(2000) }))
     .mutation(async ({ ctx, input }) => {
-      return generateStaffing(scopeOf(ctx.identity).workspaceId, input.industryText);
+      // 基座契约：generateStaffing(workspaceId, industryText, actor)（actor 用于留痕「谁触发的生成」）
+      return generateStaffing(scopeOf(ctx.identity).workspaceId, input.industryText, { id: ctx.identity.memberNo, type: "human" });
     }),
   /** 上岗考（exam 门禁：达标才 activated） */
   onboardingExam: writeProcedure.mutation(async ({ ctx }) => {
-    return onboardingExam(scopeOf(ctx.identity).workspaceId);
+    // 基座契约：onboardingExam(workspaceId, { installId, expectedAssemblyHash }, actor)
+    // 哈希绑定由页面刷新后的当前装配提供，服务端以活动装配的 assembly_hash 校验（过期即拒）。
+    const workspaceId = scopeOf(ctx.identity).workspaceId;
+    const install = await activeInstall(workspaceId);
+    if (!install?.assembly_hash) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "当前没有可开考的定制装配（缺少装配哈希）" });
+    }
+    return onboardingExam(
+      workspaceId,
+      { installId: install.id, expectedAssemblyHash: install.assembly_hash },
+      { id: ctx.identity.memberNo, type: "human" },
+    );
   }),
 });
 

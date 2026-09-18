@@ -454,8 +454,9 @@ export async function runExam(workspaceId: string, opts: {
     for (const q of sampled) {
       const replies = await import("@workloom/base/eval-core").then(async ({ runQuestion }) =>
         runQuestion(q, async ({ conversationId, text, cUserId }) => {
+          // 本仓 handleMessage 不接收 businessAdapter（行业适配器在 dialog 内部完成装配）
           const r = await handleMessage({
-            workspaceId, cUserId, channel: "h5", text, conversationId, businessAdapter,
+            workspaceId, cUserId, channel: "h5", text, conversationId,
           });
           return {
             conversationId: r.conversationId,

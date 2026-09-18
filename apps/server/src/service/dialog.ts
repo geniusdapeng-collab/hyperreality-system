@@ -40,11 +40,20 @@ function newId(prefix: string): string {
 
 /* ================= 意图（M8：复用 base 同一张规则表 + 本域行业词扩展） ================= */
 
-/** 酒店示例域扩展词表（M8 评测校准口径；底座规则表保持行业中性，行业词由本域注入） */
+/**
+ * 域扩展意图分类器（基座契约：IntentRuleExtension = { id, classify }，不再是词表对象）。
+ * 词表沿用模板继承的酒店示例词（本仓行业词表应由行业 owner 重写后替换），
+ * 结构升级只改分类器形态、不改判定语义。
+ */
 const HOTEL_INTENT_EXT: IntentRuleExtension = {
-  biz_query: ["房费", "房价", "房型", "大床房", "双床房", "套房", "标间", "订房"],
-  service_request: ["换床单", "续住"],
-  kb_qa: ["早餐", "停车", "健身房", "泳池", "退房", "入住"],
+  id: "hyperreality-domain-intents",
+  classify(text: string) {
+    const hit = (words: readonly string[]) => words.some((w) => text.includes(w));
+    if (hit(["房费", "房价", "房型", "大床房", "双床房", "套房", "标间", "订房"])) return "biz_query";
+    if (hit(["换床单", "续住"])) return "service_request";
+    if (hit(["早餐", "停车", "健身房", "泳池", "退房", "入住"])) return "kb_qa";
+    return null;
+  },
 };
 
 /** 工单进度查询（server 侧特有 biz_query 子类，先于规则表判定） */
@@ -62,7 +71,7 @@ const RE_ROOM_RATE = /房价|房型|大床房|双床房|单人房|标准间|套�
 export function classify(text: string): { intent: Intent; tool?: BizToolName } {
   if (RE_TICKET_STATUS.test(text)) return { intent: "biz_query", tool: "query_ticket" };
   if (RE_ROOM_RATE.test(text)) return { intent: "biz_query", tool: "query_catalog" };
-  const ruled = ruleBasedIntent(text, HOTEL_INTENT_EXT);
+  const ruled = ruleBasedIntent(text, [HOTEL_INTENT_EXT]);
   if (ruled === "complaint") return { intent: "complaint" };
   if (ruled === "service_request") return { intent: "service_request" };
   if (ruled === "biz_query") {
