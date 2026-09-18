@@ -4,6 +4,7 @@
  * 页面本身即走查工具——对照 PRD 状态规格表逐屏对账时逐格核验。
  */
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { Icon } from "@workloom/ui";
 import {
   AchievementBadge,
@@ -54,6 +55,8 @@ function Section({ name, spec, children }: { name: string; spec: string; childre
 export default function DevMatrix() {
   return (
     <div data-wl-authorized-diagnostics="ui-component-matrix" className="space-y-2">
+      {/* /dev 是 bare 路由（不挂左侧主导航），页面必须自带可见返回出口。 */}
+      <Link to="/tasks" className="wl-button wl-button--secondary inline-flex w-fit">← 返回经营主页</Link>
       <p className="rounded border border-line bg-bg800 px-3 py-2 text-body text-ink2">
         仅限本地开发环境并显式开启诊断开关后使用；本页术语仅用于组件验收。
       </p>
