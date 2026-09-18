@@ -9,7 +9,7 @@
 //  ⑤ 单调守卫形同虚设：无生产接线，且不检查 when/match 改写（when:"false" 即可废掉基线规则）；
 //  ⑥ 规则版本不可追溯：提案一律 v-next，激活不递增、不失效旧版。
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkCandidateAgainstBaseline, checkMonotonic, loadFencePack } from "./dsl.js";
@@ -27,7 +27,15 @@ const hotelPackPath = join(BUNDLES, "hotel/fences/hotel-baseline.yml");
 const aipmPackPath = join(BUNDLES, "ai-pm/fences/ai-pm-baseline.yml");
 const platformPackPath = join(BUNDLES, "platform/fences/platform-baseline.yml");
 
-const hotelPack = loadFencePack(readFileSync(hotelPackPath, "utf-8"));
+/**
+ * 本测试文件随基座分发到所有子仓，而 `bundles/**` 属行业资产（不在 base-sync 范围内）：
+ * 依赖具体行业包的断言一律按存在性守卫/跳过，避免子仓出现"文件不存在"的假红灯。
+ */
+const hotelPack = existsSync(hotelPackPath) ? loadFencePack(readFileSync(hotelPackPath, "utf-8")) : null;
+const hasHotelPack = hotelPack !== null;
+/** 已被 describe.skipIf(!hasHotelPack) 守卫的用例使用；缺包时取空值，断言不会被执行。 */
+const hotelPackRules: RuntimeRule[] = hotelPack?.rules ?? [];
+const hotelPackDefaultLevel = hotelPack?.defaultLevel ?? "review";
 
 function draft(action: string, who: { type: "human" | "agent" | "system"; id: string }): EventDraft {
   return {
@@ -96,14 +104,14 @@ describe("HP-02 ② 未知动作与规则匹配 fail-closed", () => {
     expect(v.level).toBe("auto");
   });
 
-  it("规则动作词表按语义段匹配工具名（price.adjust ↔ pms.price.write）", () => {
+  it.skipIf(!hasHotelPack)("规则动作词表按语义段匹配工具名（price.adjust ↔ pms.price.write）", () => {
     const v = judge(
       {
         object: { type: "room_price" }, action: "pms.price.write",
         params: {}, after: { price: 300 },
       },
-      hotelPack.rules,
-      hotelPack.defaultLevel,
+      hotelPackRules,
+      hotelPackDefaultLevel,
     );
     expect(v.level).toBe("block"); // R2 保底价 ¥380
     expect(v.impacts.some((i) => i.rule_id === "R2")).toBe(true);
@@ -120,13 +128,22 @@ describe("HP-02 ② 未知动作与规则匹配 fail-closed", () => {
   });
 });
 
-describe("HP-02 ④ DSL 装载器与出厂包一致", () => {
+describe.skipIf(!hasHotelPack)("HP-02 ④ DSL 装载器与出厂包一致", () => {
   it("ai-pm / platform 的 fences: 形态可装载且规则数正确", () => {
-    const aipm = loadFencePack(readFileSync(aipmPackPath, "utf-8"));
-    const platform = loadFencePack(readFileSync(platformPackPath, "utf-8"));
-    expect(aipm.rules.length).toBe(14);
-    expect(platform.rules.length).toBe(10);
-    expect(aipm.defaultLevel).toBe("review");
+    // 本文件随基座分发到所有子仓，而 bundles/** 属行业资产（platform 包仅存在于仙女座/基座）：
+    // 按包存在性守卫，缺包即跳过该包断言，避免子仓出现"文件不存在"的假红灯。
+    if (existsSync(aipmPackPath)) {
+      const aipm = loadFencePack(readFileSync(aipmPackPath, "utf-8"));
+      expect(aipm.rules.length).toBe(14);
+      expect(aipm.defaultLevel).toBe("review");
+    }
+    if (existsSync(platformPackPath)) {
+      const platform = loadFencePack(readFileSync(platformPackPath, "utf-8"));
+      expect(platform.rules.length).toBe(10);
+    }
+    if (!existsSync(hotelPackPath) && !existsSync(aipmPackPath) && !existsSync(platformPackPath)) {
+      expect(true).toBe(true); // 该仓未随附任何示例围栏包：本用例无对象可校验（已在上面按包跳过）
+    }
   });
 
   it("重复 rule_id 装载即拒（防 patchById 静默取最后一条）", () => {
@@ -135,23 +152,23 @@ describe("HP-02 ④ DSL 装载器与出厂包一致", () => {
   });
 });
 
-describe("HP-02 ⑤ 单调守卫必须防 when/match 改写", () => {
+describe.skipIf(!hasHotelPack)("HP-02 ⑤ 单调守卫必须防 when/match 改写", () => {
   it("基线规则 when 被改成恒假 → 视为放宽（拒绝）", () => {
-    const patch = hotelPack.rules.map((r) => (r.rule_id === "R2" ? { ...r, when: "false" } : r));
-    const res = checkMonotonic(hotelPack.rules, patch);
+    const patch = hotelPackRules.map((r) => (r.rule_id === "R2" ? { ...r, when: "false" } : r));
+    const res = checkMonotonic(hotelPackRules, patch);
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => v.rule_id === "R2")).toBe(true);
   });
 
   it("基线规则 match 收窄（删掉被覆盖动作）→ 拒绝", () => {
-    const patch = hotelPack.rules.map((r) =>
+    const patch = hotelPackRules.map((r) =>
       r.rule_id === "R3" ? { ...r, actions: ["price.adjust"] } : r);
-    const res = checkMonotonic(hotelPack.rules, patch);
+    const res = checkMonotonic(hotelPackRules, patch);
     expect(res.ok).toBe(false);
   });
 
   it("patch 内重复 rule_id → 拒绝", () => {
-    const res = checkMonotonic(hotelPack.rules, [...hotelPack.rules, { ...hotelPack.rules[0]!, level: "auto" as const }]);
+    const res = checkMonotonic(hotelPackRules, [...hotelPackRules, { ...hotelPackRules[0]!, level: "auto" as const }]);
     expect(res.ok).toBe(false);
   });
 });
@@ -170,7 +187,7 @@ describe("HP-02 ⑥ 规则动作清单注册（供装配期调用）", () => {
 const RUN_DB = process.env.RUN_DB_TESTS === "1"
   && Boolean(process.env.DATABASE_APP_URL) && Boolean(process.env.DATABASE_URL);
 
-describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
+describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本递增", () => {
   // ws-yunqi 的种子租户是 tenant-demo（与 runtime 夹具一致）；写错租户会在同一工作区产生
   // 第二条哈希链根（GENESIS），进而让套件的链完整性校验失败（O-15/Q-03/R-13）。
   const scope = { tenantId: "tenant-demo", workspaceId: "ws-yunqi" };
@@ -259,8 +276,8 @@ describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
 
   it("伪造审批引用被拒（审批事件必须与提案绑定且已 approved）", async () => {
     const dr = await createDryRun(appPool, scope, {
-      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPack.rules,
-      defaultLevel: hotelPack.defaultLevel, createdBy: "MEM-001",
+      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPackRules,
+      defaultLevel: hotelPackDefaultLevel, createdBy: "MEM-001",
     });
     await confirmDryRun(appPool, scope, dr.dryRunId);
     await insertCandidate(newRuleId, "review", "after.price < 300");
@@ -294,8 +311,8 @@ describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
 
   it("加严候选激活成功：版本递增、旧 active 同 rule_id 转 rolled_back", async () => {
     const dr = await createDryRun(appPool, scope, {
-      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPack.rules,
-      defaultLevel: hotelPack.defaultLevel, createdBy: "MEM-001",
+      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPackRules,
+      defaultLevel: hotelPackDefaultLevel, createdBy: "MEM-001",
     });
     await confirmDryRun(appPool, scope, dr.dryRunId);
     await insertCandidate(newRuleId, "block", "after.price < 380");
