@@ -145,9 +145,25 @@ export class OverlayError extends Error {
     public code:
       | "SCHEMA" | "FENCE_LOOSEN" | "FENCE_BLOCK_IMMUTABLE" | "FENCE_FROM_MISMATCH"
       | "THRESHOLD_OUT_OF_BOUNDS" | "PATH_NOT_FOUND" | "PRESET_NOT_FOUND"
-      | "SKILL_NOT_FOUND" | "KB_ITEM_NOT_FOUND" | "STATUS_ILLEGAL",
+      | "SKILL_NOT_FOUND" | "KB_ITEM_NOT_FOUND" | "STATUS_ILLEGAL"
+      | "PATH_UNSAFE" | "THRESHOLD_UNVERIFIED" | "THRESHOLD_WIDENED",
     message: string,
   ) { super(message); this.name = "OverlayError"; }
+}
+
+/**
+ * 路径安全（HP-01 加固）：覆盖声明的 path 是用户可控自由文本，会被合并引擎逐段写进
+ * 资产对象（deepSet）。因此必须拒绝原型链关键字，否则 `__proto__/x` 这类路径会污染
+ * Object.prototype（跨请求、跨租户的进程级污染），是明确的 P0 面。
+ */
+const UNSAFE_PATH_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
+export function assertSafePath(path: string): void {
+  for (const segment of path.split("/")) {
+    if (UNSAFE_PATH_SEGMENTS.has(segment)) {
+      throw new OverlayError("PATH_UNSAFE",
+        `路径 ${path} 含原型链关键字「${segment}」，拒绝（防止对象图被污染）`);
+    }
+  }
 }
 
 /**
@@ -155,9 +171,12 @@ export class OverlayError extends Error {
  * - 围栏 tighten：to 的严格度必须高于 from；from=block 禁止（block 不可调）
  * - 阈值：value 必须在 bounds 内
  * - canary 状态必须带 canary_scope
+ * - 路径：写入侧即拒绝不可覆盖路径与原型链关键字（不接受"先存后拒"）
  */
 export function validateOverlay(doc: OverlayDoc): OverlayDoc {
   for (const it of doc.items) {
+    assertSafePath(it.path);
+    assertPathAllowed(it.path);
     if (it.type === "fence") {
       if (it.from === "block") {
         throw new OverlayError("FENCE_BLOCK_IMMUTABLE",

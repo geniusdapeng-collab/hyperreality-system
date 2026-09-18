@@ -7,9 +7,11 @@
  *          不可覆盖路径（红线/账本/考试院/积分底层）命中即拒。
  */
 import {
-  FENCE_STRICTNESS, OverlayDoc, OverlayError, OverlayItem, assertPathAllowed, validateOverlay,
+  FENCE_STRICTNESS, OverlayDoc, OverlayError, OverlayItem, assertPathAllowed, assertSafePath,
+  validateOverlay,
   type FenceLevel,
 } from "./model.js";
+import { boundsWithin, intersectBounds, platformBoundsFor, type ThresholdBound } from "./threshold-policy.js";
 
 /* ================= 合并目标结构（与装配器磁盘资产同构的宽松视图） ================= */
 export interface BundleAssetView {
@@ -34,16 +36,29 @@ export interface MergeResult {
 /* ================= 小工具 ================= */
 function clone<T>(v: T): T { return JSON.parse(JSON.stringify(v)) as T; }
 
-/** 深路径设置（a/b/c → obj.a.b.c = value），中间层不存在则创建 */
+/** 原型链关键字：写入侧的第二道闸（第一道在 model.assertSafePath） */
+const UNSAFE_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
+
+/** 深路径设置（a/b/c → obj.a.b.c = value），中间层不存在则创建
+ *  加固（HP-01）：逐段拒绝原型链关键字，中间层一律用自有属性判断，
+ *  不允许经 `__proto__` 走到 Object.prototype 上写值（进程级原型污染）。 */
 function deepSet(obj: Record<string, unknown>, path: string, value: unknown): void {
   const parts = path.split("/");
   let cur: Record<string, unknown> = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const k = parts[i]!;
-    if (typeof cur[k] !== "object" || cur[k] === null || Array.isArray(cur[k])) cur[k] = {};
+    if (UNSAFE_SEGMENTS.has(k)) {
+      throw new OverlayError("PATH_UNSAFE", `路径 ${path} 含原型链关键字「${k}」，拒绝写入`);
+    }
+    const existing = Object.prototype.hasOwnProperty.call(cur, k) ? cur[k] : undefined;
+    if (typeof existing !== "object" || existing === null || Array.isArray(existing)) cur[k] = {};
     cur = cur[k] as Record<string, unknown>;
   }
-  cur[parts[parts.length - 1]!] = value;
+  const last = parts[parts.length - 1]!;
+  if (UNSAFE_SEGMENTS.has(last)) {
+    throw new OverlayError("PATH_UNSAFE", `路径 ${path} 含原型链关键字「${last}」，拒绝写入`);
+  }
+  cur[last] = value;
 }
 
 function deepGet(obj: Record<string, unknown>, path: string): unknown {
@@ -118,7 +133,38 @@ function applyCrew(view: BundleAssetView, item: Extract<OverlayItem, { type: "cr
 }
 
 /* ================= ④ 阈值（override + 边界校验） ================= */
+/** 行业包前向兼容位：视图显式声明 `workloom.threshold_bounds` 时可进一步收紧区间 */
+function packThresholdBounds(view: BundleAssetView, path: string): ThresholdBound | null {
+  const declared = (view.bj.workloom as Record<string, unknown> | undefined)?.threshold_bounds;
+  if (!declared || typeof declared !== "object" || Array.isArray(declared)) return null;
+  const entry = (declared as Record<string, unknown>)[path];
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const { min, max } = entry as { min?: unknown; max?: unknown };
+  if (typeof min !== "number" || typeof max !== "number" || !Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return { min, max };
+}
+
+/** 阈值路径的基座允许区间（基座红线目录 ∪ 行业包收紧位）；未登记 = null（不可覆盖） */
+export function thresholdBoundsFor(view: BundleAssetView, path: string): ThresholdBound | null {
+  const platform = platformBoundsFor(path);
+  const pack = packThresholdBounds(view, path);
+  if (platform && pack) return intersectBounds(platform, pack);
+  return platform ?? pack;
+}
+
 function applyThreshold(view: BundleAssetView, item: Extract<OverlayItem, { type: "threshold" }>, audit: MergeResult["audit"]): void {
+  // HP-01：区间判定必须锚定基座（或行业包进一步收紧后的）允许区间——
+  // 覆盖层自带的 bounds 只是"申请收窄的范围"，不能拿来给自己发许可证。
+  const allowed = thresholdBoundsFor(view, item.path);
+  if (!allowed) {
+    throw new OverlayError("THRESHOLD_UNVERIFIED",
+      `阈值 ${item.path} 未在基座红线目录/行业包允许区间登记——不可覆盖（fail-closed，先登记再放开）`);
+  }
+  if (!boundsWithin(item.bounds, allowed)) {
+    throw new OverlayError("THRESHOLD_WIDENED",
+      `阈值 ${item.path} 的区间 [${item.bounds.min}, ${item.bounds.max}] 超出基座允许区间 `
+      + `[${allowed.min}, ${allowed.max}]：覆盖层只能收紧，不得放宽`);
+  }
   if (item.value < item.bounds.min || item.value > item.bounds.max) {
     throw new OverlayError("THRESHOLD_OUT_OF_BOUNDS",
       `阈值 ${item.path}=${item.value} 超出基座允许区间 [${item.bounds.min}, ${item.bounds.max}]`);
@@ -126,16 +172,28 @@ function applyThreshold(view: BundleAssetView, item: Extract<OverlayItem, { type
   const wl = (view.bj.workloom ??= {});
   const thresholds = (wl.thresholds ??= {}) as Record<string, unknown>;
   deepSet(thresholds, item.path, item.value);
-  audit.push({ path: item.path, action: "threshold.override", detail: `阈值 ${item.path} = ${item.value}（区间 [${item.bounds.min}, ${item.bounds.max}]）` });
+  audit.push({
+    path: item.path, action: "threshold.override",
+    detail: `阈值 ${item.path} = ${item.value}（基座允许 [${allowed.min}, ${allowed.max}]，本次申请 [${item.bounds.min}, ${item.bounds.max}]）`,
+  });
 }
 
 /* ================= ⑤ 技能（disable / params） ================= */
+/** 技能存在性：provides.skills 与 presets[].skills 双源核对（与 rebase 判定同口径） */
+export function skillExistsInView(view: BundleAssetView, name: string): boolean {
+  const provides = (view.bj.workloom as Record<string, unknown> | undefined)?.provides;
+  const declared = (provides as Record<string, unknown> | undefined)?.skills;
+  if (Array.isArray(declared)
+    && declared.some((s) => String(s) === name || String(s).includes(`/${name}/`))) return true;
+  return (view.presets ?? []).some((p) =>
+    Array.isArray(p.skills) && (p.skills as unknown[]).map(String).includes(name));
+}
+
 function applySkill(view: BundleAssetView, item: Extract<OverlayItem, { type: "skill" }>, audit: MergeResult["audit"]): void {
   const name = item.path.replace(/^skills\//, "");
   const wl = (view.bj.workloom ??= {});
   const provides = (wl.provides ??= {}) as Record<string, unknown>;
-  const skills = (provides.skills as string[] | undefined) ?? [];
-  if (skills.length > 0 && !skills.some((s) => s.includes(`/${name}/`) || s === name)) {
+  if (!skillExistsInView(view, name)) {
     throw new OverlayError("SKILL_NOT_FOUND", `技能 ${item.path} 不存在于行业包 provides.skills`);
   }
   if (item.op === "disable") {
@@ -177,7 +235,10 @@ function applyFence(view: BundleAssetView, item: Extract<OverlayItem, { type: "f
  */
 export function mergeOverlay(view: BundleAssetView, doc: OverlayDoc): MergeResult {
   validateOverlay(doc);
-  for (const it of doc.items) assertPathAllowed(it.path);
+  for (const it of doc.items) {
+    assertSafePath(it.path);
+    assertPathAllowed(it.path);
+  }
 
   const out: BundleAssetView = clone(view);
   const audit: MergeResult["audit"] = [];
