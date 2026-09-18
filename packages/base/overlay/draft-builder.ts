@@ -13,6 +13,7 @@ import { z } from "zod";
 import { parseOverlay, type OverlayDoc, type OverlayItem } from "./model.js";
 import { saveDraft, type OverlayScope } from "./store.js";
 import type { Queryable } from "./pipeline.js";
+import { intersectBounds, platformBoundsFor } from "./threshold-policy.js";
 
 /** L1 结构化意图（AI 澄清/文档抽取产物；kind 白名单九种） */
 export const L1IntentSchema = z.discriminatedUnion("kind", [
@@ -140,6 +141,26 @@ export class L1IntakeError extends Error {
   constructor(message: string, readonly code: "EMPTY" | "INVALID") { super(message); this.name = "L1IntakeError"; }
 }
 
+/**
+ * 阈值意图的基座对齐（HP-01）：AI/文档给出的 bounds 只是"申请区间"，
+ * 落到覆盖项时以基座红线目录为准——区间取交集（只能收窄），
+ * 申请值本身越界即拒（录入侧早拒，不把问题留到考试闸）。
+ */
+function alignThresholdWithPlatform(item: OverlayItem): OverlayItem {
+  if (item.type !== "threshold") return item;
+  const allowed = platformBoundsFor(item.path);
+  if (!allowed) {
+    throw new L1IntakeError(
+      `阈值 ${item.path} 未在基座红线目录登记，不能通过录入通道新增（需先由基座评审登记允许区间）`, "INVALID");
+  }
+  const bounds = intersectBounds(item.bounds, allowed);
+  if (item.value < bounds.min || item.value > bounds.max) {
+    throw new L1IntakeError(
+      `阈值 ${item.path}=${item.value} 超出基座允许区间 [${allowed.min}, ${allowed.max}]`, "INVALID");
+  }
+  return { ...item, bounds };
+}
+
 /** 多条意图 → 覆盖层草稿（合并、全量校验；与手工编辑同一道闸） */
 export function buildDraftFromIntents(
   scope: OverlayScope, baseBundle: string, baseVersion: string, intents: L1Intent[],
@@ -147,7 +168,7 @@ export function buildDraftFromIntents(
 ): Omit<OverlayDoc, "overlay_version" | "status"> {
   if (intents.length === 0) throw new L1IntakeError("意图列表为空", "EMPTY");
   const parsed = intents.map((i) => L1IntentSchema.parse(i));
-  const items = parsed.flatMap(intentToItems);
+  const items = parsed.flatMap(intentToItems).map(alignThresholdWithPlatform);
   // 与手工编辑同一道闸：parseOverlay 语义校验（边界/围栏纪律/canary 纪律）全量过
   return parseOverlay({
     tenant_id: scope.tenantId,

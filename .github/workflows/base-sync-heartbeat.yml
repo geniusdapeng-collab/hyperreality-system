@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_REPO: geniusdapeng-collab/workloom-im
+  BASE_REPO: workloom-ai/workloom-im
   GIT_TERMINAL_PROMPT: "0"
 
 jobs:

@@ -6,6 +6,7 @@
  *    客户侧不暴露版本号/状态机概念，只讲人话（"您的 3 项定制已生效"）。
  */
 import { z } from "zod";
+import type pg from "pg";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -15,10 +16,11 @@ import {
   L1IntentSchema, listVersions, loadActiveOverlay, rebaseSummary, rollback,
   healthSummary, saveDraft, buildIntakePreview, extractIntentsDeterministic,
   summarizeIntent, type BundleAssetView, type CurrentState, type PipelineDeps,
-  type OverlayDoc,
+  type OverlayDoc, type OverlayScope, withOverlayTx, PipelineError,
 } from "@workloom/base/overlay";
 import { routedLlmCall } from "../service/llm.js";
 import { loadVerifiedBundleManifest } from "@workloom/base/bundles";
+import { overlayPipelineDeps, recordOverlayEventInOwnTx } from "../service/overlay-runtime.js";
 import { actionProcedure, protectedProcedure, router, scopeOf } from "./context.js";
 
 /** 从磁盘行业包构建合并视图（与装配钩子 toView 同口径） */
@@ -40,7 +42,18 @@ function loadViewFromDisk(slug: string): BundleAssetView {
   return { bj, presets, fencePacks, extra };
 }
 
-const deps: PipelineDeps = { loadView: (slug) => loadViewFromDisk(slug) };
+/**
+ * 覆盖层 DB 访问统一入口（HP-01）：RLS 依赖事务级 GUC，
+ * 裸用连接池会让策略恒 false（修复前生产环境覆盖层整体不可用）。
+ */
+function tx<T>(scope: OverlayScope, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+  return withOverlayTx(getAppPool(), scope, fn);
+}
+
+/** 流水线 deps：装配视图 + 账本出口（账本出口绑定当前事务 client，与状态变更同一 COMMIT） */
+function scopedDeps(client: pg.PoolClient, scope: OverlayScope, actorId: string): PipelineDeps {
+  return overlayPipelineDeps((slug) => loadViewFromDisk(slug), client, scope, actorId);
+}
 
 /** 当前生效覆盖层 → 冲突检测上下文（FAQ/服务目录/营业规则/禁用表达 四本现状账） */
 function currentStateFromOverlay(doc: OverlayDoc | null): CurrentState {
@@ -68,12 +81,14 @@ export const overlayRouter = router({
 
   /** 版本历史（管理台时间线） */
   versions: protectedProcedure.input(baseInput).query(async ({ ctx, input }) => {
-    return listVersions(getAppPool(), scopeOf(ctx.identity), input.baseBundle);
+    const scope = scopeOf(ctx.identity);
+    return tx(scope, (client) => listVersions(client, scope, input.baseBundle));
   }),
 
   /** 当前生效的覆盖层（无则 null） */
   active: protectedProcedure.input(baseInput).query(async ({ ctx, input }) => {
-    return loadActiveOverlay(getAppPool(), scopeOf(ctx.identity), input.baseBundle);
+    const scope = scopeOf(ctx.identity);
+    return tx(scope, (client) => loadActiveOverlay(client, scope, input.baseBundle));
   }),
 
   /** 存草稿（运营手工编辑入口） */
@@ -90,7 +105,8 @@ export const overlayRouter = router({
       }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return saveDraft(getAppPool(), scopeOf(ctx.identity), {
+      const scope = scopeOf(ctx.identity);
+      return tx(scope, (client) => saveDraft(client, scope, {
         tenant_id: ctx.identity.tenantId,
         base_bundle: input.baseBundle,
         base_version: input.baseVersion,
@@ -98,27 +114,53 @@ export const overlayRouter = router({
         note: input.note,
         canary_scope: input.canaryScope,
         createdBy: ctx.identity.memberNo,
-      });
+      }));
     }),
 
   /** 流水线：草稿 → 考试 → 灰度（考试闸不过即拒，事件留痕） */
   toCanary: actionProcedure("workspace.configure").input(versionInput).mutation(async ({ ctx, input }) => {
-    return draftToCanary(getAppPool(), scopeOf(ctx.identity), input.baseBundle, input.overlayVersion, deps);
+    const scope = scopeOf(ctx.identity);
+    try {
+      return await tx(scope, (client) => draftToCanary(
+        client, scope, input.baseBundle, input.overlayVersion,
+        scopedDeps(client, scope, ctx.identity.memberNo),
+      ));
+    } catch (err) {
+      // 考试闸拒收：状态变更已随事务回滚，拒收原因必须独立留痕（L4.2 需介入事件）
+      if (err instanceof PipelineError && err.code === "EXAM_FAILED") {
+        await recordOverlayEventInOwnTx(getAppPool(), scope, ctx.identity.memberNo, {
+          type: "overlay.exam_failed",
+          tenant_id: ctx.identity.tenantId,
+          base_bundle: input.baseBundle,
+          overlay_version: input.overlayVersion,
+          detail: { reason: err.message, failures: err.detail ?? null },
+        });
+      }
+      throw err;
+    }
   }),
 
   /** 流水线：灰度 → 全量（观察期纪律） */
   toActive: actionProcedure("workspace.configure").input(versionInput).mutation(async ({ ctx, input }) => {
-    return canaryToActive(getAppPool(), scopeOf(ctx.identity), input.baseBundle, input.overlayVersion, deps);
+    const scope = scopeOf(ctx.identity);
+    return tx(scope, (client) => canaryToActive(
+      client, scope, input.baseBundle, input.overlayVersion,
+      scopedDeps(client, scope, ctx.identity.memberNo),
+    ));
   }),
 
   /** 一键回滚（止血，直激活） */
   rollback: actionProcedure("workspace.configure").input(baseInput).mutation(async ({ ctx, input }) => {
-    return rollback(getAppPool(), scopeOf(ctx.identity), input.baseBundle, ctx.identity.memberNo, deps);
+    const scope = scopeOf(ctx.identity);
+    return tx(scope, (client) => rollback(
+      client, scope, input.baseBundle, ctx.identity.memberNo, scopedDeps(client, scope, ctx.identity.memberNo),
+    ));
   }),
 
   /** 导出快照（资产归属叙事：客户的定制可一键导出带走） */
   export: protectedProcedure.input(baseInput).query(async ({ ctx, input }) => {
-    return exportSnapshot(getAppPool(), scopeOf(ctx.identity), input.baseBundle);
+    const scope = scopeOf(ctx.identity);
+    return tx(scope, (client) => exportSnapshot(client, scope, input.baseBundle));
   }),
 
   /** Rebase 预检：行业包升级前，先出《兼容报告》（运营评审用） */
@@ -126,7 +168,7 @@ export const overlayRouter = router({
     .input(baseInput.extend({ toVersion: z.string().min(1).max(50) }))
     .query(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
-      const doc = await loadActiveOverlay(getAppPool(), scope, input.baseBundle);
+      const doc = await tx(scope, (client) => loadActiveOverlay(client, scope, input.baseBundle));
       if (!doc) return { report: null, summary: "当前无生效定制，升级零影响" };
       const report = detectRebase(doc, loadViewFromDisk(input.baseBundle), input.toVersion);
       return { report, summary: rebaseSummary(report) };
@@ -148,8 +190,9 @@ export const overlayRouter = router({
       }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return ingestL1(getAppPool(), scopeOf(ctx.identity), input.baseBundle, input.baseVersion,
-        input.intents, { note: input.note, createdBy: ctx.identity.memberNo, canaryScope: input.canaryScope });
+      const scope = scopeOf(ctx.identity);
+      return tx(scope, (client) => ingestL1(client, scope, input.baseBundle, input.baseVersion,
+        input.intents, { note: input.note, createdBy: ctx.identity.memberNo, canaryScope: input.canaryScope }));
     }),
 
   /* ================= P0-2 配置录入管线（对话/文档 → 意图卡 → 草稿） ================= */
@@ -199,7 +242,7 @@ export const overlayRouter = router({
       const scope = scopeOf(ctx.identity);
       const buf = Buffer.from(input.contentBase64, "base64");
       if (buf.length > 3_000_000) throw new Error("文件超过 3MB 上限");
-      const active = await loadActiveOverlay(getAppPool(), scope, input.baseBundle);
+      const active = await tx(scope, (client) => loadActiveOverlay(client, scope, input.baseBundle));
       const llm = input.useLlm === false ? undefined
         : routedLlmCall({ gateway: getAppPool(), scope, scene: "kb-extract" });
       return buildIntakePreview(input.filename, buf, {
@@ -221,16 +264,18 @@ export const overlayRouter = router({
       intents: z.array(L1IntentSchema).min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
-      return ingestL1(getAppPool(), scopeOf(ctx.identity), input.baseBundle, input.baseVersion,
+      const scope = scopeOf(ctx.identity);
+      return tx(scope, (client) => ingestL1(client, scope, input.baseBundle, input.baseVersion,
         input.intents, {
           note: `文档导入批次 ${input.batchId}${input.filename ? `（${input.filename}）` : ""} · ${input.intents.length} 条意图`,
           createdBy: ctx.identity.memberNo,
-        });
+        }));
     }),
 
   /** 健康汇总（晨报/健康分数据源：滞留草稿/超龄灰度预警） */
   health: protectedProcedure.query(async ({ ctx }) => {
-    return healthSummary(getAppPool(), scopeOf(ctx.identity));
+    const scope = scopeOf(ctx.identity);
+    return tx(scope, (client) => healthSummary(client, scope));
   }),
 
   /* ================= 客户简化版（只说人话） ================= */
@@ -238,8 +283,7 @@ export const overlayRouter = router({
   /** 我的定制：一句话状态（"您的 3 项定制已生效 / 2 项待裁决"） */
   myStatus: protectedProcedure.input(baseInput).query(async ({ ctx, input }) => {
     const scope = scopeOf(ctx.identity);
-    const pool = getAppPool();
-    const doc = await loadActiveOverlay(pool, scope, input.baseBundle);
+    const doc = await tx(scope, (client) => loadActiveOverlay(client, scope, input.baseBundle));
     if (!doc) return { hasOverlay: false, summary: "您还没有专属定制，当前使用行业标准配置" };
     return {
       hasOverlay: true,
@@ -251,7 +295,10 @@ export const overlayRouter = router({
 
   /** 我的定制：一键恢复原样（客户侧唯一动作，不暴露版本概念） */
   myRollback: actionProcedure("workspace.configure").input(baseInput).mutation(async ({ ctx, input }) => {
-    const doc = await rollback(getAppPool(), scopeOf(ctx.identity), input.baseBundle, ctx.identity.memberNo, deps);
+    const scope = scopeOf(ctx.identity);
+    const doc = await tx(scope, (client) => rollback(
+      client, scope, input.baseBundle, ctx.identity.memberNo, scopedDeps(client, scope, ctx.identity.memberNo),
+    ));
     return { ok: true, summary: `已恢复上一版定制（共 ${doc.items.length} 项）` };
   }),
 });

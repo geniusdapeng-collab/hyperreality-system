@@ -8,8 +8,9 @@
  *    → 保留现状但挂「待裁决」，晨报/健康分可见，人裁决前不静默改动。
  * 输出《Rebase 报告》：谁兼容、谁落回、谁待裁决——升级影响一纸看清（DoD ②）。
  */
-import { kbEntriesOf, thresholdOf, type BundleAssetView } from "./merge.js";
+import { kbEntriesOf, skillExistsInView, thresholdBoundsFor, thresholdOf, type BundleAssetView } from "./merge.js";
 import type { OverlayDoc, OverlayItem } from "./model.js";
+import { boundsWithin } from "./threshold-policy.js";
 
 export type RebaseVerdict = "compatible" | "auto_fallback" | "needs_decision";
 
@@ -45,13 +46,6 @@ function fenceRule(view: BundleAssetView, ruleId: string): { level?: string } | 
   }
   return null;
 }
-/** 技能存在性：presets[].skills 引用与 provides.skills 双源核对 */
-function skillExists(view: BundleAssetView, name: string): boolean {
-  const provides = (view.bj.workloom?.provides as Record<string, unknown> | undefined)?.skills;
-  if (Array.isArray(provides) && provides.some((s) => String(s).includes(`/${name}/`))) return true;
-  return (view.presets ?? []).some((p) =>
-    Array.isArray(p.skills) && (p.skills as unknown[]).map(String).includes(name));
-}
 /** 知识条目存在性：按常见集合路径扫描（faq/kb/service-catalog 等） */
 function kbEntryExists(view: BundleAssetView, entryPath: string): boolean {
   const [coll, id] = entryPath.split("/");
@@ -81,15 +75,27 @@ export function checkItem(item: OverlayItem, index: number, newView: BundleAsset
       return { ...base, verdict: "compatible", reason: "员工仍存在" };
     }
     case "threshold": {
-      if (thresholdOf(newView, item.path) === undefined) {
-        return { ...base, verdict: "auto_fallback", reason: `新行业包已移除阈值 ${item.path} → 落回默认` };
+      // HP-01：阈值存在性锚定基座红线目录（或行业包收紧位），不再由"行业包是否恰好声明默认值"裁决——
+      // 否则真实行业包（bundle 契约不含阈值字段）升级时会把全部阈值定制误判为引用消失而静默删除。
+      const allowed = thresholdBoundsFor(newView, item.path);
+      if (!allowed) {
+        return { ...base, verdict: "auto_fallback", reason: `新包/新基座已撤销阈值 ${item.path} 的允许区间 → 落回默认` };
+      }
+      if (!boundsWithin(item.bounds, allowed)) {
+        return {
+          ...base, verdict: "needs_decision",
+          reason: `阈值 ${item.path} 的申请区间 [${item.bounds.min}, ${item.bounds.max}] 已超出新允许区间 [${allowed.min}, ${allowed.max}]（红线收紧）→ 待裁决`,
+        };
       }
       const newDefault = thresholdOf(newView, item.path);
-      return { ...base, verdict: "compatible", reason: `阈值仍存在（新行业包默认 ${newDefault}，租户 ${item.value}）` };
+      return {
+        ...base, verdict: "compatible",
+        reason: `阈值允许区间仍存在（新行业包默认 ${newDefault ?? "未声明"}，允许 [${allowed.min}, ${allowed.max}]，租户 ${item.value}）`,
+      };
     }
     case "skill": {
       const name = item.path.replace(/^skills\//, "");
-      if (!skillExists(newView, name)) {
+      if (!skillExistsInView(newView, name)) {
         return { ...base, verdict: "auto_fallback", reason: `新行业包已移除技能 ${name} → 落回默认` };
       }
       return { ...base, verdict: "compatible", reason: "技能仍存在" };

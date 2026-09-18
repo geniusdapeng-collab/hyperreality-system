@@ -158,13 +158,12 @@ describe("rebase 检测器", () => {
       { type: "kb", op: "override", path: "faq/standard-041", value: { a: "下午 2 点" } },      // 新包删了 → 落回
       { type: "crew", op: "disable", path: "presets/marketing-officer" },                        // 员工还在 → 兼容
       { type: "fence", op: "tighten", path: "fences/R-MK1", from: "review", to: "block" },      // 新包变了级别 → 待裁决
-      { type: "threshold", op: "override", path: "approval/refund-credits", value: 800, bounds: { min: 0, max: 1000 } }, // 新包删了 → 落回
+      { type: "threshold", op: "override", path: "local/legacy-param", value: 800, bounds: { min: 0, max: 1000 } }, // 允许区间被撤销 → 落回
       { type: "skill", op: "disable", path: "skills/marketing-auto" },                           // 技能还在 → 兼容
     ]);
-    // 新行业包：删了 standard-041 与阈值、R-MK1 级别 review→block
+    // 新行业包：删了 standard-041；阈值裁决以基座红线目录为准（HP-01：不再由行业包默认值裁决）
     const next = makeView();
     next.extra.faq = [{ id: "standard-042", q: "含早吗？", a: "含双早" }] as never;
-    (next.bj.workloom!.thresholds as Record<string, number>) = {};
     next.fencePacks[0]!.fences = [
       { rule_id: "R-MK1", level: "block", name: "营销内容人工复核" },
       { rule_id: "R-PL4", level: "block", name: "客户数据导出" },
@@ -174,7 +173,7 @@ describe("rebase 检测器", () => {
     expect(report.from_version).toBe("2.3.0");
     expect(report.to_version).toBe("2.4.0");
     expect(report.compatible).toBe(3);        // persona + crew + skill
-    expect(report.autoFallback).toBe(2);      // kb + threshold
+    expect(report.autoFallback).toBe(2);      // kb + 允许区间被撤销的阈值
     expect(report.needsDecision).toBe(1);     // fence
     // 落回后的项集：摘掉 kb 与 threshold，其余保留
     expect(report.rebasedItems).toHaveLength(4);

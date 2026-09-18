@@ -1,14 +1,14 @@
 {
   "baseRepo": "workloom-ai/workloom-im",
-  "lastSyncedBaseSha": "4f2296f39dbc7ebd43bdaefe14a4e11d2772850b",
-  "lastSyncAt": "2026-09-17T17:11:02Z",
-  "filesTouched": 1,
-  "lastRequiredAssetsBaseSha": "f90c4cebb3749ede15f90757b327845d88b94d67",
-  "lastSyncMode": "required-only",
+  "lastSyncedBaseSha": "878967518b946b32706397d2fd125a40548924b8",
+  "lastSyncAt": "2026-09-18T00:56:31.961Z",
+  "filesTouched": 14,
+  "lastRequiredAssetsBaseSha": "878967518b946b32706397d2fd125a40548924b8",
+  "lastSyncMode": "full",
   "pathPrefix": ".",
   "requiredRootAssetsSha256": {
     "WORKLOOM_PRODUCT_CONTEXT.md": "ae9eba80b05c5b9a90c8b68709e3193b98c064b627703415318fc1a07d7efbb2",
-    ".github/workflows/base-sync-heartbeat.yml": "1ca270ea0121c54dfde3e4752b6651702283600cbff10c7e1a8e7de8e1b245d0",
+    ".github/workflows/base-sync-heartbeat.yml": "5058d3aecbde57482f98ece2716e2cd056d5a5ca7799500b0cbcc1501ae5ca98",
     "AGENTS.md#managed-section": "d63adfbd349ac87c8af33b96cd13aad1a2ed29909f226e8fbb97ee9d4a1ecacf"
   }
 }
