@@ -16,6 +16,13 @@ const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const RUN = `e2e-${Date.now().toString(36)}`;
 const DEV_C_SECRET = "workloom-c-dev-secret-change-me";
 const FIXTURE_WORKSPACE_ID = process.env.SERVICE_C_TEST_WORKSPACE_ID?.trim() || null;
+// LLM 装配自带干净基线：本套件断言「未装配 → mock 标注」。
+// 上一次 e2e 套件若中途失败，会把 .env 的 LLM_PROVIDER 留成 e2e-stub（saveLlmConfig 落盘），
+// 环境残留会让这里的断言莫名失败——固定为 mock，避免测试依赖机器状态。
+process.env.LLM_PROVIDER = "mock";
+process.env.LLM_BASE_URL = "";
+process.env.LLM_API_KEY = "";
+process.env.LLM_MODEL = "";
 if (process.env.RUN_DB_TESTS === "1" && !FIXTURE_WORKSPACE_ID) {
   throw new Error("服务 E2E 已启用真库，但未显式配置 SERVICE_C_TEST_WORKSPACE_ID");
 }

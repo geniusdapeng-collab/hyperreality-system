@@ -11,6 +11,12 @@ process.env.DATABASE_URL ??= "postgres://postgres:workloom@localhost:5432/worklo
 process.env.DATABASE_APP_URL ??= "postgres://workloom_app:workloom_dev_app@localhost:5432/workloom";
 process.env.DATABASE_GATEWAY_URL ??= "postgres://workloom_gateway:workloom_dev_gateway@localhost:5432/workloom";
 process.env.SERVICE_C_DEMO_AUTH = "true";
+// 同 e2e.test.ts：契约用例断言「未装配 LLM → mock 标注」，固定干净基线，
+// 避免上一次套件异常退出留下的 .env 残留（LLM_PROVIDER=e2e-stub）污染本测试。
+process.env.LLM_PROVIDER = "mock";
+process.env.LLM_BASE_URL = "";
+process.env.LLM_API_KEY = "";
+process.env.LLM_MODEL = "";
 const FIXTURE_WORKSPACE_ID = process.env.SERVICE_C_TEST_WORKSPACE_ID?.trim() || null;
 if (process.env.RUN_DB_TESTS === "1" && !FIXTURE_WORKSPACE_ID) {
   throw new Error("服务契约测试已启用真库，但未显式配置 SERVICE_C_TEST_WORKSPACE_ID");

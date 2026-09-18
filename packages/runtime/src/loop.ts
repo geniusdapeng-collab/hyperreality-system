@@ -11,8 +11,8 @@
  *  - E3.7：工具执行无回执（receipt.synced≠true）→ 标「未核实」，线程不得转 completed
  */
 import type pg from "pg";
-import { judge, type RuntimeRule } from "@workloom/base/fence-engine";
-import { gatewayAppend, gatewayAppendOnClient } from "@workloom/base/workdata";
+import { judge, judgeViews, type JudgeInput, type RuntimeRule } from "@workloom/base/fence-engine";
+import { gatewayAppend, gatewayAppendOnClient, registerWriteActions } from "@workloom/base/workdata";
 
 /** D16（#1/A）：步骤内「事件 + 线程状态」单事务封装（双 GUC 齐备） */
 async function inTx<T>(
@@ -174,14 +174,16 @@ async function loadActiveRules(app: pg.Pool, scope: { tenantId: string; workspac
        FROM fence_rules WHERE (workspace_id=$1 OR workspace_id='*') AND status='active'`,
       [scope.workspaceId],
     );
-    return {
-      rules: r.rows.map((row) => ({
+    const rules: RuntimeRule[] = r.rows.map((row) => ({
         rule_id: row.rule_id, version: row.version, name: row.name, level: row.level,
         is_baseline: row.is_baseline, objectTypes: row.match_spec.object_types,
         actions: row.match_spec.actions, when: row.match_spec.when,
-      })),
-      defaultLevel: "review", // 活动围栏包未命中时的保守默认
-    };
+      }));
+    // HP-02：本工作区围栏包声明的写类动作在判定与执行前完成登记——
+    // 否则行业写类动作（如 inventory.adjust / order.reconcile）被网关段①当读类放行，
+    // 且 judge 无命中时不走 default_level（E2.1），形成静默放宽。
+    registerWriteActions(rules.flatMap((rule) => rule.actions));
+    return { rules, defaultLevel: "review" }; // 活动围栏包未命中时的保守默认
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
@@ -343,13 +345,22 @@ export async function runQuest(
     if (done.has(step.stepId)) continue; // 已完成步骤跳过（幂等续跑）
 
     // 围栏瀑布判定（纯函数；子调用同瀑布）
-    const verdict = judge(
-      {
-        object: { type: step.objectType, id: step.objectId }, action: step.action,
+    // HP-02：① effect 取 preset 工具声明的 access（显式读写，不靠动作名猜）；
+    //        ② 语义动作名与工具名两个视图分别判定并取最严——规则词表命中任一即生效，
+    //           LLM 规划的动作名不能掩盖真正的执行工具（反之亦然）。
+    const toolAccess: "read" | "write" =
+      preset.tools.find((tool) => tool.name === step.tool)?.access === "read" ? "read" : "write";
+    const views: JudgeInput[] = [{
+      object: { type: step.objectType, id: step.objectId }, action: step.action, effect: toolAccess,
+      params: step.params, before: step.before, after: step.after, context: step.context,
+    }];
+    if (step.tool && step.tool !== step.action) {
+      views.push({
+        object: { type: step.objectType, id: step.objectId }, action: step.tool, effect: toolAccess,
         params: step.params, before: step.before, after: step.after, context: step.context,
-      },
-      rules, defaultLevel,
-    );
+      });
+    }
+    const verdict = views.length === 1 ? judge(views[0]!, rules, defaultLevel) : judgeViews(views, rules, defaultLevel);
 
     await updateThread(app, scope, threadId, { current_action: step.label });
 

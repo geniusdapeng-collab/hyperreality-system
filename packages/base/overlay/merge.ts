@@ -12,6 +12,7 @@ import {
   type FenceLevel,
 } from "./model.js";
 import { boundsWithin, intersectBounds, platformBoundsFor, type ThresholdBound } from "./threshold-policy.js";
+import { fenceRulesOf } from "../fence-engine/dsl.js";
 
 /* ================= 合并目标结构（与装配器磁盘资产同构的宽松视图） ================= */
 export interface BundleAssetView {
@@ -210,8 +211,10 @@ function applySkill(view: BundleAssetView, item: Extract<OverlayItem, { type: "s
 /* ================= ⑥ 围栏（只收紧，block 不可调） ================= */
 function applyFence(view: BundleAssetView, item: Extract<OverlayItem, { type: "fence" }>, audit: MergeResult["audit"]): void {
   const ruleId = item.path.replace(/^fences\//, "");
-  const pack = view.fencePacks.find((p) => p.fences?.some((r) => r.rule_id === ruleId));
-  const rule = pack?.fences?.find((r) => r.rule_id === ruleId);
+  // HP-02：统一按 rules ?? fences 读取（hotel 包用 rules:，行业包用 fences:）
+  const pack = view.fencePacks.find((p) => fenceRulesOf(p).some((r) => r.rule_id === ruleId));
+  const rule = (pack ? fenceRulesOf(pack).find((r) => r.rule_id === ruleId) : undefined) as
+    { rule_id?: string; level?: FenceLevel } | undefined;
   if (!rule) throw new OverlayError("PATH_NOT_FOUND", `围栏规则 ${item.path} 不存在于行业包`);
   const current = (rule.level ?? "review") as FenceLevel;
   if (current === "block") {

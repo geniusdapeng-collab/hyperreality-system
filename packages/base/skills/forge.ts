@@ -143,9 +143,13 @@ export async function dryRunSkill(
         rule_id: string; version: string; name: string; level: RuntimeRule["level"];
         is_baseline: boolean; match_spec: { object_types?: string[]; actions?: string[]; when?: string };
       }>(
+        // HP-02：与运行时 deny 优先并集口径对齐——同一 rule_id 的多版本共存时取最严的一条，
+        // 避免技能考试/复核按"最新创建"拿到被基线压住的宽松版本。
         `SELECT DISTINCT ON (rule_id) rule_id, version, name, level, is_baseline, match_spec
          FROM fence_rules WHERE (workspace_id=$1 OR workspace_id='*') AND status='active' AND rule_id = ANY($2)
-         ORDER BY rule_id, created_at DESC`,
+         ORDER BY rule_id,
+                  CASE level WHEN 'block' THEN 2 WHEN 'review' THEN 1 ELSE 0 END DESC,
+                  is_baseline DESC, created_at DESC`,
         [scope.workspaceId, bindings],
       );
       rules = rr.rows.map((r) => ({

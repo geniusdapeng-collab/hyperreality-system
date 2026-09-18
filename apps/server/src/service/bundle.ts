@@ -22,6 +22,8 @@ import {
   staffingDraftHash,
   type ExamBinding,
 } from "./onboarding-truth.js";
+import { checkCandidateAgainstBaseline, loadActiveRulesInTx } from "@workloom/base/fence-engine";
+import { registerWriteActions } from "@workloom/base/workdata";
 
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
 
@@ -801,6 +803,9 @@ export async function confirmAndAssembleStaffing(
          JSON.stringify(fence.match_spec), JSON.stringify(fence.action), fence.is_baseline, actor.id],
       );
     }
+    // HP-02：装配即登记本 bundle 围栏声明的写类动作（gateway 段① 权限校验与 judge default_level 的识别前提）。
+    // 此前 registerWriteActions 只有测试调用，行业写类动作在网关被当读类放行（F2.10 失守）。
+    registerWriteActions(assets.candidate.fences.flatMap((fence) => fence.match_spec.actions));
     await client.query(
       `INSERT INTO bundle_installs
          (id, workspace_id, bundle_id, assets, status, draft_id, assembly_version, assembly_hash)
@@ -1165,6 +1170,33 @@ export async function onboardingExam(
         reason: "atomic-switch",
       })
       : null;
+    // HP-02：基线单调守卫——候选围栏规则相对**切换前**的生效基线只可加严
+    // （必须在 deactivateInstallOn 之前取样：停用旧装配后旧基线行已转 rolled_back）
+    const candidateFenceIds = install.assets.fence_rule_ids ?? [];
+    if (candidateFenceIds.length > 0) {
+      const activeBefore = await loadActiveRulesInTx(client, { tenantId: scope.tenantId ?? "", workspaceId });
+      const candidates = await client.query<{
+        rule_id: string; version: string; name: string; level: "auto" | "review" | "block";
+        is_baseline: boolean; match_spec: { object_types?: string[]; actions?: string[]; when?: string };
+      }>(
+        `SELECT rule_id, version, name, level, is_baseline, match_spec FROM fence_rules
+          WHERE workspace_id=$1 AND id=ANY($2)`,
+        [workspaceId, candidateFenceIds],
+      );
+      for (const row of candidates.rows) {
+        const verdict = checkCandidateAgainstBaseline(activeBefore, {
+          rule_id: row.rule_id, version: row.version, name: row.name, level: row.level,
+          is_baseline: row.is_baseline,
+          objectTypes: row.match_spec.object_types ?? [],
+          actions: row.match_spec.actions ?? [],
+          when: row.match_spec.when ?? "",
+        });
+        if (!verdict.ok) {
+          throw new StaffingDraftValidationError(
+            `围栏基线只可加严，候选行业包被拒：${verdict.violations.map((v) => v.reason).join("；")}`);
+        }
+      }
+    }
     if (previousInstall) await deactivateInstallOn(client, workspaceId, previousInstall);
 
     await client.query(`UPDATE agents SET status='ready' WHERE workspace_id=$1 AND id=ANY($2) AND status='disabled'`, [workspaceId, install.assets.preset_ids]);
