@@ -2,7 +2,7 @@
   "meta": {
     "schema": "workloom.oss-components/v2",
     "name": "WorkLoom 开源组件登记表（oss-watch）",
-    "updated": "2026-09-18",
+    "updated": "2026-09-19",
     "doc": "docs/OPEN_SOURCE_COMPONENTS.md",
     "plan": "docs/oss-update-plan.md",
     "state": ".oss-watch-state.json",

@@ -3,7 +3,7 @@
 <!-- 自动生成，请勿手改：node scripts/oss-inventory.mjs --write -->
 
 > 生成器：`scripts/oss-inventory.mjs`（离线事实）＋ `scripts/oss-watch.sh`（上游最新版本）
-> 仓库：workloom-ai/hyperreality-system ｜ 最近一次上游扫描：2026-09-18T16:05:07.000Z
+> 仓库：workloom-ai/hyperreality-system ｜ 最近一次上游扫描：2026-09-19T03:13:55.000Z
 > 统计：登记组件 90 个 ｜ npm 直接依赖 154 个 ｜ Python 依赖 1 个 ｜ 容器镜像 2 个
 
 ## 0. 维护机制（四件事）
@@ -69,7 +69,7 @@
 | 46 | typescript-governance（别名固定解析器） | [github.com/microsoft/TypeScript](https://github.com/microsoft/TypeScript) · Apache-2.0 | 5.9.3 | —（未扫描） | CI/流水线 | UI 治理/消费校验固定解析器（npm:typescript@5.9.3） | 治理脚本的固定解析器，不随主 TypeScript 升级；改动需与 sync/install-ui-governance.mjs 的 dependency 声明同步 |
 | 47 | yaml-governance（别名固定解析器） | [github.com/eemeli/yaml](https://github.com/eemeli/yaml) · ISC | 2.9.0 | —（未扫描） | CI/流水线 | UI 治理脚本固定 YAML 解析器（npm:yaml@2.9.0） | 与 sync/base-scope.json#uiGovernanceCapability.yamlDependency 保持同版 |
 | 48 | concurrently | [github.com/open-cli-tools/concurrently](https://github.com/open-cli-tools/concurrently) · MIT | 9.2.4 | **10.0.5** ⬆ | 开发/构建 | pnpm dev（多进程编排） | 开发编排；升级不影响生产载荷 |
-| 49 | jsdom | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) · MIT | 30.1.0 | 30.1.0 | 开发/构建 | 前端单测环境 | DOM 测试环境；升级后跑三端单测 |
+| 49 | jsdom | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) · MIT | 30.0.1 / 30.1.0 | **30.1.0** ⬆ | 开发/构建 | 前端单测环境 | DOM 测试环境；升级后跑三端单测 |
 | 50 | esbuild | [github.com/evanw/esbuild](https://github.com/evanw/esbuild) · MIT | 未引入 | 0.28.2 | 运行时 | 桌面运行载荷（native 构建产物随包） | 传递依赖（vite/tsx 链路）随包分发；桌面载荷锁三平台二进制，升级必须重跑 runtime:deps:refresh + 载荷边界校验 |
 | 51 | rolldown | [github.com/rolldown/rolldown](https://github.com/rolldown/rolldown) · MIT | 未引入 | 1.2.9 | 开发/构建 | vite 8 打包内核（native 二进制） | 随 vite 升级；桌面载荷含三平台绑定，注意 onlyBuiltDependencies 白名单 |
 | 52 | lightningcss | [github.com/parcel-bundler/lightningcss](https://github.com/parcel-bundler/lightningcss) · MPL-2.0 | 未引入 | 1.33.0 | 开发/构建 | vite 8 CSS 管线（native 二进制） | 随 vite 升级；MPL 属弱 copyleft，仅构建期使用，不分发源码 |
@@ -242,7 +242,7 @@
 | `@types/three` | 0.185.4（声明） | ^0.185.4 | 开发 | apps/web/package.json | **0.186.0** ⬆ |
 | `@types/ws` | 8.18.1（声明） | 8.18.1 | 开发 | vendor/dsh/package.json | 8.18.1 |
 | `@vitejs/plugin-react` | 6.1.0（声明） | 6.1.0 | 开发/生产 | .workloom-runtime-deps/package.json、apps/web/package.json、apps/webb/package.json 等 4 处 | **6.1.1** ⬆ |
-| `@workloom/ui` | 0.1.2（声明） | 0.1.2 | 生产 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | —（未扫描） |
+| `@workloom/ui` | 0.1.3（声明） | 0.1.3 | 生产 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | —（未扫描） |
 | `commander` | 15.0.0（声明） | ^15.0.0 | 生产 | vendor/dsh/package.json | 15.0.0 |
 | `concurrently` | 9.2.4 | ^9.1.0 | 开发 | package.json | **10.0.5** ⬆ |
 | `drizzle-orm` | 0.45.2（声明） | 0.45.2 / ^0.45.2 | 生产 | .workloom-runtime-deps/package.json、packages/db/package.json | 0.45.2 |
@@ -252,7 +252,7 @@
 | `hono` | 4.13.5（声明） | 4.13.5 | 生产 | .workloom-runtime-deps/package.json、apps/server/package.json | **4.13.8** ⬆ |
 | `jose` | 6.2.10（声明） | 6.2.10 | 生产 | .workloom-runtime-deps/package.json、apps/server/package.json、packages/base/package.json | **6.2.12** ⬆ |
 | `js-yaml` | 4.2.0（声明） | ^4.2.0 | 生产 | vendor/dsh/package.json | **5.4.2** ⬆ |
-| `jsdom` | 30.1.0 | ^30.0.1 | 开发 | package.json | 30.1.0 |
+| `jsdom` | 30.0.1 / 30.1.0 | ^30.0.1 | 开发 | apps/web/package.json、apps/webc/package.json、package.json | 30.1.0 |
 | `node-addon-require-builtin` | 0.1.4（声明） | ^0.1.4 | 生产 | vendor/dsh/package.json | **0.1.6** ⬆ |
 | `pg` | 8.23.0 | 8.23.0 | 生产 | .workloom-runtime-deps/package.json、package.json、packages/base/package.json 等 5 处 | 8.23.0 |
 | `pixi-live2d-display` | 0.4.0（声明） | ^0.4.0 | 生产 | apps/web/package.json | 0.4.0 |
@@ -297,7 +297,7 @@
 
 ## 3. 有可用更新
 
-登记组件滞后 29 个，直接依赖滞后 33 个 —— 逐项执行单见 `docs/oss-update-plan.md`。
+登记组件滞后 30 个，直接依赖滞后 33 个 —— 逐项执行单见 `docs/oss-update-plan.md`。
 - `DeepSeek Harness（dsh）` 0.1.2-rc.1 → **0.1.5-rc.2**（门禁 runtime-gate）
 - `node-addon-require-builtin` 0.1.5 → **0.1.6**（门禁 standard）
 - `dsh-im 多平台 IM 接入插件` 0.2.2 → **4.21.2**（门禁 standard）
@@ -323,6 +323,7 @@
 - `tsx` 4.19.0 / 4.23.12 → **4.23.13**（门禁 standard）
 - `TypeScript` 5.9.0 / 7.0.2 → **7.0.2**（门禁 smoke）
 - `concurrently` 9.2.4 → **10.0.5**（门禁 smoke）
+- `jsdom` 30.0.1 / 30.1.0 → **30.1.0**（门禁 standard）
 - `Node.js` 24.19.0 → **v26.9.0**（门禁 full）
 - `pnpm` 10.14.0 → **12.4.2**（门禁 standard）
 - `npm（桌面载荷安装器）` 11.17.0 → **12.0.2**（门禁 standard）

@@ -641,6 +641,11 @@ function shortRepos(paths, limit = 3) {
 
 export function renderMarkdown({ root, repo, registry, inventory, state, planFile = PLAN_FILE }) {
   const scannedAt = state?.last_full_scan ? state.last_full_scan : "尚未扫描（运行 `pnpm oss:watch`）";
+  const hasNodeStack = existsSync(join(root, "package.json"));
+  const cmd = (task) =>
+    hasNodeStack
+      ? `pnpm ${task}`
+      : { "oss:watch": "bash scripts/oss-watch.sh", "oss:plan": "bash scripts/oss-watch.sh --show" }[task];
   const cache = state?.registry_cache ?? {};
   const probes = probeVersions(root, registry.components);
   const lines = [];
@@ -658,10 +663,14 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
   lines.push("");
   lines.push("| 时机 | 动作 | 命令 |");
   lines.push("|---|---|---|");
-  lines.push("| 依赖变更（改 package.json / lockfile / requirements） | CI 门禁：清单必须同步刷新，否则红灯 | `pnpm oss:check` |");
-  lines.push("| 每周（CNB crontab + 基座审计任务） | 扫描上游最新版本，有更新则进更新计划并开 PR | `pnpm oss:watch` |");
-  lines.push("| 安全事件（CVE / 供应链投毒） | 不等周期，立即全量扫描 | `pnpm oss:watch --all` |");
-  lines.push("| 发布前 | 复核清单新鲜度与更新计划 | `pnpm oss:plan` |");
+  lines.push(
+    `| 依赖变更（改 package.json / lockfile / requirements） | CI 门禁：清单必须同步刷新，否则红灯 | \`${
+      hasNodeStack ? "pnpm oss:check" : "node scripts/oss-inventory.mjs --check"
+    }\` |`,
+  );
+  lines.push(`| 每周（CNB crontab + 基座审计任务） | 扫描上游最新版本，有更新则进更新计划并开 PR | \`${cmd("oss:watch")}\` |`);
+  lines.push(`| 安全事件（CVE / 供应链投毒） | 不等周期，立即全量扫描 | \`${cmd("oss:watch")} --all\` |`);
+  lines.push(`| 发布前 | 复核清单新鲜度与更新计划 | \`${cmd("oss:plan")}\` |`);
   lines.push("");
   lines.push("升级纪律：**扫描可以自动，升级永不自动**；升级必须逐项走 `docs/oss-update-plan.md` 的人工圈定 + 门禁 + 发布流程。");
   lines.push("");

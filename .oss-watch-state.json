@@ -2080,8 +2080,8 @@
    "checked_at_iso": "2026-09-18T16:00:21.000Z"
   }
  },
- "last_full_scan": "2026-09-18T16:05:07.000Z",
- "last_full_scan_epoch": 1789747507,
+ "last_full_scan": "2026-09-19T03:13:55.000Z",
+ "last_full_scan_epoch": 1789787635,
  "registry": {
   "npm": "https://registry.npmmirror.com",
   "pypi": "https://pypi.tuna.tsinghua.edu.cn/pypi",
