@@ -197,13 +197,24 @@ function studioArchive(): Record<string, unknown> {
       {
         key: "project",
         name: "项目制（单剧/单项目核算）",
-        autonomy: { render_budget_per_episode: 300, render_retry_cap: 5 },
+        autonomy: {
+          caps: {
+            "render-budget": { label: "单集渲染额度上限", limit: 300 },
+            "render-retry": { label: "渲染重试次数上限", limit: 5 },
+          },
+        },
         circuit_breaker: { kpi_floor: { roi_iaa: 0.98, scrap_rate: 0.85 } },
       },
       {
         key: "contract",
         name: "合同制（商单履约 SLA）",
-        autonomy: { publish_per_day_cap: 2, content_reject_rounds_cap: 3, response_time_slo_hours: 4 },
+        autonomy: {
+          caps: {
+            "publish-per-day": { label: "每日发布条数上限", limit: 2 },
+            "content-reject-rounds": { label: "内容打回轮次上限", limit: 3 },
+            "response-time-slo": { label: "响应时长上限（小时）", limit: 4 },
+          },
+        },
         circuit_breaker: { kpi_floor: { sla_hit_rate: 0.9 } },
       },
     ],

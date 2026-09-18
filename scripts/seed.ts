@@ -182,7 +182,15 @@ function yunqiArchive(): Record<string, unknown> {
       version: 1,
       mode: "trial",
       identity: { name: "公司CEO", persona: "稳健经营型" },
-      autonomy: { price_band: [0.85, 1.15], procurement_cap: 5000, campaign_cap: 2000 },
+      autonomy: {
+        ranges: {
+          "price-change-ratio": { label: "房价调整比例", lower: 0.85, upper: 1.15, anchor: 1 },
+        },
+        caps: {
+          procurement: { label: "采购金额上限", limit: 5000 },
+          campaign: { label: "营销支出上限", limit: 2000 },
+        },
+      },
       escalate: ["修改保底价/安全禁区相关", "单月累计让利超上限", "围栏规则放宽（任何放宽）", "新渠道/新平台上线", "对外公开承诺（赔偿/免费/声明）", "宪章变更"],
       briefing: { daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" },
       circuit_breaker: { window_days: 14, kpi_floor: { occ: 0.7 }, tightened: false },
