@@ -80,7 +80,19 @@ export const defaultCharter = (): Charter => charterSchema.parse({});
 
 export function parseCharter(raw: unknown): Charter {
   const r = charterSchema.safeParse(raw ?? {});
-  return r.success ? r.data : defaultCharter();
+  if (r.success) return r.data;
+  // 结构不合法时仍然 fail-closed（回落 disabled），但**绝不静默**：
+  // 历史事故中旧自治结构（price_band / procurement_cap / quote_cap…）被 strict schema 拒绝，
+  // 整片治理能力（晨报/裁决/熔断/绩效/董事会包）无声停摆，只在 E2E 里表现为 21 条互不相干的失败。
+  // 这里把根因一句话报到日志，行业仓换种子/换契约时能立刻看见。
+  if (raw !== null && typeof raw === "object" && Object.keys(raw as Record<string, unknown>).length > 0) {
+    const reason = r.error.issues
+      .slice(0, 3)
+      .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
+      .join("；");
+    console.warn(`[captain] 宪章结构不合法 → 已按 disabled 兜底（fail-closed）：${reason}`);
+  }
+  return defaultCharter();
 }
 
 /* ================= 治理状态机（纯函数，§12.1） ================= */
