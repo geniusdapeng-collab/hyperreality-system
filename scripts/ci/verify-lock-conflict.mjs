@@ -62,6 +62,38 @@ function fullPathOf(entry) {
   return match ? decodeURIComponent(match[1]) : String(entry?.filename ?? "");
 }
 
+/**
+ * 自身 PR 判定（协议 §4 三重排除 + 祖先兜底）。
+ *
+ * CNB 实测：当分支 tip 由流水线回推（如视觉基线重生成提交）时，`pulls` 接口在数分钟内
+ * 仍返回旧的 head.sha，而构建检出的 HEAD 已是新 tip —— 仅按编号/分支/SHA 相等判定会把
+ * 自己的 PR 当成"别人的 PR"，报出与自身路径冲突的假红灯（2026-09-18 审计批次实测）。
+ * 因此追加：PR 记录的 head 是本地 HEAD 的祖先时同样视为自身（本地分支已包含其全部提交）。
+ */
+export function isSelfPull({ number, headRef, headSha, selfNumber, selfBranch, selfHeadSha, ancestorOfHead = false }) {
+  const short = (value) => String(value ?? "").slice(0, 12);
+  if (number && selfNumber && String(number) === String(selfNumber)) return true;
+  if (selfBranch && headRef && String(headRef).replace(/^refs\/heads\//, "") === String(selfBranch)) return true;
+  if (selfHeadSha && headSha) {
+    if (String(headSha) === String(selfHeadSha)) return true;
+    if (short(headSha) === short(selfHeadSha)) return true;
+    if (short(headSha) && short(selfHeadSha) && String(headSha).startsWith(short(selfHeadSha))) return true;
+    if (short(headSha) && short(selfHeadSha) && String(selfHeadSha).startsWith(short(headSha))) return true;
+  }
+  return Boolean(selfHeadSha && headSha && ancestorOfHead);
+}
+
+/** PR 记录的 head 是否为本地 HEAD 的祖先（本地分支已包含该提交）。 */
+function isAncestorOfHead(sha) {
+  if (!sha) return false;
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", sha, "HEAD"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
   const pulls = await apiJson(`${API}/${repoSlug}/-/pulls?state=open`);
   const list = Array.isArray(pulls) ? pulls : (pulls?.data ?? []);
@@ -71,12 +103,15 @@ async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
     if (!number) continue;
     const headRef = String(pull?.head?.ref ?? "").replace(/^refs\/heads\//, "");
     const headSha = String(pull?.head?.sha ?? "");
-    const isSelf =
-      number === String(selfNumber ?? "")
-      || (selfBranch && headRef === selfBranch)
-      || (selfHeadSha && headSha === selfHeadSha)
-      || (selfHeadSha && headSha && headSha.startsWith(selfHeadSha.slice(0, 12)))
-      || (selfHeadSha && headSha && selfHeadSha.startsWith(headSha.slice(0, 12)));
+    const isSelf = isSelfPull({
+      number,
+      headRef,
+      headSha,
+      selfNumber,
+      selfBranch,
+      selfHeadSha,
+      ancestorOfHead: headSha !== selfHeadSha && isAncestorOfHead(headSha),
+    });
     if (isSelf) {
       console.log(`- 跳过自身 PR #${number}（head=${headSha.slice(0, 12)} ref=${headRef}）`);
       continue;
@@ -104,7 +139,23 @@ function selfTest() {
     console.error("✗ self-test: 文件重叠判定错误");
     process.exit(1);
   }
-  console.log("✓ verify-lock-conflict self-test 通过（模块互斥 / 文件重叠 / 无冲突 3 例）");
+  const selfCases = [
+    // 编号一致 → 自身
+    [{ number: "27", headRef: "audit/x", headSha: "aaaaaaaaaaaa", selfNumber: "27", selfHeadSha: "bbbbbbbbbbbb" }, true],
+    // head 与本地 HEAD 一致 → 自身
+    [{ number: "27", headRef: "audit/x", headSha: "bbbbbbbbbbbb", selfNumber: null, selfHeadSha: "bbbbbbbbbbbb" }, true],
+    // 平台 head.sha 滞后（旧提交是本地 HEAD 的祖先）→ 仍视为自身，避免自比对假红灯
+    [{ number: "27", headRef: "audit/x", headSha: "aaaaaaaaaaaa", selfNumber: null, selfHeadSha: "bbbbbbbbbbbb", ancestorOfHead: true }, true],
+    // 真并发 PR：既非同一编号，也非祖先 → 不排除
+    [{ number: "25", headRef: "task/T-1", headSha: "cccccccccccc", selfNumber: null, selfHeadSha: "bbbbbbbbbbbb", ancestorOfHead: false }, false],
+  ];
+  for (const [input, expected] of selfCases) {
+    if (isSelfPull(input) !== expected) {
+      console.error(`✗ self-test: 自身 PR 判定错误 ${JSON.stringify(input)} 期望 ${expected}`);
+      process.exit(1);
+    }
+  }
+  console.log("✓ verify-lock-conflict self-test 通过（模块互斥 / 文件重叠 / 无冲突 / 自身 PR 判定 4 例）");
 }
 
 async function main() {
@@ -194,4 +245,3 @@ main().catch((error) => {
   console.error(`锁冲突检测异常：${error?.message ?? error}`);
   process.exit(1);
 });
-
