@@ -238,7 +238,7 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     if (cached?.repo && !component.repo) component.repo = cached.repo;
   });
 
-  /* 写回登记表（current 不自动改写：升级必须人工执行） */
+  /* 写回登记表（current 只随升级 PR 改写：扫描器不直接改包版本） */
   const registryPath = join(root, REGISTRY_FILE);
   registry.meta = { ...registry.meta, updated: iso.slice(0, 10) };
   writeFileSync(
@@ -324,10 +324,10 @@ export function renderPlan({ root, registry, inventory, state, iso }) {
   lines.push(
     `> 生成：${iso} ｜ 登记组件有更新 **${updates.length}** 个 ｜ 直接依赖有更新 **${dependencyUpdates.length + pythonUpdates.length}** 个`,
   );
-  lines.push("> 使用：人工圈定范围 → Agent 逐项升级 → 按 gate 过门禁 → 全绿后发布。**升级永不自动。**");
+  lines.push("> 使用：Agent 按清单组批 → 逐项升级 → 按 gate 过门禁 → 门禁全绿后按协议 §1/§9.5 合并。破坏性/大版本升级须在 PR 显著标注并按 §3 人审放行；人保留叫停与回滚权。");
   lines.push("");
   if (updates.length) {
-    lines.push("## 一、登记组件更新（待人工圈定）");
+    lines.push("## 一、登记组件更新（待处理：AI 组批执行，破坏性升级人审放行）");
     lines.push("");
     lines.push("| 组件 | 现版 | 最新 | 周期 | 门禁 | 备注 |");
     lines.push("|---|---|---|---|---|---|");
@@ -381,7 +381,7 @@ export function renderPlan({ root, registry, inventory, state, iso }) {
     .filter(([, entry]) => !entry?.latest)
     .map(([name]) => name);
   if (stale.length) {
-    lines.push("## 附：人工复核项（未取到上游版本）");
+    lines.push("## 附：复核项（未取到上游版本；AI 重试 / 人工兜底）");
     lines.push("");
     for (const name of stale.sort()) lines.push(`- \`${name}\`：上游查询失败或需人工核对`);
     lines.push("");
