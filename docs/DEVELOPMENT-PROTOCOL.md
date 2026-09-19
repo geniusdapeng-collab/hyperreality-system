@@ -10,7 +10,10 @@
 1. **一任务一分支一 PR**：任务卡 = CNB Issue（标题 `[T-YYYYMMDD-XXXX] 目标`），分支 = `task/T-YYYYMMDD-XXXX`，一个会话同时只开一个任务。
 2. **任务号进提交信息**：`<type>(<layer>): <摘要> [T-YYYYMMDD-XXXX]`，由 `scripts/ci/verify-commit-msg.mjs` 校验。
 3. **先声明后落笔**：PR 描述里写明本次改动的路径清单；`scripts/ci/verify-lock-conflict.mjs` 会与同仓其它 open PR 比对，**模块级互斥路径重叠即拒**。
-4. **合并在人、串行执行**：AI 只提 PR；合并由人按队列**一次一个**执行；合并后其余分支先 rebase 再继续。
+4. **合并在机器、串行执行、人保留叫停权**：AI 只提 PR；**门禁全绿且无冲突时，由 AI 按队列一次一个直接合并**（默认 squash）；合并后其余分支先 rebase 再继续。人不再承担逐 PR 合并操作，保留随时叫停、要求回滚与例外裁决的权利；涉及真实资金 / 实盘、生产秘密与生产配置、协议文本语义变更的 PR，必须在描述中显著标注并提供回滚路径。
+   - 在途 / 未完成的 PR 必须置为 **WIP（草稿）**——WIP PR 不参与任何合并；
+   - `risk/review` 标签的 PR 需人审放行（移除该标签，或 Issue / 会话里有明确指令）后由 AI 合并；`risk/block` 永不合并；
+   - 无人值守通道（`sync/merge-sync-prs.mjs`，每 30 分钟随 fanout 运行）只碰**门禁全绿、冷却期已过、无风险标签、且不落在治理路径**的 PR；其余 PR 仍由会话内 AI 在拿到放行后显式合并。
 5. **无回执不算完成**：任务收尾必须在 Issue 留 5 行回执——进展 / 决策 / 未完成 / 下一步 / 分支状态。
 
 ## 2. 四问（每次落笔前必答，答案写进 Issue）
@@ -136,23 +139,39 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 | 基座资产分发（根级受控资产 → 各仓 `sync/base-*` PR） | **自动** | 每 30 分钟 cron + `api_trigger_base_sync`：`sync/fanout-cnb.mjs`（详见《FLEET-AUTO-SYNC.md》§1） |
 | 任务卡创建/回执/关单 | **半自动** | `scripts/tools/task.mjs new|receipt|close`（一条命令，不再手写 JSON） |
 | 分支创建、提交、提 PR | 由 AI/人执行 | 用任务号命名分支即可 |
-| **合并（代码类 PR）** | **人来**（串行，一次一个） | 协议 §1 硬规则；动到 `packages/**`、`apps/**`、行业语义的 PR 永不自动合并 |
+| **合并（代码类 PR）** | **AI / 流水线**（门禁全绿 + 串行，一次一个） | 协议 §1；会话内由 AI 直接合并，无人值守时由 `sync/merge-sync-prs.mjs` 按 §9.5 车道合并 |
 | **合并（纯同步 PR）** | **自动** | 仅 `sync/base-*` 且改动全在根级受控资产白名单、全部门禁 success 时由 `sync/merge-sync-prs.mjs` 合并（协议 §9.4） |
-| 高风险裁决、协议版本发布 | **人来** | 协议 §3/§8 |
+| 高风险裁决与叫停 / 回滚 | **人来** | 协议 §3；协议文本语义变更由 AI 按 §1 合并，人保留叫停权 |
 
-结论：门禁、扫描、纳管、**根级资产分发与纯同步 PR 合并**是自动的；
-必须由人按的按钮只剩两个：**代码类 PR 的合并**与**高风险裁决**。
+结论：门禁、扫描、纳管、**根级资产分发**与**全部 PR 合并（门禁全绿 + 串行，一次一个）**是自动的；
+必须由人按的按钮只剩一个：**高风险裁决与叫停 / 回滚**（真实资金 / 实盘、生产秘密与生产配置、协议文本语义变更）。
 
 ### 9.4 纯同步 PR 的自动合并（2026-09-19 新增）
 
 - 自动合并的判定逻辑在 `sync/fanout-rules.mjs#autoMergeEligibility`（纯函数、有单测），执行器是
   `sync/merge-sync-prs.mjs`；两者与 fanout（`sync/fanout-cnb.mjs`）共同构成"基座改一次、
   舰队跟一次"的闭环，机制说明见 `docs/FLEET-AUTO-SYNC.md`。
-- 白名单只覆盖根级受控资产：`WORKLOOM_PRODUCT_CONTEXT.md`、`AGENTS.md`、
+- 白名单只覆盖根级受控资产：`WORKLOOM_PRODUCT_CONTEXT.md`、`AI-AUTONOMOUS-OPERATIONS.md`、`AGENTS.md`、
   `docs/DEVELOPMENT-PROTOCOL.md`、`.workloom-base-sync.json`、
   `.github/workflows/base-sync-heartbeat.yml`、`sync/**`。
 - 门禁仍然先行：PR 必须全部门禁 success 且平台可合并；**没有状态检查结果的 PR 不自动合并**。
-- 白名单外的任何路径（含行业 bundle、服务层、三端页面、脚本）一律回落到"人来合并"。
+- 白名单外的任何路径（含行业 bundle、服务层、三端页面、脚本）：门禁全绿后由 AI 按 §1 队列合并（不再等待人工点击）；白名单只决定"是否无需 AI 操作即可自动合并"。
+
+### 9.5 代码类 PR 的机器合并（2026-09-19 修订）
+
+- 判定逻辑：`sync/fanout-rules.mjs#codeMergeEligibility`（纯函数、有单测），执行器同样是
+  `sync/merge-sync-prs.mjs`——同一脚本先跑纯同步车道（§9.4），再跑代码车道。
+- 代码车道准入（全部满足）：分支在任务/行业/实验/维护车道（`task/ industry/ experiment/ chore/ docs/ fix/ audit/ rescue/`）；
+  全部门禁 success；平台 `mergeable_state=mergeable`；非 WIP；无 `risk/review`、`risk/block` 标签；
+  分支最近一次提交已过 **10 分钟冷却期**（避免合并"会话仍在写"的 PR）；改动不落在治理/高风险路径
+  （`platform-ops/**`、`bundles/platform/**`、`protocol/**`、`sync/**`、`docs/DEVELOPMENT-PROTOCOL.md`、
+  `AGENTS.md`、`.cnb.yml`、`.github/**`、`**/migrations/**`——其中受控资产在同步波次里按 §9.4 白名单放行）。
+- 串行约束：**同一仓库每轮最多合并一条代码类 PR**；其余候选项留待下一轮（先 rebase 再合），
+  与 §1 规则 4 的"合并后其余分支先 rebase 再继续"一致。
+- 非纯同步的 `sync/base-*-full` 波次（携带运行时代码的基座升级）同样走代码车道：门禁全绿 + 冷却期
+  已过才由机器合并；任何一个条件不满足都只报告、不合并。
+- 治理路径（协议文本、`.cnb.yml`、迁移、平台工程等）永远不进无人值守通道：由会话内 AI 在
+  获得明确指令/放行后显式合并，人保留叫停权。
 
 ### 9.2 工具用法
 
@@ -188,5 +207,6 @@ node scripts/tools/provision-protocol.mjs --repo workloom-ai/<name> [--dry-run]
 
 - 进行中的对话是否都有任务卡？（应 100%）
 - 是否有两个 open PR 改了同一文件/同一互斥模块？（应 0）
-- 是否有 PR 超过 24h 未合并？（应 0，或已在 Issue 说明原因）
+- 是否有门禁全绿却超过 24h 未合并的 PR？（应 0——由 AI 按 §1/§9.5 直接合并，或已在 Issue 说明阻塞原因）
+- `risk/review` PR 是否都在拿到放行后由 AI 执行了合并（而不是等人来点）？（应「是」）
 - 合并是否严格串行？（应「是」）

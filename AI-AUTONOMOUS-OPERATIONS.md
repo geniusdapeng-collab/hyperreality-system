@@ -1,6 +1,6 @@
 # AI 自主经营纲领
 
-> **受控只读副本**：原文在 `workloom-im` 根目录维护，经 base-sync 分发；请勿在本仓直接修改，修订意见请提基座任务卡。
+> **受控原文（canonical）**：本纲领由 `workloom-im` 维护，经 base-sync 分发至各仓；修订须在基座提交任务卡（见 `docs/DEVELOPMENT-PROTOCOL.md`）。
 
 ## 论一个新经营范式的诞生
 
