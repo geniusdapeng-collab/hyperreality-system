@@ -1,10 +1,10 @@
 {
-  "schemaVersion": "workloom.acceptance-profile/v1",
+  "schemaVersion": "workloom.acceptance-profile/v2",
   "repo": "workloom-ai/<repo>",
   "productName": "<产品名>",
-  "lane": "industry",
+  "lane": "base|platform|industry|experiment",
   "primaryBundle": "<bundles 下的主包目录名>",
-  "workspaceId": "ws-<demo>",
+  "workspaceId": null,
   "dataMode": "simulated",
   "startup": {
     "command": "pnpm preview:all",
@@ -12,10 +12,11 @@
   },
   "identity": {
     "human": "MEM-001",
-    "guest": "demo-direct"
+    "guest": "demo-direct",
+    "workspaceSlug": "ws-<demo>"
   },
   "surfaces": {
-    "pcRoutes": ["/", "/tasks", "/approvals", "/agents", "/skills"],
+    "pcRoutes": ["/", "/tasks", "/approvals", "/agents", "/skills", "/events", "/reports", "/guardrails"],
     "bMobileRoutes": ["/", "/inbox", "/tasks", "/operations", "/account"],
     "cRoutes": ["#chat", "#service", "#tickets", "#messages", "#me"]
   },
@@ -27,8 +28,74 @@
     "guestFirstReplyMs": 30000,
     "decisionQuota": 7,
     "minContrastRatio": 4.5,
-    "idleInterruptionWindowS": 20
+    "idleInterruptionWindowS": 20,
+    "taskSuccessP0": 1.0,
+    "taskSuccessP1": 0.9,
+    "susMin": 68,
+    "susTarget": 80,
+    "seqMin": 5.5,
+    "csatMin": 4.2,
+    "targetSizePx": 24,
+    "zoomPercent": 200,
+    "axCritical": 0,
+    "adr1Target": 0.85,
+    "hirNiMax": 0.1,
+    "h34Max": 0.03,
+    "hmpoMax": 0.5,
+    "passK": 5,
+    "p0PassKTarget": 0.8,
+    "offlineAuditSample": 10,
+    "soakHours": 24
   },
+  "ux": {
+    "personas": [
+      { "id": "owner", "jtbd": ["每天 10 分钟看清经营与风险"], "criticality": "P0" },
+      { "id": "manager", "jtbd": ["今天要处理什么、谁在做、卡在哪"], "criticality": "P0" },
+      { "id": "staff", "jtbd": ["接活、交付、有回执"], "criticality": "P0" },
+      { "id": "partner", "jtbd": ["看清我能做什么、不能碰什么"], "criticality": "P1" },
+      { "id": "guest", "jtbd": ["问得清、答得快、能联系到人"], "criticality": "P0" }
+    ],
+    "journeys": [
+      { "id": "U-01", "persona": "owner", "stage": "first-run", "title": "首启看到价值与待拍板", "mot": true },
+      { "id": "U-02", "persona": "manager", "stage": "day-1", "title": "派活并看到拆解", "mot": true },
+      { "id": "U-03", "persona": "owner", "stage": "daily", "title": "审批三手势写回", "mot": true },
+      { "id": "U-04", "persona": "owner", "stage": "exception", "title": "紧急制动与恢复", "mot": true },
+      { "id": "U-05", "persona": "guest", "stage": "exception", "title": "C 端首响与转人工", "mot": true }
+    ],
+    "tasks": [
+      { "id": "U2-T01", "persona": "manager", "criticality": "P0", "budgetMs": 60000, "paths": ["normal", "error", "offline"] },
+      { "id": "U2-T02", "persona": "owner", "criticality": "P0", "budgetMs": 30000, "paths": ["normal", "boundary", "permission"] }
+    ],
+    "research": {
+      "participants": [],
+      "methods": ["think-aloud", "first-click", "five-second", "tree-test"],
+      "instruments": ["SUS", "SEQ", "NASA-TLX", "CSAT"]
+    }
+  },
+  "outcome": {
+    "roles": [
+      {
+        "role": "<岗位 preset_key>",
+        "agentPreset": "<preset_key>",
+        "al": "AL3",
+        "deliverableUnit": "<交付件单位>",
+        "minSubstance": "<最小实质标准>",
+        "kpis": [{ "name": "<KPI>", "source": "<system>", "baseline": null, "target": null }],
+        "attribution": "observational",
+        "guardrails": ["csat", "complaints", "refund"]
+      }
+    ],
+    "taskSuites": ["acceptance/outcomes/<role>.yaml"],
+    "receipts": ["acceptance/receipts/*.json"]
+  },
+  "autonomy": {
+    "interventionTaxonomy": "H0-H4",
+    "fixtureFilters": ["suite.", "suite-", "apr-suite-", "apr-e-", "T-suite"],
+    "windows": ["4w"],
+    "targetPrecisionPp": 10,
+    "offlineAuditSample": 10
+  },
+  "soak": { "hours": [24, 168, 672], "metrics": ["success", "latency", "cost", "drift"] },
   "journeys": [
     { "id": "EXP-01", "persona": "owner", "title": "首启看到价值与待拍板", "script": "builtin:first-value" },
     { "id": "EXP-02", "persona": "owner", "title": "审批三手势写回", "script": "builtin:approval" },
@@ -41,5 +108,5 @@
     { "id": "EXP-09", "persona": "guest", "title": "C 端首响与转人工", "script": "builtin:guest-service" },
     { "id": "EXP-10", "persona": "owner", "title": "围栏 dry-run", "script": "builtin:dry-run" }
   ],
-  "notes": "行业专属补充：如资金/合规/上架审批等额外旅程，可在此声明 custom 脚本路径。"
+  "notes": "行业专属补充：角色/旅程/任务/阈值/结果契约请按本仓业务细化；阈值只能收紧不能放宽。"
 }
