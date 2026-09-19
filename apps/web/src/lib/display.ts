@@ -20,6 +20,63 @@ export function hydrateDisplayTerminology(terminology: Record<string, string>): 
   ));
 }
 
+/**
+ * 剔除术语串里的拉丁技术记号（SOP / RPA / PRD / eval / gh API / v1 …）。
+ * clientChineseText 遇到夹带技术记号的串会**整串回落**，技能名就会裸奔成
+ * 「dev-dispatch」「prd-forge」这类内部 id（真机验收实测：基座技能中心 20 项里 13 项）。
+ */
+function stripTechnicalTokens(value: string): string {
+  return value
+    .replace(/[A-Za-z][A-Za-z0-9._+/'-]*/g, " ")
+    .replace(/[\s·—–-]+/g, " ")
+    .trim();
+}
+
+/** 必须给中文名的场景：先按原串过词典（保留 GEO 这类词典认可的行业词），被拒再剔除记号重试 */
+export function chineseDisplayName(value: string | null | undefined, fallback: string): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return fallback;
+  const kept = clientChineseText(raw, "");
+  if (kept) return kept;
+  const cleaned = stripTechnicalTokens(raw);
+  if (cleaned) {
+    const accepted = clientChineseText(cleaned, "");
+    if (accepted) return accepted;
+  }
+  return fallback;
+}
+
+/**
+ * 技能展示名（Bundles 技能口径）：优先从技能说明首段解析中文名。
+ * 首段分隔符覆盖行业写作习惯：。「」（）以及破折号「——」（ai-pm 技能大量用破折号）；
+ * 首段夹带技术记号时先剔除再取，避免整串回落成裸 id。
+ * 行业词表仍由各 Bundle 的技能正文提供，客户端不新增行业词汇（本文件顶部扩展纪律）。
+ */
+export function skillDisplayName(name: string, description?: string | null): string {
+  const text = (description ?? "").trim();
+  if (text) {
+    const m = /^([^（(。：:—]{2,40})[（(。：:—]/.exec(text);
+    const candidate = m?.[1]?.trim();
+    if (candidate) {
+      const resolved = chineseDisplayName(candidate, "");
+      if (resolved) return resolved;
+    }
+    /**
+     * 长说明兜底（RDAS v3.0 实测：badcase-harvest / model-scout 首段 >40 字导致整串回落成裸 id）：
+     * 按句号/分号/破折号切第一段，再取第一个逗号前的短句；剔除技术记号与符号后必须是中文。
+     */
+    const first = text.split(/[。；;！!？?\n]|——/)[0]?.trim() ?? "";
+    const clause = (first.split(/[，,]/)[0] ?? first)
+      .replace(/[+/*#_|]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 32);
+    const resolved = clause ? chineseDisplayName(clause, "") : "";
+    if (resolved) return resolved;
+  }
+  return chineseDisplayName(name, name);
+}
+
 function projectedText(key: string): string | undefined {
   return DISPLAY_TERMINOLOGY[key];
 }

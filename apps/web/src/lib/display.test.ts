@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { actionText, actorText, approvalGestureText, hydrateDisplayTerminology, payloadText, versionText } from "./display";
+import { actionText, actorText, approvalGestureText, chineseDisplayName, hydrateDisplayTerminology, payloadText, skillDisplayName, versionText } from "./display";
+
+describe("技能中文展示名（基座：技能中心不得裸奔内部 id）", () => {
+  it("首段即中文短名（含破折号分隔）", () => {
+    expect(skillDisplayName("dev-dispatch", "开发任务派发——选机床、建隔离 worktree、快照、启动受管会话。")).toBe("开发任务派发");
+    expect(skillDisplayName("kb-fresh", "知识库保鲜巡检——过期检测（模型版本/价格/政策失效）…")).toBe("知识库保鲜巡检");
+  });
+
+  it("首段夹带技术记号时剔除后再取（PRD/eval/LLM 这类词不进技能名）", () => {
+    expect(skillDisplayName("eval-forge", "评测集锻造。从 PRD/需求自动生成可执行 eval 集（30-40 案例起步）…")).toBe("评测集锻造");
+    expect(chineseDisplayName("gh API 读取 issue/PR 提交节奏", "github-pulse")).toBe("读取 提交节奏");
+  });
+
+  it("实在取不到中文名才回落原 id", () => {
+    expect(skillDisplayName("some-skill", "")).toBe("some-skill");
+  });
+});
 
 describe("客户端版本文案", () => {
   it("只展示人类可读版本序号", () => {

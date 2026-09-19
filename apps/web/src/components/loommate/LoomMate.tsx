@@ -467,7 +467,21 @@ export function LoomMate() {
         </button>
       ) : (
       <div className="flex flex-col items-center">
+        {/* RDAS v3.0 T-02/T-11：视觉保持原样，但把 480px 方框的指针命中区缩小到角色上半身，
+            避免数字人命中区压住审批动作栏；透明区域不拦截点击。 */}
         <div
+          className="relative block"
+          style={{ pointerEvents: "none" }}
+        >
+          {webglOk
+            ? <MateLive2D size={dim} mood={mood} gesture={mateGesture} />
+            : <MateAvatar size={dim} excited={unread > 0} />}
+          {unread > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-body font-bold text-white shadow-lg">
+              {unread}
+            </span>
+          )}
+          <div
           role="button" tabIndex={0}
           aria-label={`${personaName}助手；回车打开对话，方向键移动，按住 Shift 可加速移动`}
           aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight"
@@ -479,17 +493,10 @@ export function LoomMate() {
               void openPanel("chat");
             }
           }}
-          className="relative block cursor-grab touch-none select-none transition-transform hover:scale-105 active:cursor-grabbing"
+          className="absolute cursor-grab touch-none select-none active:cursor-grabbing"
+          style={{ left: "25%", top: "6%", width: "50%", height: "44%", pointerEvents: "auto", borderRadius: 9999 }}
           title={`${personaName}（拖拽挪位置 · 点击聊聊）`}
-        >
-          {webglOk
-            ? <MateLive2D size={dim} mood={mood} gesture={mateGesture} />
-            : <MateAvatar size={dim} excited={unread > 0} />}
-          {unread > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-alert px-1 text-body font-bold text-white shadow-lg">
-              {unread}
-            </span>
-          )}
+          />
         </div>
         <div className="mt-0.5 flex items-center gap-1.5">
             <span className="rounded-full bg-bg900/90 px-2.5 py-0.5 text-body text-ink shadow">

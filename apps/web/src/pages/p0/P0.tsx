@@ -655,6 +655,7 @@ export default function P0() {
       {/* 开门仪式遮罩 */}
       {showCeremony && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-bg950 transition-opacity duration-700"
+          role="status" aria-live="polite"
           style={{ opacity: ceremony >= 4 ? 0 : 1, pointerEvents: ceremony >= 4 ? "none" : "auto" }}>
           <div className="text-center">
             <div className={`mx-auto mb-4 h-3 w-3 rounded-full bg-gold transition-all duration-700 ${ceremony >= 2 ? "scale-[3] shadow-[0_0_60px_#e8edf4]" : "scale-100"}`} />
