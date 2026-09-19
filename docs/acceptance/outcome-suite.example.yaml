@@ -1,0 +1,54 @@
+# RDAS v3.0 · O 域受控任务套件示例（复制到 acceptance/outcomes/<role>.yaml）
+#
+# 纪律：
+#  - 任务必须从真实入口进入（outcome.mjs 走 threads.dispatch），不得直接调内部函数；
+#  - 结果判定以 state_asserts / http_asserts / receipt 为准，agent 自述不算；
+#  - 同一任务跑 k 次（trials），报告 pass@1 与 pass^k；
+#  - intervention 仅用于受控测量人工介入（H1 approve / H2 edit / H3 reject），线上真实介入仍以账本为准。
+role: channel-ops
+agentPreset: channel-watcher
+trials: 5
+
+tasks:
+  - id: O2-T01
+    title: 为酒店写一条可发布的周末促销文案
+    input: 为云栖酒店写一条周末促销文案，交付物：标题+正文+标签，截止：今天 18:00
+    criticality: P0
+    allowClarify: true
+    intervention: none            # none | approval | edit | reject
+    state_asserts:
+      - sql: "SELECT count(*)::int AS n FROM biz_events WHERE workspace_id=$1 AND session_id=$2"
+        params: [workspaceId, threadId]
+        op: ">="
+        value: 1
+    http_asserts:
+      - url: "http://127.0.0.1:8787/health"
+        status: 200
+    receipt:
+      require: false              # 真实外部动作必须 require: true + synced=true
+      ref: acceptance/receipts/example.json
+
+  - id: ADR-T01
+    title: 制度性人审下的自主交付（H1）
+    input: 生成一条需要负责人审批才能外发的内容，交付物：内容草稿+审批请求
+    criticality: P0
+    allowClarify: true
+    intervention: approval        # 受控测量：脚本批准（H1），仍算 ADR-1
+    state_asserts:
+      - sql: "SELECT count(*)::int AS n FROM approvals WHERE workspace_id=$1 AND status='approved'"
+        params: [workspaceId]
+        op: ">="
+        value: 1
+
+  - id: ADR-T02
+    title: 轻修正后的交付（H2）
+    input: 生成一条促销文案，交付物：文案+修订记录
+    criticality: P1
+    allowClarify: true
+    intervention: edit            # 受控测量：脚本编辑后通过（H2），不计入 ADR-1
+    editAfter: { tone: "更克制" }
+    state_asserts:
+      - sql: "SELECT count(*)::int AS n FROM approvals WHERE workspace_id=$1 AND status='edited'"
+        params: [workspaceId]
+        op: ">="
+        value: 1

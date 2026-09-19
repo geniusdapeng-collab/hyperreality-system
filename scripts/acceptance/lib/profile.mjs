@@ -7,19 +7,47 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-export const PROFILE_SCHEMA = "workloom.acceptance-profile/v1";
+export const PROFILE_SCHEMA = "workloom.acceptance-profile/v2";
+export const LEGACY_PROFILE_SCHEMAS = ["workloom.acceptance-profile/v1"];
 
-/** 阈值下限（行业 profile 的取值不得低于这里的默认值） */
+/**
+ * 阈值下限（行业 profile 的取值不得比这里更宽松）。
+ * 方向：
+ *  - max：越小越严（时间/次数/比率上限）；
+ *  - min：越大越严（成功率/量表/目标值）；
+ *  - clamp：低于下限时直接抬到下限（AA 对比度这类硬标准）。
+ */
 export const THRESHOLD_FLOORS = {
-  firstValueMs: 20000,
-  dispatchMs: 60000,
-  approvalMs: 30000,
-  traceClicks: 2,
-  guestFirstReplyMs: 30000,
-  decisionQuota: 7,
-  minContrastRatio: 4.5,
-  idleInterruptionWindowS: 20,
+  firstValueMs: { value: 20000, dir: "max" },
+  dispatchMs: { value: 60000, dir: "max" },
+  approvalMs: { value: 30000, dir: "max" },
+  traceClicks: { value: 2, dir: "max" },
+  guestFirstReplyMs: { value: 30000, dir: "max" },
+  decisionQuota: { value: 7, dir: "max" },
+  minContrastRatio: { value: 4.5, dir: "clamp" },
+  idleInterruptionWindowS: { value: 20, dir: "max" },
+  // v3：体验域
+  taskSuccessP0: { value: 1.0, dir: "min" },
+  taskSuccessP1: { value: 0.9, dir: "min" },
+  susMin: { value: 68, dir: "min" },
+  susTarget: { value: 80, dir: "min" },
+  seqMin: { value: 5.5, dir: "min" },
+  csatMin: { value: 4.2, dir: "min" },
+  targetSizePx: { value: 24, dir: "min" },
+  zoomPercent: { value: 200, dir: "min" },
+  axCritical: { value: 0, dir: "max" },
+  // v3：交付域 / ADR-HIR
+  adr1Target: { value: 0.85, dir: "min" },
+  hirNiMax: { value: 0.10, dir: "max" },
+  h34Max: { value: 0.03, dir: "max" },
+  hmpoMax: { value: 0.5, dir: "max" },
+  passK: { value: 5, dir: "min" },
+  p0PassKTarget: { value: 0.8, dir: "min" },
+  offlineAuditSample: { value: 10, dir: "min" },
+  soakHours: { value: 24, dir: "min" },
 };
+
+export const THRESHOLD_DEFAULTS = Object.fromEntries(Object.entries(THRESHOLD_FLOORS).map(([k, v]) => [k, v.value]));
 
 export const DEFAULT_BUILTIN_JOURNEYS = [
   { id: "EXP-01", persona: "owner", title: "首启看到价值与待拍板", script: "builtin:first-value" },
@@ -49,6 +77,23 @@ export const DEFAULT_ROUTES = {
   portfolio: "/portfolio",
   service: "/service",
 };
+
+/** v3 默认的 U/O/ADR 配置骨架；行业仓可在 profile 里覆盖。 */
+export const DEFAULT_UX = {
+  personas: [],
+  journeys: [],
+  tasks: [],
+  research: { participants: [], methods: ["think-aloud", "first-click", "five-second"], instruments: ["SUS", "SEQ"] },
+};
+export const DEFAULT_OUTCOME = { roles: [], taskSuites: [], receipts: [] };
+export const DEFAULT_AUTONOMY = {
+  interventionTaxonomy: "H0-H4",
+  fixtureFilters: ["suite.", "suite-", "apr-suite-", "apr-e-", "T-suite"],
+  windows: ["4w"],
+  targetPrecisionPp: 10,
+  offlineAuditSample: 10,
+};
+export const DEFAULT_SOAK = { hours: [24, 168, 672], metrics: ["success", "latency", "cost", "drift"] };
 
 export function findRepoRoot(start = process.cwd()) {
   let dir = resolve(start);
@@ -83,27 +128,36 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
         surfaces: { pcRoutes: ["/"], bMobileRoutes: ["/"], cRoutes: ["#chat"] },
         routes: { ...DEFAULT_ROUTES },
         storage: {},
-        thresholds: { ...THRESHOLD_FLOORS },
+        thresholds: { ...THRESHOLD_DEFAULTS },
+        ux: { ...DEFAULT_UX },
+        outcome: { ...DEFAULT_OUTCOME },
+        autonomy: { ...DEFAULT_AUTONOMY },
+        soak: { ...DEFAULT_SOAK },
         journeys: DEFAULT_BUILTIN_JOURNEYS,
         notes: "",
       },
     };
   }
   const raw = JSON.parse(readFileSync(path, "utf-8"));
-  if (raw.schemaVersion !== PROFILE_SCHEMA) warnings.push(`profile.schemaVersion=${raw.schemaVersion}，期望 ${PROFILE_SCHEMA}`);
-  const thresholds = { ...THRESHOLD_FLOORS, ...(raw.thresholds ?? {}) };
-  for (const [key, floor] of Object.entries(THRESHOLD_FLOORS)) {
+  if (raw.schemaVersion !== PROFILE_SCHEMA) {
+    if (LEGACY_PROFILE_SCHEMAS.includes(raw.schemaVersion)) warnings.push(`profile.schemaVersion=${raw.schemaVersion}（v1 兼容读取）；建议升级到 ${PROFILE_SCHEMA} 以启用 U/O/ADR 配置`);
+    else warnings.push(`profile.schemaVersion=${raw.schemaVersion}，期望 ${PROFILE_SCHEMA}`);
+  }
+  const thresholds = { ...THRESHOLD_DEFAULTS, ...(raw.thresholds ?? {}) };
+  for (const [key, spec] of Object.entries(THRESHOLD_FLOORS)) {
+    const floor = spec.value;
     const value = thresholds[key];
     if (typeof value !== "number") {
       warnings.push(`thresholds.${key} 非数字，已回落默认值 ${floor}`);
       thresholds[key] = floor;
       continue;
     }
-    // 时间/次数类阈值“越大越松”，对比度“越大越严”，分别判定
-    if (key === "minContrastRatio") {
+    if (spec.dir === "clamp") {
       if (value < floor) { warnings.push(`thresholds.minContrastRatio=${value} 低于 AA 下限 ${floor}，已抬到下限`); thresholds[key] = floor; }
-    } else if (value > floor) {
-      warnings.push(`thresholds.${key}=${value} 比基座下限 ${floor} 更宽松，需在报告中说明理由`);
+    } else if (spec.dir === "max" && value > floor) {
+      warnings.push(`thresholds.${key}=${value} 比基座下限 ${floor} 更宽松（max 方向），需在报告中说明理由`);
+    } else if (spec.dir === "min" && value < floor) {
+      warnings.push(`thresholds.${key}=${value} 低于基座下限 ${floor}（min 方向），需在报告中说明理由`);
     }
   }
   const journeys = Array.isArray(raw.journeys) && raw.journeys.length ? raw.journeys : DEFAULT_BUILTIN_JOURNEYS;
@@ -116,6 +170,10 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
     surfaces: { pcRoutes: ["/"], bMobileRoutes: ["/"], cRoutes: ["#chat"], ...(raw.surfaces ?? {}) },
     routes: { ...DEFAULT_ROUTES, ...(raw.routes ?? {}) },
     storage: { ...(raw.storage ?? {}) },
+    ux: { ...DEFAULT_UX, ...(raw.ux ?? {}), research: { ...DEFAULT_UX.research, ...(raw.ux?.research ?? {}) } },
+    outcome: { ...DEFAULT_OUTCOME, ...(raw.outcome ?? {}) },
+    autonomy: { ...DEFAULT_AUTONOMY, ...(raw.autonomy ?? {}) },
+    soak: { ...DEFAULT_SOAK, ...(raw.soak ?? {}) },
   };
   return { isDefault: false, warnings, profile, path };
 }

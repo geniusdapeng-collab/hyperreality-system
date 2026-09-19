@@ -37,6 +37,8 @@ const SKIP_SEED = has("--skip-seed");
 const SKIP_REGRESSION = has("--skip-regression");
 const KEEP_RUNNING = has("--keep-running");
 const TIMEOUT_MIN = Number(arg("--timeout-min", "40"));
+const WITH_REDTEAM = has("--with-redteam");
+const SOAK_HOURS = arg("--soak-hours", null);
 const PORTS = { pc: 3000, bMobile: 3001, cMobile: 3002, server: 8787 };
 
 if (!existsSync(join(REPO_DIR, "package.json"))) {
@@ -301,12 +303,13 @@ function ensureProfile() {
   if (existsSync(profilePath)) return "本仓已有 profile";
   const manifest = JSON.parse(readFileSync(join(REPO_DIR, "product.manifest.json"), "utf-8"));
   const profile = {
-    schemaVersion: "workloom.acceptance-profile/v1",
+    schemaVersion: "workloom.acceptance-profile/v2",
     repo: manifest.repository,
     productName: manifest.displayName ?? manifest.packageName ?? REPO,
     lane: manifest.role ?? "industry",
     primaryBundle: manifest.defaultBundle ?? null,
     workspaceId: null,
+    dataMode: "simulated",
     identity: { workspaceSlug: manifest.demoWorkspaceSlug ?? null, human: manifest.demoMemberNo ?? "MEM-001", guest: "demo-direct" },
     startup: { command: "pnpm preview:all", ports: PORTS },
     surfaces: {
@@ -315,6 +318,11 @@ function ensureProfile() {
       cRoutes: ["#chat", "#service", "#tickets", "#messages", "#me"],
     },
     thresholds: { firstValueMs: 20000, dispatchMs: 60000, approvalMs: 30000, traceClicks: 2, guestFirstReplyMs: 30000, decisionQuota: 7, minContrastRatio: 4.5, idleInterruptionWindowS: 20 },
+    ux: { personas: [], journeys: [], tasks: [], research: { participants: [], methods: ["think-aloud", "first-click", "five-second"], instruments: ["SUS", "SEQ"] } },
+    outcome: { roles: [], taskSuites: [], receipts: [] },
+    autonomy: { interventionTaxonomy: "H0-H4", fixtureFilters: ["suite.", "suite-", "apr-suite-", "apr-e-", "T-suite"], windows: ["4w"], targetPrecisionPp: 10, offlineAuditSample: 10 },
+    soak: { hours: [24, 168, 672], metrics: ["success", "latency", "cost", "drift"] },
+    journeys: [],
     notes: "由 fleet-run.mjs 依据 product.manifest.json 生成：角色/旅程/阈值请本仓负责人在首轮验收后按行业细化。",
   };
   mkdirSync(join(REPO_DIR, "acceptance"), { recursive: true });
@@ -333,7 +341,13 @@ const acceptance = [
     : [process.execPath, "scripts/acceptance/matrix.mts", "--out", "outputs/acceptance/matrix"], "scripts/acceptance/matrix.mts"],
   ["ui", [process.execPath, "scripts/acceptance/ui-probe.mjs", "--out", "outputs/acceptance/ui"], "scripts/acceptance/ui-probe.mjs"],
   ["experience", [process.execPath, "scripts/acceptance/experience.mjs", "--out", "outputs/acceptance/experience"], "scripts/acceptance/experience.mjs"],
-  ["report", [process.execPath, "scripts/acceptance/report.mjs", "--root", "outputs/acceptance"], "scripts/acceptance/report.mjs"],
+  ["ux", [process.execPath, "scripts/acceptance/ux.mjs", "--out", "outputs/acceptance/ux"], "scripts/acceptance/ux.mjs"],
+  ["outcome", [process.execPath, "scripts/acceptance/outcome.mjs", "--out", "outputs/acceptance/outcome"], "scripts/acceptance/outcome.mjs"],
+  ...(WITH_REDTEAM ? [["redteam", [process.execPath, "scripts/acceptance/redteam.mjs", "--out", "outputs/acceptance/redteam"], "scripts/acceptance/redteam.mjs"]] : []),
+  ["autonomy", [process.execPath, "scripts/acceptance/autonomy.mjs", "--out", "outputs/acceptance/autonomy"], "scripts/acceptance/autonomy.mjs"],
+  ...(SOAK_HOURS ? [["soak", [process.execPath, "scripts/acceptance/soak.mjs", "--out", "outputs/acceptance/soak", "--hours", String(SOAK_HOURS)], "scripts/acceptance/soak.mjs"]] : []),
+  ["coverage", [process.execPath, "scripts/acceptance/coverage.mjs", "--root", "outputs/acceptance", "--out", "outputs/acceptance/coverage.json"], "scripts/acceptance/coverage.mjs"],
+  ["report", [process.execPath, "scripts/acceptance/report-v3.mjs", "--root", "outputs/acceptance"], "scripts/acceptance/report-v3.mjs"],
 ];
 for (const [name, command, entry] of acceptance) {
   if (state.steps.preview?.ok === false) { state.steps[name] = { ok: false, detail: "前置：真机未就绪，跳过" }; state.ok = false; continue; }
