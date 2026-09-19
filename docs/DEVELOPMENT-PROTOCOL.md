@@ -133,12 +133,26 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 | 合并前闸门（类型/测试/构建/迁移种子验链/视觉） | **自动** | 各仓 `.cnb.yml`（基座 static/db/ui 三道必需） |
 | 分支保护（禁直推/禁强推/必需状态检查） | **自动** | CNB 平台规则（九仓已配） |
 | 新仓发现与纳管 | **自动** | 每日 cron：`scripts/tools/fleet-scan.mjs --issue --provision` → 开扫描卡 + 建纳管 PR |
+| 基座资产分发（根级受控资产 → 各仓 `sync/base-*` PR） | **自动** | 每 30 分钟 cron + `api_trigger_base_sync`：`sync/fanout-cnb.mjs`（详见《FLEET-AUTO-SYNC.md》§1） |
 | 任务卡创建/回执/关单 | **半自动** | `scripts/tools/task.mjs new|receipt|close`（一条命令，不再手写 JSON） |
 | 分支创建、提交、提 PR | 由 AI/人执行 | 用任务号命名分支即可 |
-| **合并** | **人来**（串行，一次一个） | 协议 §1 硬规则；CNB 未开自动合并 |
+| **合并（代码类 PR）** | **人来**（串行，一次一个） | 协议 §1 硬规则；动到 `packages/**`、`apps/**`、行业语义的 PR 永不自动合并 |
+| **合并（纯同步 PR）** | **自动** | 仅 `sync/base-*` 且改动全在根级受控资产白名单、全部门禁 success 时由 `scripts/tools/merge-sync-prs.mjs` 合并（协议 §9.4） |
 | 高风险裁决、协议版本发布 | **人来** | 协议 §3/§8 |
 
-结论：门禁、扫描、纳管是自动的；**唯一必须由人按的按钮是"合并"和"高风险裁决"**。
+结论：门禁、扫描、纳管、**根级资产分发与纯同步 PR 合并**是自动的；
+必须由人按的按钮只剩两个：**代码类 PR 的合并**与**高风险裁决**。
+
+### 9.4 纯同步 PR 的自动合并（2026-09-19 新增）
+
+- 自动合并的判定逻辑在 `sync/fanout-rules.mjs#autoMergeEligibility`（纯函数、有单测），执行器是
+  `scripts/tools/merge-sync-prs.mjs`；两者与 fanout（`sync/fanout-cnb.mjs`）共同构成"基座改一次、
+  舰队跟一次"的闭环，机制说明见 `docs/FLEET-AUTO-SYNC.md`。
+- 白名单只覆盖根级受控资产：`WORKLOOM_PRODUCT_CONTEXT.md`、`AGENTS.md`、
+  `docs/DEVELOPMENT-PROTOCOL.md`、`.workloom-base-sync.json`、
+  `.github/workflows/base-sync-heartbeat.yml`、`sync/**`。
+- 门禁仍然先行：PR 必须全部门禁 success 且平台可合并；**没有状态检查结果的 PR 不自动合并**。
+- 白名单外的任何路径（含行业 bundle、服务层、三端页面、脚本）一律回落到"人来合并"。
 
 ### 9.2 工具用法
 
@@ -176,4 +190,3 @@ node scripts/tools/provision-protocol.mjs --repo workloom-ai/<name> [--dry-run]
 - 是否有两个 open PR 改了同一文件/同一互斥模块？（应 0）
 - 是否有 PR 超过 24h 未合并？（应 0，或已在 Issue 说明原因）
 - 合并是否严格串行？（应「是」）
-
