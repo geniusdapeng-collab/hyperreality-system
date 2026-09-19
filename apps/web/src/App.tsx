@@ -89,6 +89,17 @@ function Shell() {
   const bare = pathname === "/dev" || pathname.startsWith("/onboarding") || pathname === "/login" || pathname === "/activate" || pathname === "/invite";
   return (
     <div data-workloom-client="b-pc" data-wl-theme="dark" className="flex min-h-screen min-w-0 max-w-full overflow-x-hidden">
+      {/* 无导航壳页面（/dev、/login、/activate、/invite…）必须有明确出口：
+          这类页面此前只能靠浏览器后退，客户会“进得去出不来”。 */}
+      {bare && pathname !== "/" && (
+        <a
+          href="/"
+          aria-label="返回经营主页"
+          className="fixed left-3 top-3 z-50 rounded border border-line bg-panel/90 px-2.5 py-1 text-body text-ink3 no-underline backdrop-blur hover:border-gline hover:text-ink"
+        >
+          ← 返回经营主页
+        </a>
+      )}
       {!bare && <SideNav />}
       {/* Live2D 插件的 WebGL 资源与多 canvas 共存不稳定；首装舞台独占唯一数字人实例。 */}
       {!bare && !welcomeActive && <LoomMate />}

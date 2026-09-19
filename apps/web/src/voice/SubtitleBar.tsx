@@ -73,7 +73,7 @@ export function SubtitleBar({ channelName = "经营晨会" }: { channelName?: st
       aria-live="polite"
       aria-hidden={!visible}
     >
-      <div style={{
+      <div className="wl-subtitle-channel" style={{
         flex: "0 1 42%", minWidth: 0, display: "flex", alignItems: "center", gap: 6,
         padding: "8px 12px", fontSize: 14, fontWeight: 700, letterSpacing: 1,
         color: fuse ? "#ffdce2" : "#e8edf4",

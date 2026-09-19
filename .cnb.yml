@@ -34,6 +34,12 @@
         node --test scripts/oss-inventory.test.mjs
         pnpm oss:check
 
+    - name: UI 消费契约（稳定制品 + 三端实际渲染）
+      script: |
+        set -eu
+        node scripts/verify-ui-consumer.mjs --repo . --require-governance-state
+        node scripts/verify-client-foundation-consumer.mjs --repo .
+
     - name: 产品身份与行业包治理
       script: |
         set -eu

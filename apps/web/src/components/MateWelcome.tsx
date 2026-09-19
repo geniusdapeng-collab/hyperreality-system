@@ -20,7 +20,9 @@ const CEREMONY_VOICE = {
   pitch: 1.04,
   rate: 0.94,
   female: true,
-  preferredNames: ["Flo", "Tingting", "Xiaoxiao", "Xiaoyi", "Meijia", "Sinji"],
+  // 中文名与本机实际音色名同列：macOS 的 zh-CN 音色在 Chromium 里叫「婷婷 / 美嘉 / 善怡 / 语舒」，
+  // 只写英文名会匹配不到；VoiceEngine 还会把不发 boundary 的 Eddy/Flo 一族降级兜底。
+  preferredNames: ["Flo", "Tingting", "Xiaoxiao", "Xiaoyi", "Meijia", "Sinji", "婷婷", "美嘉", "善怡", "语舒"],
 };
 /** 字幕/语音节奏：约 5.8 字/秒 + 段尾缓冲 */
 const segDuration = (text: string) =>

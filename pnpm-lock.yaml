@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@workloom/ui@0.1.3': https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz
+  '@workloom/ui@0.1.4': https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz
 
 importers:
 
@@ -140,8 +140,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@workloom/ui':
-        specifier: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz
-        version: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz
+        version: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       pixi-live2d-display:
         specifier: ^0.4.0
         version: 0.4.0(0736f5bd67d2e4de7e9fff36ad63fa2e)
@@ -204,8 +204,8 @@ importers:
         specifier: workspace:*
         version: link:../server
       '@workloom/ui':
-        specifier: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz
-        version: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz
+        version: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -235,8 +235,8 @@ importers:
   apps/webc:
     dependencies:
       '@workloom/ui':
-        specifier: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz
-        version: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz
+        version: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -1670,9 +1670,9 @@ packages:
   '@vitest/utils@4.1.11':
     resolution: {integrity: sha512-zTCVGpyFsGWBhllOyKlTw/vnr6D9qxsfSDyfbyZmTyjHw5N/VuvzHpHoQjm2ZJzn4RJgx5w4r7V0er69CmLgPQ==}
 
-  '@workloom/ui@https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz':
-    resolution: {integrity: sha512-WKueOZJmP6eMhRljrq6vh45hy0ySsf+L3KIzl1L26bIi/gl2HA94/DoCad938zf2/06/R8y2fPXvjhFy0wnEEg==, tarball: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz}
-    version: 0.1.3
+  '@workloom/ui@https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz':
+    resolution: {integrity: sha512-aUVu65XAxife5b3WcxO0S99o6sK4g1NrlI8kiZ/RCeSqvGLWUflUeKMnMjSuHM/sBbIpRB15wqoI2x9CDkoCoA==, tarball: https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz}
+    version: 0.1.4
     peerDependencies:
       react: '>=19.0.0'
       react-dom: '>=19.0.0'
@@ -4772,7 +4772,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.1
 
-  '@workloom/ui@https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.3/workloom-ui-0.1.3.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@workloom/ui@https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.4/workloom-ui-0.1.4.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
