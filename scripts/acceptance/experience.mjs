@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { cliArgs, findRepoRoot, loadProfile, urlsOf } from "./lib/profile.mjs";
 import { loadChromium } from "./lib/playwright.mjs";
+import { loginAsMember, productIdOf } from "./lib/session.mjs";
 
 const args = cliArgs();
 const REPO_ROOT = findRepoRoot();
@@ -67,22 +68,8 @@ const shot = async (target, name) => {
   return file;
 };
 
-/* 登录（PC 成员态） */
-const loginRes = await page.request.post(`${URLs.api}/trpc/auth.loginAs`, {
-  data: { workspaceSlug: WORKSPACE_SLUG, memberNo: MEMBER_NO },
-});
-const loginJson = await loginRes.json();
-const TOKEN = loginJson?.result?.data?.token;
-if (!TOKEN) throw new Error(`登录失败：${JSON.stringify(loginJson).slice(0, 200)}`);
-await page.goto(`${URLs.pc}/login`, { waitUntil: "domcontentloaded" });
-await page.waitForTimeout(500);
-await page.evaluate((t) => {
-  const keys = Object.keys(localStorage);
-  const tk = keys.find((k) => k.endsWith(":access-token")) ?? "workloom:access-token";
-  const gk = keys.find((k) => k.endsWith(":guest"));
-  localStorage.setItem(tk, t);
-  if (gk) localStorage.removeItem(gk);
-}, TOKEN);
+/* 登录（PC 成员态）：必须清除演示直登游客标记，否则审批等成员能力会被误判为无权 */
+const TOKEN = await loginAsMember(page, { urls: URLs, workspaceSlug: WORKSPACE_SLUG, memberNo: MEMBER_NO, productId: productIdOf(REPO_ROOT) });
 
 /** 展开右栏“任务上下文”抽屉（窄内容区时关键动作在抽屉里；点不到就是缺陷） */
 async function ensureRightPanel(target) {
@@ -131,7 +118,9 @@ async function firstValue() {
 async function approval() {
   await page.goto(`${URLs.pc}${R.approvals}`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2800);
-  const openedPanel = await ensureRightPanel(page);
+  // 先在主工作区操作；只有找不到动作按钮时才展开右栏（右栏本身可能遮挡列表——RDAS v3 实测）。
+  let openedPanel = false;
+  if ((await page.locator('button:has-text("推进")').count()) === 0) openedPanel = await ensureRightPanel(page);
   const items = page.locator("button").filter({ hasText: /必审|逐步审|高风险/ });
   const pendingItems = await items.count();
   if (pendingItems > 0) await items.first().click({ timeout: 8000 }).catch(() => undefined);
@@ -149,7 +138,7 @@ async function approval() {
     await advance.scrollIntoViewIfNeeded().catch(() => undefined);
     await advance.click({ timeout: 12000 }).catch(() => undefined);
     clicked = true;
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
     afterText = await page.evaluate(() => document.body.innerText);
   }
   const singleMs = now() - t0;
@@ -216,20 +205,32 @@ async function brake() {
   let has = false;
   let enabled = false;
   let where = null;
-  for (const [name, route] of [["reports", R.reports], ["night", "/night"]]) {
+  let brakeLocator = null;
+  for (const [name, route] of [["reports", R.reports], ["night", "/night"], ["approvals", R.approvals]]) {
     await page.goto(`${URLs.pc}${route}`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2500);
-    const candidate = page.getByRole("button", { name: /紧急制动/ }).first();
-    if (await candidate.count()) {
-      has = true;
-      enabled = !(await candidate.isDisabled());
-      where = name;
-      break;
+    // 审批页的制动杆在选中一条待审后出现（P3 底部动作条）；先选一条再找。
+    if (name === "approvals") {
+      const item = page.locator("button").filter({ hasText: /必审|逐步审|高风险/ }).first();
+      if (await item.count()) { await item.click({ timeout: 6000 }).catch(() => undefined); await page.waitForTimeout(1200); }
     }
+    const candidates = page.getByRole("button", { name: /紧急制动/ });
+    const count = await candidates.count();
+    if (count > 0) has = true;
+    for (let i = 0; i < count; i += 1) {
+      const candidate = candidates.nth(i);
+      if (!(await candidate.isDisabled())) {
+        enabled = true;
+        where = name;
+        brakeLocator = candidate;
+        break;
+      }
+    }
+    if (enabled) break;
   }
   let dialog = false;
-  if (has) {
-    const brakeButton = page.getByRole("button", { name: /紧急制动/ }).first();
+  if (enabled && brakeLocator) {
+    const brakeButton = brakeLocator;
     await brakeButton.scrollIntoViewIfNeeded().catch(() => undefined);
     await brakeButton.click({ timeout: 8000 }).catch(() => undefined);
     await page.waitForTimeout(1000);
@@ -260,7 +261,7 @@ async function dispatch() {
   const title = "为下周三的客房促销活动写一条发布计划，本周五前交付";
   const res = await page.request.post(`${URLs.api}/trpc/threads.dispatch`, {
     headers: { authorization: `Bearer ${TOKEN}` },
-    data: { title, presetKey: null },
+    data: { title },
   });
   const json = await res.json();
   let threadId = json?.result?.data?.threadId ?? null;
@@ -269,7 +270,7 @@ async function dispatch() {
   if (!threadId && clarify) {
     const retry = await page.request.post(`${URLs.api}/trpc/threads.dispatch`, {
       headers: { authorization: `Bearer ${TOKEN}` },
-      data: { title: `${title}（交付物：发布计划文档；截止：本周五 18:00）`, presetKey: null },
+      data: { title: `${title}（交付物：发布计划文档；截止：本周五 18:00）` },
     });
     threadId = (await retry.json())?.result?.data?.threadId ?? null;
   }

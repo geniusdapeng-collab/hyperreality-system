@@ -101,13 +101,18 @@ for (const file of files) {
       const startedAt = Date.now();
       const trial = { suite: file.replace(REPO_ROOT, "."), taskId: task.id, title: task.title, criticality: task.criticality ?? "P1", trial: t, interventions: [], asserts: [], pass: false, clarify: false, falseSuccess: false, status: null, threadId: null, ms: 0 };
       try {
-        const dispatch = await trpcPost("threads.dispatch", { title: task.input ?? task.title, presetKey: task.presetKey ?? suite.agentPreset ?? null });
+        const preset = task.presetKey ?? suite.agentPreset;
+        const dispatchInput = { title: task.input ?? task.title };
+        if (preset) dispatchInput.presetKey = preset;
+        const dispatch = await trpcPost("threads.dispatch", dispatchInput);
         const d = dispatch.json?.result?.data ?? {};
         trial.kind = d.kind ?? "unknown";
         if (d.kind === "clarify") {
           trial.clarify = true;
           if (task.allowClarify === false || task.retryOnClarify === true) {
-            const retry = await trpcPost("threads.dispatch", { title: `${task.input ?? task.title}（交付物/截止已明确）`, presetKey: task.presetKey ?? suite.agentPreset ?? null });
+            const retryInput = { title: `${task.input ?? task.title}（交付物/截止已明确）` };
+            if (preset) retryInput.presetKey = preset;
+            const retry = await trpcPost("threads.dispatch", retryInput);
             trial.threadId = retry.json?.result?.data?.threadId ?? null;
           }
         } else trial.threadId = d.threadId ?? null;

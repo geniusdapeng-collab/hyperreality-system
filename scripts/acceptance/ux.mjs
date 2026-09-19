@@ -17,6 +17,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { cliArgs, findRepoRoot, loadProfile, urlsOf } from "./lib/profile.mjs";
 import { loadChromium } from "./lib/playwright.mjs";
+import { loginAsMember, productIdOf } from "./lib/session.mjs";
 
 const args = cliArgs();
 const REPO_ROOT = findRepoRoot();
@@ -63,19 +64,8 @@ const shot = async (target, name) => {
   return file;
 };
 
-// 登录（成员态）
-const loginRes = await page.request.post(`${URLs.api}/trpc/auth.loginAs`, { data: { workspaceSlug: WORKSPACE_SLUG, memberNo: MEMBER_NO } });
-const loginJson = await loginRes.json();
-const TOKEN = loginJson?.result?.data?.token;
-if (!TOKEN) throw new Error(`登录失败：${JSON.stringify(loginJson).slice(0, 200)}`);
-await page.goto(`${URLs.pc}/login`, { waitUntil: "domcontentloaded" });
-await page.evaluate((t) => {
-  const keys = Object.keys(localStorage);
-  const tk = keys.find((k) => k.endsWith(":access-token")) ?? "workloom:access-token";
-  localStorage.setItem(tk, t);
-  const gk = keys.find((k) => k.endsWith(":guest"));
-  if (gk) localStorage.removeItem(gk);
-}, TOKEN);
+// 登录（成员态）：清除演示直登游客标记，避免权限类页面被误判
+await loginAsMember(page, { urls: URLs, workspaceSlug: WORKSPACE_SLUG, memberNo: MEMBER_NO, productId: productIdOf(REPO_ROOT) });
 
 const routes = (profile.surfaces?.pcRoutes ?? ["/"]).slice(0, MAX_ROUTES);
 const goto = async (route) => {
