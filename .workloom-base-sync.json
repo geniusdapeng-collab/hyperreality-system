@@ -1,15 +1,19 @@
 {
   "baseRepo": "workloom-ai/workloom-im",
   "lastSyncedBaseSha": "f84cdff0c9101b74bbdd220151d1d9c28885a26d",
-  "lastSyncAt": "2026-09-19T07:06:24.998Z",
-  "filesTouched": 3,
-  "lastRequiredAssetsBaseSha": "6762c76bc717c9fb93452252d5c61c54a77d01a2",
+  "lastSyncAt": "2026-09-19T08:32:15.522Z",
+  "filesTouched": 5,
+  "lastRequiredAssetsBaseSha": "bb66fccdeb47e1b76df7514ff3ea418c2bd0fe8f",
   "lastSyncMode": "required-only",
   "pathPrefix": ".",
   "requiredRootAssetsSha256": {
     "WORKLOOM_PRODUCT_CONTEXT.md": "742d22355d5493e2516bca7169fb5980b5219bda4c8f55ef55b305e0e35a9587",
     "docs/DEVELOPMENT-PROTOCOL.md": "39a6f8ffe11b1dd11eb16f98c8f42527598a235e16f66f5deb91911ddeb8cc42",
+    "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md": "f656d642c8c4d209c3c12b572a97ecb71d1ab5c53aebb3050db4348aaf30d702",
+    "docs/acceptance/checklist.v1.json": "7eab36c24d9079acd17d13c4d37dc16add35cc9aa0ffb1865457ba0b7a902104",
+    "docs/acceptance/report-template.md": "fa65cb419c75a55ab9786ac710aaab2f10cb3b101d4f30d0dbd2f331414a8a9d",
+    "docs/acceptance/profile.example.json": "36ca2a3432414e36aa6220dedb135c94f11b28e978299d5b6044dedf0f502c27",
     ".github/workflows/base-sync-heartbeat.yml": "584bd0345fa6b55ed75100d03b5ad07a28d66a1aa7e7bc088ae594084ecd77a2",
-    "AGENTS.md#managed-section": "d63adfbd349ac87c8af33b96cd13aad1a2ed29909f226e8fbb97ee9d4a1ecacf"
+    "AGENTS.md#managed-section": "e44bef55f5b3b5ae2e0217575e3b950d46ff782fb47e7389eab5e713b958d970"
   }
 }
