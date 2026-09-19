@@ -49,7 +49,7 @@ WorkLoom 不是一组彼此独立的 AI 应用，而是一套“一个基座、�
 - **酒店、电商、视频、获客、咨询、交易等项目**是从同一基座派生的行业经营体。它们用行业包定义自己的数字员工组织、技能、业务对象、阶段、围栏、种子数据、投影和 UI。
 - **狐狸先生**不是一个独立行业，而是新人格、新交互和影音汇报方式的试验田；成功经验可回到基座，失败实验进入“策略墓地”。
 - 整套系统的真正差异化不只在模型能力，而在两层复利：一是“围栏 + 账本 + 考试院”的信任工程，二是“经验上行、评测灰度、能力下发”的蜂群飞轮。
-- 研发侧已上线**开发协作机制**（`docs/DEVELOPMENT-PROTOCOL.md`，协议 v1.2）：五条硬规则（一任务一分支、任务号进提交、先声明后落笔、合并在人且串行、无回执不算完成）+ 三个自动化工具 + 每日舰队扫描；同时为 `workroom-fox` / `WorkLoom-growth` 建立了**实验车道**，实验语义不下发、不覆盖、不回流。
+- 研发侧已上线**开发协作机制**（`docs/DEVELOPMENT-PROTOCOL.md`，协议 v1.3）：五条硬规则（一任务一分支、任务号进提交、先声明后落笔、**合并在机器且串行（人保留叫停权）**、无回执不算完成）+ 三个自动化工具 + 每日舰队扫描；同时为 `workroom-fox` / `WorkLoom-growth` 建立了**实验车道**，实验语义不下发、不覆盖、不回流。
 - 工程完整性上，每个仓都是**可独立运行的自包含 monorepo 源码树**（含服务端、三端前端、桌面壳、数据库迁移、行业包与技能），开源组件以“仓内 vendor / npm 依赖 / 安装期受控下载”三种形态存在，详见 §12。
 
 一句话心智模型：**WorkLoom IM 是操作系统，行业包是岗位与业务制度，行业项目是经营实例，仙女座是管理全部实例的中央运营台。**
@@ -256,7 +256,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 - **UI 与三端基座**：`@workloom/ui` 与三端客户端基座按同一稳定版本经升级 PR 分波下发；行业扩展只允许落在 `apps/*/src/{extensions,projections,config/industry,theme/industry}/**` 等显式排除路径。
 - **污染守卫**：路径黑名单含 `^bundles/`、`^demo/`、`^docs/demo`、`^scripts/seed`、`^scripts/demo` 与 `hotel-baseline`、`ai-pm`、`yunqi`、`ecommerce`、`panda-cineforge`、`platform-ops` 等子串；单次常规同步上限 200 文件，新行业接入放宽至 450，超限即中止并要求人工核对。
 - **平台工程不出仓**：Andromeda 的 `extraExclude` 显式排除 `platform-ops/**`，与 `safety/` 保护清单、载荷身份策略（B-01.PB-1）形成三重护栏。
-- **实际同步基线**：八个子仓的 `.workloom-base-sync.json` 记录 `lastSyncedBaseSha=4f2296f…`（2026-09-16，基座 `PR #16` 合并点）；`requiredRootAssetsSha256` 随“基座 fanout → 子仓 `sync/base-*` PR → 门禁全绿自动合并”的通道持续收敛（2026-09-19 起，机制见 `docs/FLEET-AUTO-SYNC.md`，运行时代码升级仍由人合并）。
+- **实际同步基线**：八个子仓的 `.workloom-base-sync.json` 记录 `lastSyncedBaseSha=4f2296f…`（2026-09-16，基座 `PR #16` 合并点）；`requiredRootAssetsSha256` 随“基座 fanout → 子仓 `sync/base-*` PR → 门禁全绿自动合并”的通道持续收敛（2026-09-19 起，机制见 `docs/FLEET-AUTO-SYNC.md`；运行时代码按协议 §1/§9.5 走代码车道——门禁全绿 + 冷却期 + 串行，同样由 AI 合并，人保留叫停权）。
 
 后续跨仓开发默认顺序：先判断能力属于公共基座、平台中枢还是行业包；公共机制优先在 `workloom-im` 实现并通过同步下发；行业语义仅在对应 bundle/子仓实现；平台运营工程仅在 Andromeda；同步后逐仓运行类型检查、测试、围栏/评测和打包门禁，不能只看文件复制成功。
 
@@ -434,7 +434,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 1. 一任务一分支一 PR：任务卡 = CNB Issue（标题 `[T-YYYYMMDD-XXXX]`），分支 = `task/T-YYYYMMDD-XXXX`；
 2. 提交标题 `<type>(<layer>): <摘要> [T-…]`；type ∈ `feat|fix|sync|protocol|exam|docs|test|chore|ci`；layer 仅告警；2026-09-19 起新提交必须带任务号（此前提交按过渡期祖父规则放行）；
 3. 先声明后落笔：与同仓其它 open PR 改到同一文件或同一互斥模块（`sync/`、`protocol/`、`migrations/`、`.cnb.yml`、`AGENTS.md`、根 `package.json`）→ **先到先得**（编号小者优先），后到者排队；
-4. 合并在人、串行执行：AI 只提 PR，人按队列一次合一个；
+4. 合并在机器、串行执行：AI 只提 PR，门禁全绿后由 AI 按队列一次一个合并（squash），人保留叫停与回滚权；
 5. 无回执不算完成：Issue 必须留 5 行回执并关单。
 
 ### 14.2 自动化边界（哪些不用人管）
@@ -448,7 +448,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 | 任务卡建卡 / 回执 / 关单 | `scripts/tools/task.mjs new|list|receipt` |
 | 实验路径护栏 | 每日 cron `scripts/tools/experiment-guard.mjs --check` |
 | **基座资产分发**（根级受控资产 → 各仓 `sync/base-*` PR → 合并） | 30 分钟 cron + `api_trigger_base_sync`：`sync/fanout-cnb.mjs` + `sync/merge-sync-prs.mjs`（仅纯同步 PR 自动合并，白名单见协议 §9.4） |
-| **代码类 PR 合并 / 高风险裁决 / 协议发布** | **人**（运行时代码与行业语义永不由机器人合并） |
+| **代码类 PR 合并 / 高风险裁决 / 协议发布** | **AI 执行合并**（门禁全绿 + 串行；`risk/review` 放行后合并，`risk/block` 永不合并）；**人**保留高风险裁决与随时叫停 / 回滚权 |
 
 ### 14.3 工具与服务
 
