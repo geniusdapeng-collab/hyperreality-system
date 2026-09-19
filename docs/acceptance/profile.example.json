@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "workloom.acceptance-profile/v1",
+  "repo": "workloom-ai/<repo>",
+  "productName": "<产品名>",
+  "lane": "industry",
+  "primaryBundle": "<bundles 下的主包目录名>",
+  "workspaceId": "ws-<demo>",
+  "dataMode": "simulated",
+  "startup": {
+    "command": "pnpm preview:all",
+    "ports": { "pc": 3000, "bMobile": 3001, "cMobile": 3002, "server": 8787 }
+  },
+  "identity": {
+    "human": "MEM-001",
+    "guest": "demo-direct"
+  },
+  "surfaces": {
+    "pcRoutes": ["/", "/tasks", "/approvals", "/agents", "/skills"],
+    "bMobileRoutes": ["/", "/inbox", "/tasks", "/operations", "/account"],
+    "cRoutes": ["#chat", "#service", "#tickets", "#messages", "#me"]
+  },
+  "thresholds": {
+    "firstValueMs": 20000,
+    "dispatchMs": 60000,
+    "approvalMs": 30000,
+    "traceClicks": 2,
+    "guestFirstReplyMs": 30000,
+    "decisionQuota": 7,
+    "minContrastRatio": 4.5,
+    "idleInterruptionWindowS": 20
+  },
+  "journeys": [
+    { "id": "EXP-01", "persona": "owner", "title": "首启看到价值与待拍板", "script": "builtin:first-value" },
+    { "id": "EXP-02", "persona": "owner", "title": "审批三手势写回", "script": "builtin:approval" },
+    { "id": "EXP-03", "persona": "owner", "title": "一键溯源", "script": "builtin:traceability" },
+    { "id": "EXP-04", "persona": "owner", "title": "紧急制动确认与撤回", "script": "builtin:brake" },
+    { "id": "EXP-05", "persona": "manager", "title": "派活并看拆解", "script": "builtin:dispatch" },
+    { "id": "EXP-06", "persona": "manager", "title": "统一待办聚合", "script": "builtin:inbox" },
+    { "id": "EXP-07", "persona": "staff", "title": "移动端接活（390px）", "script": "builtin:mobile-staff" },
+    { "id": "EXP-08", "persona": "partner", "title": "伙伴授权边界可见", "script": "builtin:partner-scope" },
+    { "id": "EXP-09", "persona": "guest", "title": "C 端首响与转人工", "script": "builtin:guest-service" },
+    { "id": "EXP-10", "persona": "owner", "title": "围栏 dry-run", "script": "builtin:dry-run" }
+  ],
+  "notes": "行业专属补充：如资金/合规/上架审批等额外旅程，可在此声明 custom 脚本路径。"
+}
