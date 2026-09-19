@@ -673,7 +673,7 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
   lines.push(`| 安全事件（CVE / 供应链投毒） | 不等周期，立即全量扫描 | \`${cmd("oss:watch")} --all\` |`);
   lines.push(`| 发布前 | 复核清单新鲜度与更新计划 | \`${cmd("oss:plan")}\` |`);
   lines.push("");
-  lines.push("升级纪律：**扫描可以自动，升级永不自动**；升级必须逐项走 `docs/oss-update-plan.md` 的人工圈定 + 门禁 + 发布流程。");
+  lines.push("升级纪律：**扫描自动；升级走独立 PR（按 `docs/oss-update-plan.md` 组批 + 门禁 + 协议 §1/§9.5 合并），破坏性/大版本升级按 §3 人审放行**。");
   lines.push("");
   lines.push("## 1. 登记组件（治理清单 · 人工登记 + 自动探测当前版本 + 自动扫描上游最新版本）");
   lines.push("");
