@@ -754,6 +754,7 @@ function Live2DBackend({ size, mood = "neutral", gesture = null, modelUrl = "/li
       data-render-mode={renderReady ? "live2d-webgl" : loadError ? "live2d-error" : "live2d-loading"}
       data-avatar-ready={renderReady ? "true" : "false"}
       data-avatar-motion="dynamic"
+      role="img"
       style={{
         position: "relative", width: size, height: size, borderRadius: 16,
         overflow: "hidden", pointerEvents: "none",

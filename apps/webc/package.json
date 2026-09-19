@@ -11,7 +11,7 @@
     "test": "../../node_modules/.bin/vitest run"
   },
   "dependencies": {
-    "@workloom/ui": "0.1.4",
+    "@workloom/ui": "0.1.6",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -19,10 +19,10 @@
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "6.1.0",
-    "jsdom": "^30.0.1",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "^30.1.0",
     "tailwindcss": "4.3.3",
     "typescript": "^7.0.2",
-    "vite": "8.2.2"
+    "vite": "8.3.0"
   }
 }

@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.4",
-  "sourceRef": "refs/tags/ui-v0.1.4",
-  "sourceCommit": "50876e8870d5f86ab51fcbb8d2a9578f1a35cc46",
+  "version": "0.1.6",
+  "sourceRef": "refs/tags/ui-v0.1.6",
+  "sourceCommit": "33b8d1cc4596421eeaa8118a48e2e0a939b8b87a",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "44d09ea0f2b686548f0b067ff61fb5f17d5e25ddf5471ac16706b2e5f3a3a421",
+      "sha256": "84fd52c5ebb74f80400e8f015687e0dbaac73131d7c5c3c8d2fcfc1a0bcb997b",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -411,11 +411,11 @@
       "mode": 420
     },
     "apps/web/src/components/loommate/LoomMate.tsx": {
-      "sha256": "ed24a42e0d036b954291503cc8e91fdf914afde206004deb16e0eea5a507653f",
+      "sha256": "491336cc05d685a5a4c9c01449eca976036aae3bd998b2ea5a4e6edcdc6208f4",
       "mode": 420
     },
     "apps/web/src/components/loommate/MateLive2D.tsx": {
-      "sha256": "1d787c7b9fbd507e68a8335f3c4e09221f705fb6f22cd4f8118264bb15adb090",
+      "sha256": "bafa929d8e72cc9b69bab5468e36b655c385bd7e68bd37d516b95c2185e54abc",
       "mode": 420
     },
     "apps/web/src/components/loommate/speechText.test.ts": {
@@ -479,11 +479,11 @@
       "mode": 420
     },
     "apps/web/src/lib/display.test.ts": {
-      "sha256": "7eddb856058ac709f05df7f8001c3b4e1611914b17bcb5d26d92562f4ef3a171",
+      "sha256": "c6b874b9f6e4e2ebb031de8f3db6efc72c604ee76e64d889158cc8c19e53b4a7",
       "mode": 420
     },
     "apps/web/src/lib/display.ts": {
-      "sha256": "25b75d0b2b6afd080b1d9c15079fe2446514098276a73a70b3eefcdef5a2689a",
+      "sha256": "67eb812f701031f983ae39d5317c70c4363379c791dee004e80719d93a286df0",
       "mode": 420
     },
     "apps/web/src/lib/naming.test.ts": {
@@ -591,7 +591,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p0/P0.tsx": {
-      "sha256": "61df4db2b7c8e43e2f3f405a24deb2e6c0ac5c0b20ab8922893c2eebb45b47fc",
+      "sha256": "afae3b4c8ad16f3b2f28483e827b99631ea61eb399663289c5f6ff6577d0544b",
       "mode": 420
     },
     "apps/web/src/pages/p1/P1.tsx": {
@@ -663,7 +663,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p6/P6.tsx": {
-      "sha256": "2ba358f54a637b9d1104b4e91aac91308210e0eda366d6cb4585378f685ee2c9",
+      "sha256": "afa22618e0cf1b8055692ce640787f26025c7f45b1609138c2070dd7ff148075",
       "mode": 420
     },
     "apps/web/src/pages/p7/P7.tsx": {
@@ -755,7 +755,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "34f344db1661ca3efd80fb1d305e594ef9da8330706a209736edca9b8a79f42c",
+      "sha256": "00e388d6c2aae3c44389d9a3320d106a1c3cee153a5a7dff1342c63c386b49af",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -819,7 +819,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "a20bc1140ae15de9475f3bfb852e5e4378aaf8eb9d3b4cfba0887c4251bcc182",
+      "sha256": "756f65cbf052cd50d985bf13e8f76268b031fcb3b6648923b82518d848cc3ef7",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {
@@ -847,7 +847,7 @@
       "mode": 420
     },
     "apps/webc/src/lib/api.ts": {
-      "sha256": "036cb7d7cf8036f6ab5b7d1a0c21c898a0114806d824ebb2eaa1f4ee5e08c64c",
+      "sha256": "f4b5b688e8f9d7fa628733d825e0a4e7111b604aea5fcd619aadb28ae6f98cee",
       "mode": 420
     },
     "apps/webc/src/lib/business-display.test.ts": {

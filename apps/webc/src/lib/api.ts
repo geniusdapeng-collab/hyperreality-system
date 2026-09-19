@@ -110,7 +110,7 @@ export function getSessionError(): ApiError | null {
 }
 
 /** 首进自动建会话；失败返回 null 并由 UI 显示真实错误，不注入行业演示数据。 */
-export async function ensureSession(): Promise<{ token: string; user: SessionUser } | null> {
+async function createSession(): Promise<{ token: string; user: SessionUser } | null> {
   const configuredWorkspaceKey = getConfig().workspaceKey ?? "";
   const cached = getToken();
   const user = getStoredUser();
@@ -158,6 +158,22 @@ export async function ensureSession(): Promise<{ token: string; user: SessionUse
       ? err
       : new ApiError("无法连接服务，请检查网络后重试", 0);
     return null;
+  }
+}
+
+let sessionPromise: Promise<{ token: string; user: SessionUser } | null> | null = null;
+
+/**
+ * 单飞会话建立（RDAS v3.0 实测：页面挂载点并发调用 ensureSession 会重复 POST /c/session，
+ * 并在 401→清 token→重建的竞态下产生“缺少 c-token”抖动）。并发调用共享同一次会话请求。
+ */
+export async function ensureSession(): Promise<{ token: string; user: SessionUser } | null> {
+  if (sessionPromise) return sessionPromise;
+  sessionPromise = createSession();
+  try {
+    return await sessionPromise;
+  } finally {
+    sessionPromise = null;
   }
 }
 
