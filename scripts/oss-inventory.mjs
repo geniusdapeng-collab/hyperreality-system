@@ -21,6 +21,7 @@
  *
  * 纪律：本脚本只读仓库、零网络；写盘仅限清单文档（--write）。
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -786,10 +787,26 @@ function shortRepoLabel(url) {
 export function repoIdentity(root) {
   const manifest = readJson(join(root, "package.json"));
   const product = readJson(join(root, "product.manifest.json"));
+  // 仓库标识以 git remote 为准（product.manifest.json 里的 repository 可能滞后于改仓/改名，
+  // 用它会让清单头显示错仓名，也会让「产品身份统一」这类改动误触发清单门禁）。
+  const remote = gitRemoteSlug(root);
   return {
     name: product?.productId ?? manifest?.name ?? root.split(sep).pop(),
-    slug: product?.repository ?? null,
+    slug: remote ?? product?.repository ?? null,
   };
+}
+
+function gitRemoteSlug(root) {
+  try {
+    const url = execFileSync("git", ["-C", root, "remote", "get-url", "origin"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    const match = url.match(/cnb\.cool[/:]([^/]+\/[^/\s]+?)(?:\.git)?$/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
 }
 
 export function generateDocument(root) {
