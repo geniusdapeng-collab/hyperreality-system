@@ -29,11 +29,6 @@ const bundles = ls("bundles", (d) => !d.includes("."));
 const skills = ls("skills/official", (d) => !d.includes("."));
 const demoPages = ls("docs/demo", (f) => f.endsWith(".html") && !["index.html", "shell.html"].includes(f));
 const shots = ls("docs/demo/preview-shots", (f) => f.endsWith(".png"));
-// 行业 bundle 的数字员工岗位数/技能数（事实源：product.manifest.json 的 defaultBundle）
-const productManifest = existsSync(join(ROOT, "product.manifest.json")) ? J("product.manifest.json") : {};
-const defaultBundle = bundles.includes(productManifest.defaultBundle) ? productManifest.defaultBundle : null;
-const presets = defaultBundle ? ls(`bundles/${defaultBundle}/presets`, (f) => f.endsWith(".yml")) : [];
-const bundleSkills = defaultBundle ? ls(`bundles/${defaultBundle}/skills`, (d) => !d.includes(".")) : [];
 const repoName = pkg.name?.split("/").pop() || "workloom";
 const desc = pkg.description || "AI 经营系统";
 
@@ -51,11 +46,7 @@ groups.push({
 
 if (bundles.length) groups.push({
   icon: "🏨", title: "行业 Bundle（垂直能力包）",
-  items: bundles.map((b) => ({
-    name: `bundles/${b}/`,
-    how: `见 bundles/${b}/ 目录`,
-    desc: `围栏/技能/员工/对象/管线一键装配${b === defaultBundle && presets.length ? `（${presets.length} 个数字员工岗位 · ${bundleSkills.length} 个技能）` : ""}`,
-  })),
+  items: bundles.map((b) => ({ name: `bundles/${b}/`, how: `见 bundles/${b}/ 目录`, desc: "围栏/技能/员工/对象/管线一键装配" })),
 });
 
 // 数字员工与数字人（事实探测：页面/组件/资产/语音引擎存在才列出）
@@ -63,7 +54,7 @@ const digitalWorkforce = [
   existsSync(join(ROOT, "apps/web/src/pages/p8/P8.tsx")) && {
     name: "数字员工中心（`/agents`）",
     how: "`pnpm preview:all` → http://localhost:3000/agents",
-    desc: `人机混编通讯录：员工档案 / 围栏对账 / 30 天战绩 / 派遣 / 夜班自动上线${presets.length ? `（本包 ${presets.length} 个岗位）` : ""}`,
+    desc: "人机混编通讯录：员工档案 / 围栏绑定 / 30 天战绩 / 段位 / 派遣 / 夜班 22:00-08:00 自动上线",
   },
   existsSync(join(ROOT, "apps/web/src/components/loommate/LoomMate.tsx")) && {
     name: "织伴数字人（Live2D 常驻浮层）",
@@ -74,6 +65,11 @@ const digitalWorkforce = [
     name: "语音与口型引擎",
     how: "docs/voice-and-avatar-delivery-contract.md",
     desc: "TTS 音色映射 + 中文逐字开口度时间线 + 音频振幅驱动口型；人设/音色可切换",
+  },
+  existsSync(join(ROOT, "apps/web/public/live2d")) && {
+    name: "Live2D 渲染后端与资产",
+    how: "apps/web/public/live2d/",
+    desc: "pixi-live2d-display + Cubism core（MIT/官方 SDK）；换形象=换模型文件，驱动链路零改动",
   },
 ].filter(Boolean);
 if (digitalWorkforce.length) groups.push({

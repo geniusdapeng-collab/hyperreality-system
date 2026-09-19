@@ -22,24 +22,43 @@ export function requireToken() {
   return token;
 }
 
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 带重试的 API 调用：CNB 对高频调用会返回 429（实测舰队级巡检连续 20+ 次即触发），
+ * 因此所有调用默认重试 4 次（指数退避 + 抖动），并尊重 Retry-After。
+ */
 export async function api(slug, path, options = {}) {
-  const { method = "GET", body, token = requireToken(), accept = "application/json" } = options;
+  const { method = "GET", body, token = requireToken(), accept = "application/json", retries = 4, baseDelayMs = 700 } = options;
   const url = path.startsWith("http") ? path : `${API_BASE}/${slug}${path}`;
   const headers = { Authorization: `Bearer ${token}`, Accept: accept };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  if (!response.ok) throw new CnbError(response.status, text, url);
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await response.text();
+    if (response.ok) {
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+    lastError = new CnbError(response.status, text, url);
+    if (!RETRYABLE_STATUS.has(response.status) || attempt === retries) throw lastError;
+    const retryAfter = Number.parseFloat(response.headers.get("retry-after") ?? "");
+    const delay = Number.isFinite(retryAfter) && retryAfter > 0
+      ? retryAfter * 1000
+      : baseDelayMs * 2 ** attempt + Math.floor(Math.random() * 250);
+    await sleep(Math.min(delay, 30000));
   }
+  throw lastError;
 }
 
 /** 读取仓库内文件原文；不存在返回 null（而非抛错） */
@@ -56,12 +75,12 @@ export async function rawFile(slug, ref, path, options = {}) {
 }
 
 export function listRepos(groupSlug, options = {}) {
-  return api(groupSlug, "/-/repos?per_page=100", options).then((data) =>
+  return api(groupSlug, "/-/repos?page_size=100", options).then((data) =>
     Array.isArray(data) ? data : (data?.data ?? data?.repos ?? []));
 }
 
 export function listLabels(slug, options = {}) {
-  return api(slug, "/-/labels?per_page=100", options).then((data) =>
+  return api(slug, "/-/labels?page_size=100", options).then((data) =>
     Array.isArray(data) ? data : (data?.data ?? []));
 }
 
@@ -125,7 +144,17 @@ export function closeIssue(slug, number, options = {}) {
 }
 
 export function listIssues(slug, { state = "open" } = {}, options = {}) {
-  return api(slug, `/-/issues?state=${state}&per_page=100`, options).then((data) =>
+  // CNB 的 state 只接受 open|closed（传 all 会 400），all 由两次查询合并实现。
+  if (state === "all") {
+    return Promise.all([
+      listIssues(slug, { state: "open" }, options),
+      listIssues(slug, { state: "closed" }, options),
+    ]).then((pages) => pages.flat());
+  }
+  if (state !== "open" && state !== "closed") {
+    throw new Error(`listIssues 不支持 state=${state}（CNB 只接受 open|closed）`);
+  }
+  return api(slug, `/-/issues?page_size=100&state=${state}`, options).then((data) =>
     Array.isArray(data) ? data : (data?.data ?? []));
 }
 
@@ -133,12 +162,60 @@ export function createPull(slug, { title, head, base = "main", body }, options =
   return api(slug, "/-/pulls", { method: "POST", body: { title, head, base, body }, ...options });
 }
 
-export function listPulls(slug, { state = "open" } = {}, options = {}) {
-  return api(slug, `/-/pulls?state=${state}`, options).then((data) =>
+export function listPulls(slug, { state = "open", baseRef } = {}, options = {}) {
+  const query = new URLSearchParams({ page_size: "100", state });
+  if (baseRef) query.set("base_ref", baseRef);
+  return api(slug, `/-/pulls?${query.toString()}`, options).then((data) =>
     Array.isArray(data) ? data : (data?.data ?? []));
+}
+
+export function getPull(slug, number, options = {}) {
+  return api(slug, `/-/pulls/${number}`, options);
+}
+
+export function getPullFiles(slug, number, options = {}) {
+  return api(slug, `/-/pulls/${number}/files`, options).then((data) =>
+    (Array.isArray(data) ? data : (data?.data ?? [])).map((file) => ({
+      filename: file.filename ?? file.new_path ?? file.path,
+      status: file.status,
+    })));
+}
+
+export function getPullCommitStatuses(slug, number, options = {}) {
+  return api(slug, `/-/pulls/${number}/commit-statuses`, options);
+}
+
+/**
+ * 合并合并请求。CNB 未暴露 auto-merge 开关，自动合并由调用方在
+ * “全部门禁 success 且 mergeable_state=mergeable” 后调用本函数完成。
+ */
+export function mergePull(slug, number, { mergeStyle = "squash", commitTitle, commitMessage, force } = {}, options = {}) {
+  if (!commitTitle) throw new Error("mergePull 需要 commitTitle（CNB 合并接口要求显式提交标题）");
+  const body = { merge_style: mergeStyle };
+  body.commit_title = commitTitle;
+  if (commitMessage) body.commit_message = commitMessage;
+  if (force !== undefined) body.force = Boolean(force);
+  return api(slug, `/-/pulls/${number}/merge`, { method: "PUT", body, ...options });
+}
+
+export function addPullLabels(slug, number, labels, options = {}) {
+  return api(slug, `/-/pulls/${number}/labels`, { method: "POST", body: { labels }, ...options });
+}
+
+/**
+ * 比较 `base...head` 的提交差异（返回**完整路径**）。
+ * 注意：`GET /pulls/{n}/files` 的 `filename` 字段会丢目录（实测把
+ * `docs/DEVELOPMENT-PROTOCOL.md` 报成 `DEVELOPMENT-PROTOCOL.md`），
+ * 因此“改动文件白名单”判定必须用本接口，PR 文件接口只作兜底展示。
+ */
+export function compareCommits(slug, baseHead, options = {}) {
+  return api(slug, `/-/git/compare/${encodeURIComponent(baseHead)}`, options).then((data) => ({
+    totalCommits: data?.total_commits ?? 0,
+    headSha: data?.head_commit?.sha ?? null,
+    files: (data?.files ?? []).map((file) => ({ path: file.path ?? file.name, status: file.status })),
+  }));
 }
 
 export function getBranch(slug, branch, options = {}) {
   return api(slug, `/-/git/branches/${branch}`, options);
 }
-
