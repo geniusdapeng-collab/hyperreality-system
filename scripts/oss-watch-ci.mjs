@@ -6,7 +6,8 @@
  *   ① 全量刷新上游最新版本（npm / PyPI / GitHub）；
  *   ② 重新生成 docs/OPEN_SOURCE_COMPONENTS.md 与 docs/oss-update-plan.md；
  *   ③ 有变化时自动开一支 `chore/oss-watch-YYYYMMDD` 分支 + 提交 + 推送 + PR。
- *      —— 只提议、不合并：升级永远由人圈定后执行（AGENTS.md 与 skill 铁律）。
+ *      —— 计划 PR 只刷新事实；升级由 AI 按协议 §1/§9.5 执行（门禁全绿 + 串行 + 冷却期），
+ *         破坏性/大版本升级按 §3 人审放行，人保留叫停与回滚权。
  *
  * 用法（CI）：node scripts/oss-watch-ci.mjs [--dry-run] [--exit-zero]
  * 前置：CNB_TOKEN（CNB 流水线自动注入，作用域限当前仓库）
@@ -111,16 +112,17 @@ export async function run({ cwd, dryRun = false, taskId = "", log = console.log 
   lines.push(`- npm 查询 ${summary.npmQueried} 个 ｜ PyPI 查询 ${summary.pypiQueried} 个 ｜ 查询失败 ${summary.failures.length} 个`);
   lines.push(`- 变更文件：${changed.map((file) => `\`${file}\``).join("、")}`);
   lines.push("");
-  lines.push("## 升级纪律（人工执行）");
+  lines.push("## 升级纪律（AI 执行 · 人保留叫停）");
   lines.push("");
-  lines.push("1. 在 `docs/oss-update-plan.md` 圈定本轮批次（dsh 永远单独一批）；");
+  lines.push("1. AI 按 `docs/oss-update-plan.md` 组批（dsh 永远单独一批；破坏性/大版本单列并在 PR 显著标注）；");
   lines.push("2. 按组件 gate 逐项升级并过门禁（smoke/standard/full/runtime-gate）；");
-  lines.push("3. 全绿后更新 `oss-components.json` 的 current 并发布。");
+  lines.push("3. 门禁全绿后按协议 §1/§9.5 合并，更新 `oss-components.json` 的 current 并发布；");
+  lines.push("4. 人保留随时叫停、要求回滚与例外裁决权。");
   lines.push("");
-  lines.push("> 本 PR 只刷新事实与计划，**不代表任何升级已批准**。");
+  lines.push("> 本 PR 只刷新事实与计划；升级执行与合并按协议 §1/§9.5（`risk/review` 项需人审放行）。");
   if (summary.failures.length) {
     lines.push("");
-    lines.push("## 上游查询失败（需人工复核）");
+    lines.push("## 上游查询失败（AI 重试 / 人工兜底）");
     lines.push("");
     for (const failure of summary.failures.slice(0, 20)) lines.push(`- \`${failure}\``);
   }
