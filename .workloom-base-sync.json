@@ -1,9 +1,9 @@
 {
   "baseRepo": "workloom-ai/workloom-im",
   "lastSyncedBaseSha": "f84cdff0c9101b74bbdd220151d1d9c28885a26d",
-  "lastSyncAt": "2026-09-19T08:32:15.522Z",
-  "filesTouched": 5,
-  "lastRequiredAssetsBaseSha": "bb66fccdeb47e1b76df7514ff3ea418c2bd0fe8f",
+  "lastSyncAt": "2026-09-19T09:14:51.636Z",
+  "filesTouched": 10,
+  "lastRequiredAssetsBaseSha": "dc6cf26c3238fe9b3c6fa867bb1bebe30539369a",
   "lastSyncMode": "required-only",
   "pathPrefix": ".",
   "requiredRootAssetsSha256": {
@@ -13,6 +13,16 @@
     "docs/acceptance/checklist.v1.json": "7eab36c24d9079acd17d13c4d37dc16add35cc9aa0ffb1865457ba0b7a902104",
     "docs/acceptance/report-template.md": "fa65cb419c75a55ab9786ac710aaab2f10cb3b101d4f30d0dbd2f331414a8a9d",
     "docs/acceptance/profile.example.json": "36ca2a3432414e36aa6220dedb135c94f11b28e978299d5b6044dedf0f502c27",
+    "scripts/acceptance/README.md": "f988902abe3842ece361d3d960a83ba00557f2bf21ce0afa90255ddea15cfc4b",
+    "scripts/acceptance/matrix.mts": "4bdc80241c0f662566fac294dbe23f51d4fad761a19fb623da8cd166ce934212",
+    "scripts/acceptance/ui-probe.mjs": "83098dcb9206957c9d4c475fcf2fbd9b22ad8cfe89b08be2e2bd95664bc02d09",
+    "scripts/acceptance/experience.mjs": "144572537b0af4d110139419addb7abb6723b90c8c5a95c770c38ffca436ecf0",
+    "scripts/acceptance/report.mjs": "5c5c51b06efce29cfa5a52e191b02ebced032967d57b7ef962ddd9f587dbb263",
+    "scripts/acceptance/profile-check.mjs": "5cb7f90dd2b1673afff368b549e52281c2131872d28a0c5b75a09ed49cee8e14",
+    "scripts/acceptance/fleet-run.mjs": "6155feac69d3b4a4ccc0d0ce68c5ba9e29d335ecd30bbcd58943c5fa93a53f90",
+    "scripts/acceptance/lib/profile.mjs": "ec62ce2ef42319c06e401ba9cd9e38c59b8db2a0c4bc7971401f89b8f1f0fde6",
+    "scripts/acceptance/lib/playwright.mjs": "25429b420a366eba26f7af6afcc7c07ed9041fc4ef7a7eb20cef015376357bbd",
+    "scripts/acceptance/lib/compose.mjs": "629660131672bf5fe3f9a7ec2ee173fdc1306a9f7fb6de194e266b0b42f9e789",
     ".github/workflows/base-sync-heartbeat.yml": "584bd0345fa6b55ed75100d03b5ad07a28d66a1aa7e7bc088ae594084ecd77a2",
     "AGENTS.md#managed-section": "e44bef55f5b3b5ae2e0217575e3b950d46ff782fb47e7389eab5e713b958d970"
   }
