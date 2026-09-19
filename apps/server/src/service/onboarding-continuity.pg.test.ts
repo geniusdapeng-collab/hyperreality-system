@@ -19,7 +19,8 @@ const RUN_DB = process.env.RUN_DB_TESTS === "1"
   && Boolean(process.env.DATABASE_APP_URL)
   && Boolean(process.env.DATABASE_GATEWAY_URL);
 
-describe.runIf(RUN_DB).sequential("Onboarding PostgreSQL 集成", () => {
+// vitest 5 移除 describe.sequential（默认即顺序执行，且本仓未开启 sequence.shuffle）。
+describe.runIf(RUN_DB)("Onboarding PostgreSQL 集成", () => {
   const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
   const tenantId = `it-onb-tenant-${suffix}`;
   const workspaceId = `it-onb-ws-${suffix}`;

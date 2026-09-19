@@ -164,7 +164,9 @@ async function main() {
   if (process.argv.includes("--self-test")) return selfTest();
 
   const repoSlug = arg("--repo") ?? process.env.CNB_REPO_SLUG ?? null;
-  const selfNumber = arg("--pr") ?? (process.env.CNB_PULL_REQUEST !== "true" ? process.env.CNB_PULL_REQUEST : null);
+  // 注意：下面解析 open PR 时可能回填（自身编号来自 head 匹配），因此必须是 let——写成 const 会在
+  // 任何「有 open PR」的流水线里抛 TypeError，被 catch 吞成「跳过冲突检测」，等于门禁静默失效。
+  let selfNumber = arg("--pr") ?? (process.env.CNB_PULL_REQUEST !== "true" ? process.env.CNB_PULL_REQUEST : null);
   const strict = process.argv.includes("--strict");
   const overlapMode = process.env.LOCK_OVERLAP_MODE === "warn" ? "warn" : "fail";
   const base = arg("--base");

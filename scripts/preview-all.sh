@@ -17,7 +17,17 @@ export WEB_PORT=$PC_PORT WEBB_PORT=$MB_PORT WEBC_PORT=$MC_PORT SERVER_PORT=$SERV
 
 say() { printf "\033[1;36m[preview:all]\033[0m %s\n" "$1"; }
 PIDS=""
-stop_port() { local P=$1 PID; PID=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -oP 'pid=\K[0-9]+' | head -1 || true); [ -n "$PID" ] && kill "$PID" 2>/dev/null && say "已停掉 :$P 残留进程（PID=$PID）"; }
+# 端口清理兼容 macOS（lsof）与 Linux（ss）：macOS 自带 bash 3.2 且无 ss。
+stop_port() {
+  local P=$1 PID=""
+  if command -v lsof >/dev/null 2>&1; then
+    PID=$(lsof -nP -iTCP:"$P" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)
+  elif command -v ss >/dev/null 2>&1; then
+    PID=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
+  fi
+  [ -n "$PID" ] && kill "$PID" 2>/dev/null && say "已停掉 :${P} 残留进程（PID=${PID}）"
+  return 0
+}
 cleanup() { say "停止三端预览…"; for P in $PIDS; do kill "$P" 2>/dev/null; done; }
 trap cleanup EXIT INT TERM
 
@@ -41,20 +51,20 @@ for SEED in $(node -e "console.log(Object.keys(require('./package.json').scripts
 done
 
 # ---------- 2. 起 server（Mock 模式） ----------
-say "启动 server :$SERVER_PORT（Mock：离线确定性模型 + 演示直登）"
+say "启动 server :${SERVER_PORT}（Mock：离线确定性模型 + 演示直登）"
 pnpm -C apps/server start >/tmp/preview-all-server.log 2>&1 &
 PIDS="$PIDS $!"
 
 # ---------- 3. 起三端 ----------
-say "启动 PC 端 :$PC_PORT（apps/web）"
+say "启动 PC 端 :${PC_PORT}（apps/web）"
 pnpm -C apps/web exec vite --port $PC_PORT --strictPort >/tmp/preview-all-pc.log 2>&1 &
 PIDS="$PIDS $!"
 
-say "启动 B 端移动 :$MB_PORT（apps/webb）"
+say "启动 B 端移动 :${MB_PORT}（apps/webb）"
 pnpm -C apps/webb exec vite --port "$MB_PORT" --strictPort >/tmp/preview-all-mb.log 2>&1 &
 PIDS="$PIDS $!"
 
-say "启动 C 端 :$MC_PORT（apps/webc，小程序入口 H5 模拟）"
+say "启动 C 端 :${MC_PORT}（apps/webc，小程序入口 H5 模拟）"
 pnpm -C apps/webc exec vite --port $MC_PORT --strictPort >/tmp/preview-all-mc.log 2>&1 &
 PIDS="$PIDS $!"
 
@@ -62,7 +72,14 @@ PIDS="$PIDS $!"
 for P in $SERVER_PORT $PC_PORT $MB_PORT $MC_PORT; do
   for i in $(seq 1 30); do
     curl -sf -o /dev/null "http://localhost:$P" 2>/dev/null && break
-    [ "$P" = "$SERVER_PORT" ] && ss -tln 2>/dev/null | grep -q ":$P " && break
+    # server 根路径返回 404 属正常：以端口监听为准（macOS 用 lsof，Linux 用 ss）
+    if [ "$P" = "$SERVER_PORT" ]; then
+      if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$P" -sTCP:LISTEN >/dev/null 2>&1 && break
+      elif command -v ss >/dev/null 2>&1; then
+        ss -tln 2>/dev/null | grep -q ":$P " && break
+      fi
+    fi
     sleep 1
   done
 done

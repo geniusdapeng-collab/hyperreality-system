@@ -5,7 +5,7 @@
  * 用法：
  *   node scripts/tools/provision-protocol.mjs --repo workloom-ai/<name> [--base-repo workloom-ai/workloom-im]
  *        [--branch chore/protocol-onboarding-YYYYMMDD] [--dry-run] [--skip-push]
- * 说明：只创建 PR，不合并（协议 §1：合并由人执行）。
+ * 说明：只创建 PR；合并由 AI 在门禁全绿后按协议 §1 串行执行（人保留叫停权）。
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
@@ -197,7 +197,7 @@ export async function provisionProtocol(slug, options = {}) {
         "- `.cnb.yml` 新增「协议门禁（提交规范 + 并发冲突）」stage",
         "- 仓库标签体系（10 个，CNB 上限）与 main 分支保护（强制 PR + 必需状态检查）",
         "",
-        "本 PR 由 `scripts/tools/provision-protocol.mjs` 自动创建，合并由人执行。",
+        "本 PR 由 `scripts/tools/provision-protocol.mjs` 自动创建；门禁全绿后由 AI 按协议 §1 串行合并（人保留叫停权）。",
       ].join("\n"),
     });
     log(`  已创建 PR #${pull?.number}`);
