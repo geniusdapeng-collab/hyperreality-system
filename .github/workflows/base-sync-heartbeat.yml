@@ -278,7 +278,7 @@ jobs:
           fi
           gh auth setup-git
 
-          TITLE="chore(base-sync): 对齐 WorkLoom IM 基座 ${BASE_SHORT} (${SYNC_MODE})"
+          TITLE="sync(base): 对齐 WorkLoom IM 基座 ${BASE_SHORT} (${SYNC_MODE})"
           EXISTING="$(gh pr list --state open --limit 100 --json title,url --jq ".[] | select(.title == \"$TITLE\") | .url" | head -n 1)"
           if [ -n "$EXISTING" ]; then
             echo "已有同一基座版本的待审 PR：$EXISTING"

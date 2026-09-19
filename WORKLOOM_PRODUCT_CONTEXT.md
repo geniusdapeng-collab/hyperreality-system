@@ -1,7 +1,7 @@
 <!--
 document_schema: workloom.product-context/v1
 document_id: workloom-product-and-code-panorama
-context_version: 2026-09-19.1
+context_version: 2026-09-19.2
 snapshot_date: 2026-09-19
 timezone: Asia/Shanghai
 canonical_repository: cnb.cool/workloom-ai/workloom-im
@@ -256,7 +256,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 - **UI 与三端基座**：`@workloom/ui` 与三端客户端基座按同一稳定版本经升级 PR 分波下发；行业扩展只允许落在 `apps/*/src/{extensions,projections,config/industry,theme/industry}/**` 等显式排除路径。
 - **污染守卫**：路径黑名单含 `^bundles/`、`^demo/`、`^docs/demo`、`^scripts/seed`、`^scripts/demo` 与 `hotel-baseline`、`ai-pm`、`yunqi`、`ecommerce`、`panda-cineforge`、`platform-ops` 等子串；单次常规同步上限 200 文件，新行业接入放宽至 450，超限即中止并要求人工核对。
 - **平台工程不出仓**：Andromeda 的 `extraExclude` 显式排除 `platform-ops/**`，与 `safety/` 保护清单、载荷身份策略（B-01.PB-1）形成三重护栏。
-- **实际同步基线**：八个子仓的 `.workloom-base-sync.json` 记录 `lastSyncedBaseSha=4f2296f…`（2026-09-16），即基座 `PR #16` 合并点；此后基座与九仓一起被 rescue 到 CNB。
+- **实际同步基线**：八个子仓的 `.workloom-base-sync.json` 记录 `lastSyncedBaseSha=4f2296f…`（2026-09-16，基座 `PR #16` 合并点）；`requiredRootAssetsSha256` 随“基座 fanout → 子仓 `sync/base-*` PR → 门禁全绿自动合并”的通道持续收敛（2026-09-19 起，机制见 `docs/FLEET-AUTO-SYNC.md`，运行时代码升级仍由人合并）。
 
 后续跨仓开发默认顺序：先判断能力属于公共基座、平台中枢还是行业包；公共机制优先在 `workloom-im` 实现并通过同步下发；行业语义仅在对应 bundle/子仓实现；平台运营工程仅在 Andromeda；同步后逐仓运行类型检查、测试、围栏/评测和打包门禁，不能只看文件复制成功。
 
@@ -313,7 +313,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 - 迁移后的 `main` 历史仍是单次 “rescue” 提交（CNB 侧保留），依赖 `git log`/blame 的审计路径需另行设计；
 - `.github/workflows/*` 保留为遗留（CNB 上不生效），发布类工作流需按需迁移；
-- 自动 fanout 的 GitHub App 未配置（DEF-P2-0016），跨仓同步暂以受控脚本 + PR 执行。
+- ~~自动 fanout 的 GitHub App 未配置（DEF-P2-0016），跨仓同步暂以受控脚本 + PR 执行。~~ **已解决（2026-09-19）**：CNB 原生 fanout（`sync/fanout-cnb.mjs`）按资产摘要做漂移预检并对漂移子仓开 `sync/base-*` PR，纯同步 PR 由 `sync/merge-sync-prs.mjs` 在白名单 + 全门禁 success 后自动合并；GitHub App 不再需要。
 
 ### 9.1.1 CNB 闸门落地（2026-09-18）
 
@@ -419,7 +419,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 - `HP-01`（tenant-overlay）进行中：`AUDITING`；其余 36 项中，`HP-29` `IN_PROGRESS/PARTIAL`、`HP-30` `PARTIAL`、`HP-31` `VERIFYING`，**其余 33 项为 `READY`（尚未审计）**。
 - 三个发布 P1 未修（并入 HP-29）：不可变发行重跑恢复（DEF-P1-0012）、latest 并发 TOCTOU（DEF-P1-0013）、Artifact 来源摘要未贯穿下载边界（DEF-P1-0014）。
 - 下游八仓一般 CI 仍有既有红灯（DEF-P1-0015，typecheck 与 ui-contract，属 SC-4 之前债务）。
-- 自动 fanout 的 GitHub App 未配置（DEF-P2-0016），此前同步为手工受控；迁移到 CNB 后需重新设计。
+- ~~自动 fanout 的 GitHub App 未配置（DEF-P2-0016），此前同步为手工受控；迁移到 CNB 后需重新设计。~~ **已关闭（2026-09-19）**：改由 CNB 原生 fanout + 纯同步 PR 自动合并承接（见 §6 与 `docs/FLEET-AUTO-SYNC.md`）。
 - 桌面真实签名/公证/Bundle 私钥 secrets 未配置（BLK-B-01-003），阻断真实 desktop 发行，不阻断代码合并。
 - 权威审计台账的私有落点未定（BLK-CTL-05-001）。
 
@@ -447,7 +447,8 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 | **新仓发现与纳管** | 每日 cron（09:00）`scripts/tools/fleet-scan.mjs --issue --provision`：识别 → 开扫描卡 → 自动建纳管 PR |
 | 任务卡建卡 / 回执 / 关单 | `scripts/tools/task.mjs new|list|receipt` |
 | 实验路径护栏 | 每日 cron `scripts/tools/experiment-guard.mjs --check` |
-| **合并 / 高风险裁决 / 协议发布** | **人**（唯一必须按的按钮） |
+| **基座资产分发**（根级受控资产 → 各仓 `sync/base-*` PR → 合并） | 30 分钟 cron + `api_trigger_base_sync`：`sync/fanout-cnb.mjs` + `sync/merge-sync-prs.mjs`（仅纯同步 PR 自动合并，白名单见协议 §9.4） |
+| **代码类 PR 合并 / 高风险裁决 / 协议发布** | **人**（运行时代码与行业语义永不由机器人合并） |
 
 ### 14.3 工具与服务
 
@@ -459,6 +460,8 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 | `scripts/tools/provision-protocol.mjs` | 单仓纳管（10 标签 + 分支保护 + 协议资产 + 网禁 stage + PR），幂等 |
 | `scripts/tools/task.mjs` | 任务卡 `new` / `list` / `receipt` |
 | `scripts/tools/experiment-guard.mjs` | 实验车道护栏：实验路径不得被 base-sync 覆盖、必须进 UI 扩展白名单 |
+| `sync/fanout-cnb.mjs` | 基座 fanout：资产摘要漂移预检 → 只对真漂移子仓 clone → 建 `sync/base-*` PR（在途去重、不强推） |
+| `sync/merge-sync-prs.mjs` | 纯同步 PR 自动合并：分支前缀 + 文件白名单 + 全部门禁 success 三条件齐备才合并 |
 
 **任务集看板**：`workloom-ai/WorkLoom-Dev-Dispatch`（纳入十仓，按 `t/*` 标签分列；CNB 任务集名不允许空格与中文）。**标签体系**：每仓 10 个（CNB 硬上限，实测第 11 个返回 201 但不落库）。
 
