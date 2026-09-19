@@ -4,7 +4,7 @@
 
 > 生成器：`scripts/oss-inventory.mjs`（离线事实）＋ `scripts/oss-watch.sh`（上游最新版本）
 > 仓库：workloom-ai/hyperreality-system ｜ 最近一次上游扫描：2026-09-19T03:13:55.000Z
-> 统计：登记组件 90 个 ｜ npm 直接依赖 154 个 ｜ Python 依赖 1 个 ｜ 容器镜像 2 个
+> 统计：登记组件 90 个 ｜ npm 直接依赖 155 个 ｜ Python 依赖 1 个 ｜ 容器镜像 2 个
 
 ## 0. 维护机制（四件事）
 
@@ -46,13 +46,13 @@
 | 23 | Redis（事件总线备选后端） | [github.com/redis/redis](https://github.com/redis/redis) · RSALv2 / SSPLv1 / AGPLv3 | 适配器已实现（自研 RESP2 客户端），服务未部署 | 8.10.2 | 停车场（已选型未引入） | packages/base/event-bus/adapters/redis.ts（生产备选） | ⚠ 许可证非 OSI 标准许可：只允许独立服务进程形态，不得链接进分发包；实现走自研 RESP2（node:net），不引入第三方 redis 客户端；启用前必须过崩溃恢复（PEL/XPENDING）与延迟队列用例 |
 | 24 | React | [github.com/facebook/react](https://github.com/facebook/react) · MIT | 19.2.8 | **19.3.0** ⬆ | 运行时 | apps/web、apps/webc、apps/webb、packages/ui | React 19；与 react-dom、@types/react 同批升级；升级后必须过三端视觉与交互门禁 |
 | 25 | react-dom | [github.com/facebook/react](https://github.com/facebook/react) · MIT | 19.2.8 | **19.3.0** ⬆ | 运行时 | apps/web、apps/webc、apps/webb | 必须与 react 严格同版 |
-| 26 | React Router | [github.com/remix-run/react-router](https://github.com/remix-run/react-router) · MIT | 8.3.0 | **8.4.0** ⬆ | 运行时 | apps/web | 路由与数据加载；大版本升级需核对路由表与深链（含 bare 路由返回出口） |
-| 27 | TanStack Query | [github.com/TanStack/query](https://github.com/TanStack/query) · MIT | 5.102.5 | **5.103.1** ⬆ | 运行时 | apps/web | 服务端状态缓存；升级复核轮询失效策略（心跳类页面） |
-| 28 | Vite | [github.com/vitejs/vite](https://github.com/vitejs/vite) · MIT | 8.2.2 | **8.3.0** ⬆ | 开发/构建 | apps/web、apps/webc、apps/webb | 构建工具链；与 @vitejs/plugin-react、@tailwindcss/vite 同批联动；v8 走 rolldown 内核，升级后必须过三端生产构建 |
-| 29 | @vitejs/plugin-react | [github.com/vitejs/vite-plugin-react](https://github.com/vitejs/vite-plugin-react) · MIT | 6.1.0 | **6.1.1** ⬆ | 开发/构建 | apps/web、apps/webc、apps/webb | 与 vite 同批升级 |
+| 26 | React Router | [github.com/remix-run/react-router](https://github.com/remix-run/react-router) · MIT | 8.4.0 | 8.4.0 | 运行时 | apps/web | 路由与数据加载；大版本升级需核对路由表与深链（含 bare 路由返回出口） |
+| 27 | TanStack Query | [github.com/TanStack/query](https://github.com/TanStack/query) · MIT | 5.103.1 | 5.103.1 | 运行时 | apps/web | 服务端状态缓存；升级复核轮询失效策略（心跳类页面） |
+| 28 | Vite | [github.com/vitejs/vite](https://github.com/vitejs/vite) · MIT | 8.2.2 / 8.3.0 | **8.3.0** ⬆ | 开发/构建 | apps/web、apps/webc、apps/webb | 构建工具链；与 @vitejs/plugin-react、@tailwindcss/vite 同批联动；v8 走 rolldown 内核，升级后必须过三端生产构建 |
+| 29 | @vitejs/plugin-react | [github.com/vitejs/vite-plugin-react](https://github.com/vitejs/vite-plugin-react) · MIT | 6.1.0 / 6.1.1 | **6.1.1** ⬆ | 开发/构建 | apps/web、apps/webc、apps/webb | 与 vite 同批升级 |
 | 30 | Tailwind CSS | [github.com/tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss) · MIT | 4.3.3 | 4.3.3 | 开发/构建 | apps/web、apps/webc、apps/webb、packages/ui | v4 令牌制；升级后必须过 Candy 设计系统纯色验证与三端视觉基线 |
 | 31 | @tailwindcss/vite | [github.com/tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss) · MIT | 4.3.3 | 4.3.3 | 开发/构建 | apps/web、apps/webc、apps/webb | 必须与 tailwindcss 严格同版 |
-| 32 | three.js | [github.com/mrdoob/three.js](https://github.com/mrdoob/three.js) · MIT | 0.185.1 | **0.186.0** ⬆ | 运行时 | apps/web（3D 舞台/数字人） | 3D 渲染；与 @react-three/fiber、drei、postprocessing、three-stdlib 同批升级（版本矩阵敏感），升级后必须过真实渲染截图 |
+| 32 | three.js | [github.com/mrdoob/three.js](https://github.com/mrdoob/three.js) · MIT | 0.186.0 | 0.186.0 | 运行时 | apps/web（3D 舞台/数字人） | 3D 渲染；与 @react-three/fiber、drei、postprocessing、three-stdlib 同批升级（版本矩阵敏感），升级后必须过真实渲染截图 |
 | 33 | @react-three/fiber | [github.com/pmndrs/react-three-fiber](https://github.com/pmndrs/react-three-fiber) · MIT | 9.7.0 | 9.7.0 | 运行时 | apps/web | React 19 适配线；与 three 主版本绑定，同批升级 |
 | 34 | @react-three/drei | [github.com/pmndrs/drei](https://github.com/pmndrs/drei) · MIT | 10.7.8 | 10.7.8 | 运行时 | apps/web | 随 fiber/three 同批升级 |
 | 35 | @react-three/postprocessing | [github.com/pmndrs/react-postprocessing](https://github.com/pmndrs/react-postprocessing) · MIT | 3.1.1 | 3.1.1 | 运行时 | apps/web | 后处理特效；随 three 同批升级 |
@@ -69,7 +69,7 @@
 | 46 | typescript-governance（别名固定解析器） | [github.com/microsoft/TypeScript](https://github.com/microsoft/TypeScript) · Apache-2.0 | 5.9.3 | —（未扫描） | CI/流水线 | UI 治理/消费校验固定解析器（npm:typescript@5.9.3） | 治理脚本的固定解析器，不随主 TypeScript 升级；改动需与 sync/install-ui-governance.mjs 的 dependency 声明同步 |
 | 47 | yaml-governance（别名固定解析器） | [github.com/eemeli/yaml](https://github.com/eemeli/yaml) · ISC | 2.9.0 | —（未扫描） | CI/流水线 | UI 治理脚本固定 YAML 解析器（npm:yaml@2.9.0） | 与 sync/base-scope.json#uiGovernanceCapability.yamlDependency 保持同版 |
 | 48 | concurrently | [github.com/open-cli-tools/concurrently](https://github.com/open-cli-tools/concurrently) · MIT | 9.2.4 | **10.0.5** ⬆ | 开发/构建 | pnpm dev（多进程编排） | 开发编排；升级不影响生产载荷 |
-| 49 | jsdom | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) · MIT | 30.0.1 / 30.1.0 | **30.1.0** ⬆ | 开发/构建 | 前端单测环境 | DOM 测试环境；升级后跑三端单测 |
+| 49 | jsdom | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) · MIT | 30.1.0 | 30.1.0 | 开发/构建 | 前端单测环境 | DOM 测试环境；升级后跑三端单测 |
 | 50 | esbuild | [github.com/evanw/esbuild](https://github.com/evanw/esbuild) · MIT | 未引入 | 0.28.2 | 运行时 | 桌面运行载荷（native 构建产物随包） | 传递依赖（vite/tsx 链路）随包分发；桌面载荷锁三平台二进制，升级必须重跑 runtime:deps:refresh + 载荷边界校验 |
 | 51 | rolldown | [github.com/rolldown/rolldown](https://github.com/rolldown/rolldown) · MIT | 未引入 | 1.2.9 | 开发/构建 | vite 8 打包内核（native 二进制） | 随 vite 升级；桌面载荷含三平台绑定，注意 onlyBuiltDependencies 白名单 |
 | 52 | lightningcss | [github.com/parcel-bundler/lightningcss](https://github.com/parcel-bundler/lightningcss) · MPL-2.0 | 未引入 | 1.33.0 | 开发/构建 | vite 8 CSS 管线（native 二进制） | 随 vite 升级；MPL 属弱 copyleft，仅构建期使用，不分发源码 |
@@ -114,7 +114,7 @@
 
 ## 2. 全量直接依赖（本仓事实，含上游最新）
 
-### 2.1 npm 直接依赖（154 个，解析自 pnpm-lock.yaml）
+### 2.1 npm 直接依赖（155 个，解析自 pnpm-lock.yaml）
 
 | 包 | 当前版本 | 声明 | 类型 | 出现位置 | 上游最新 |
 |---|---|---|---|---|---|
@@ -231,18 +231,18 @@
 | `@react-three/fiber` | 9.7.0（声明） | ^9.7.0 | 生产 | apps/web/package.json | 9.7.0 |
 | `@react-three/postprocessing` | 3.1.1（声明） | ^3.1.1 | 生产 | apps/web/package.json | 3.1.1 |
 | `@tailwindcss/vite` | 4.3.3（声明） | 4.3.3 | 开发/生产 | .workloom-runtime-deps/package.json、apps/web/package.json、apps/webc/package.json | 4.3.3 |
-| `@tanstack/react-query` | 5.102.5（声明） | 5.102.5 | 生产 | apps/web/package.json | **5.103.1** ⬆ |
-| `@trpc/client` | 11.18.0（声明） | 11.18.0 | 生产 | apps/web/package.json、apps/webb/package.json | **11.19.0** ⬆ |
+| `@tanstack/react-query` | 5.103.1（声明） | 5.103.1 | 生产 | apps/web/package.json | 5.103.1 |
+| `@trpc/client` | 11.19.0（声明） | 11.19.0 | 生产 | apps/web/package.json、apps/webb/package.json | 11.19.0 |
 | `@trpc/server` | 11.19.0（声明） | 11.19.0 | 生产 | .workloom-runtime-deps/package.json、apps/server/package.json | 11.19.0 |
 | `@types/js-yaml` | 4.0.9（声明） | ^4.0.9 | 开发 | vendor/dsh/package.json | 4.0.9 |
 | `@types/node` | 24.0.0 / 24.13.3 | ^24.0.0 | 开发 | apps/server/package.json、package.json、packages/video-studio/package.json | **26.6.1** ⬆ |
 | `@types/pg` | 8.23.1（声明） | ^8.23.1 | 开发 | apps/server/package.json、packages/base/package.json、packages/db/package.json 等 4 处 | 8.23.1 |
 | `@types/react` | 19.2.0（声明） | ^19.2.0 | 开发 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | **19.3.0** ⬆ |
 | `@types/react-dom` | 19.2.0（声明） | ^19.2.0 | 开发 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | **19.3.0** ⬆ |
-| `@types/three` | 0.185.4（声明） | ^0.185.4 | 开发 | apps/web/package.json | **0.186.0** ⬆ |
+| `@types/three` | 0.186.0（声明） | ^0.186.0 | 开发 | apps/web/package.json | 0.186.0 |
 | `@types/ws` | 8.18.1（声明） | 8.18.1 | 开发 | vendor/dsh/package.json | 8.18.1 |
-| `@vitejs/plugin-react` | 6.1.0（声明） | 6.1.0 | 开发/生产 | .workloom-runtime-deps/package.json、apps/web/package.json、apps/webb/package.json 等 4 处 | **6.1.1** ⬆ |
-| `@workloom/ui` | 0.1.4（声明） | 0.1.4 | 生产 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | —（未扫描） |
+| `@vitejs/plugin-react` | 6.1.0 / 6.1.1（声明） | 6.1.0 / 6.1.1 | 开发/生产 | .workloom-runtime-deps/package.json、apps/web/package.json、apps/webb/package.json 等 4 处 | 6.1.1 |
+| `@workloom/ui` | 0.1.6（声明） | 0.1.6 | 生产 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | —（未扫描） |
 | `commander` | 15.0.0（声明） | ^15.0.0 | 生产 | vendor/dsh/package.json | 15.0.0 |
 | `concurrently` | 9.2.4 | ^9.1.0 | 开发 | package.json | **10.0.5** ⬆ |
 | `drizzle-orm` | 0.45.2（声明） | 0.45.2 / ^0.45.2 | 生产 | .workloom-runtime-deps/package.json、packages/db/package.json | 0.45.2 |
@@ -252,22 +252,23 @@
 | `hono` | 4.13.8（声明） | 4.13.8 | 生产 | .workloom-runtime-deps/package.json、apps/server/package.json | 4.13.8 |
 | `jose` | 6.2.12（声明） | 6.2.12 | 生产 | .workloom-runtime-deps/package.json、apps/server/package.json、packages/base/package.json | 6.2.12 |
 | `js-yaml` | 4.2.0（声明） | ^4.2.0 | 生产 | vendor/dsh/package.json | **5.4.2** ⬆ |
-| `jsdom` | 30.0.1 / 30.1.0 | ^30.0.1 | 开发 | apps/web/package.json、apps/webc/package.json、package.json | 30.1.0 |
+| `jsdom` | 30.1.0 | ^30.0.1 / ^30.1.0 | 开发 | apps/web/package.json、apps/webc/package.json、package.json | 30.1.0 |
 | `node-addon-require-builtin` | 0.1.4（声明） | ^0.1.4 | 生产 | vendor/dsh/package.json | **0.1.6** ⬆ |
 | `pg` | 8.23.0 | 8.23.0 | 生产 | .workloom-runtime-deps/package.json、package.json、packages/base/package.json 等 5 处 | 8.23.0 |
 | `pixi-live2d-display` | 0.4.0（声明） | ^0.4.0 | 生产 | apps/web/package.json | 0.4.0 |
 | `pixi.js` | 6.5.10（声明） | ^6.5.10 | 生产 | apps/web/package.json | **8.21.0** ⬆ |
+| `postprocessing` | 6.39.5（声明） | ^6.39.5 | 生产 | apps/web/package.json | —（未扫描） |
 | `react` | 19.2.8（声明） | 19.2.8 | 生产 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | **19.3.0** ⬆ |
 | `react-dom` | 19.2.8（声明） | 19.2.8 | 生产 | apps/web/package.json、apps/webb/package.json、apps/webc/package.json | **19.3.0** ⬆ |
-| `react-router` | 8.3.0（声明） | 8.3.0 | 生产 | apps/web/package.json | **8.4.0** ⬆ |
+| `react-router` | 8.4.0（声明） | 8.4.0 | 生产 | apps/web/package.json | 8.4.0 |
 | `tailwindcss` | 4.3.3（声明） | 4.3.3 | 开发 | apps/web/package.json、apps/webc/package.json | 4.3.3 |
-| `three` | 0.185.1（声明） | ^0.185.1 | 生产 | apps/web/package.json | **0.186.0** ⬆ |
+| `three` | 0.186.0（声明） | ^0.186.0 | 生产 | apps/web/package.json | 0.186.0 |
 | `three-stdlib` | 2.36.1（声明） | ^2.36.1 | 生产 | apps/web/package.json | 2.36.1 |
 | `tsx` | 4.23.12 / 4.23.13 | 4.23.12 / ^4.23.12 / ^4.23.13 | 开发/生产 | .workloom-runtime-deps/package.json、apps/server/package.json、package.json 等 4 处 | 4.23.13 |
 | `typescript` | 5.9.0 / 7.0.2 | ^5.9.0 / ^7.0.2 | 开发 | apps/server/package.json、apps/web/package.json、apps/webb/package.json 等 12 处 | 7.0.2 |
 | `typescript-governance → npm:typescript` | 5.9.3 | npm:typescript@5.9.3 | 开发 | package.json | **7.0.2** ⬆ |
-| `vite` | 8.2.2（声明） | 8.2.2 | 开发/生产 | .workloom-runtime-deps/package.json、apps/web/package.json、apps/webb/package.json 等 4 处 | **8.3.0** ⬆ |
-| `vitest` | 3.2.0 / 4.1.11 / 5.0.1 | 4.1.11 / ^3.2.0 / ^4.1.11 / ^5.0.1 | 开发 | apps/webb/package.json、package.json、packages/audit-engine/package.json 等 8 处 | 5.0.1 |
+| `vite` | 8.2.2 / 8.3.0（声明） | 8.2.2 / 8.3.0 | 开发/生产 | .workloom-runtime-deps/package.json、apps/web/package.json、apps/webb/package.json 等 4 处 | 8.3.0 |
+| `vitest` | 3.2.0 / 4.1.11 / 5.0.1 | ^3.2.0 / ^4.1.11 / ^5.0.1 | 开发 | apps/webb/package.json、package.json、packages/audit-engine/package.json 等 8 处 | 5.0.1 |
 | `ws` | 8.21.0（声明） | 8.21.0 | 开发 | vendor/dsh/package.json | **8.21.3** ⬆ |
 | `yaml` | 2.9.0 | 2.9.0 | 开发/生产 | .workloom-runtime-deps/package.json、apps/server/package.json、package.json 等 4 处 | **2.9.1** ⬆ |
 | `yaml-governance → npm:yaml` | 2.9.0 | npm:yaml@2.9.0 | 开发 | package.json | **2.9.1** ⬆ |
@@ -297,7 +298,7 @@
 
 ## 3. 有可用更新
 
-登记组件滞后 25 个，直接依赖滞后 25 个 —— 逐项执行单见 `docs/oss-update-plan.md`。
+登记组件滞后 21 个，直接依赖滞后 18 个 —— 逐项执行单见 `docs/oss-update-plan.md`。
 - `DeepSeek Harness（dsh）` 0.1.2-rc.1 → **0.1.5-rc.2**（门禁 runtime-gate）
 - `dsh-im 多平台 IM 接入插件` 0.2.2 → **4.21.2**（门禁 standard）
 - `yaml` 2.9.0 → **2.9.1**（门禁 standard）
@@ -307,18 +308,14 @@
 - `NATS Server（内嵌事件总线）` v2.11.4 → **v2.15.0**（门禁 full）
 - `React` 19.2.8 → **19.3.0**（门禁 full）
 - `react-dom` 19.2.8 → **19.3.0**（门禁 full）
-- `React Router` 8.3.0 → **8.4.0**（门禁 full）
-- `TanStack Query` 5.102.5 → **5.103.1**（门禁 full）
-- `Vite` 8.2.2 → **8.3.0**（门禁 standard）
-- `@vitejs/plugin-react` 6.1.0 → **6.1.1**（门禁 standard）
-- `three.js` 0.185.1 → **0.186.0**（门禁 full）
+- `Vite` 8.2.2 / 8.3.0 → **8.3.0**（门禁 standard）
+- `@vitejs/plugin-react` 6.1.0 / 6.1.1 → **6.1.1**（门禁 standard）
 - `pixi.js` 6.5.10 → **8.21.0**（门禁 full）
 - `Electron` 44.1.1 → **44.4.2**（门禁 full）
 - `Vitest` 3.2.0 / 4.1.11 / 5.0.1 → **5.0.1**（门禁 standard）
 - `tsx` 4.23.12 / 4.23.13 → **4.23.13**（门禁 standard）
 - `TypeScript` 5.9.0 / 7.0.2 → **7.0.2**（门禁 smoke）
 - `concurrently` 9.2.4 → **10.0.5**（门禁 smoke）
-- `jsdom` 30.0.1 / 30.1.0 → **30.1.0**（门禁 standard）
 - `Node.js` 24.19.0 → **v26.9.0**（门禁 full）
 - `pnpm` 10.14.0 → **12.4.2**（门禁 standard）
 - `npm（桌面载荷安装器）` 11.17.0 → **12.0.2**（门禁 standard）
