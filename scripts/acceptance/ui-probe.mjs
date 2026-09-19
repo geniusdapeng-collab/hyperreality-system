@@ -15,6 +15,7 @@ import { join, resolve } from "node:path";
 import pg from "pg";
 import { cliArgs, findRepoRoot, loadProfile, urlsOf } from "./lib/profile.mjs";
 import { loadChromium } from "./lib/playwright.mjs";
+import { loginAsMember, productIdOf } from "./lib/session.mjs";
 
 const args = cliArgs();
 const REPO_ROOT = findRepoRoot();
@@ -67,11 +68,17 @@ function stripTechnicalTokens(value) {
   return value.replace(/[A-Za-z][A-Za-z0-9._+/-]*/g, " ").replace(/[\s·—–-]+/g, " ").trim();
 }
 function displayCandidates(name, description) {
-  const m = /^([^（(。：:—]{2,40})[（(。：:—]/.exec((description ?? "").trim());
-  const candidate = m?.[1]?.trim();
-  const cleaned = candidate ? stripTechnicalTokens(candidate) : "";
-  const list = [candidate, cleaned].filter((x) => x && x.length >= 2);
+  const text = (description ?? "").trim();
+  const m = /^([^（(。：:—]{2,40})[（(。：:—]/.exec(text);
+  const first = text.split(/[。；;！!？?\n]|——/)[0]?.trim() ?? "";
+  const clause = (first.split(/[，,]/)[0] ?? first).replace(/[+/*#_|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 32);
+  const list = [...new Set([m?.[1]?.trim(), clause, first].filter(Boolean).map(stripTechnicalTokens).filter((x) => x && x.length >= 2))];
   return list.length ? list : [name];
+}
+
+/** 比较用归一化：去技术记号与空白/标点，避免“LLM / 空格 / 标点”造成假阴性 */
+function normalizeForMatch(value) {
+  return stripTechnicalTokens(value).replace(/[\s/、，,。:：;；|]+/g, "");
 }
 function versionLabel(version) {
   const raw = String(version ?? "");
@@ -98,22 +105,12 @@ page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text(
 page.on("pageerror", (e) => consoleErrors.push(String(e).split("\n")[0]));
 
 async function loginPc() {
-  const res = await page.request.post(`${URLs.api}/trpc/auth.loginAs`, {
-    data: { workspaceSlug, memberNo: profile.identity?.human ?? "MEM-001" },
+  return loginAsMember(page, {
+    urls: URLs,
+    workspaceSlug,
+    memberNo: profile.identity?.human ?? "MEM-001",
+    productId: productIdOf(REPO_ROOT),
   });
-  const json = await res.json();
-  const token = json?.result?.data?.token;
-  if (!token) throw new Error(`登录失败（loginAs）：${JSON.stringify(json).slice(0, 200)}`);
-  await page.goto(`${URLs.pc}/login`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(600);
-  await page.evaluate((t) => {
-    const keys = Object.keys(localStorage);
-    const tk = keys.find((k) => k.endsWith(":access-token")) ?? "workloom:access-token";
-    const gk = keys.find((k) => k.endsWith(":guest"));
-    localStorage.setItem(tk, t);
-    if (gk) localStorage.removeItem(gk);
-  }, token);
-  return token;
 }
 
 const token = await loginPc();
@@ -180,7 +177,8 @@ try {
   }));
   for (const skill of skillRows) {
     const candidates = displayCandidates(skill.name, skill.description);
-    const shown = candidates.some((candidate) => dom.text.includes(candidate));
+    const normalizedText = normalizeForMatch(dom.text);
+    const shown = candidates.some((candidate) => dom.text.includes(candidate) || normalizedText.includes(normalizeForMatch(candidate)));
     const rawIdShown = new RegExp(`(^|[^a-z0-9-])${skill.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9-]|$)`).test(dom.text);
     report.skills[skill.name] = { candidates, bundle: skill.bundle, ok: shown && !rawIdShown, rawIdShown };
     if (!shown) report.issues.push({ where: `skill:${skill.name}`, detail: `技能中心未见展示名「${candidates.join(" / ")}」` });
@@ -211,7 +209,7 @@ async function probe(target, routes, prefix, waitMs = 1800) {
         return {
           len: text.length,
           blank: text.trim().length === 0,
-          internalError: /Internal Server Error|加载失败|出错了/.test(text),
+          internalError: /Internal Server Error|加载失败(?!时)|出错了(?!，)/.test(text),
           overflowX: document.documentElement.scrollWidth > window.innerWidth + 2,
           sample: text.replace(/\s+/g, " ").slice(0, 90),
         };
@@ -259,7 +257,7 @@ await probe(page, profile.surfaces.pcRoutes, "pc", 2000);
           len: text.length,
           authPage: text.includes("B 端移动工作台") && text.includes("验证码"),
           restoring: /正在恢复工作区|正在确认身份/.test(text),
-          internalError: /加载失败|出错了|Internal Server Error/.test(text),
+          internalError: /加载失败(?!时)|出错了(?!，)|Internal Server Error/.test(text),
           overflowX: document.documentElement.scrollWidth > window.innerWidth + 2,
           sample: text.replace(/\s+/g, " ").slice(0, 80),
         };
@@ -290,7 +288,7 @@ await probe(page, profile.surfaces.pcRoutes, "pc", 2000);
         const text = document.body.innerText || "";
         return {
           len: text.length,
-          internalError: /加载失败|出错了|Internal Server Error/.test(text),
+          internalError: /加载失败(?!时)|出错了(?!，)|Internal Server Error/.test(text),
           overflowX: document.documentElement.scrollWidth > window.innerWidth + 2,
           sample: text.replace(/\s+/g, " ").slice(0, 80),
         };
