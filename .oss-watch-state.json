@@ -1,142 +1,2090 @@
 {
  "@deepseek-ai/dsh": {
-  "last_scan": 1787738962.6607935,
-  "latest_seen": "0.1.2-rc.1"
+  "last_scan": 1787738725.706696,
+  "latest_seen": "0.1.1-rc.2"
  },
  "computer-use": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "playwright": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "1.62.1"
  },
  "stagehand": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "v2.2.0"
  },
  "browser-use": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "0.13.8"
  },
  "vite": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "8.2.2"
  },
  "react": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "19.2.8"
  },
  "react-router": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "8.3.0"
  },
  "@tanstack/react-query": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "5.102.5"
  },
  "@trpc/server": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "11.18.0"
  },
  "hono": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "4.13.5"
  },
  "tailwindcss": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "4.3.3"
  },
  "pg": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "8.23.0"
  },
  "zod": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "4.4.3"
  },
  "jose": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "6.2.10"
  },
  "tsx": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "4.23.12"
  },
  "vitest": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "4.1.11"
  },
  "typescript": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "7.0.2"
  },
  "litellm": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "mem0": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "presidio": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "langfuse": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "deepeval": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "v4.1.8"
  },
  "promptfoo": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "0.122.0"
  },
  "skyvern": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "gui-agents": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "openadapt": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "v1.14.0"
  },
  "wrenai": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "lago": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "copilotkit": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "4.9.1"
  },
  "echarts": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "6.1.0"
  },
  "tauri": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "2.11.5"
  },
  "pgvector": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
  },
  "litestream": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": "v0.5.16"
  },
  "browserskill": {
-  "last_scan": 1787738962.6607935,
+  "last_scan": 1787738725.706696,
   "latest_seen": null
+ },
+ "schema": "workloom.oss-watch-state/v2",
+ "components": {
+  "DeepSeek Harness（dsh）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.1.5-rc.2",
+   "channel": "npm"
+  },
+  "Cordis（插件元框架）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.0.2",
+   "channel": "npm"
+  },
+  "Schemastery": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "3.18.2",
+   "channel": "npm"
+  },
+  "node-addon-require-builtin": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.1.6",
+   "channel": "npm"
+  },
+  "dsh-im 多平台 IM 接入插件": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.21.2",
+   "channel": "npm"
+  },
+  "Hono": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.13.8",
+   "channel": "npm"
+  },
+  "@hono/node-server": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "2.1.1",
+   "channel": "npm"
+  },
+  "tRPC": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "11.19.0",
+   "channel": "npm"
+  },
+  "Drizzle ORM": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.45.2",
+   "channel": "npm"
+  },
+  "node-postgres（pg）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "8.23.0",
+   "channel": "npm"
+  },
+  "Zod": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.6.5",
+   "channel": "npm"
+  },
+  "jose（JWT/JWS）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "6.2.12",
+   "channel": "npm"
+  },
+  "yaml": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "2.9.1",
+   "channel": "npm"
+  },
+  "js-yaml": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "5.4.2",
+   "channel": "npm"
+  },
+  "Commander": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "15.0.0",
+   "channel": "npm"
+  },
+  "Execa": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "10.0.1",
+   "channel": "npm"
+  },
+  "ws": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "8.21.3",
+   "channel": "npm"
+  },
+  "Agent Client Protocol SDK": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.4.0",
+   "channel": "npm"
+  },
+  "PostgreSQL": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": null,
+   "channel": "docker"
+  },
+  "Redis（事件总线备选后端）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "8.10.2",
+   "channel": "github"
+  },
+  "React": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "19.3.0",
+   "channel": "npm"
+  },
+  "react-dom": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "19.3.0",
+   "channel": "npm"
+  },
+  "React Router": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "8.4.0",
+   "channel": "npm"
+  },
+  "TanStack Query": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "5.103.1",
+   "channel": "npm"
+  },
+  "Vite": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "8.3.0",
+   "channel": "npm"
+  },
+  "@vitejs/plugin-react": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "6.1.1",
+   "channel": "npm"
+  },
+  "Tailwind CSS": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.3.3",
+   "channel": "npm"
+  },
+  "@tailwindcss/vite": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.3.3",
+   "channel": "npm"
+  },
+  "three.js": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.186.0",
+   "channel": "npm"
+  },
+  "@react-three/fiber": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "9.7.0",
+   "channel": "npm"
+  },
+  "@react-three/drei": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "10.7.8",
+   "channel": "npm"
+  },
+  "@react-three/postprocessing": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "3.1.1",
+   "channel": "npm"
+  },
+  "three-stdlib": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "2.36.1",
+   "channel": "npm"
+  },
+  "pixi.js": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "8.21.0",
+   "channel": "npm"
+  },
+  "pixi-live2d-display": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.4.0",
+   "channel": "npm"
+  },
+  "Electron": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "44.4.2",
+   "channel": "npm"
+  },
+  "electron-builder": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "26.15.3",
+   "channel": "npm"
+  },
+  "Playwright": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.63.0",
+   "channel": "npm"
+  },
+  "@axe-core/playwright": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.13.0",
+   "channel": "npm"
+  },
+  "Vitest": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "5.0.1",
+   "channel": "npm"
+  },
+  "tsx": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.23.13",
+   "channel": "npm"
+  },
+  "TypeScript": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "7.0.2",
+   "channel": "npm"
+  },
+  "typescript-governance（别名固定解析器）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": null,
+   "channel": "npm"
+  },
+  "yaml-governance（别名固定解析器）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": null,
+   "channel": "npm"
+  },
+  "concurrently": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "10.0.5",
+   "channel": "npm"
+  },
+  "jsdom": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "30.1.0",
+   "channel": "npm"
+  },
+  "esbuild": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.28.2",
+   "channel": "npm"
+  },
+  "rolldown": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.2.9",
+   "channel": "npm"
+  },
+  "lightningcss": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.33.0",
+   "channel": "npm"
+  },
+  "@tailwindcss/oxide": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.3.3",
+   "channel": "npm"
+  },
+  "LiteLLM Proxy": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.43.10",
+   "channel": "pypi"
+  },
+  "mem0": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.0.18",
+   "channel": "pypi"
+  },
+  "Microsoft Presidio": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "2.2.355",
+   "channel": "pypi"
+  },
+  "NATS Server（内嵌事件总线）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v2.15.0",
+   "channel": "github"
+  },
+  "DeepEval": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.0.0",
+   "channel": "pypi"
+  },
+  "Promptfoo": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.123.1",
+   "channel": "npm"
+  },
+  "Stagehand": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.1.0",
+   "channel": "npm"
+  },
+  "browser-use": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.13.10",
+   "channel": "pypi"
+  },
+  "Skyvern": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.0.48",
+   "channel": "pypi"
+  },
+  "Langfuse": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v4.38.0",
+   "channel": "github"
+  },
+  "SQLite（经 dsh 会话索引）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": null,
+   "channel": "github"
+  },
+  "Tencent BrowserSkill": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "cli-v0.3.0",
+   "channel": "github"
+  },
+  "pgvector": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v0.8.6",
+   "channel": "github"
+  },
+  "OpenAdapt": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v1.16.0",
+   "channel": "github"
+  },
+  "Agent-S3（gui-agents）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v0.3.2",
+   "channel": "github"
+  },
+  "Scrapling": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v0.4.15",
+   "channel": "github"
+  },
+  "BrowserAct 技能包": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": null,
+   "channel": "github"
+  },
+  "Lago": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v1.53.0",
+   "channel": "github"
+  },
+  "Daytona": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v0.190.0",
+   "channel": "github"
+  },
+  "Taro": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.2.1",
+   "channel": "npm"
+  },
+  "CopilotKit": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.72.0",
+   "channel": "npm"
+  },
+  "ECharts": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "6.1.0",
+   "channel": "npm"
+  },
+  "TipTap": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "3.31.3",
+   "channel": "npm"
+  },
+  "SheetJS": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "0.18.5",
+   "channel": "npm"
+  },
+  "PptxGenJS": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.0.1",
+   "channel": "npm"
+  },
+  "Fabric.js": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "7.4.0",
+   "channel": "npm"
+  },
+  "WeasyPrint": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "62.3",
+   "channel": "pypi"
+  },
+  "WrenAI": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "wren-core-py-v0.8.0",
+   "channel": "github"
+  },
+  "Tauri": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "tauri-v3.0.0-alpha.1",
+   "channel": "github"
+  },
+  "E2B（执行沙箱 SDK）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "e2b@2.51.0",
+   "channel": "github"
+  },
+  "Litestream": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v0.5.17",
+   "channel": "github"
+  },
+  "pnpm": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "12.4.2",
+   "channel": "npm"
+  },
+  "npm（桌面载荷安装器）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "12.0.2",
+   "channel": "npm"
+  },
+  "python-pptx": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.0.2",
+   "channel": "pypi"
+  },
+  "Playwright（Python · computer-use 工具链）": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "1.46.0",
+   "channel": "pypi"
+  },
+  "sqlite-vec": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v0.1.9",
+   "channel": "github"
+  },
+  "SeaweedFS": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "4.47",
+   "channel": "github"
+  },
+  "Node.js": {
+   "last_scan": 1789747221,
+   "last_scan_iso": "2026-09-18T16:00:21.000Z",
+   "latest_seen": "v26.9.0",
+   "channel": "github"
+  }
+ },
+ "registry_cache": {
+  "@deepseek-ai/cordis": {
+   "ecosystem": "npm",
+   "latest": "4.0.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@axe-core/playwright": {
+   "ecosystem": "npm",
+   "latest": "4.13.0",
+   "license": "MPL-2.0",
+   "repo": "https://github.com/dequelabs/axe-core-npm",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@browserbasehq/stagehand": {
+   "ecosystem": "npm",
+   "latest": "4.1.0",
+   "license": "MIT",
+   "repo": "https://github.com/browserbase/stagehand",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/cordis-plugin-hmr": {
+   "ecosystem": "npm",
+   "latest": "1.0.17",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/cordis-plugin-include": {
+   "ecosystem": "npm",
+   "latest": "1.0.7",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/cordis-plugin-loader": {
+   "ecosystem": "npm",
+   "latest": "1.0.3",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@agentclientprotocol/sdk": {
+   "ecosystem": "npm",
+   "latest": "1.4.0",
+   "license": "Apache-2.0",
+   "repo": "https://github.com/agentclientprotocol/typescript-sdk",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@copilotkit/react-core": {
+   "ecosystem": "npm",
+   "latest": "1.72.0",
+   "license": "MIT",
+   "repo": "https://github.com/CopilotKit/CopilotKit",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/cordis-plugin-timer": {
+   "ecosystem": "npm",
+   "latest": "1.1.4",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-acp": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-agent": {
+   "ecosystem": "npm",
+   "latest": "0.1.0-rc.6",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh": {
+   "ecosystem": "npm",
+   "latest": "0.1.5-rc.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-acp-app": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-agent-instructions": {
+   "ecosystem": "npm",
+   "latest": "0.1.0-rc.6",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-agent-tool-presentation": {
+   "ecosystem": "npm",
+   "latest": "0.1.0-rc.6",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-attachment-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-base": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-bash-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-app-boot": {
+   "ecosystem": "npm",
+   "latest": "0.1.0-rc.6",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-client-ui-agent-preset": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-cmdline": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-client-ui-cordis": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-command-compact": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-command-goal": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-compaction-basic": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-cordis-client-runner": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-compaction-tool-result-pruner": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-credentials-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-deepseek-llm-api-extensions": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-experimental-agent-team": {
+   "ecosystem": "npm",
+   "latest": "0.1.5-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-fs-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-experimental-agent-team-profile": {
+   "ecosystem": "npm",
+   "latest": "0.1.5-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-experimental-tool-agent-team": {
+   "ecosystem": "npm",
+   "latest": "0.1.5-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-fs-observation-policy": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-fs-sandbox": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-goal-round-driver": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-goal": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-headless": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-home-paths": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-host-frontend-static": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-host-webserver": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-hooks-claude-code": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.5",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-jobs-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-llm": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-launch-environment": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-hooks-codex": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-llm-deepseek": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-llm-mock-server": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-llm-replay": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-loader-smoke": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-persona": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-plugin-package-inventory-deepseek": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-plan-mode": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-mcp-client": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-llm-pi-ai": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-pwsh-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-pwsh-sandbox": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-sandbox-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-session-checkpoint-policy": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-schedule": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-sandbox-policy": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-sdk-app": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-sdk-minimal": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-session": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-session-log-deepseek": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-session-query": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-session-persistence-jsonl": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-session-reference": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-settings": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-session-projection": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-settings-file": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-shell-env": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-skill": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-subprocess-local": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-skill-filesystem": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-subagent-spawn-in-process": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-subagent": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-terminal": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-system-prompt": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-subagent-fork-in-process": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-terminal-bash": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-time-context": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-token-meter": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-cordis": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-bash": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-ask-user": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-bash-persistent": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tmux-context": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-fs": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-goal": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-jobs": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-fs-search": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-ralph": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-pwsh": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-pwsh-persistent": {
+   "ecosystem": "npm",
+   "latest": "0.1.0-rc.8",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-skill": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-str-replace-editor": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-subagent-control": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-subagent": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-todo": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-web": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tools": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-user-approval": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-tool-workflow": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-web-app": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.1",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-webhook": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-webhook-github": {
+   "ecosystem": "npm",
+   "latest": "0.1.2-alpha.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/schemastery": {
+   "ecosystem": "npm",
+   "latest": "3.18.2",
+   "license": "MIT",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@deepseek-ai/dsh-workflow-worker-thread": {
+   "ecosystem": "npm",
+   "latest": "0.0.1-rc.3",
+   "license": "BSD-3-Clause",
+   "repo": "https://github.com/deepseek-ai/deepseek-harness",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@playwright/test": {
+   "ecosystem": "npm",
+   "latest": "1.63.0",
+   "license": "Apache-2.0",
+   "repo": "https://github.com/microsoft/playwright",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@react-three/drei": {
+   "ecosystem": "npm",
+   "latest": "10.7.8",
+   "license": "MIT",
+   "repo": "https://github.com/pmndrs/drei",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@hono/node-server": {
+   "ecosystem": "npm",
+   "latest": "2.1.1",
+   "license": "MIT",
+   "repo": "https://github.com/honojs/node-server",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@react-three/fiber": {
+   "ecosystem": "npm",
+   "latest": "9.7.0",
+   "license": "MIT",
+   "repo": "https://github.com/pmndrs/react-three-fiber",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@react-three/postprocessing": {
+   "ecosystem": "npm",
+   "latest": "3.1.1",
+   "license": "MIT",
+   "repo": "https://github.com/pmndrs/react-postprocessing",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@tailwindcss/vite": {
+   "ecosystem": "npm",
+   "latest": "4.3.3",
+   "license": "MIT",
+   "repo": "https://github.com/tailwindlabs/tailwindcss",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@tailwindcss/oxide": {
+   "ecosystem": "npm",
+   "latest": "4.3.3",
+   "license": "MIT",
+   "repo": "https://github.com/tailwindlabs/tailwindcss",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@tanstack/react-query": {
+   "ecosystem": "npm",
+   "latest": "5.103.1",
+   "license": "MIT",
+   "repo": "https://github.com/TanStack/query",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@tiptap/core": {
+   "ecosystem": "npm",
+   "latest": "3.31.3",
+   "license": "MIT",
+   "repo": "https://github.com/ueberdosis/tiptap",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@tarojs/taro": {
+   "ecosystem": "npm",
+   "latest": "4.2.1",
+   "license": "MIT",
+   "repo": "https://github.com/NervJS/taro",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@trpc/client": {
+   "ecosystem": "npm",
+   "latest": "11.19.0",
+   "license": "MIT",
+   "repo": "https://github.com/trpc/trpc",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@types/node": {
+   "ecosystem": "npm",
+   "latest": "26.6.1",
+   "license": "MIT",
+   "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@trpc/server": {
+   "ecosystem": "npm",
+   "latest": "11.19.0",
+   "license": "MIT",
+   "repo": "https://github.com/trpc/trpc",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@types/js-yaml": {
+   "ecosystem": "npm",
+   "latest": "4.0.9",
+   "license": "MIT",
+   "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@types/react": {
+   "ecosystem": "npm",
+   "latest": "19.3.0",
+   "license": "MIT",
+   "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@types/pg": {
+   "ecosystem": "npm",
+   "latest": "8.23.1",
+   "license": "MIT",
+   "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@types/react-dom": {
+   "ecosystem": "npm",
+   "latest": "19.3.0",
+   "license": "MIT",
+   "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@vitejs/plugin-react": {
+   "ecosystem": "npm",
+   "latest": "6.1.1",
+   "license": "MIT",
+   "repo": "https://github.com/vitejs/vite-plugin-react",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@types/ws": {
+   "ecosystem": "npm",
+   "latest": "8.18.1",
+   "license": "MIT",
+   "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@types/three": {
+   "ecosystem": "npm",
+   "latest": "0.186.0",
+   "license": "MIT",
+   "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "concurrently": {
+   "ecosystem": "npm",
+   "latest": "10.0.5",
+   "license": "MIT",
+   "repo": "https://github.com/open-cli-tools/concurrently",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "echarts": {
+   "ecosystem": "npm",
+   "latest": "6.1.0",
+   "license": "Apache-2.0",
+   "repo": "https://github.com/apache/echarts",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "@xmanrui/dsh-im": {
+   "ecosystem": "npm",
+   "latest": "4.21.2",
+   "license": "MIT",
+   "repo": "https://github.com/xmanrui/dsh-im",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "commander": {
+   "ecosystem": "npm",
+   "latest": "15.0.0",
+   "license": "MIT",
+   "repo": "https://github.com/tj/commander.js",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "electron-builder": {
+   "ecosystem": "npm",
+   "latest": "26.15.3",
+   "license": "MIT",
+   "repo": "https://github.com/electron-userland/electron-builder",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "electron": {
+   "ecosystem": "npm",
+   "latest": "44.4.2",
+   "license": "MIT",
+   "repo": "https://github.com/electron/electron",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "esbuild": {
+   "ecosystem": "npm",
+   "latest": "0.28.2",
+   "license": "MIT",
+   "repo": "https://github.com/evanw/esbuild",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "drizzle-orm": {
+   "ecosystem": "npm",
+   "latest": "0.45.2",
+   "license": "Apache-2.0",
+   "repo": "https://github.com/drizzle-team/drizzle-orm",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "execa": {
+   "ecosystem": "npm",
+   "latest": "10.0.1",
+   "license": "MIT",
+   "repo": "https://github.com/sindresorhus/execa",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "hono": {
+   "ecosystem": "npm",
+   "latest": "4.13.8",
+   "license": "MIT",
+   "repo": "https://github.com/honojs/hono",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "fabric": {
+   "ecosystem": "npm",
+   "latest": "7.4.0",
+   "license": "MIT",
+   "repo": "https://github.com/fabricjs/fabric.js",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "js-yaml": {
+   "ecosystem": "npm",
+   "latest": "5.4.2",
+   "license": "MIT",
+   "repo": "https://github.com/nodeca/js-yaml",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "jose": {
+   "ecosystem": "npm",
+   "latest": "6.2.12",
+   "license": "MIT",
+   "repo": "https://github.com/panva/jose",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "lightningcss": {
+   "ecosystem": "npm",
+   "latest": "1.33.0",
+   "license": "MPL-2.0",
+   "repo": "https://github.com/parcel-bundler/lightningcss",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "jsdom": {
+   "ecosystem": "npm",
+   "latest": "30.1.0",
+   "license": "MIT",
+   "repo": "https://github.com/jsdom/jsdom",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "pg": {
+   "ecosystem": "npm",
+   "latest": "8.23.0",
+   "license": "MIT",
+   "repo": "git://github.com/brianc/node-postgres",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "npm": {
+   "ecosystem": "npm",
+   "latest": "12.0.2",
+   "license": "Artistic-2.0",
+   "repo": "https://github.com/npm/cli",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "node-addon-require-builtin": {
+   "ecosystem": "npm",
+   "latest": "0.1.6",
+   "license": "MIT",
+   "repo": null,
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "pnpm": {
+   "ecosystem": "npm",
+   "latest": "12.4.2",
+   "license": "MIT",
+   "repo": "https://github.com/pnpm/pnpm",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "pixi-live2d-display": {
+   "ecosystem": "npm",
+   "latest": "0.4.0",
+   "license": "MIT",
+   "repo": "https://github.com/guansss/pixi-live2d-display",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "pixi.js": {
+   "ecosystem": "npm",
+   "latest": "8.21.0",
+   "license": "MIT",
+   "repo": "https://github.com/pixijs/pixijs",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "pptxgenjs": {
+   "ecosystem": "npm",
+   "latest": "4.0.1",
+   "license": "MIT",
+   "repo": "https://github.com/gitbrent/PptxGenJS",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "promptfoo": {
+   "ecosystem": "npm",
+   "latest": "0.123.1",
+   "license": "MIT",
+   "repo": "https://github.com/promptfoo/promptfoo",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "react": {
+   "ecosystem": "npm",
+   "latest": "19.3.0",
+   "license": "MIT",
+   "repo": "https://github.com/react/react",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "react-router": {
+   "ecosystem": "npm",
+   "latest": "8.4.0",
+   "license": "MIT",
+   "repo": "https://github.com/remix-run/react-router",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "react-dom": {
+   "ecosystem": "npm",
+   "latest": "19.3.0",
+   "license": "MIT",
+   "repo": "https://github.com/react/react",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "three": {
+   "ecosystem": "npm",
+   "latest": "0.186.0",
+   "license": "MIT",
+   "repo": "https://github.com/mrdoob/three.js",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "tailwindcss": {
+   "ecosystem": "npm",
+   "latest": "4.3.3",
+   "license": "MIT",
+   "repo": "https://github.com/tailwindlabs/tailwindcss",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "rolldown": {
+   "ecosystem": "npm",
+   "latest": "1.2.9",
+   "license": "MIT",
+   "repo": "https://github.com/rolldown/rolldown",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "three-stdlib": {
+   "ecosystem": "npm",
+   "latest": "2.36.1",
+   "license": "MIT",
+   "repo": "https://github.com/pmndrs/three-stdlib",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "tsx": {
+   "ecosystem": "npm",
+   "latest": "4.23.13",
+   "license": "MIT",
+   "repo": "https://github.com/privatenumber/tsx",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "typescript": {
+   "ecosystem": "npm",
+   "latest": "7.0.2",
+   "license": "Apache-2.0",
+   "repo": "https://github.com/microsoft/TypeScript",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "vite": {
+   "ecosystem": "npm",
+   "latest": "8.3.0",
+   "license": "MIT",
+   "repo": "https://github.com/vitejs/vite",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "vitest": {
+   "ecosystem": "npm",
+   "latest": "5.0.1",
+   "license": "MIT",
+   "repo": "https://github.com/vitest-dev/vitest",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "yaml": {
+   "ecosystem": "npm",
+   "latest": "2.9.1",
+   "license": "ISC",
+   "repo": "https://github.com/eemeli/yaml",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "zod": {
+   "ecosystem": "npm",
+   "latest": "4.6.5",
+   "license": "MIT",
+   "repo": "https://github.com/colinhacks/zod",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "ws": {
+   "ecosystem": "npm",
+   "latest": "8.21.3",
+   "license": "MIT",
+   "repo": "https://github.com/websockets/ws",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "xlsx": {
+   "ecosystem": "npm",
+   "latest": "0.18.5",
+   "license": "Apache-2.0",
+   "repo": "git://github.com/SheetJS/sheetjs",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "mem0ai": {
+   "ecosystem": "pypi",
+   "latest": "0.0.18",
+   "license": null,
+   "repo": null,
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "python-pptx": {
+   "ecosystem": "pypi",
+   "latest": "1.0.2",
+   "license": "MIT",
+   "repo": "https://github.com/scanny/python-pptx",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "presidio-analyzer": {
+   "ecosystem": "pypi",
+   "latest": "2.2.355",
+   "license": "MIT",
+   "repo": "https://github.com/Microsoft/presidio",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "playwright": {
+   "ecosystem": "pypi",
+   "latest": "1.46.0",
+   "license": "Apache-2.0",
+   "repo": "https://github.com/Microsoft/playwright-python",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "deepeval": {
+   "ecosystem": "pypi",
+   "latest": "1.0.0",
+   "license": null,
+   "repo": "https://github.com/confident-ai/deepeval",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "weasyprint": {
+   "ecosystem": "pypi",
+   "latest": "62.3",
+   "license": null,
+   "repo": "https://github.com/Kozea/WeasyPrint",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "litellm": {
+   "ecosystem": "pypi",
+   "latest": "1.43.10",
+   "license": "MIT",
+   "repo": "https://litellm.ai",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "browser-use": {
+   "ecosystem": "pypi",
+   "latest": "0.13.10",
+   "license": null,
+   "repo": "https://browser-use.com",
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  },
+  "skyvern": {
+   "ecosystem": "pypi",
+   "latest": "1.0.48",
+   "license": null,
+   "repo": null,
+   "checked_at": 1789747221,
+   "checked_at_iso": "2026-09-18T16:00:21.000Z"
+  }
+ },
+ "last_full_scan": "2026-09-19T03:13:55.000Z",
+ "last_full_scan_epoch": 1789787635,
+ "registry": {
+  "npm": "https://registry.npmmirror.com",
+  "pypi": "https://pypi.tuna.tsinghua.edu.cn/pypi",
+  "github": "api.github.com"
  }
 }
