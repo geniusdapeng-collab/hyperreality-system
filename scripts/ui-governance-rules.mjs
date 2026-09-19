@@ -1919,6 +1919,20 @@ function declarationDirectlyDelegatesSurface(declaration, isManagedNode) {
     ? initializer : declaration;
   let sawManaged = false;
   let invalid = false;
+  /**
+   * `return null` / `return false` / `return undefined` / 裸 `return;` 是「本组件此刻不渲染」
+   * 的常规写法（例如 `if (!open) return null;`），不能算作“自建浮层”。
+   * 2026-09-19 修复：此前这类早返回会被判为 invalid，导致 `export function XOverlay(){ if (!open) return null; return <Overlay/>; }`
+   * 这种**完全委托**的组件证明不出来，行业仓正常实现被误报。
+   */
+  const isNoopReturn = (expression) => {
+    if (!expression) return true;
+    const target = unwrapExpression(expression);
+    return !target
+      || target.kind === ts.SyntaxKind.NullKeyword
+      || target.kind === ts.SyntaxKind.FalseKeyword
+      || (ts.isIdentifier(target) && target.text === "undefined");
+  };
   const checkExpression = (expression) => {
     const target = unwrapExpression(expression);
     if (!target || target.kind === ts.SyntaxKind.NullKeyword || target.kind === ts.SyntaxKind.FalseKeyword
@@ -1943,7 +1957,7 @@ function declarationDirectlyDelegatesSurface(declaration, isManagedNode) {
     if (node !== rootCallable && (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)
       || ts.isArrowFunction(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node))) return;
     if (ts.isReturnStatement(node)) {
-      if (!checkExpression(node.expression)) invalid = true;
+      if (!isNoopReturn(node.expression) && !checkExpression(node.expression)) invalid = true;
       return;
     }
     ts.forEachChild(node, (child) => inspectReturns(child, rootCallable));
@@ -2063,7 +2077,9 @@ export function findUnmanagedSurfaceRisks(source, fileName = "client.tsx", { tru
   const shadowedSurfaceImports = shadowedImportNames(sourceFile, sharedSurfaceImportNames);
   for (const [localName, binding] of imports) {
     const trustedHookSource = binding.sourceName === "@workloom/ui"
-      || (sharedUiFile && /^(?:\.\.\/)*\.\/?managed-surface$/u.test(binding.sourceName));
+      // 相对导入在本仓遵循 TypeScript ESM 约定带 `.js` 后缀（构建产物需扩展名）；
+      // 判定时先剥离扩展名再比对，避免把 `./managed-surface.js` 误判为不可信来源。
+      || (sharedUiFile && /^(?:\.\.\/)*\.\/?managed-surface$/u.test(binding.sourceName.replace(/\.js$/u, "")));
     if (trustedHookSource && binding.original === "useManagedSurface") managedHookNames.add(localName);
   }
   const managedBindings = new Set();

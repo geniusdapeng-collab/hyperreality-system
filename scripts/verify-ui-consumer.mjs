@@ -99,6 +99,13 @@ const DUPLICATE_COMPONENTS = new Map([
   ["StatusBadge", "StatusChip"],
 ]);
 const REQUIRED_STYLES = ["tokens.css", "content-safety.css", "components.css"];
+/** 同名共享组件的别名组：`SideNav`/`SectionNavigation` 都指向共享 `SideNavigation`（见 packages/ui 导出）。 */
+const COMPONENT_ALIAS_GROUPS = Object.freeze([
+  new Set(["SideNav", "SideNavigation", "SectionNavigation"]),
+]);
+function aliasGroupOf(name) {
+  return COMPONENT_ALIAS_GROUPS.find((group) => group.has(name)) ?? null;
+}
 const DEFAULT_ALLOWED_TOKENS = ["--wl-brand-primary", "--wl-brand-on-primary", "--wl-brand-accent"];
 const UI_STATE_SCHEMA = "workloom.ui-consumer-state/v1";
 const UI_PACKAGE = "@workloom/ui";
@@ -136,7 +143,7 @@ function canonicalUiArtifact(version) {
   return {
     type: UI_RELEASE_TYPE,
     assetName,
-    url: `https://github.com/${CANONICAL_BASE_REPOSITORY}/releases/download/ui-v${version}/${assetName}`,
+    url: `https://cnb.cool/${CANONICAL_BASE_REPOSITORY}/-/releases/download/ui-v${version}/${assetName}`,
     overrideSelector: `${UI_PACKAGE}@${version}`,
   };
 }
@@ -422,7 +429,10 @@ export function registeredServiceWorkerRisks(repoPath, clientRoot) {
 
 function collectNamedImports(source) {
   const imported = new Map();
-  for (const match of source.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*["']@workloom\/ui["']/g)) {
+  // 2026-09-19 修复：原用 `[\s\S]*?` 会从**更早**的一条 `import {` 一路吞到本行 `} from "@workloom/ui"`，
+  // 把中间的 import 语句整段塞进同一个捕获组，导致 `OverlayManager`（单行 import）读不到 →
+  // 误报「未实际渲染共享基座组件 OverlayManager」。命名导入列表内不可能出现花括号，故用 `[^{}]*` 收敛。
+  for (const match of source.matchAll(/import\s*(?:type\s*)?\{([^{}]*)\}\s*from\s*["']@workloom\/ui["']/g)) {
     for (const raw of (match[1] ?? "").split(",")) {
       const part = raw.trim().replace(/^type\s+/, "");
       if (!part) continue;
@@ -815,10 +825,25 @@ export function verifyUiConsumerRepo(repoPath, { allowMissingClients = false, re
     for (const file of sourceFiles) {
       const base = file.split("/").pop()?.replace(/\.(?:tsx|jsx)$/, "") ?? "";
       const fileCanonical = DUPLICATE_COMPONENTS.get(base);
-      if (fileCanonical) errors.push(`${relative(repo, file)} 与共享基座组件 ${fileCanonical} 同义，疑似本地复制分叉`);
       const localSource = readFileSync(file, "utf8");
+      // 委托型包装不算分叉：受管客户端壳里存在 `shell/SideNav.tsx` 这类文件——它从 @workloom/ui
+      // 引入同名共享组件（可别名）并真实渲染，只是把行业/产品上下文接进去。分叉的定义是**重新实现**，
+      // 因此这里要求「同名导入 + 真实渲染」才算包装；否则仍按复制拦截。
+      const fileImports = collectNamedImports(localSource);
+      // 同一共享组件可能有多个名字（SideNav / SideNavigation / SectionNavigation），
+      // 只要文件引入并渲染了组内任意一个，就认定它是委托型包装。
+      const rendersAnyOf = (names) => [...names].some((candidate) => {
+        const alias = fileImports.get(candidate);
+        return Boolean(alias) && isRendered(localSource, alias);
+      });
+      const groupOf = (...names) => new Set(names.flatMap((name) => [name, ...(aliasGroupOf(name) ?? [])]).filter(Boolean));
+      const fileIsWrapper = fileCanonical ? rendersAnyOf(groupOf(fileCanonical, base)) : false;
+      if (fileCanonical && !fileIsWrapper) {
+        errors.push(`${relative(repo, file)} 与共享基座组件 ${fileCanonical} 同义，疑似本地复制分叉`);
+      }
       for (const [name, canonical] of DUPLICATE_COMPONENTS) {
         if (new RegExp(`(?:export\\s+)?(?:function|class)\\s+${name}\\b|(?:export\\s+)?const\\s+${name}\\s*=`).test(localSource)) {
+          if (rendersAnyOf(groupOf(name, canonical))) continue;
           errors.push(`${relative(repo, file)} 本地定义 ${name}（共享语义 ${canonical}），必须改为共享组件或使用明确的行业复合组件名`);
         }
       }

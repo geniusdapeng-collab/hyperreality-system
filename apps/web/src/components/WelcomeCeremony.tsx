@@ -90,12 +90,19 @@ export function WelcomeCeremony({
 
   // 团队仪式计时：织伴开场演完（team-bridge）进入 entrance 后才启动
   useEffect(() => {
-    if (phase !== "entrance") return;
-    const timers = [
-      setTimeout(() => setPhase("dance"), 1600),
-      setTimeout(() => setPhase("ribbon"), 7000),
-      setTimeout(() => setPhase("modal"), 8400),
-    ];
+    // 每段只挂“下一跳”：总节奏与原来一致（1.6s → dance / 7.0s → ribbon / 8.4s → modal）。
+    // 原实现把三个定时器一次性挂在 entrance 上，phase 一变 dance 就触发 cleanup，
+    // 把还没到点的 ribbon/modal 一起清掉 → 仪式永久停在 dance（审计 B1）。
+    // 用函数式 setPhase 并校验当前阶段，避免用户点“跳到介绍”后旧定时器把阶段拉回去。
+    const advanceTo = (ms: number, next: "dance" | "ribbon" | "modal") =>
+      window.setTimeout(() => {
+        setPhase((current) => (current === phase ? next : current));
+      }, ms);
+    const timers =
+      phase === "entrance" ? [advanceTo(1600, "dance")]
+        : phase === "dance" ? [advanceTo(5400, "ribbon")]
+          : phase === "ribbon" ? [advanceTo(1400, "modal")]
+            : [];
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 

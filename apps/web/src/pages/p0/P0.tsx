@@ -27,6 +27,7 @@ import { useTheaterDiff } from "../../lib/theaterDiff";
 import { displayNameOf, hydrateAliases, reportTitleOf, selectReporters } from "../../lib/naming";
 import { Link } from "react-router";
 import { useNavigationAccess } from "../../shell/NavigationAccess";
+import { IndustrySlot } from "../../shell/IndustrySlots";
 import { Button, Icon, Overlay, clientChineseText } from "@workloom/ui";
 
 /* ================= 类型 ================= */
@@ -684,6 +685,8 @@ export default function P0() {
       )}
       {/* 新闻台字幕条（语音字幕等价物 + 降级兜底） */}
       <SubtitleBar channelName={`${wsName} · 晨会`} />
+      {/* 行业页内插槽（首页浮层）：行业仓只能在 extensions/** 声明，受管页面不做行业分支判断 */}
+      <IndustrySlot name="home.overlay" />
       <RejectDialog
         open={canApprove && rejectTarget !== null}
         mode="reject"

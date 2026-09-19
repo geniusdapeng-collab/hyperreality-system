@@ -69,6 +69,44 @@ export function voiceProfileForRole(role: string): VoiceProfile {
 const FEMALE_VOICE_RE = /female|flo|sandy|shelley|ting[- ]?ting|tingting|mei[- ]?jia|sin[- ]?ji|xiaoxiao|xiaoyi|yunxia|huihui|yaoyao|lily|xiaobei|晓晓|晓伊|婷婷|美佳|善怡/i;
 const MALE_VOICE_RE = /male|eddy|reed|rocko|li[- ]?mu|yunxi|yunjian|yunyang|xiaoyu|云希|云健|云扬|晓宇|李沐/i;
 
+/**
+ * macOS「新奇音色」一族（Eddy/Reed/Flo/Sandy/Shelley/Rocko/Grandma/Grandpa）。
+ *
+ * 实测（2026-09-18，macOS + Electron 44 真实壳）：这组音色在 zh-CN 下**能出声但不发
+ * `onboundary` 事件**（同一句中文：它们 0 次 boundary，而 婷婷 15 次 / Li-Mu 13 次）。
+ * 基座的口型同步链路正是靠 boundary 的 charIndex 驱动（MateLive2D / VoiceEngine.onLipSync），
+ * 于是“看起来在说话、嘴却不动”。因此把它们降级为最后兜底：只有在没有任何正常中文音色时才用。
+ */
+export const DEGRADED_VOICE_RE = /^(eddy|reed|flo|sandy|shelley|rocko|grandma|grandpa)\b/i;
+
+/** 把中文音色按“可用性”重排：正常音色在前，新奇音色垫底（保持原有 zh-CN 优先次序，稳定排序）。 */
+export function rankZhVoices<T extends { name: string }>(zh: readonly T[]): T[] {
+  return [...zh].sort((a, b) => Number(DEGRADED_VOICE_RE.test(a.name)) - Number(DEGRADED_VOICE_RE.test(b.name)));
+}
+
+export interface VoiceLike { name: string; lang: string }
+
+/**
+ * 纯函数：从系统音色列表里为某个角色挑音色（无缓存、无副作用，可单测）。
+ * 规则：中文优先（zh-CN 在前）→ 只要存在正常中文音色就不用新奇音色 → 首选名 → 性别 → 兜底第一个。
+ */
+export function selectVoice<T extends VoiceLike>(voices: readonly T[], profile: VoiceProfile): T | null {
+  const zh = voices
+    .filter((v) => /zh|cmn|chinese/i.test(`${v.lang} ${v.name}`))
+    .sort((a, b) => Number(!/^zh[-_]cn/i.test(a.lang)) - Number(!/^zh[-_]cn/i.test(b.lang)) || a.name.localeCompare(b.name));
+  if (zh.length === 0) return null;
+  const ranked = rankZhVoices(zh);
+  const usable = ranked.filter((v) => !DEGRADED_VOICE_RE.test(v.name));
+  const pool = usable.length > 0 ? usable : ranked;
+  const preferred = profile.preferredNames
+    ?.map((name) => pool.find((v) => v.name.toLowerCase().includes(name.toLowerCase())))
+    .find(Boolean);
+  const gendered = profile.female
+    ? pool.find((v) => FEMALE_VOICE_RE.test(v.name))
+    : pool.find((v) => MALE_VOICE_RE.test(v.name));
+  return preferred ?? gendered ?? pool[0] ?? null;
+}
+
 type CaptionListener = (c: Caption) => void;
 
 export class VoiceEngineImpl {
@@ -122,13 +160,7 @@ export class VoiceEngineImpl {
     // 不允许第二段突然换成另一位说话人。织伴在 2.4s 入场后才开口，正常机器
     // 此时列表已经可用；极端情况下宁可全程同一默认声，也不段落间变声。
     if (zh.length === 0) { this.voiceCache.set(role, null); return null; }
-    const preferred = profile.preferredNames
-      ?.map((name) => zh.find((v) => v.name.toLowerCase().includes(name.toLowerCase())))
-      .find(Boolean);
-    const gendered = profile.female
-      ? zh.find((v) => FEMALE_VOICE_RE.test(v.name))
-      : zh.find((v) => MALE_VOICE_RE.test(v.name));
-    const chosen = preferred ?? gendered ?? zh[0] ?? null;
+    const chosen = selectVoice(voices, profile) as SpeechSynthesisVoice | null;
     if (chosen) this.voiceCache.set(role, chosen);
     return chosen;
   }

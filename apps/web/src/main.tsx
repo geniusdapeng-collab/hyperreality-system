@@ -5,6 +5,7 @@ import { OverlayManager } from "@workloom/ui";
 import App from "./App";
 import { BackendGate } from "./components/BackendGate";
 import "./styles/tokens.css";
+import "./styles/subtitle.css";
 import "@workloom/ui/tokens.css";
 import "@workloom/ui/content-safety.css";
 import "@workloom/ui/components.css";

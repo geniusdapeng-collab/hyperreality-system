@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { getConfig, getConfigState, type ServiceEntry } from "../lib/config";
 import type { ActionReceipt, ActionState } from "../lib/types";
-import { EmptyState, Icon, clientIdentifierText } from "@workloom/ui";
+import { EmptyState, Icon, Input, Textarea, clientIdentifierText } from "@workloom/ui";
 import { PageHeader, chineseMessage } from "../components/common";
 
 export default function ServicePage({ prefill }: { prefill: string | null }) {
@@ -117,34 +117,29 @@ export default function ServicePage({ prefill }: { prefill: string | null }) {
             </span>
             <span className="min-w-0 break-words">工单类型已预填：{entry.title} · {entry.sla}</span>
           </div>
-          <label className="block">
-            <span className="mb-1.5 block text-body text-ink2">标题 *</span>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={entry.titlePlaceholder ?? "请描述您的需求"}
-              className="h-11 w-full min-w-0 rounded-xl border border-line bg-bg900 px-3.5 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-body text-ink2">详细描述</span>
-            <textarea
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              rows={4}
-              placeholder="补充数量、时间、具体情况等"
-              className="w-full min-w-0 resize-none rounded-xl border border-line bg-bg900 px-3.5 py-3 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-body text-ink2">相关位置或编号（选填）</span>
-            <input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="例如：订单号、地点或设备编号"
-              className="h-11 w-full min-w-0 rounded-xl border border-line bg-bg900 px-3.5 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
-            />
-          </label>
+          {/* 共享表单控件：标签、错误与无障碍语义由基座统一提供（不得在本仓重写表单控件） */}
+          <Input
+            label="标题"
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={entry.titlePlaceholder ?? "请描述您的需求"}
+          />
+          <Textarea
+            label="详细描述"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            rows={4}
+            placeholder="补充数量、时间、具体情况等"
+            className="resize-none"
+          />
+          <Input
+            label="相关位置或编号"
+            description="选填；例如订单号、地点或设备编号"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder="订单号、地点或设备编号"
+          />
           {error && (
             <div role="alert" className="break-words rounded-xl border border-alert/50 bg-alert/10 px-3 py-2.5 text-body leading-relaxed text-alert">
               {error}
