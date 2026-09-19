@@ -1,7 +1,7 @@
 {
  "repo": "hyperreality",
  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）",
- "generatedAt": "2026-09-02T08:44:50.012Z",
+ "generatedAt": "2026-09-19T06:54:30.770Z",
  "demoPages": [
   "hyperreality-demo-c.html",
   "hyperreality-demo-mobile.html",
@@ -34,18 +34,44 @@
    ]
   },
   {
-   "icon": "🎬",
+   "icon": "🏨",
    "title": "行业 Bundle（垂直能力包）",
    "items": [
     {
+     "name": "bundles/ai-pm/",
+     "how": "见 bundles/ai-pm/ 目录",
+     "desc": "围栏/技能/员工/对象/管线一键装配"
+    },
+    {
      "name": "bundles/ai-video/",
      "how": "见 bundles/ai-video/ 目录",
-     "desc": "25 数字员工 presets · 9 个官方技能 · 2 客群装配（audit_only/managed） · 含 fast-scan 快照快扫（15–30 分钟当场出体检报告）"
+     "desc": "围栏/技能/员工/对象/管线一键装配（33 个数字员工岗位 · 9 个技能）"
     },
     {
      "name": "bundles/hotel/",
      "how": "见 bundles/hotel/ 目录",
-     "desc": "7 数字员工 presets · 3 个官方技能"
+     "desc": "围栏/技能/员工/对象/管线一键装配"
+    }
+   ]
+  },
+  {
+   "icon": "🧑‍💼",
+   "title": "数字员工与数字人（本仓自带）",
+   "items": [
+    {
+     "name": "数字员工中心（`/agents`）",
+     "how": "`pnpm preview:all` → http://localhost:3000/agents",
+     "desc": "人机混编通讯录：员工档案 / 围栏对账 / 30 天战绩 / 派遣 / 夜班自动上线（本包 33 个岗位）"
+    },
+    {
+     "name": "织伴数字人（Live2D 常驻浮层）",
+     "how": "打开任一 PC 页面右下角；`pnpm preview:all`",
+     "desc": "全页面常驻数字人：语音播报 + 口型/表情/动作 + 三态（小角落 / 大形象 / 屏保）+ 记忆透明面板"
+    },
+    {
+     "name": "语音与口型引擎",
+     "how": "docs/voice-and-avatar-delivery-contract.md",
+     "desc": "TTS 音色映射 + 中文逐字开口度时间线 + 音频振幅驱动口型；人设/音色可切换"
     }
    ]
   },
@@ -73,6 +99,11 @@
      "name": "围栏 DSL 引擎",
      "how": "见 docs/capability-map.md L3",
      "desc": "事前裁决：支持 in/contains_any 列表语义"
+    },
+    {
+     "name": "技能保鲜环（下行分发）",
+     "how": "见 docs/capability-map.md L3",
+     "desc": "官方技能一键投放：五道预检 + L0/L1 静默/L2 审批 + 一键回滚 + 全事件留痕"
     },
     {
      "name": "L2 编排（ASK/QUEST）",
@@ -192,9 +223,9 @@
      "desc": "对外产品故事"
     },
     {
-     "name": "自带技能 ×7",
+     "name": "自带技能 ×8",
      "how": "skills/official/",
-     "desc": "component-integration / cross-platform-review / deal-flow / demo-mirror 等"
+     "desc": "client-demo-recorder / component-integration / cross-platform-review / deal-flow 等"
     },
     {
      "name": "能力导览 PPT",

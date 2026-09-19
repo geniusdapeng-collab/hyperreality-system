@@ -4,7 +4,7 @@
 
 **别再抽卡了。把 AI 视频创作，变成一门可控、可复盘、可增长的生意。**
 
-一支 25 人的 AI 制作班组住进你的通讯录，从选题调研到评论区回复，全链路替你干活——
+一支 33 个岗位的 AI 制作班组住进你的通讯录（制作 21 + 经营 12），从选题调研到评论区回复，全链路替你干活——
 你只做三件事：**定方向、拍板、收钱。**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-9A7B2D)](LICENSE)
@@ -37,16 +37,17 @@ HyperReality 的答案，是把「生成后筛选」变成「生成前锁定」�
 抽卡次数从十几次降到一两次，省下的不只是 API 额度，还有最贵的两样东西——注意力和时间。
 
 <!-- CAPABILITIES:BEGIN -->
-<!-- 本区块由 scripts/generate-capabilities.mjs 自动生成（2026-09-02），请勿手改；重跑 pnpm capabilities 更新 -->
+<!-- 本区块由 scripts/generate-capabilities.mjs 自动生成（2026-09-19），请勿手改；重跑 pnpm capabilities 更新 -->
 
 ## 🧩 系统能力速览（自动生成 · 与代码同步）
 
 - 🖥 **三端应用（开箱即看）**：PC 端 · B 端工作台 · 移动端 · B 端高保真 · 移动端 · C 端 AI 服务前台
-- 🎬 **行业 Bundle（垂直能力包）**：bundles/ai-video/ · bundles/hotel/
+- 🏨 **行业 Bundle（垂直能力包）**：bundles/ai-pm/ · bundles/ai-video/ · bundles/hotel/
+- 🧑‍💼 **数字员工与数字人（本仓自带）**：数字员工中心（`/agents`） · 织伴数字人（Live2D 常驻浮层） · 语音与口型引擎
 - 🖐 **操作电脑能力（本仓自带 · 可装生产工作站）**：computer-use 三层感知（65 动作） · HTTP 远程驱动 + MCP server
-- 🤖 **AI 自动化引擎（系统内置能力）**：围栏 DSL 引擎 · L2 编排（ASK/QUEST） · 夜班自动运行 · 模型路由 · 全平台 RPA 发布 · 五元事件 + RLS 隔离 等 14 项
+- 🤖 **AI 自动化引擎（系统内置能力）**：围栏 DSL 引擎 · 技能保鲜环（下行分发） · L2 编排（ASK/QUEST） · 夜班自动运行 · 模型路由 · 全平台 RPA 发布 等 15 项
 - ✅ **验证与质量（工程纪律）**：一键安装（bootstrap） · 主测试套件 · 发布门禁 · 五元事件验链 · Agent 能力巡游 · 环境自检
-- 🎁 **演示与交付资产**：高保真演示页 ×6 · 官网静态站 · 自带技能 ×7 · 能力导览 PPT · Mock 数据体系
+- 🎁 **演示与交付资产**：高保真演示页 ×6 · 官网静态站 · 自带技能 ×8 · 能力导览 PPT · Mock 数据体系
 
 > 📖 完整能力导览（含截图与体验路径）：[docs/capabilities.auto.md](docs/capabilities.auto.md) ｜ 🤖 AI Agent 入口：[AGENTS.md](AGENTS.md) ｜ 🎯 首启必跑：`pnpm preview:all`
 <!-- CAPABILITIES:END -->
@@ -55,9 +56,13 @@ HyperReality 的答案，是把「生成后筛选」变成「生成前锁定」�
 
 ## 核心能力
 
-### 一支 25 人的 AI 制作班组
+### 一支 33 个岗位的 AI 制作班组
 
-制作班组 21 人（总导演 / 情报五站 / 创意策划 / 制片人 / 剧本师 / 分镜师 / 提示词工程师 / 质检 / 定妆照 / 渲染师 / 剪辑师……）+ 经营班组 4 人（调研 / 发布 / 看板 / 评论运营），与人类员工**同通讯录、同会话、同记忆**。你对着工作台说一句话，班组自动开工；每个关键节点，一张审批卡推到你面前——**你只在真正需要人味的地方出现**。
+制作班组 21 个岗位（总导演 / 情报五站 / 创意策划 / 制片人 / 剧本师 / 剧本连贯审查 / 视觉语言 / 场景设计 / 分镜 / 提示词工程 / 微动作增强 / 定妆照美术 / 渲染 / 剪辑 / 片头 / 音频 / 字段质检 / 合规审核 / 版权管理 / 复盘分析 / 投放优化……）+ 经营班组 12 个岗位（调研 / 多平台分发 / 达人合作 / 商单 / 数据看板 / 评论运营 / 分账对账……），与人类员工**同通讯录、同会话、同记忆**。你对着工作台说一句话，班组自动开工；每个关键节点，一张审批卡推到你面前——**你只在真正需要人味的地方出现**。
+
+> **编制是可查的**：打开 `/agents` 人机混编通讯录，每个岗位都有平台档案——来源 Bundle、**围栏授权逐条对账**（悬空标红）、绑定技能包、运行约束、**30 天战绩**（动作数 / 采纳率 / 被驳回 / 渲染积分与谷时占比）与等级段位；点「派遣」当场建任务线程。夜班岗位 22:00–08:00 自动上线，只读岗位标绿（无写工具）。
+
+> **数字人织伴（LoomMate）**：PC 端全页面常驻的 Live2D 秘书——语音 + 口型播报"昨夜渲染完成 / 今早发布排期 / 待你拍板"，三态（小角落 / 大形象 / 屏保）可切；你不在电脑前时她聚合非 P0 事项、屏保守着全场，点她就能问、派活、看记忆。
 
 ### 数字 CEO：内容公司的总经理
 
@@ -103,33 +108,65 @@ HyperReality 的答案，是把「生成后筛选」变成「生成前锁定」�
 
 ---
 
+## 系统架构与业务闭环
+
+<p align="center"><img src="docs/images/architecture.png" alt="HyperReality 系统架构（体验层 / 服务层 / ai-video Bundle + 基座十域 / 运行时地基 / 数据层）" width="92%"/></p>
+
+五层结构自上而下：**体验层**（制作工作台 / 移动 B 端 / C 端服务前台 / 织伴数字人 + IM 通道）→ **服务层**（Hono + tRPC v11，PG 行级安全，品牌方与外包按授权收敛可见范围）→ **能力层**（ai-video Bundle：33 个岗位 / 9 个技能 / 21 条围栏 + 镜头卡、前置评审、定妆照锚定、三条管线、渲染调度与 RPA 发布 ＋ 基座十域零改动继承）→ **运行时地基**（DeepSeek Harness seam 适配）→ **数据层**（PostgreSQL 17 + pgvector：素材版本链、渲染额度台账、组织记忆、五元事件哈希链）。
+
+<p align="center"><img src="docs/images/business-loop.png" alt="一条 30 秒成片的诞生：选题 → 镜头卡 → 前置评审 → 定妆照锚定 → 渲染后期 → 发布运营" width="92%"/></p>
+
+**选题与情报 → 剧本与镜头卡 → 前置评审 → 定妆照锚定 → 渲染与后期 → 发布与运营**，六节点闭环：评审与预算两道闸门在烧额度之前拦人；驳回理由与复盘结论回流组织记忆，让下一条片子的抽卡次数更少。底部两条安全带（成本闸门 / 事实红线）兜住最贵的两类事故。
+
+---
+
 ## 系统截图（模拟运行态实拍）
 
 以下截图均来自系统**模拟运行态**（Mock 模式：种子演示数据 + 离线确定性模型），页面顶部琥珀色横幅「当前为全模拟运行态」为系统原生标识。
 
 ### PC 端 · B 端工作台
 
-| 经营剧场（默认首页） | 工作台 · 总览 |
+| 经营剧场（默认首页 `/`） | 数字员工 · 人机混编通讯录（`/agents`） |
 |---|---|
-| ![经营剧场](docs/images/shots/pc-home.png) | ![工作台总览](docs/images/shots/pc-workbench.png) |
+| ![经营剧场](docs/images/shots/pc-home.png) | ![数字员工](docs/images/shots/pc-agents.png) |
 
-| 审批中心 | 规则与权限 |
+| 片库 · 渲染脚本 CMS（`/ai-video/assets`） | 团队绩效（`/ai-video/team-performance`） |
 |---|---|
-| ![审批中心](docs/images/shots/pc-approval.png) | ![规则与权限](docs/images/shots/pc-rules.png) |
+| ![渲染脚本 CMS](docs/images/shots/pc-cms.png) | ![团队绩效](docs/images/shots/pc-team-performance.png) |
 
-| 技能中心 | 夜班中心 |
+| 视频经营动态（`/ai-video/activity`） | 视频审批分工（`/ai-video/review-guide`） |
 |---|---|
-| ![技能中心](docs/images/shots/pc-skills.png) | ![夜班中心](docs/images/shots/pc-night.png) |
+| ![视频经营动态](docs/images/shots/pc-activity.png) | ![审批分工](docs/images/shots/pc-review-guide.png) |
 
-| 片库 · 渲染脚本 CMS | 落地向导（接入真实数据） |
+| 技能运营（`/ai-video/skills`） | 技能中心（`/skills`） |
 |---|---|
-| ![渲染脚本 CMS](docs/images/shots/pc-cms.png) | ![落地向导](docs/images/shots/pc-onboarding.png) |
+| ![技能运营](docs/images/shots/pc-skill-ops.png) | ![技能中心](docs/images/shots/pc-skills.png) |
+
+| 审批中心（`/approvals`） | 夜班中心（`/night`） |
+|---|---|
+| ![审批中心](docs/images/shots/pc-approvals.png) | ![夜班中心](docs/images/shots/pc-night.png) |
+
+| 围栏规则（`/guardrails`） | 事件账本（`/events`） |
+|---|---|
+| ![围栏规则](docs/images/shots/pc-guardrails.png) | ![事件账本](docs/images/shots/pc-events.png) |
+
+| 组织记忆（`/memory`） | 经营驾驶舱 · 数字CEO（`/executive`） |
+|---|---|
+| ![组织记忆](docs/images/shots/pc-memory.png) | ![经营驾驶舱](docs/images/shots/pc-executive.png) |
+
+### 数字人 · 织伴（Live2D 常驻）
+
+| 织伴开场（S0–S4 全身像登场） | 织伴面板（聊聊 / 设置 / 记忆） |
+|---|---|
+| ![织伴开场](docs/images/shots/pc-mate-welcome.png) | ![织伴面板](docs/images/shots/pc-mate-chat.png) |
 
 ### 移动端
 
 | B 端移动（经营主页） | C 端 · AI 服务对话 | C 端 · 服务大厅 | C 端 · 工单 | C 端 · 我的 |
 |---|---|---|---|---|
 | ![B端移动](docs/images/shots/mb-b-home.png) | ![C端对话](docs/images/shots/mc-chat.png) | ![C端服务](docs/images/shots/mc-service.png) | ![C端工单](docs/images/shots/mc-tickets.png) | ![C端我的](docs/images/shots/mc-me.png) |
+
+> B 端移动端同样可查数字员工名册（`/agents`）：`docs/images/shots/mb-b-agents.png`。
 
 ---
 
@@ -228,6 +265,8 @@ Ask 问询另支持联网实时检索事实面（`ASK_WEB_SEARCH=1`，Bing RSS�
 | Quest 引擎 | 目标自动拆解为任务卡，replay 断点续跑——长链路生产不怕中断 |
 | 全平台 RPA 发布 | 模拟人工上传：抖音 / 小红书 / B 站 / YouTube 已适配，TikTok / 视频号预留；人工节奏防风控，单账号日上限熔断 |
 | 行业 Bundle | 垂直能力包机制：`bundles/ai-video/`（短视频创作域）、`bundles/hotel/`（酒店服务域），围栏 / 技能 / 管线 / UI 随包分发 |
+
+> **本机实测（2026-09-19）**：`pnpm suite` **454/459 通过**（服务层 412/414 + HTTP E2E 42/45）；剩余 5 项为 `H-33`（技能吊销围栏并集）、`P-15`（前端悬空调用 `video.cms` / `video.render`）、`H-13 / H-15 / H-16`（开箱模拟态与真实模式门禁口径），已如实登记为待修，不在本次文档改动范围内。
 
 ## 仓库结构
 

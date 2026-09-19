@@ -29,6 +29,11 @@ const bundles = ls("bundles", (d) => !d.includes("."));
 const skills = ls("skills/official", (d) => !d.includes("."));
 const demoPages = ls("docs/demo", (f) => f.endsWith(".html") && !["index.html", "shell.html"].includes(f));
 const shots = ls("docs/demo/preview-shots", (f) => f.endsWith(".png"));
+// 行业 bundle 的数字员工岗位数/技能数（事实源：product.manifest.json 的 defaultBundle）
+const productManifest = existsSync(join(ROOT, "product.manifest.json")) ? J("product.manifest.json") : {};
+const defaultBundle = bundles.includes(productManifest.defaultBundle) ? productManifest.defaultBundle : null;
+const presets = defaultBundle ? ls(`bundles/${defaultBundle}/presets`, (f) => f.endsWith(".yml")) : [];
+const bundleSkills = defaultBundle ? ls(`bundles/${defaultBundle}/skills`, (d) => !d.includes(".")) : [];
 const repoName = pkg.name?.split("/").pop() || "workloom";
 const desc = pkg.description || "AI 经营系统";
 
@@ -46,7 +51,33 @@ groups.push({
 
 if (bundles.length) groups.push({
   icon: "🏨", title: "行业 Bundle（垂直能力包）",
-  items: bundles.map((b) => ({ name: `bundles/${b}/`, how: `见 bundles/${b}/ 目录`, desc: "围栏/技能/员工/对象/管线一键装配" })),
+  items: bundles.map((b) => ({
+    name: `bundles/${b}/`,
+    how: `见 bundles/${b}/ 目录`,
+    desc: `围栏/技能/员工/对象/管线一键装配${b === defaultBundle && presets.length ? `（${presets.length} 个数字员工岗位 · ${bundleSkills.length} 个技能）` : ""}`,
+  })),
+});
+
+// 数字员工与数字人（事实探测：页面/组件/资产/语音引擎存在才列出）
+const digitalWorkforce = [
+  existsSync(join(ROOT, "apps/web/src/pages/p8/P8.tsx")) && {
+    name: "数字员工中心（`/agents`）",
+    how: "`pnpm preview:all` → http://localhost:3000/agents",
+    desc: `人机混编通讯录：员工档案 / 围栏对账 / 30 天战绩 / 派遣 / 夜班自动上线${presets.length ? `（本包 ${presets.length} 个岗位）` : ""}`,
+  },
+  existsSync(join(ROOT, "apps/web/src/components/loommate/LoomMate.tsx")) && {
+    name: "织伴数字人（Live2D 常驻浮层）",
+    how: "打开任一 PC 页面右下角；`pnpm preview:all`",
+    desc: "全页面常驻数字人：语音播报 + 口型/表情/动作 + 三态（小角落 / 大形象 / 屏保）+ 记忆透明面板",
+  },
+  existsSync(join(ROOT, "apps/web/src/voice/VoiceEngine.ts")) && {
+    name: "语音与口型引擎",
+    how: "docs/voice-and-avatar-delivery-contract.md",
+    desc: "TTS 音色映射 + 中文逐字开口度时间线 + 音频振幅驱动口型；人设/音色可切换",
+  },
+].filter(Boolean);
+if (digitalWorkforce.length) groups.push({
+  icon: "🧑‍💼", title: "数字员工与数字人（本仓自带）", items: digitalWorkforce,
 });
 
 if (basePkgs.includes("computer-use")) groups.push({

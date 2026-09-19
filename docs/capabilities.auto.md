@@ -1,7 +1,7 @@
 # hyperreality · 能力导览（人类版）
 
 > 视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）
-> 本文件由 `node scripts/generate-capabilities.mjs` 从代码事实**自动生成**（2026-09-02），
+> 本文件由 `node scripts/generate-capabilities.mjs` 从代码事实**自动生成**（2026-09-19），
 > 请勿手改——能力变更后重跑生成器即可。Agent 版机器清单见 docs/capability-map.md。
 
 ## 🚀 5 分钟体验路径
@@ -18,7 +18,7 @@ pnpm install && pnpm preview:all
 
 无需任何真实后端或密钥：Mock 数据（种子 + 离线确定性模型 + 演示直登）已固化，详见 mock/README.md。
 
-## 📦 能力总览（32 项）
+## 📦 能力总览（37 项）
 
 ### 🖥 三端应用（开箱即看）
 
@@ -28,12 +28,21 @@ pnpm install && pnpm preview:all
 | **移动端 · B 端高保真** | 6 页高保真演示页 + 手机壳容器 | `pnpm preview:all` → http://localhost:3001 |
 | **移动端 · C 端 AI 服务前台** | 小程序入口 H5 模拟：对话/服务/工单/消息/我的，演示直登 | `pnpm preview:all` → http://localhost:3002 |
 
-### 🎬 行业 Bundle（垂直能力包）
+### 🏨 行业 Bundle（垂直能力包）
 
 | 能力 | 一句话 | 怎么体验 |
 |---|---|---|
-| **bundles/ai-video/** | 25 数字员工 presets · 9 个官方技能 · 2 客群装配（audit_only/managed） · 含 fast-scan 快照快扫（15–30 分钟当场出体检报告） | 见 bundles/ai-video/ 目录 |
-| **bundles/hotel/** | 7 数字员工 presets · 3 个官方技能 | 见 bundles/hotel/ 目录 |
+| **bundles/ai-pm/** | 围栏/技能/员工/对象/管线一键装配 | 见 bundles/ai-pm/ 目录 |
+| **bundles/ai-video/** | 围栏/技能/员工/对象/管线一键装配（33 个数字员工岗位 · 9 个技能） | 见 bundles/ai-video/ 目录 |
+| **bundles/hotel/** | 围栏/技能/员工/对象/管线一键装配 | 见 bundles/hotel/ 目录 |
+
+### 🧑‍💼 数字员工与数字人（本仓自带）
+
+| 能力 | 一句话 | 怎么体验 |
+|---|---|---|
+| **数字员工中心（`/agents`）** | 人机混编通讯录：员工档案 / 围栏对账 / 30 天战绩 / 派遣 / 夜班自动上线（本包 33 个岗位） | `pnpm preview:all` → http://localhost:3000/agents |
+| **织伴数字人（Live2D 常驻浮层）** | 全页面常驻数字人：语音播报 + 口型/表情/动作 + 三态（小角落 / 大形象 / 屏保）+ 记忆透明面板 | 打开任一 PC 页面右下角；`pnpm preview:all` |
+| **语音与口型引擎** | TTS 音色映射 + 中文逐字开口度时间线 + 音频振幅驱动口型；人设/音色可切换 | docs/voice-and-avatar-delivery-contract.md |
 
 ### 🖐 操作电脑能力（本仓自带 · 可装生产工作站）
 
@@ -47,6 +56,7 @@ pnpm install && pnpm preview:all
 | 能力 | 一句话 | 怎么体验 |
 |---|---|---|
 | **围栏 DSL 引擎** | 事前裁决：支持 in/contains_any 列表语义 | 见 docs/capability-map.md L3 |
+| **技能保鲜环（下行分发）** | 官方技能一键投放：五道预检 + L0/L1 静默/L2 审批 + 一键回滚 + 全事件留痕 | 见 docs/capability-map.md L3 |
 | **L2 编排（ASK/QUEST）** | 一句话目标自动拆解多步骤并派发 | 见 docs/capability-map.md L3 |
 | **夜班自动运行** | 离线任务推进，次日晨报 | 见 docs/capability-map.md L3 |
 | **模型路由** | 离线确定性模型，无密钥可跑 | 见 docs/capability-map.md L3 |
@@ -78,7 +88,7 @@ pnpm install && pnpm preview:all
 |---|---|---|
 | **高保真演示页 ×6** | 糖果色，含手机壳容器 | http://localhost:3001 |
 | **官网静态站** | 对外产品故事 | apps/site/index.html |
-| **自带技能 ×7** | component-integration / cross-platform-review / deal-flow / demo-mirror 等 | skills/official/ |
+| **自带技能 ×8** | client-demo-recorder / component-integration / cross-platform-review / deal-flow 等 | skills/official/ |
 | **能力导览 PPT** | 路演/汇报直接用 | docs/capability-tour.pptx |
 | **Mock 数据体系** | 种子 + 离线模型 + 演示直登，开箱即用 | mock/README.md |
 
