@@ -3,11 +3,11 @@
   "lastSyncedBaseSha": "f84cdff0c9101b74bbdd220151d1d9c28885a26d",
   "lastSyncAt": "2026-09-19T03:55:53.445Z",
   "filesTouched": 10,
-  "lastRequiredAssetsBaseSha": "f84cdff0c9101b74bbdd220151d1d9c28885a26d",
-  "lastSyncMode": "full",
+  "lastRequiredAssetsBaseSha": "92dae064a2efb18ba60e4f6ee890b4096eac7bcd",
+  "lastSyncMode": "required-only",
   "pathPrefix": ".",
   "requiredRootAssetsSha256": {
-    "WORKLOOM_PRODUCT_CONTEXT.md": "ae9eba80b05c5b9a90c8b68709e3193b98c064b627703415318fc1a07d7efbb2",
+    "WORKLOOM_PRODUCT_CONTEXT.md": "af078cd89e9dcc38754c6500b2a7617c0bedec1c3d65b8ed1e32d458d956aef9",
     "docs/DEVELOPMENT-PROTOCOL.md": "05844ca643eb652bc4649080ec82aa58e8e8cd71bf2b56d11153690e461364da",
     ".github/workflows/base-sync-heartbeat.yml": "5058d3aecbde57482f98ece2716e2cd056d5a5ca7799500b0cbcc1501ae5ca98",
     "AGENTS.md#managed-section": "d63adfbd349ac87c8af33b96cd13aad1a2ed29909f226e8fbb97ee9d4a1ecacf"
