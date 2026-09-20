@@ -96,6 +96,103 @@
     "offlineAuditSample": 10
   },
   "soak": { "hours": [24, 168, 672], "metrics": ["success", "latency", "cost", "drift"] },
+  "environment": {
+    "kind": "local-preview",
+    "allowWrites": false,
+    "supportDir": null,
+    "target": {},
+    "timeouts": { "healthMs": 8000, "probeMs": 20000 },
+    "notes": "local-preview=本机预览（mock 口径）；client-runtime=已安装桌面客户端运行时（默认 server 8787 / web 5173，supportDir 缺省按产品名推导）；deployed=生产部署，必须显式声明 target.{pcUrl,apiUrl}。生产档位默认只读，写入需 --allow-prod-writes。"
+  },
+  "live": {
+    "enabled": true,
+    "requireRealModels": false,
+    "allowDb": false,
+    "budgets": {
+      "maxLlmCalls": 40,
+      "maxLlmTokens": 300000,
+      "maxImages": 8,
+      "maxVideoClips": 3,
+      "minVideoSeconds": 10,
+      "maxVideoSeconds": 15,
+      "maxVideoSecondsTotal": 45,
+      "maxCostCny": 120,
+      "maxWallClockMin": 45
+    },
+    "models": [
+      { "id": "deepseek-v4.1-flash", "kind": "llm", "model": "deepseek-flash", "adapter": "dsh-harness", "apiKeyEnv": "DEEPSEEK_API_KEY", "baseUrlEnv": "DEEPSEEK_BASE_URL", "note": "客户端内置 LLM（dsh deepseek-official 路由，内置目录 deepseek-flash 支持文本+图像）" },
+      { "id": "seedream-5.0", "kind": "image", "model": "seedream-5.0", "adapter": "gen-http", "apiKeyEnv": "SEEDREAM_API_KEY", "baseUrlEnv": "SEEDREAM_ENDPOINT" },
+      { "id": "seedance-2.5", "kind": "video", "model": "seedance-2.5", "adapter": "gen-http", "apiKeyEnv": "SEEDANCE_API_KEY", "baseUrlEnv": "SEEDANCE_ENDPOINT" }
+    ],
+    "tasks": [
+      {
+        "id": "LLM-R1",
+        "kind": "llm",
+        "chain": "dsh-harness",
+        "model": "deepseek-v4.1-flash",
+        "criticality": "P0",
+        "title": "<本仓真实推理任务>",
+        "prompt": "<任务描述；明确成功标准与 TASK_COMPLETE 结尾>",
+        "expect": ["<任一命中即可的判定正则>"],
+        "expectAll": ["TASK_COMPLETE"]
+      },
+      {
+        "id": "LLM-T1",
+        "kind": "llm",
+        "chain": "dsh-harness",
+        "model": "deepseek-v4.1-flash",
+        "criticality": "P0",
+        "title": "<工具循环任务（工具调用过围栏 + 事件落账）>",
+        "prompt": "请调用 bash 工具执行 `echo <夹具标记>`，原样贴出输出，最后另起一行输出 TASK_COMPLETE。",
+        "expect": ["<夹具标记>|TASK_COMPLETE"],
+        "expectAll": ["TASK_COMPLETE"]
+      },
+      {
+        "id": "LLM-M1",
+        "kind": "llm",
+        "chain": "dsh-harness",
+        "model": "deepseek-v4.1-flash",
+        "criticality": "P1",
+        "title": "<多模态理解任务（截图/商品图）>",
+        "prompt": "请打开随附图片，用一句话说明这是什么页面/商品，并给出图中可见的一处细节。最后另起一行输出 TASK_COMPLETE。",
+        "fixture": "ui-shot",
+        "expect": ["."]
+      },
+      {
+        "id": "IMG-01",
+        "kind": "image",
+        "model": "seedream-5.0",
+        "criticality": "P1",
+        "images": 2,
+        "title": "<本仓生图任务：海报/定妆照/商品图>",
+        "prompt": "<提示词>",
+        "minArtifacts": 1
+      },
+      {
+        "id": "VID-01",
+        "kind": "video",
+        "model": "seedance-2.5",
+        "criticality": "P1",
+        "durationSeconds": 12,
+        "title": "<本仓生视频任务：门店空镜/产品镜头>",
+        "prompt": "<提示词>",
+        "durationRange": [10, 15]
+      },
+      {
+        "id": "PROD-01",
+        "kind": "product",
+        "criticality": "P0",
+        "title": "<经产品入口派单的交付链任务>",
+        "input": "<派单标题；含交付物与截止>",
+        "presetKey": "<岗位 preset_key>",
+        "workspaceSlug": "<本仓演示工作区>",
+        "state_asserts": [
+          { "http": { "url": "http://127.0.0.1:8787/health", "status": 200 } }
+        ]
+      }
+    ],
+    "notes": "P 域生产实测：每个内置模型 ≥1 条真实任务；生图/生视频按张、按秒硬计量（图 ≤8 张、视频 ≤3 段且各 10–15s、总 ≤45s）。凭据经环境变量或秘密存储注入，禁止写进 profile 或仓库。"
+  },
   "journeys": [
     { "id": "EXP-01", "persona": "owner", "title": "首启看到价值与待拍板", "script": "builtin:first-value" },
     { "id": "EXP-02", "persona": "owner", "title": "审批三手势写回", "script": "builtin:approval" },

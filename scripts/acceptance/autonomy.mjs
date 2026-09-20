@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * autonomy.mjs · O4 自主交付率（ADR）/ 人工介入率（HIR）计算（RDAS v3.0）
+ * autonomy.mjs · O4 自主交付率（ADR）/ 人工介入率（HIR）计算（RDAS v3.1）
  *
  * 数据源四合一：threads（交付件）+ approvals（人审/修正/驳回）+ biz_events（人类动作/回执线索）+ c_tickets（返工线索）。
  * 产出：autonomy-report.{json,md}，含 ADR-0/1/2、HIR、HIR-NI、H3+H4、HMPO 估算、Wilson CI、夹具过滤、
@@ -225,7 +225,7 @@ try {
 
   const report = {
     at: new Date().toISOString(),
-    spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.0",
+    spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1",
     workspace: { id: wsRow.id, slug: wsRow.slug, bundle: wsRow.bundle_id },
     window: { since: SINCE, until: new Date().toISOString() },
     filters: { patterns: FILTERS, rawThreads: allThreads.length, fixtureThreads: fixtureThreads.length, rawApprovals: allApprovals.length, fixtureApprovals: fixtureApprovals.length },
@@ -253,7 +253,7 @@ try {
 
   const fmtRate = (r) => (r?.p == null ? "n/a" : `${(r.p * 100).toFixed(1)}% (${(r.lo * 100).toFixed(1)}–${(r.hi * 100).toFixed(1)}%, n=${r.n})`);
   const md = [
-    "# ADR / HIR 自主交付报告（RDAS v3.0）", "",
+    "# ADR / HIR 自主交付报告（RDAS v3.1）", "",
     `- 工作区：${wsRow.slug}（${wsRow.id}）｜窗口：${SINCE ?? "全部"} → ${report.window.until}｜生成：${report.at}`,
     `- 原始 threads ${allThreads.length}（夹具 ${fixtureThreads.length}）；原始 approvals ${allApprovals.length}（夹具 ${fixtureApprovals.length}）`,
     `- profile 告警：${profileWarnings.join("；") || "无"}`, "",

@@ -6,6 +6,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { DEFAULT_ENVIRONMENT, ENVIRONMENT_KINDS } from "./target.mjs";
+import { LIVE_BUDGET_CAPS, normalizeBudgets } from "./live/budget.mjs";
 
 export const PROFILE_SCHEMA = "workloom.acceptance-profile/v2";
 export const LEGACY_PROFILE_SCHEMAS = ["workloom.acceptance-profile/v1"];
@@ -95,6 +97,23 @@ export const DEFAULT_AUTONOMY = {
 };
 export const DEFAULT_SOAK = { hours: [24, 168, 672], metrics: ["success", "latency", "cost", "drift"] };
 
+/**
+ * v3.1：生产实测默认骨架（P 域）。
+ * `enabled: false` 表示本仓尚未声明真实模型任务——验收器会写「未验证」，不会伪造通过。
+ * 模型清单与任务矩阵由各仓按自己的行业语义填写（基座只给内置三模型与硬上限）。
+ */
+export const DEFAULT_LIVE = {
+  enabled: false,
+  requireRealModels: false,
+  allowDb: false,
+  budgets: { ...LIVE_BUDGET_CAPS },
+  models: [],
+  tasks: [],
+  notes: "",
+};
+
+export const LIVE_BUDGET_FLOORS = LIVE_BUDGET_CAPS;
+
 export function findRepoRoot(start = process.cwd()) {
   let dir = resolve(start);
   for (let i = 0; i < 6; i += 1) {
@@ -133,6 +152,8 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
         outcome: { ...DEFAULT_OUTCOME },
         autonomy: { ...DEFAULT_AUTONOMY },
         soak: { ...DEFAULT_SOAK },
+        environment: { ...DEFAULT_ENVIRONMENT },
+        live: { ...DEFAULT_LIVE },
         journeys: DEFAULT_BUILTIN_JOURNEYS,
         notes: "",
       },
@@ -161,10 +182,25 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
     }
   }
   const journeys = Array.isArray(raw.journeys) && raw.journeys.length ? raw.journeys : DEFAULT_BUILTIN_JOURNEYS;
+  const environment = { ...DEFAULT_ENVIRONMENT, ...(raw.environment ?? {}) };
+  if (!ENVIRONMENT_KINDS.includes(environment.kind)) {
+    warnings.push(`environment.kind=${environment.kind} 非法（可选 ${ENVIRONMENT_KINDS.join("/")}），已回落 ${DEFAULT_ENVIRONMENT.kind}`);
+    environment.kind = DEFAULT_ENVIRONMENT.kind;
+  }
+  const live = { ...DEFAULT_LIVE, ...(raw.live ?? {}) };
+  const normalizedBudgets = normalizeBudgets({ ...DEFAULT_LIVE.budgets, ...(raw.live?.budgets ?? {}) });
+  live.budgets = normalizedBudgets.budgets;
+  warnings.push(...normalizedBudgets.warnings);
+  if (live.enabled && !Array.isArray(live.tasks)) {
+    warnings.push("live.enabled=true 但 live.tasks 不是数组：P 域将按未配置处理（未验证）");
+    live.tasks = [];
+  }
   const profile = {
     ...raw,
     thresholds,
     journeys,
+    environment,
+    live,
     startup: { command: "pnpm preview:all", ports: { pc: 3000, bMobile: 3001, cMobile: 3002, server: 8787 }, ...(raw.startup ?? {}) },
     identity: { human: "MEM-001", workspaceSlug: null, guest: "demo-direct", ...(raw.identity ?? {}) },
     surfaces: { pcRoutes: ["/"], bMobileRoutes: ["/"], cRoutes: ["#chat"], ...(raw.surfaces ?? {}) },
@@ -179,12 +215,28 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
 }
 
 export function urlsOf(profile) {
+  /**
+   * v3.1：环境档位优先——生产/客户端档位必须打真实目标地址，
+   * 只有 local-preview 才回落到本机端口。禁止用本机端口冒充生产目标。
+   */
+  const target = profile?.environment?.target ?? {};
+  if (target.pcUrl || target.apiUrl || target.cMobileUrl || target.bMobileUrl) {
+    const ports = profile?.startup?.ports ?? { pc: 3000, bMobile: 3001, cMobile: 3002, server: 8787 };
+    return {
+      pc: target.pcUrl ?? `http://localhost:${ports.pc}`,
+      bMobile: target.bMobileUrl ?? `http://localhost:${ports.bMobile}`,
+      cMobile: target.cMobileUrl ?? `http://localhost:${ports.cMobile}`,
+      api: target.apiUrl ?? `http://127.0.0.1:${ports.server}`,
+      environmentKind: profile?.environment?.kind ?? "local-preview",
+    };
+  }
   const p = profile.startup.ports;
   return {
     pc: `http://localhost:${p.pc}`,
     bMobile: `http://localhost:${p.bMobile}`,
     cMobile: `http://localhost:${p.cMobile}`,
     api: `http://127.0.0.1:${p.server}`,
+    environmentKind: profile?.environment?.kind ?? "local-preview",
   };
 }
 

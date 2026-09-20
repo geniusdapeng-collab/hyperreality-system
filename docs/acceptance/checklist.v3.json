@@ -1,14 +1,15 @@
 {
  "schemaVersion": "workloom.acceptance-checklist/v3",
  "spec": "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md",
- "specVersion": "rdas/v3.0",
- "generatedFrom": "RDAS v2.0（117 项，原样保留）+ v3.0 新增 U/O/ADR/L16/M（141 项）+ 陷阱 T-19–T-50",
+ "specVersion": "rdas/v3.1",
+ "generatedFrom": "RDAS v2.0（117 项，原样保留）+ v3.0 新增 U/O/ADR/L16/M（141 项）+ v3.1 新增 P 域生产实测（18 项）+ 陷阱 T-19–T-54",
  "howToUse": [
   "每轮验收逐条执行；不适用项必须写 'skip + 理由 + 补做时间 + 批准人'，禁止静默跳过。",
   "执行分层：T1 冒烟核心（每次发布前，约 2h）；T2 标准轮（1–2 人日）；T3 长跑/专项/季度。",
   "阈值只能收紧不能放宽；放宽需产品所有者批准并登记复验日期。",
   "v3.0 为 v2.0 超集：L0–L15 条目保留；v3 新增条目只增不删。",
-  "红线判定不得只用 LLM 评审；业务结果结论必须 A 级证据。"
+  "红线判定不得只用 LLM 评审；业务结果结论必须 A 级证据。",
+  "v3.1 新增 P 域（生产实测）：只有 environment.kind ∈ {client-runtime, deployed} 且内置模型真实触发、回执与配额台账齐备时，P 域才能判通过；本机预览（LLM_PROVIDER=mock）下 P 域只能写“未验证”。"
  ],
  "severities": {
   "P0": "阻断：主线不可用/数据损坏/治理失效/泄密",
@@ -17,12 +18,13 @@
   "P3": "建议"
  },
  "totals": {
-  "all": 258,
+  "all": 276,
   "v2": 117,
   "v3new": 141,
+  "v3_1new": 18,
   "byTier": {
-   "T2": 191,
-   "T1": 44,
+   "T2": 201,
+   "T1": 52,
    "T3": 23
   },
   "byLayer": {
@@ -62,9 +64,13 @@
    "O8": 5,
    "O9": 5,
    "ADR": 16,
-   "L16": 6
+   "L16": 6,
+   "P0": 4,
+   "P1": 4,
+   "P2": 6,
+   "P3": 4
   },
-  "traps": 50
+  "traps": 54
  },
  "items": [
   {
@@ -4945,6 +4951,258 @@
    "specVersion": "rdas/v3.0",
    "tier": "T3",
    "estMinutes": 12
+  },
+  {
+   "id": "P0-01",
+   "layer": "P0",
+   "title": "验收档位声明与目标指纹：environment.kind ∈ {client-runtime, deployed} 且目标地址显式声明",
+   "method": "script:live",
+   "evidence": "live/live-report.json#fingerprint",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 3
+  },
+  {
+   "id": "P0-02",
+   "layer": "P0",
+   "title": "目标可达性与身份：生产 server /health 与客户端 payload VERSION / install-state 可核验",
+   "method": "script:live",
+   "evidence": "live/live-report.json#fingerprint.targetProbe",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 3
+  },
+  {
+   "id": "P0-03",
+   "layer": "P0",
+   "title": "生产只读纪律：不跑迁移/种子复位与夹具写入；任何写入需显式授权、夹具标记与残留披露",
+   "method": "script+manual",
+   "evidence": "live-report.json#environment + fleet-run 日志",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script+manual",
+   "owner": "验收执行者 + 仓负责人",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 5
+  },
+  {
+   "id": "P0-04",
+   "layer": "P0",
+   "title": "凭据与秘密边界：凭据只从环境/秘密存储解析；报告只出「已配置/缺失 + 掩码」，任何密钥不落盘",
+   "method": "script+manual",
+   "evidence": "live-report.json#models + 秘密扫描",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script+manual",
+   "owner": "验收执行者 + 安全 owner",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 5
+  },
+  {
+   "id": "P1-01",
+   "layer": "P1",
+   "title": "内置模型清单与版本固定：LLM/生图/生视频三类模型逐个记录 model id、端点、凭据来源与实际返回 model",
+   "method": "script:live",
+   "evidence": "live-report.json#models + receipts/*.json",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 5
+  },
+  {
+   "id": "P1-02",
+   "layer": "P1",
+   "title": "DeepSeek Harness（dsh）版本与适配器固定：锁版号 + deepseek-official 路由 + 内置目录（deepseek-flash 支持文本与图像）",
+   "method": "script:live",
+   "evidence": "live-report.json#fingerprint.dsh + dsh patch 快照",
+   "severity": "P1",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 5
+  },
+  {
+   "id": "P1-03",
+   "layer": "P1",
+   "title": "降级与换模可见：真实调用失败时的降级链留痕，实际 model id 记录，禁止静默换模型",
+   "method": "script+manual",
+   "evidence": "receipts + 事件账本",
+   "severity": "P1",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script+manual",
+   "owner": "验收执行者 + 领域 owner",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 8
+  },
+  {
+   "id": "P1-04",
+   "layer": "P1",
+   "title": "成本口径与单价冻结：按 token/张/秒的单价与用量台账可复算；估算值与账单区分标注",
+   "method": "script",
+   "evidence": "live/budget-summary.json + budget-ledger.jsonl",
+   "severity": "P2",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 5
+  },
+  {
+   "id": "P2-01",
+   "layer": "P2",
+   "title": "LLM 推理任务真实触发：内置推理模型完成任务且答案满足预声明判定，回执齐全",
+   "method": "script:live",
+   "evidence": "live/transcripts/LLM-*.json + receipts",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 10
+  },
+  {
+   "id": "P2-02",
+   "layer": "P2",
+   "title": "多模态理解任务真实触发：图片输入到达模型，回答含图内可核验内容（不是纯文本占位）",
+   "method": "script:live",
+   "evidence": "live/transcripts/LLM-M*.json",
+   "severity": "P1",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 10
+  },
+  {
+   "id": "P2-03",
+   "layer": "P2",
+   "title": "工具循环任务真实触发：工具调用过围栏瀑布判定，session/event 落哈希链且链验证通过",
+   "method": "script:live",
+   "evidence": "live/transcripts/LLM-T*.json（fenceHits + audit.chain）",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 12
+  },
+  {
+   "id": "P2-04",
+   "layer": "P2",
+   "title": "生图任务真实触发（配额内）：出图张数达标、产物可下载、回执含 URL 与元数据",
+   "method": "script:live",
+   "evidence": "live/artifacts/*.png + receipts/IMG-*.json",
+   "severity": "P1",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 15
+  },
+  {
+   "id": "P2-05",
+   "layer": "P2",
+   "title": "生视频任务真实触发（配额内）：出片成功、时长落在 10–15s、产物可下载、回执含 task_id/URL",
+   "method": "script:live",
+   "evidence": "live/artifacts/*.mp4 + receipts/VID-*.json",
+   "severity": "P1",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 20
+  },
+  {
+   "id": "P2-06",
+   "layer": "P2",
+   "title": "产品派单链路：经产品自身入口派单，用环境状态/回执判分，假成功直接红线候选",
+   "method": "script:live",
+   "evidence": "live/transcripts/PROD-*.json（asserts + falseSuccess）",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 20
+  },
+  {
+   "id": "P3-01",
+   "layer": "P3",
+   "title": "配额硬上限 fail-closed：生图≤8 张、视频≤3 段且各 10–15s、总秒≤45、LLM 调用/token/成本上限，超限即中止并留痕",
+   "method": "script:live",
+   "evidence": "live/budget-summary.json + budget-ledger.jsonl",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 5
+  },
+  {
+   "id": "P3-02",
+   "layer": "P3",
+   "title": "产物与证据归档：artifacts / receipts / transcripts / 账本齐备且可校验，报告附证据索引",
+   "method": "script",
+   "evidence": "live/** + evidence-index.json",
+   "severity": "P1",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 8
+  },
+  {
+   "id": "P3-03",
+   "layer": "P3",
+   "title": "未验证不得写通过：凭据缺失/目标不可达 → blocked；O/P 域只能写“未验证/结构合规”",
+   "method": "script",
+   "evidence": "live-report.json#verdict + report-v3 判定",
+   "severity": "P0",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T1",
+   "estMinutes": 5
+  },
+  {
+   "id": "P3-04",
+   "layer": "P3",
+   "title": "失败与额度拦下逐条披露：失败任务、被配额拦下的任务、未覆盖模型不得静默跳过",
+   "method": "script",
+   "evidence": "live-report.json#summary + 报告第五节",
+   "severity": "P1",
+   "applies": ["base", "platform", "industry", "experiment"],
+   "automation": "script",
+   "owner": "验收执行者（script）",
+   "specVersion": "rdas/v3.1",
+   "tier": "T2",
+   "estMinutes": 5
   }
  ],
  "trapChecks": [
@@ -5247,6 +5505,30 @@
    "title": "分母注水/去重缺失",
    "check": "最小实质标准 + 去重 + 抽检",
    "ref": "spec §13 T-50"
+  },
+  {
+   "id": "T-51",
+   "title": "本机预览冒充生产验收",
+   "check": "environment.kind + 目标指纹 + provider 非 mock + 目标可达性",
+   "ref": "spec §13 T-51"
+  },
+  {
+   "id": "T-52",
+   "title": "内置模型“配置了”却没被任务触发过",
+   "check": "每个模型 ≥1 个真实任务 + 回执 + 产物",
+   "ref": "spec §13 T-52"
+  },
+  {
+   "id": "T-53",
+   "title": "生成任务超配额/成本失控",
+   "check": "预算闸 + 台账 + 超限 fail-closed",
+   "ref": "spec §13 T-53"
+  },
+  {
+   "id": "T-54",
+   "title": "只拿到 task_id 就写“出片成功”",
+   "check": "产物落盘 + URL 可下载 + 时长/张数核验",
+   "ref": "spec §13 T-54"
   }
  ]
 }

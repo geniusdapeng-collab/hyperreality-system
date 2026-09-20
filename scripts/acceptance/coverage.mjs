@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * coverage.mjs · 检查单覆盖率与证据映射（RDAS v3.0）
+ * coverage.mjs · 检查单覆盖率与证据映射（RDAS v3.1）
  *
  * 读取 checklist.v3.json 与 outputs/acceptance/** 产物，给出逐条状态：
  *   pass / fail / evidence-present / not-run / manual-missing
@@ -33,6 +33,7 @@ const autonomy = readJson(join(ROOT, "autonomy", "autonomy-report.json"));
 const redteam = readJson(join(ROOT, "redteam", "redteam-report.json"));
 const soak = readJson(join(ROOT, "soak", "soak-report.json"));
 const regression = readJson(join(ROOT, "regression", "summary.json"));
+const live = readJson(join(ROOT, "live", "live-report.json"));
 
 const manual = (id, pass, note, evidence) => ({ id, status: pass === true ? "pass" : pass === false ? "fail" : "evidence-present", note: note ?? "人工证据", evidence: evidence ?? [] });
 const expCheck = (id) => (experience?.checks ?? []).find((c) => c.id === id);
@@ -95,6 +96,100 @@ function statusOf(item) {
   if (["O7-03", "O7-06", "O7-07", "ADR-03", "ADR-04", "ADR-05", "ADR-06", "ADR-07", "ADR-08", "ADR-10", "ADR-11", "ADR-12", "ADR-14"].includes(id)) return autonomy ? { id, status: "evidence-present", note: `autonomy N=${autonomy.overall?.delivered?.n ?? "?"}`, evidence: ["autonomy/autonomy-report.json"] } : { id, status: "not-run", note: "缺 autonomy-report.json", evidence: [] };
   if (id === "O6-06") return redteam ? { id, status: redteam.findings?.length ? "fail" : "evidence-present", note: `redteam cases=${redteam.cases?.length ?? "?"}`, evidence: ["redteam/redteam-report.json"] } : { id, status: "not-run", note: "缺 redteam-report.json", evidence: [] };
   if (layer === "O5") return soak ? { id, status: "evidence-present", note: `soak samples=${soak.samples?.length ?? "?"}`, evidence: ["soak/soak-report.json"] } : { id, status: "not-run", note: "缺 soak-report.json", evidence: [] };
+  /* ---------- v3.1：P 域生产实测（live/live-report.json） ---------- */
+  if (layer.startsWith("P")) {
+    if (!live) return { id, status: "not-run", note: "缺 live/live-report.json（未跑生产实测）", evidence: [] };
+    const tasks = live.tasks ?? [];
+    const byId = (tid) => tasks.find((t) => t.id === tid);
+    const anyOk = (pred) => tasks.some((t) => t.status === "ok" && pred(t));
+    const anyFail = (pred) => tasks.some((t) => t.status === "failed" && pred(t));
+    const selftestNote = live.selftest ? "（selftest：非生产实测证据）" : "";
+    const production = live.environment?.kind && live.environment.kind !== "local-preview";
+    switch (id) {
+      case "P0-01": {
+        const ok = Boolean(production && live.fingerprint?.environmentKind === live.environment.kind);
+        return {
+          id,
+          status: ok ? "pass" : production ? "fail" : "not-run",
+          note: `environment.kind=${live.environment?.kind ?? "?"} declaredTarget=${live.environment?.declaredTarget}${selftestNote}`,
+          evidence: ["live/live-report.json"],
+        };
+      }
+      case "P0-02": {
+        const ok = live.fingerprint?.targetProbe?.ok === true;
+        const failedChecks = (live.fingerprint?.targetProbe?.checks ?? []).filter((c) => !c.ok).map((c) => c.name).join(",");
+        return {
+          id,
+          status: ok ? "pass" : production ? "fail" : "not-run",
+          note: `目标探测：${failedChecks || "全绿"}${selftestNote}`,
+          evidence: ["live/live-report.json"],
+        };
+      }
+      case "P0-03": {
+        const ok = live.environment?.isProduction ? live.environment.allowWrites === false : true;
+        return { id, status: ok ? (production ? "pass" : "evidence-present") : "fail", note: `production=${live.environment?.isProduction} allowWrites=${live.environment?.allowWrites}`, evidence: ["live/live-report.json"] };
+      }
+      case "P0-04": {
+        const models = live.models ?? [];
+        const note = models.map((m) => `${m.id}:${m.ready ? "就绪" : "缺凭据"}(${m.credentialEnv ?? "—"})`).join("；");
+        return { id, status: "evidence-present", note: note || "未声明模型", evidence: ["live/live-report.json"] };
+      }
+      case "P1-01": {
+        const models = live.models ?? [];
+        const ok = models.length > 0 && models.every((m) => m.model);
+        return { id, status: ok ? "pass" : "fail", note: `${models.length} 个模型：${models.map((m) => `${m.id}→${m.model ?? "?"}`).join("；")}${selftestNote}`, evidence: ["live/live-report.json", "live/receipts/"] };
+      }
+      case "P1-02": {
+        const v = live.fingerprint?.dsh?.version ?? null;
+        return { id, status: v ? "pass" : "fail", note: `dsh=${v ?? "未固定"}`, evidence: ["live/live-report.json"] };
+      }
+      case "P1-03":
+        return { id, status: "evidence-present", note: "降级链留痕需人工复核 receipts 与实际 model id", evidence: ["live/receipts/"] };
+      case "P1-04":
+        return { id, status: live.budget ? "evidence-present" : "not-run", note: `预算台账：${live.budget ? `已用 ¥${live.budget.used?.costCny}` : "缺"}（估算值，账单另行对账）`, evidence: ["live/budget-summary.json"] };
+      case "P2-01": {
+        const has = tasks.some((t) => t.kind === "llm");
+        const ok = anyOk((t) => t.kind === "llm");
+        const blockedOnly = tasks.filter((t) => t.kind === "llm").every((t) => t.status === "blocked");
+        return { id, status: !has ? "not-run" : ok ? "pass" : blockedOnly ? "not-run" : "fail", note: `LLM 任务 ${tasks.filter((t) => t.kind === "llm").length} 个${selftestNote}`, evidence: ["live/transcripts/"] };
+      }
+      case "P2-02": {
+        const m = tasks.filter((t) => /M\d|多模态|multimodal/i.test(`${t.id} ${t.title ?? ""}`));
+        const blockedOnly = m.length > 0 && m.every((t) => t.status === "blocked");
+        return { id, status: m.length ? (m.some((t) => t.status === "ok") ? "pass" : blockedOnly ? "not-run" : "fail") : "not-run", note: `多模态任务 ${m.length} 个${selftestNote}`, evidence: ["live/transcripts/"] };
+      }
+      case "P2-03": {
+        const t = tasks.find((x) => (x.fenceHits ?? []).length > 0 || x.audit?.chain?.ok);
+        return { id, status: t && t.audit?.chain?.ok ? "pass" : t ? "fail" : "not-run", note: t ? `工具调用 ×${(t.fenceHits ?? []).length}，账本链 ${t.audit?.chain?.ok ? "验证通过" : "未验证"}` : "无工具循环任务", evidence: ["live/transcripts/"] };
+      }
+      case "P2-04": {
+        const img = tasks.filter((t) => t.kind === "image");
+        return { id, status: img.length ? (anyOk((t) => t.kind === "image") ? "pass" : anyFail((t) => t.kind === "image") ? "fail" : "not-run") : "not-run", note: `生图任务 ${img.length} 个；图片 ${live.budget?.used?.images ?? 0} 张${selftestNote}`, evidence: ["live/artifacts/"] };
+      }
+      case "P2-05": {
+        const vid = tasks.filter((t) => t.kind === "video");
+        return { id, status: vid.length ? (anyOk((t) => t.kind === "video") ? "pass" : anyFail((t) => t.kind === "video") ? "fail" : "not-run") : "not-run", note: `生视频任务 ${vid.length} 个；视频 ${live.budget?.used?.videoClips ?? 0} 段/${live.budget?.used?.videoSeconds ?? 0}s${selftestNote}`, evidence: ["live/artifacts/"] };
+      }
+      case "P2-06": {
+        const prod = tasks.filter((t) => t.kind === "product");
+        if (!prod.length) return { id, status: "not-run", note: "未声明产品派单任务", evidence: [] };
+        const blockedOnly = prod.every((t) => t.status === "blocked" || t.status === "skipped");
+        return { id, status: prod.some((t) => t.status === "ok") ? "pass" : blockedOnly ? "not-run" : "fail", note: `产品派单 ${prod.length} 个`, evidence: ["live/transcripts/"] };
+      }
+      case "P3-01": {
+        const b = live.budget;
+        return { id, status: b ? "pass" : "not-run", note: b ? `图 ${b.used.images}/${b.budgets.maxImages}；视频 ${b.used.videoClips}/${b.budgets.maxVideoClips} 段、${b.used.videoSeconds}/${b.budgets.maxVideoSecondsTotal}s；拦下 ${b.blocked?.length ?? 0} 项` : "缺预算台账", evidence: ["live/budget-summary.json"] };
+      }
+      case "P3-02":
+        return { id, status: "evidence-present", note: "产物目录：live/{artifacts,receipts,transcripts,budget-*}（校验和见 evidence-index）", evidence: ["live/"] };
+      case "P3-03":
+        return { id, status: "evidence-present", note: `live.verdict=${live.verdict}（blocked 不得写通过；最终判定见 report-v3）`, evidence: ["live/live-report.json"] };
+      case "P3-04":
+        return { id, status: "evidence-present", note: `blocked=${(live.summary?.blockedIds ?? []).join(",") || "无"}；failed=${(live.summary?.failedIds ?? []).join(",") || "无"}`, evidence: ["live/live-report.json"] };
+      default:
+        return { id, status: live ? "evidence-present" : "not-run", note: "P 域条目：见 live-report.json", evidence: ["live/live-report.json"] };
+    }
+  }
   // L6–L16 script 项：用回归命令存在性做弱映射
   if ((layer.startsWith("L") || layer === "L16") && item.automation === "script") {
     if (regOk("db:verify-chain") || regOk("suite") || regOk("typecheck") || regOk("release:gate")) return { id, status: "evidence-present", note: "回归命令存在（未逐项判定）", evidence: ["regression/summary.json"] };
@@ -121,7 +216,7 @@ const summary = {
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(summary, null, 1));
 
-const md = ["# RDAS v3.0 覆盖率报告", "", `- 检查单：${summary.checklist}｜产物根：${summary.root}｜生成：${summary.at}`, `- 状态分布：${JSON.stringify(summary.totals.byStatus)}`, "", "| Tier | 总数 | pass | fail | not-run | manual-missing |", "|---|---:|---:|---:|---:|---:|"];
+const md = ["# RDAS v3.1 覆盖率报告", "", `- 检查单：${summary.checklist}｜产物根：${summary.root}｜生成：${summary.at}`, `- 状态分布：${JSON.stringify(summary.totals.byStatus)}`, "", "| Tier | 总数 | pass | fail | not-run | manual-missing |", "|---|---:|---:|---:|---:|---:|"];
 for (const [t, v] of Object.entries(summary.totals.byTier).sort()) md.push(`| ${t} | ${v.total} | ${v.pass} | ${v.fail} | ${v.notRun} | ${v.manualMissing} |`);
 md.push("", "## T1 未通过/未执行（冒烟阻断候选）", "");
 if (!summary.notRunT1.length) md.push("无。");
