@@ -9,13 +9,18 @@
  *   node scripts/acceptance/fleet-run.mjs --repo WorkLoom-growth --db workloom_growth
  *   [--fleet-dir ~/WorkLoom-fleet] [--skip-install] [--skip-seed] [--skip-regression] [--keep-running]
  *   [--regression "suite,suite:hotel,db:verify-chain,typecheck"] [--timeout-min 40]
+ *   [--env local-preview|client-runtime|deployed] [--live] [--live-only] [--require-live] [--allow-prod-writes]
  *
  * 纪律：只跑本机克隆（不改远端）；`.env` 只在缺失时生成、不覆盖既有；预览进程跑完必关（--keep-running 除外）。
+ * v3.1 纪律（生产实测）：`--env client-runtime|deployed` 时不装依赖、不迁移种子、不起本机预览、不关停目标端口，
+ *   只做「目标探测 → P 域生产实测 → 覆盖率/报告」；任何写入必须显式 `--allow-prod-writes`。
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { loadProfile } from "./lib/profile.mjs";
+import { resolveEnvironment, probeEnvironment } from "./lib/target.mjs";
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -39,6 +44,12 @@ const KEEP_RUNNING = has("--keep-running");
 const TIMEOUT_MIN = Number(arg("--timeout-min", "40"));
 const WITH_REDTEAM = has("--with-redteam");
 const SOAK_HOURS = arg("--soak-hours", null);
+const ENV_KIND = arg("--env", null);
+const LIVE = has("--live");
+const LIVE_ONLY = has("--live-only");
+const REQUIRE_LIVE = has("--require-live");
+const ALLOW_PROD_WRITES = has("--allow-prod-writes");
+const PRODUCTION = Boolean(ENV_KIND) && ENV_KIND !== "local-preview";
 const PORTS = { pc: 3000, bMobile: 3001, cMobile: 3002, server: 8787 };
 
 if (!existsSync(join(REPO_DIR, "package.json"))) {
@@ -47,7 +58,7 @@ if (!existsSync(join(REPO_DIR, "package.json"))) {
 }
 
 const log = (msg) => console.log(`[fleet-run:${REPO}] ${msg}`);
-const state = { repo: REPO, repoDir: REPO_DIR, startedAt: new Date().toISOString(), steps: {}, ok: true, notes: [] };
+const state = { repo: REPO, repoDir: REPO_DIR, startedAt: new Date().toISOString(), steps: {}, ok: true, notes: [], environment: { kind: ENV_KIND ?? "local-preview", production: PRODUCTION, allowWrites: ALLOW_PROD_WRITES } };
 const fail = (step, detail) => { state.ok = false; state.steps[step] = { ok: false, detail: String(detail).slice(0, 800) }; log(`✗ ${step}：${String(detail).slice(0, 200)}`); };
 const pass = (step, detail) => { state.steps[step] = { ok: true, detail: String(detail ?? "ok").slice(0, 800) }; log(`✓ ${step}`); };
 
@@ -100,7 +111,10 @@ try {
 } catch (err) { fail("prepare", err.message); }
 
 /* ------------------------------ 1. 依赖 ------------------------------ */
-if (!SKIP_INSTALL) {
+if (PRODUCTION) {
+  state.notes.push("生产档位：跳过依赖安装（不改变被测环境与仓库状态）");
+  pass("install", "生产档位跳过（不装依赖）");
+} else if (!SKIP_INSTALL) {
   try {
     const needs = !existsSync(join(REPO_DIR, "node_modules", ".bin", "tsx"));
     if (needs) {
@@ -116,7 +130,10 @@ if (!SKIP_INSTALL) {
 }
 
 /* ------------------------------ 2. .env ------------------------------ */
-try {
+if (PRODUCTION) {
+  state.notes.push("生产档位：不改写仓库 .env（LLM/凭据口径以目标环境指纹为准）");
+  pass("env", "生产档位跳过（不改写 .env）");
+} else try {
   const envPath = join(REPO_DIR, ".env");
   if (existsSync(envPath)) {
     /**
@@ -195,8 +212,19 @@ try {
   }
 } catch (err) { fail("env", err.message); }
 
+/**
+ * .env 冻结护栏快照点（2026-09-20 真机验收实战）：
+ * 回归套件/走查探针会触发「落地向导写回」，把仓库 .env 的 LLM 四件套改写成 mock——
+ * 快照必须在这里（所有会写 .env 的步骤之前）拍，否则被污染的 mock 值会被当"运行前状态"。
+ */
+const envSnapshotPath = join(REPO_DIR, ".env");
+const envSnapshot = existsSync(envSnapshotPath) ? readFileSync(envSnapshotPath, "utf-8") : null;
+
 /* ------------------------------ 3. 迁移 + 种子 ------------------------------ */
-if (!SKIP_SEED && state.steps.env?.ok !== false) {
+if (PRODUCTION) {
+  state.notes.push("生产档位：禁止迁移与种子复位（只增不改 / 不许污染被验环境）");
+  pass("seed", "生产档位跳过（不迁移、不种子）");
+} else if (!SKIP_SEED && state.steps.env?.ok !== false) {
   const pkg = JSON.parse(readFileSync(join(REPO_DIR, "package.json"), "utf-8"));
   const scripts = pkg.scripts ?? {};
   const bundleDirOf = (name) => {
@@ -270,7 +298,10 @@ async function startPreview() {
  * 套件会撞端口给出 net 层报错（基座首轮实测：suite 假失败 exit 1 `emitErrorNT`）。
  */
 /* ------------------------------ 4.1 回归（先于预览） ------------------------------ */
-if (!SKIP_REGRESSION) {
+if (PRODUCTION) {
+  state.notes.push("生产档位：跳过本机回归套件与 release:gate（它们是本机预览口径；生产证据以 P 域实测与目标探测为准）");
+  pass("regression", "生产档位跳过（本机回归不适用于生产目标）");
+} else if (!SKIP_REGRESSION) {
   const pkg = JSON.parse(readFileSync(join(REPO_DIR, "package.json"), "utf-8"));
   const scripts = pkg.scripts ?? {};
   // release:gate 打的是 http://localhost:8787，必须等预览起来后再跑（见 6.1）；这里只跑不依赖 server 的部分
@@ -292,7 +323,19 @@ if (!SKIP_REGRESSION) {
 }
 
 /* ------------------------------ 5. 起真机 + 真机验收四件套 ------------------------------ */
-await startPreview();
+if (PRODUCTION) {
+  // 生产档位：不起本机预览，改为探测真实目标（客户端运行时 / 部署地址）
+  try {
+    const { profile } = loadProfile(REPO_DIR);
+    const env = resolveEnvironment(profile, { flag: ENV_KIND, allowProdWrites: ALLOW_PROD_WRITES });
+    const probeResult = await probeEnvironment({ env, timeoutMs: env.timeouts.healthMs });
+    if (!probeResult.ok) throw new Error(`目标不可达：${JSON.stringify(probeResult.checks.filter((c) => !c.ok).map((c) => c.name))}`);
+    pass("preview", `生产目标可达（${env.urls.api}）`);
+    state.target = { kind: env.kind, urls: env.urls, supportDir: env.supportDir, checks: probeResult.checks.map((c) => ({ name: c.name, ok: c.ok, status: c.status ?? null })) };
+  } catch (err) { fail("preview", err.message); }
+} else {
+  await startPreview();
+}
 /**
  * 子仓不会拿到根 package.json（base-sync 只发 scripts/** 等受控资产），
  * 所以这里**直接调执行器**，不依赖 `pnpm acceptance:*` 脚本入口；
@@ -335,13 +378,50 @@ let profileNote = "(未执行)";
 try { profileNote = ensureProfile(); pass("profile", profileNote); } catch (err) { fail("profile", err.message); }
 
 const tsxBin = join(REPO_DIR, "node_modules", ".bin", "tsx");
-const acceptance = [
+
+/**
+ * 依赖 server 的门禁：必须在**探针之前**跑（2026-09-20 真机验收修复）。
+ * release:gate 自己会 dispatch ASK×2 + QUEST×1（占 L3.1 并发位）；走查/体验/红队探针也会各派
+ * 一两条，而演示库没有调度器消化它们——门禁跑在探针之后时工作区已卡在 10 条并发上限，
+ * 必然自锁报「并发上限 10/工作区」（实测 8/11，ASKeQUEST 三条主链路全红）。前移即拿干净并发位。
+ */
+if (!PRODUCTION && !SKIP_REGRESSION && state.steps.preview?.ok) {
+  const pkg = JSON.parse(readFileSync(join(REPO_DIR, "package.json"), "utf-8"));
+  const scripts = pkg.scripts ?? {};
+  for (const name of ["release:gate"].filter((k) => scripts[k])) {
+    const res = run("pnpm", [name], { allowFail: true, timeoutMs: 30 * 60_000 });
+    const last = res.out.split("\n").filter((l) => l.trim()).slice(-3).join(" ");
+    state.regression = state.regression ?? {};
+    state.regression[name] = res.status === 0 ? `通过（${last.slice(0, 160)}）` : `失败 exit=${res.status}：${last.slice(0, 200)}`;
+    log(`${res.status === 0 ? "✓" : "✗"} 回归 ${name}（探针前）`);
+  }
+  mkdirSync(join(REPO_DIR, "outputs", "acceptance", "regression"), { recursive: true });
+  writeFileSync(join(REPO_DIR, "outputs", "acceptance", "regression", "summary.json"), JSON.stringify({ commands: state.regression, at: new Date().toISOString() }, null, 1));
+}
+
+/**
+ * P 域生产实测（v3.1）：`--live` / `--env client-runtime|deployed` / profile.live.enabled 任一成立即跑。
+ * 生产档位下它是**唯一**的真实模型证据来源（本机预览的 mock 结果不算数）。
+ */
+const liveEnabled = LIVE || PRODUCTION || (() => {
+  try { return loadProfile(REPO_DIR).profile?.live?.enabled === true; } catch { return false; }
+})();
+const liveStep = ["live", [
+  process.execPath, "scripts/acceptance/live.mjs",
+  "--out", "outputs/acceptance/live",
+  ...(ENV_KIND ? ["--env", ENV_KIND] : []),
+  ...(REQUIRE_LIVE ? ["--require-live"] : []),
+  ...(ALLOW_PROD_WRITES ? ["--allow-prod-writes"] : []),
+], "scripts/acceptance/live.mjs"];
+
+const acceptanceAll = [
   ["matrix", existsSync(tsxBin)
     ? [tsxBin, "--env-file=.env", "scripts/acceptance/matrix.mts", "--out", "outputs/acceptance/matrix"]
     : [process.execPath, "scripts/acceptance/matrix.mts", "--out", "outputs/acceptance/matrix"], "scripts/acceptance/matrix.mts"],
   ["ui", [process.execPath, "scripts/acceptance/ui-probe.mjs", "--out", "outputs/acceptance/ui"], "scripts/acceptance/ui-probe.mjs"],
   ["experience", [process.execPath, "scripts/acceptance/experience.mjs", "--out", "outputs/acceptance/experience"], "scripts/acceptance/experience.mjs"],
   ["ux", [process.execPath, "scripts/acceptance/ux.mjs", "--out", "outputs/acceptance/ux"], "scripts/acceptance/ux.mjs"],
+  ...(liveEnabled ? [liveStep] : []),
   ["outcome", [process.execPath, "scripts/acceptance/outcome.mjs", "--out", "outputs/acceptance/outcome"], "scripts/acceptance/outcome.mjs"],
   ...(WITH_REDTEAM ? [["redteam", [process.execPath, "scripts/acceptance/redteam.mjs", "--out", "outputs/acceptance/redteam"], "scripts/acceptance/redteam.mjs"]] : []),
   ["autonomy", [process.execPath, "scripts/acceptance/autonomy.mjs", "--out", "outputs/acceptance/autonomy"], "scripts/acceptance/autonomy.mjs"],
@@ -349,8 +429,34 @@ const acceptance = [
   ["coverage", [process.execPath, "scripts/acceptance/coverage.mjs", "--root", "outputs/acceptance", "--out", "outputs/acceptance/coverage.json"], "scripts/acceptance/coverage.mjs"],
   ["report", [process.execPath, "scripts/acceptance/report-v3.mjs", "--root", "outputs/acceptance"], "scripts/acceptance/report-v3.mjs"],
 ];
+/** `--live-only`：只跑 P 域实测 + 覆盖率 + 报告（生产环境最常用的最小侵入档） */
+const acceptance = LIVE_ONLY
+  ? acceptanceAll.filter(([name]) => ["live", "coverage", "report"].includes(name))
+  : acceptanceAll;
+/**
+ * .env 冻结护栏（2026-09-20 真机验收实战）：
+ * 走查/向导类探针会触发「落地向导写回」把仓库 .env 的 LLM 四件套改写成 mock——
+ * 若不还原，指纹段与 O 域判定都会按 mock 口径落地（被测配置被验收过程改掉）。
+ * 这里在四件套探针跑完后立即恢复运行前快照，并把污染事实写进 state.notes（不得静默）。
+ */
+function restoreEnvSnapshotIfChanged() {
+  if (envSnapshot === null) return;
+  const now = readFileSync(envSnapshotPath, "utf-8");
+  if (now !== envSnapshot) {
+    writeFileSync(envSnapshotPath, envSnapshot);
+    state.notes.push("验收期间 .env 被探针改写，已恢复到运行前快照（LLM 四件套口径保持）");
+    log("⚠ 探针改写了 .env，已恢复运行前快照");
+  }
+}
+
 for (const [name, command, entry] of acceptance) {
-  if (state.steps.preview?.ok === false) { state.steps[name] = { ok: false, detail: "前置：真机未就绪，跳过" }; state.ok = false; continue; }
+  if (name === "coverage") restoreEnvSnapshotIfChanged();
+  /**
+   * 前置失败的跳过策略：依赖目标的探针（matrix/ui/experience/ux/outcome/autonomy/redteam/soak）跳过；
+   * 但 `live`（要落 blocked 证据）、`coverage`、`report` 必须继续跑——否则报告里连“未验证”都留不下。
+   */
+  const needsTarget = !["live", "coverage", "report"].includes(name);
+  if (needsTarget && state.steps.preview?.ok === false) { state.steps[name] = { ok: false, detail: "前置：目标未就绪，跳过" }; state.ok = false; continue; }
   try {
     if (!existsSync(join(REPO_DIR, entry))) {
       state.steps[name] = { ok: false, detail: `执行器缺失：${entry}（等待基座 full 波次分发）` };
@@ -366,23 +472,10 @@ for (const [name, command, entry] of acceptance) {
   } catch (err) { fail(name, err.message); }
 }
 
-/* ------------------------------ 6.1 回归（依赖 server 的部分，必须在预览之后） ------------------------------ */
-if (!SKIP_REGRESSION && state.steps.preview?.ok) {
-  const pkg = JSON.parse(readFileSync(join(REPO_DIR, "package.json"), "utf-8"));
-  const scripts = pkg.scripts ?? {};
-  for (const name of ["release:gate"].filter((k) => scripts[k])) {
-    const res = run("pnpm", [name], { allowFail: true, timeoutMs: 30 * 60_000 });
-    const last = res.out.split("\n").filter((l) => l.trim()).slice(-3).join(" ");
-    state.regression = state.regression ?? {};
-    state.regression[name] = res.status === 0 ? `通过（${last.slice(0, 160)}）` : `失败 exit=${res.status}：${last.slice(0, 200)}`;
-    log(`${res.status === 0 ? "✓" : "✗"} 回归 ${name}（预览后）`);
-  }
-  mkdirSync(join(REPO_DIR, "outputs", "acceptance", "regression"), { recursive: true });
-  writeFileSync(join(REPO_DIR, "outputs", "acceptance", "regression", "summary.json"), JSON.stringify({ commands: state.regression, at: new Date().toISOString() }, null, 1));
-}
-
 /* ------------------------------ 7. 关停 ------------------------------ */
-if (!KEEP_RUNNING) {
+if (PRODUCTION) {
+  pass("teardown", "生产档位不关停目标进程（只读纪律）");
+} else if (!KEEP_RUNNING) {
   killPorts();
   pass("teardown", "预览已关停");
   if (preview?.pid) { try { process.kill(-preview.pid, "SIGTERM"); } catch { /* 已退出 */ } }

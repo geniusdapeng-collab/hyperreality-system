@@ -1,6 +1,6 @@
-# <产品名> 真机验收报告（RDAS v3.0 · <轮次 R1/R2/R3> · <日期>）
+# <产品名> 真机验收报告（RDAS v3.1 · <轮次 R1/R2/R3/P> · <日期>）
 
-> 规范：`docs/REAL-DEVICE-ACCEPTANCE-SPEC.md`（rdas/v3.0）｜检查单：`docs/acceptance/checklist.v3.json`｜profile：`acceptance/profile.json`（v2）
+> 规范：`docs/REAL-DEVICE-ACCEPTANCE-SPEC.md`（rdas/v3.1）｜检查单：`docs/acceptance/checklist.v3.json`（276 项）｜profile：`acceptance/profile.json`（v2）
 > 被测版本：`<repo>@<commit SHA>`（分支 `<branch>`）｜工作区/租户：`<ws>`/`<tenant>`｜主包：`<bundle>`
 > 生成时间：`<ISO>`｜报告结论：**通过 / 条件通过 / 未验证 / 不通过**
 
@@ -9,6 +9,8 @@
 ```text
 commit=<SHA> branch=<branch>
 dataMode=<simulated|real> llmProvider=<mock|deepseek|openai|...> model=<version>
+environment=<local-preview|client-runtime|deployed> production=<true|false> target=<api url>
+clientRuntime=<VERSION> dsh=<@deepseek-ai/dsh 版本> providerKeys=<已配置/缺失（只写状态不写值）>
 seed=<seed hash> deps=<lock hash> browser=<name/version> os=<version>
 promptHash=<hash> skillVersion=<ver> fenceVersion=<ver> bundleVersion=<ver>
 checklist=rdas/v3.0 profile=<schemaVersion> judge=<model/version/κ>
@@ -19,8 +21,8 @@ stats=<confidence level / interval method / standardization weights>
 ## 二、覆盖率声明（硬性）
 
 ```text
-检查单条目：258（v2 117 + v3 141）；本轮执行：<...>；状态：pass <n> / fail <n> / not-run <n> / manual-missing <n>
-T1（冒烟核心）：<n>/44；T2（标准轮）：<n>/191；T3（长跑/专项）：<n>/23
+检查单条目：276（v2 117 + v3 141 + v3.1 P 域 18）；本轮执行：<...>；状态：pass <n> / fail <n> / not-run <n> / manual-missing <n>
+T1（冒烟核心）：<n>/52；T2（标准轮）：<n>/201；T3（长跑/专项）：<n>/23
 未读/抽样清单及原因：（逐项列出，或附 coverage.json）
 裁剪记录：裁了什么 / 为什么 / 影响哪条结论 / 何时补 / 谁批准
 ```
@@ -32,8 +34,26 @@ T1（冒烟核心）：<n>/44；T2（标准轮）：<n>/191；T3（长跑/专项
 | L 基础（L0–L16） | | | 通过/条件通过/未验证/不通过 | matrix/ui/regression |
 | U 体验（U0–U8） | | | | ux/experience/研究记录 |
 | O 交付（O0–O9 + ADR） | | | | outcome/autonomy/redteam/soak |
+| P 生产实测（P0–P3） | | | | live/{transcripts,artifacts,budget} |
 
 **整体结论**：<...>（红线命中：无 / 列出；O 未验证时必须写“结构合规/能力未验证”）
+
+## 三·一、P 域记分卡（生产环境实测）
+
+| 指标 | 实测 | 阈值/预期 | 结论 |
+|---|---|---|---|
+| 环境档位 | client-runtime / deployed | 非 local-preview | |
+| 内置模型就绪 | <n>/<n>（DeepSeek V4.1 Flash / Seedream 5.0 / Seedance 2.5） | 全部就绪 | |
+| 任务通过 | <ok>/<total> | 全部通过 | |
+| LLM 推理 / 多模态 / 工具循环 | | ≥1 条真实任务 + 回执 | |
+| 生图张数 | | ≤8 张 | |
+| 视频段数 / 秒数 | | ≤3 段、各 10–15s、总 ≤45s | |
+| 预估成本 | | ≤¥<上限>（估算≠账单） | |
+| 工具循环与账本链 | | 围栏判定 ≥1 + 链验证通过 | |
+| 被凭据/目标拦下的任务 | | 0（拦下即未验证） | |
+
+链路深度逐任务标注（`dsh-harness` / `model-gateway` / `gen-http` / `product-dispatch`）；
+`blocked` 不得写成通过，配额拦下的任务必须逐条披露。
 
 ## 四、U 域记分卡
 

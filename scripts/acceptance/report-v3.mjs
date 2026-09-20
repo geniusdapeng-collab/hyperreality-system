@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * report-v3.mjs · 把 RDAS v3.0 各类产物汇总成 REPORT.md（L/U/O 三层判定 + U/O 记分卡 + ADR/HIR 表）。
+ * report-v3.mjs · 把 RDAS v3.1 各类产物汇总成 REPORT.md（L/U/O/P 四层判定 + U/O/P 记分卡 + ADR/HIR 表）。
  *
  * 输入：outputs/acceptance/{matrix,ui,experience,ux,outcome,autonomy,redteam,soak,regression,coverage.json}
  * 输出：outputs/acceptance/REPORT.md + report-summary.json
@@ -29,6 +29,7 @@ const redteam = readJson(join(ROOT, "redteam", "redteam-report.json"));
 const soak = readJson(join(ROOT, "soak", "soak-report.json"));
 const regression = readJson(join(ROOT, "regression", "summary.json"));
 const coverage = readJson(join(ROOT, "coverage.json"));
+const live = readJson(join(ROOT, "live", "live-report.json"));
 
 const envValue = (key) => {
   const p = join(REPO_ROOT, ".env");
@@ -51,6 +52,11 @@ if (redteam?.findings?.length) addRed(1, `红队发现可利用用例 ${redteam.
 if ((ux?.checks ?? []).some((c) => !c.pass && c.id === "U5-02")) addRed(10, "键盘可达性机检未通过（需人工复核确认是否阻断 P0）");
 if ((outcome?.falseSuccess ?? 0) > 0) addRed(7, `检测到假成功 ${outcome.falseSuccess} 例`);
 if (autonomy?.anomalies?.externalWithoutReceipt > 0) addRed(5, `外部动作无回执：${autonomy.anomalies.externalWithoutReceipt} 条交付链`);
+if ((live?.tasks ?? []).some((t) => t.falseSuccess)) addRed(7, `生产实测检测到假成功：${(live.tasks ?? []).filter((t) => t.falseSuccess).map((t) => t.id).join(",")}`);
+if (live && live.environment?.kind === "local-preview" && live?.summary?.byStatus?.ok > 0 && !live.selftest) {
+  // 本机预览跑出的“真实模型”结果不构成生产实测证据（防止把 localhost 当生产）
+  addRed(3, "本机预览档位下的实测结果被当作生产验收证据（演示与真实混淆）");
+}
 for (const [name, v] of Object.entries(regression?.commands ?? {})) {
   if (/release|gate/i.test(name) && typeof v === "string" && v.startsWith("失败")) addRed(6, `发布门禁未全绿：${name}`);
 }
@@ -65,6 +71,7 @@ const coverageOf = (prefixes) => {
 const Lcov = coverageOf(["L"]);
 const Ucov = coverageOf(["U"]);
 const Ocov = coverageOf(["O", "ADR"]);
+const Pcov = coverageOf(["P"]);
 const verdictOf = (cov, { fail = false, unverified = false } = {}) => {
   if (fail) return "不通过";
   if (unverified) return "未验证";
@@ -77,14 +84,27 @@ const uxFail = (ux?.checks ?? []).some((c) => !c.pass && c.id === "U5-01");
 const Lverdict = verdictOf(Lcov, { fail: redLines.some((r) => [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12].includes(r.id)) });
 const Uverdict = verdictOf(Ucov, { fail: redLines.some((r) => r.id === 10), unverified: !ux && !experience });
 const Overdict = verdictOf(Ocov, { fail: redLines.some((r) => r.id === 7), unverified: providerIsMock && !outcome?.configured });
-const overall = redLines.length ? "不通过（红线命中）" : (Lverdict === "通过" && Uverdict === "通过" && Overdict === "通过" ? "通过" : `条件通过（L=${Lverdict} / U=${Uverdict} / O=${Overdict}）`);
+const Pverdict = !live
+  ? "未验证"
+  : live.selftest
+    ? "未验证（自检替身）"
+    : live.verdict === "pass"
+      ? "通过"
+      : live.verdict === "blocked（未验证，不得写通过）" || String(live.verdict).startsWith("blocked")
+        ? "未验证"
+        : "不通过";
+const overall = redLines.length
+  ? "不通过（红线命中）"
+  : (Lverdict === "通过" && Uverdict === "通过" && Overdict === "通过" && Pverdict === "通过"
+    ? "通过"
+    : `条件通过（L=${Lverdict} / U=${Uverdict} / O=${Overdict} / P=${Pverdict}）`);
 
 const fmtRate = (r) => (r?.p == null ? "n/a" : `${(r.p * 100).toFixed(1)}%（CI ${(r.lo * 100).toFixed(1)}–${(r.hi * 100).toFixed(1)}%，n=${r.n}）`);
 const esc = (s) => String(s ?? "").replace(/\|/g, "/").slice(0, 240);
 const md = [];
-md.push(`# ${profile.productName ?? "WorkLoom 产品"} 真机验收报告（RDAS v3.0 · ${new Date().toISOString().slice(0, 10)}）`);
+md.push(`# ${profile.productName ?? "WorkLoom 产品"} 真机验收报告（RDAS v3.1 · ${new Date().toISOString().slice(0, 10)}）`);
 md.push("");
-md.push(`> 规范：\`docs/REAL-DEVICE-ACCEPTANCE-SPEC.md\`（rdas/v3.0）｜检查单：\`docs/acceptance/checklist.v3.json\`｜profile：\`acceptance/profile.json\`（${profile.schemaVersion ?? "?"}）`);
+md.push(`> 规范：\`docs/REAL-DEVICE-ACCEPTANCE-SPEC.md\`（rdas/v3.1）｜检查单：\`docs/acceptance/checklist.v3.json\`｜profile：\`acceptance/profile.json\`（${profile.schemaVersion ?? "?"}）`);
 md.push(`> 被测版本：\`${profile.repo ?? "(unknown)"}@${git("git rev-parse --short HEAD")}\`（分支 \`${git("git rev-parse --abbrev-ref HEAD")}\`）｜工作区：\`${profile.workspaceId ?? profile.identity?.workspaceSlug ?? "?"}\`｜主包：\`${matrix?.primaryBundle ?? profile.primaryBundle ?? "?"}\`｜生成：${new Date().toISOString()}`);
 md.push("");
 md.push(`**结论：${overall}**`);
@@ -97,6 +117,8 @@ md.push(`commit=${git("git rev-parse HEAD")} branch=${git("git rev-parse --abbre
 md.push(`dataMode=${dataMode} llmProvider=${llmProvider} checklist=${coverage?.specVersion ?? "?"} profile=${profile.schemaVersion ?? "?"}`);
 md.push(`workspace=${profile.workspaceId ?? profile.identity?.workspaceSlug ?? "?"} bundle=${matrix?.primaryBundle ?? profile.primaryBundle ?? "?"}`);
 md.push(`seed=${envValue("ACCEPTANCE_SEED") ?? "未声明"} model=${envValue("LLM_MODEL") ?? "未声明"} promptHash=${envValue("PROMPT_HASH") ?? "未声明"}`);
+md.push(`environment=${live?.environment?.kind ?? profile.environment?.kind ?? "local-preview"} production=${live?.environment?.isProduction ?? false} target=${live?.fingerprint?.urls?.api ?? "(本机预览)"}`);
+if (live?.fingerprint) md.push(`dsh=${live.fingerprint.dsh?.package ?? "?"}@${live.fingerprint.dsh?.version ?? "?"} clientRuntime=${live.fingerprint.clientRuntimeVersion ?? "未接入"}`);
 md.push(`generatedAt=${new Date().toISOString()}`);
 md.push("```");
 if (profileWarnings.length) { md.push(""); md.push("Profile 告警："); for (const w of profileWarnings) md.push(`- ${w}`); }
@@ -119,6 +141,7 @@ md.push("|---|---:|---:|---|---|");
 md.push(`| L 基础（L0–L16） | ${Lcov.total ? `${(Lcov.rate * 100).toFixed(0)}%` : "n/a"} | ${Lcov.failed} | ${Lverdict} | matrix/ui/regression |`);
 md.push(`| U 体验（U0–U8） | ${Ucov.total ? `${(Ucov.rate * 100).toFixed(0)}%` : "n/a"} | ${Ucov.failed} | ${Uverdict} | ux/experience/研究记录 |`);
 md.push(`| O 交付（O0–O9 + ADR） | ${Ocov.total ? `${(Ocov.rate * 100).toFixed(0)}%` : "n/a"} | ${Ocov.failed} | ${Overdict} | outcome/autonomy/redteam/soak |`);
+md.push(`| P 生产实测（P0–P3） | ${Pcov.total ? `${(Pcov.rate * 100).toFixed(0)}%` : "n/a"} | ${Pcov.failed} | ${Pverdict} | live/{transcripts,artifacts,budget} |`);
 md.push("");
 md.push("## 四、U 域记分卡");
 md.push("");
@@ -135,6 +158,27 @@ if (experience) md.push(`| v2 走查 | ${experience.totals.passed}/${experience.
 if (coverage) {
   const uManual = coverage.items.filter((i) => i.layer?.startsWith("U") && i.status === "manual-missing").length;
   md.push(`| U 人工研究项未提交证据 | ${uManual} | 0 | ${uManual === 0 ? "通过" : "未验证"} |`);
+}
+md.push("");
+md.push("## 四·一、P 域记分卡（生产环境实测 · v3.1）");
+md.push("");
+md.push("| 指标 | 实测 | 阈值/预期 | 结论 |");
+md.push("|---|---|---|---|");
+if (live) {
+  const b = live.budget?.used ?? {};
+  const lim = live.budget?.budgets ?? {};
+  md.push(`| 环境档位 | ${live.environment?.kind}${live.selftest ? "（自检替身）" : ""} | client-runtime / deployed | ${live.environment?.kind === "local-preview" ? "**未验证（本机预览）**" : "生产档位"} |`);
+  md.push(`| 内置模型就绪 | ${(live.models ?? []).filter((m) => m.ready).length}/${(live.models ?? []).length} | 全部就绪 | ${(live.models ?? []).every((m) => m.ready) ? "通过" : "**未验证（缺凭据）**"} |`);
+  md.push(`| 任务通过 | ${live.summary?.byStatus?.ok ?? 0}/${live.summary?.total ?? 0} | 全部通过 | ${live.verdict === "pass" ? "通过" : `**${live.verdict}**`} |`);
+  md.push(`| 生图张数 | ${b.images ?? 0} | ≤${lim.maxImages ?? 8} | ${(b.images ?? 0) <= (lim.maxImages ?? 8) ? "通过" : "**超限**"} |`);
+  md.push(`| 视频段数/秒数 | ${b.videoClips ?? 0} 段 / ${b.videoSeconds ?? 0}s | ≤${lim.maxVideoClips ?? 3} 段、各 ${lim.minVideoSeconds ?? 10}–${lim.maxVideoSeconds ?? 15}s、总 ≤${lim.maxVideoSecondsTotal ?? 45}s | ${(b.videoClips ?? 0) <= (lim.maxVideoClips ?? 3) && (b.videoSeconds ?? 0) <= (lim.maxVideoSecondsTotal ?? 45) ? "通过" : "**超限**"} |`);
+  md.push(`| 预估成本 | ¥${b.costCny ?? 0} | ≤¥${lim.maxCostCny ?? 120}（估算，账单另对账） | ${(b.costCny ?? 0) <= (lim.maxCostCny ?? 120) ? "通过" : "**超限**"} |`);
+  const chainTask = (live.tasks ?? []).find((t) => t.audit?.chain?.ok);
+  md.push(`| 工具循环/账本链 | ${chainTask ? `${chainTask.id}（${(chainTask.fenceHits ?? []).length} 次围栏判定，链验证通过）` : "未执行"} | ≥1 条 | ${chainTask ? "通过" : "未验证"} |`);
+  const blockedIds = live.summary?.blockedIds ?? [];
+  if (blockedIds.length) md.push(`| 被凭据/目标拦下 | ${blockedIds.join("、")} | 0 | 未验证（不得写通过） |`);
+} else {
+  md.push("| P 域 | 未执行（缺 live/live-report.json） | — | 未验证 |");
 }
 md.push("");
 md.push("## 五、O 域记分卡（自主经营交付结果）");
@@ -219,12 +263,12 @@ md.push("");
 md.push("## 十二、证据分级与索引");
 md.push("");
 md.push("- **A**＝代码精读 + 真机实测 + 两类独立证据；**B**＝全量机检/脚本；**C**＝抽样；**D**＝推断/未验证。");
-md.push(`- 本报告：matrix/ui/autonomy 为全量机检（B）；ux 为机检近似（B/C）；experience 为真机实测（A/B）；outcome ${outcome?.configured ? "为真机实测（A）" : "未执行（D）"}；人工研究 ${coverage?.items?.some((i) => i.layer?.startsWith("U") && i.status === "pass") ? "已提交（A/C）" : "未提交（D）"}。`);
+md.push(`- 本报告：matrix/ui/autonomy 为全量机检（B）；ux 为机检近似（B/C）；experience 为真机实测（A/B）；outcome ${outcome?.configured ? "为真机实测（A）" : "未执行（D）"}；生产实测 ${live ? (live.selftest ? "自检替身（D，不得作为生产证据）" : `真实模型调用（${live.verdict === "pass" ? "A，含外部回执与产物" : "D/未验证"}）`) : "未执行（D）"}；人工研究 ${coverage?.items?.some((i) => i.layer?.startsWith("U") && i.status === "pass") ? "已提交（A/C）" : "未提交（D）"}。`);
 md.push(`- 证据索引：outputs/acceptance/evidence-index.json（若未生成，按各产物路径手工归档）。`);
 md.push("");
 md.push("## 收尾报告（硬性）");
 md.push("");
-md.push(`- 已完成：L 矩阵/页面/走查、U 自动化、ADR/HIR 遥测${outcome?.configured ? "、O 任务套件" : ""}${redteam ? "、红队" : ""}${soak ? "、长跑" : ""}、覆盖率与报告。`);
+md.push(`- 已完成：L 矩阵/页面/走查、U 自动化、ADR/HIR 遥测${outcome?.configured ? "、O 任务套件" : ""}${live ? "、P 域生产实测（含配额台账与回执）" : ""}${redteam ? "、红队" : ""}${soak ? "、长跑" : ""}、覆盖率与报告。`);
 md.push(`- 未完成/未覆盖：见第十一节；T1 未完成 ${coverage?.notRunT1?.length ?? "?"} 项。`);
 md.push("- 自主追加事项及理由：v3 执行器（ux/autonomy/outcome/coverage/report-v3/redteam/soak）与检查单升级，目的是让 U/O/ADR 可复跑而不是停留在纸面。");
 md.push("- 采用的假设：profile 的角色/旅程/阈值/结果契约为本仓权威；未声明处以基座默认值与下限执行。");
@@ -248,12 +292,13 @@ const summary = {
   branch: git("git rev-parse --abbrev-ref HEAD"),
   dataMode, llmProvider,
   verdict: overall,
-  layers: { L: Lverdict, U: Uverdict, O: Overdict },
+  layers: { L: Lverdict, U: Uverdict, O: Overdict, P: Pverdict },
   redLines,
   coverage: coverage?.totals ?? null,
   adr: autonomy ? { n: autonomy.overall?.delivered?.n, adr1: autonomy.overall?.delivered?.adr1, hirNi: autonomy.overall?.delivered?.hirNi, h34: autonomy.overall?.delivered?.h34, receipts: autonomy.overall?.delivered?.receiptCoverage } : null,
+  live: live ? { verdict: live.verdict, selftest: live.selftest, environment: live.environment?.kind, models: (live.models ?? []).length, tasks: live.summary?.byStatus ?? null, budget: live.budget?.used ?? null } : null,
   report: OUT.replace(REPO_ROOT, "."),
 };
 writeFileSync(join(ROOT, "report-summary.json"), JSON.stringify(summary, null, 1));
-console.log(`[acceptance:report:v3] 结论：${overall}；L=${Lverdict} U=${Uverdict} O=${Overdict}；红线 ${redLines.length}；输出 ${OUT}`);
+console.log(`[acceptance:report:v3] 结论：${overall}；L=${Lverdict} U=${Uverdict} O=${Overdict} P=${Pverdict}；红线 ${redLines.length}；输出 ${OUT}`);
 if (redLines.length) process.exitCode = 1;

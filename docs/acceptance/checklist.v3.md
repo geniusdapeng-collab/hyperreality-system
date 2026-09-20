@@ -1,7 +1,7 @@
-# RDAS v3.0 检查单总表
+# RDAS v3.1 检查单总表
 
-> 生成自 checklist.v3.json；共 258 项（v2 保留 117 + v3 新增 141），陷阱 50 条。
-> 分层：T1 每轮=44；T2 标准/季度=191；T3 长跑/专项=23。
+> 生成自 checklist.v3.json；共 276 项（v2 保留 117 + v3.0 新增 141 + v3.1 P 域 18），陷阱 54 条。
+> 分层：T1 每轮=52；T2 标准/季度=201；T3 长跑/专项=23。
 
 | 层 | 项数 | 组成 |
 |---|---:|---|
@@ -33,6 +33,10 @@
 | O7 | 8 | 交付域 |
 | O8 | 5 | 交付域 |
 | O9 | 5 | 交付域 |
+| P0 | 4 | 生产实测（v3.1） |
+| P1 | 4 | 生产实测（v3.1） |
+| P2 | 6 | 生产实测（v3.1） |
+| P3 | 4 | 生产实测（v3.1） |
 | U0 | 5 | 体验域 |
 | U1 | 6 | 体验域 |
 | U2 | 7 | 体验域 |
@@ -305,6 +309,24 @@
 | M-11 | M | 真实用户样本库与渠道（含无障碍用户） | manual+doc | P1 | T3 | manual | 样本库记录 |
 | M-12 | M | 结果与回执归档（业务快照/外部回执/对照数据） | script | P1 | T3 | script | outcome 归档 |
 | M-13 | M | 预算与节奏：标准轮 1–2 人日/全量 3–5 人日/长跑 7–28 天/季度全量 | manual+doc | P1 | T3 | manual | 排期与预算记录 |
+| P0-01 | P0 | 验收档位声明与目标指纹：environment.kind ∈ {client-runtime, deployed} 且目标地址显式声明 | script:live | P0 | T1 | script | live/live-report.json#fingerprint |
+| P0-02 | P0 | 目标可达性与身份：生产 server /health 与客户端 payload VERSION / install-state 可核验 | script:live | P0 | T1 | script | live/live-report.json#fingerprint.targetProbe |
+| P0-03 | P0 | 生产只读纪律：不跑迁移/种子复位与夹具写入；任何写入需显式授权、夹具标记与残留披露 | script+manual | P0 | T1 | script+manual | live-report.json#environment + fleet-run 日志 |
+| P0-04 | P0 | 凭据与秘密边界：凭据只从环境/秘密存储解析；报告只出「已配置/缺失 + 掩码」，任何密钥不落盘 | script+manual | P0 | T1 | script+manual | live-report.json#models + 秘密扫描 |
+| P1-01 | P1 | 内置模型清单与版本固定：LLM/生图/生视频三类模型逐个记录 model id、端点、凭据来源与实际返回 model | script:live | P0 | T2 | script | live-report.json#models + receipts/*.json |
+| P1-02 | P1 | DeepSeek Harness（dsh）版本与适配器固定：锁版号 + deepseek-official 路由 + 内置目录（deepseek-flash 支持文本与图像） | script:live | P1 | T2 | script | live-report.json#fingerprint.dsh + dsh patch 快照 |
+| P1-03 | P1 | 降级与换模可见：真实调用失败时的降级链留痕，实际 model id 记录，禁止静默换模型 | script+manual | P1 | T2 | script+manual | receipts + 事件账本 |
+| P1-04 | P1 | 成本口径与单价冻结：按 token/张/秒的单价与用量台账可复算；估算值与账单区分标注 | script | P2 | T2 | script | live/budget-summary.json + budget-ledger.jsonl |
+| P2-01 | P2 | LLM 推理任务真实触发：内置推理模型完成任务且答案满足预声明判定，回执齐全 | script:live | P0 | T1 | script | live/transcripts/LLM-*.json + receipts |
+| P2-02 | P2 | 多模态理解任务真实触发：图片输入到达模型，回答含图内可核验内容（不是纯文本占位） | script:live | P1 | T2 | script | live/transcripts/LLM-M*.json |
+| P2-03 | P2 | 工具循环任务真实触发：工具调用过围栏瀑布判定，session/event 落哈希链且链验证通过 | script:live | P0 | T1 | script | live/transcripts/LLM-T*.json（fenceHits + audit.chain） |
+| P2-04 | P2 | 生图任务真实触发（配额内）：出图张数达标、产物可下载、回执含 URL 与元数据 | script:live | P1 | T2 | script | live/artifacts/*.png + receipts/IMG-*.json |
+| P2-05 | P2 | 生视频任务真实触发（配额内）：出片成功、时长落在 10–15s、产物可下载、回执含 task_id/URL | script:live | P1 | T2 | script | live/artifacts/*.mp4 + receipts/VID-*.json |
+| P2-06 | P2 | 产品派单链路：经产品自身入口派单，用环境状态/回执判分，假成功直接红线候选 | script:live | P0 | T2 | script | live/transcripts/PROD-*.json（asserts + falseSuccess） |
+| P3-01 | P3 | 配额硬上限 fail-closed：生图≤8 张、视频≤3 段且各 10–15s、总秒≤45、LLM 调用/token/成本上限，超限即中止并留痕 | script:live | P0 | T1 | script | live/budget-summary.json + budget-ledger.jsonl |
+| P3-02 | P3 | 产物与证据归档：artifacts / receipts / transcripts / 账本齐备且可校验，报告附证据索引 | script | P1 | T2 | script | live/** + evidence-index.json |
+| P3-03 | P3 | 未验证不得写通过：凭据缺失/目标不可达 → blocked；O/P 域只能写“未验证/结构合规” | script | P0 | T1 | script | live-report.json#verdict + report-v3 判定 |
+| P3-04 | P3 | 失败与额度拦下逐条披露：失败任务、被配额拦下的任务、未覆盖模型不得静默跳过 | script | P1 | T2 | script | live-report.json#summary + 报告第五节 |
 
 ## 陷阱清单
 
@@ -360,3 +382,7 @@
 | T-48 | 介入次数降但每次更久 | HMPO + P90 | spec §13 T-48 |
 | T-49 | 自主率涨质量跌 | 质量/投诉/退款护栏非劣化 | spec §13 T-49 |
 | T-50 | 分母注水/去重缺失 | 最小实质标准 + 去重 + 抽检 | spec §13 T-50 |
+| T-51 | 本机预览冒充生产验收 | environment.kind + 目标指纹 + provider 非 mock + 目标可达性 | spec §13 T-51 |
+| T-52 | 内置模型“配置了”却没被任务触发过 | 每个模型 ≥1 个真实任务 + 回执 + 产物 | spec §13 T-52 |
+| T-53 | 生成任务超配额/成本失控 | 预算闸 + 台账 + 超限 fail-closed | spec §13 T-53 |
+| T-54 | 只拿到 task_id 就写“出片成功” | 产物落盘 + URL 可下载 + 时长/张数核验 | spec §13 T-54 |

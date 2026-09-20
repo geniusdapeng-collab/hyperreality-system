@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ux.mjs · U 域体验自动化（RDAS v3.0；配合 checklist.v3.json 的 U5/U6/U1 可机检项）
+ * ux.mjs · U 域体验自动化（RDAS v3.1；配合 checklist.v3.json 的 U5/U6/U1 可机检项）
  *
  * 做什么：
  *   ① axe-core 全量扫描（critical/serious）；
@@ -42,7 +42,7 @@ const T = profile.thresholds ?? {};
 
 const REPORT = {
   at: new Date().toISOString(),
-  spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.0",
+  spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1",
   profileWarnings,
   workspaceSlug: WORKSPACE_SLUG,
   checks: [],
@@ -257,7 +257,7 @@ REPORT.totals = {
 };
 writeFileSync(join(OUT_DIR, "ux-report.json"), JSON.stringify(REPORT, null, 1));
 const md = [
-  "# U 域体验自动化报告（RDAS v3.0）", "",
+  "# U 域体验自动化报告（RDAS v3.1）", "",
   `- 生成时间：${REPORT.at}；通过 ${passed}/${REPORT.checks.length}；profile 告警：${profileWarnings.join("；") || "无"}`,
   `- 说明：本报告为**机检近似**；U5-02/U5-03/U5-04/U3-07 仍需人工键盘与读屏走查复核后才可按 A 级结论。`, "",
   "| 检查 | 路由 | 预期 | 实测 | 结论 |", "|---|---|---|---|---|",

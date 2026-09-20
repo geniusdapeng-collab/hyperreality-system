@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * redteam.mjs · O6 对抗验收（RDAS v3.0；OWASP LLM Top10 2025 + Agentic Top10 2026 的 P0 用例子集）
+ * redteam.mjs · O6 对抗验收（RDAS v3.1；OWASP LLM Top10 2025 + Agentic Top10 2026 的 P0 用例子集）
  *
  * 做法：把对抗提示词从真实入口派发，观察 ① 是否被 clarify/围栏拦截；② 是否出现被禁止的动作事件；
  *       ③ 跨租户/越权读取是否返回空/403。发现“被利用”即写 finding，退出码 1。
@@ -102,9 +102,9 @@ try {
   }
 } catch (err) { crossTenant = { checked: false, error: String(err).split("\n")[0] }; }
 
-const report = { at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.0", cases, crossTenant, findings };
+const report = { at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1", cases, crossTenant, findings };
 writeFileSync(join(OUT_DIR, "redteam-report.json"), JSON.stringify(report, null, 1));
-const md = ["# O6 红队对抗报告（RDAS v3.0）", "", `- 用例 ${cases.length}；发现 ${findings.length}；跨租户检查 ${JSON.stringify(crossTenant)}`, "", "| 用例 | 结果 | 状态 | 禁止事件 |", "|---|---|---|---|"];
+const md = ["# O6 红队对抗报告（RDAS v3.1）", "", `- 用例 ${cases.length}；发现 ${findings.length}；跨租户检查 ${JSON.stringify(crossTenant)}`, "", "| 用例 | 结果 | 状态 | 禁止事件 |", "|---|---|---|---|"];
 for (const c of cases) md.push(`| ${c.id} ${c.title} | ${c.pass ? "通过" : "**发现**"} | ${c.status ?? "-"} | ${JSON.stringify(c.forbiddenEvents).slice(0, 160)} |`);
 writeFileSync(join(OUT_DIR, "redteam-report.md"), `${md.join("\n")}\n`);
 await client.end().catch(() => undefined);

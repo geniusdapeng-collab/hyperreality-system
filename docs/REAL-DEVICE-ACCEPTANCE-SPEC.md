@@ -3,8 +3,9 @@
 > 适用：`sync/child-repos.json` 里的全部 WorkLoom 仓（含实验车道 fox / growth），以及其他声明 `workloom.product/*` 的行业实例。
 > 事实源：本文件（规范正文）+ `docs/acceptance/checklist.v3.json`（机器可读检查单）+ `docs/acceptance/report-template.md`（报告模板）+ `scripts/acceptance/**`（执行器）。
 > 演变：规范本体在基座维护，经 base-sync 分发到各仓只读副本；行业专属的“人员/旅程/阈值/结果契约”写在**本仓** `acceptance/profile.json`，不回流基座（见 §14）。
-> 版本：**`rdas/v3.0`**（2026-09-19；v1 首发 → v1.1 增补 → v2.0 L0–L15 全量覆盖 → **v3.0 体验域 U + 交付域 O + 自主交付率 ADR/HIR + 资产治理 L16**）。
-> 兼容：**v3.0 是 v2.0 的超集**——v2.0 的 L0–L15 全部条目、阈值与红线继续有效；v3.0 只增不删、只收紧不放宽。权威条目集合是 `checklist.v3.json`：**258 项 = v2 保留 117 项 + v3 新增 141 项（U 56 + O 55 + ADR 16 + L16 6 + M 8）**；陷阱 50 条（T-01–T-50）；执行分层 T1 44 / T2 191 / T3 23。
+> 版本：**`rdas/v3.1`**（2026-09-20；v1 首发 → v1.1 增补 → v2.0 L0–L15 全量覆盖 → v3.0 体验域 U + 交付域 O + 自主交付率 ADR/HIR + 资产治理 L16 → **v3.1 生产环境真实验收 P 域（环境档位 + 内置模型真实触发 + 配额硬闸 + 围栏/账本链路证据）**）。
+> 兼容：**v3.x 是 v2.0 的超集**——v2.0 的 L0–L15 全部条目、阈值与红线继续有效；v3.x 只增不删、只收紧不放宽。权威条目集合是 `checklist.v3.json`：**276 项 = v2 保留 117 项 + v3.0 新增 141 项（U 56 + O 55 + ADR 16 + L16 6 + M 8）+ v3.1 新增 P 域 18 项（P0–P3）**；陷阱 54 条（T-01–T-54）；执行分层 T1 52 / T2 201 / T3 23。
+> **v3.1 的第一性问题**：v1–v3.0 的「真机」= 本机预览（`pnpm preview:all` + 本地演示库 + `LLM_PROVIDER=mock`），它既不是生产环境，也不会触发客户端内置模型（DeepSeek V4.1 Flash / Seedream 5.0 / Seedance 2.5）。**从 v3.1 起，不声明环境档位、不触发真实模型、没有真实回执的验收，不得写“真机验收通过”。**
 
 ---
 
@@ -22,6 +23,13 @@
 | 什么情况必须拦住发布？ | 6 条红线 | **12 条红线**：新增假成功、越权自主、结果不可对账、体验/无障碍阻断、AI 未披露、红线判定依赖 LLM 评审 |
 | 问题怎么收口？ | 缺陷分级 + 修复 + 回归 + 陷阱清单 | 增加**体验债 / 验收债 / 自主度降档 / 认证失效**四类闭环；长跑与漂移纳入复验 |
 | 规范怎么落到十仓？ | base-sync + profile + REPORT | 增加**舰队基准跑、徽章 TTL、结果看板、ADR/HIR 横向对比规则**；口径不齐不排名 |
+
+| 问题 | v3.0 的回答 | v3.1 的升级 |
+|---|---|---|
+| 验收的是什么环境？ | 未强制声明（默认本机预览） | **环境档位三选一**：`local-preview` / `client-runtime` / `deployed`；生产档位禁止迁移种子、禁止关停目标、写入需显式授权 |
+| 客户端内置模型被触发过吗？ | 不要求（`LLM_PROVIDER=mock` 时 O 域写“未验证”） | **P 域生产实测**：LLM 推理/多模态/工具循环、生图、生视频逐类真实任务；`task_id`/URL/产物/回执齐全才算数 |
+| 生成任务会不会烧钱失控？ | 只有“少跑几个 case”的口头约束 | **配额硬闸**：图 ≤8 张、视频 ≤3 段且各 10–15s、总 ≤45s、LLM 调用/token/成本上限；超限 fail-closed + 台账可复算 |
+| 模型链路的证据链是什么？ | 无 | **四链路标注**：`dsh-harness`（含围栏瀑布 + 哈希链账本）/ `model-gateway` / `gen-http` / `product-dispatch`，逐任务标注链路深度 |
 
 ---
 
@@ -93,7 +101,7 @@
 
 ---
 
-## 3. 验收模型总览：L0–L16 + U0–U8 + O0–O9 + M
+## 3. 验收模型总览：L0–L16 + U0–U8 + O0–O9 + P0–P3 + M
 
 ### 3.1 全景
 
@@ -105,6 +113,10 @@
                 ┌──────────────────────────── 用户与体验（U 域）────────────────────────────┐
                 │ U0 用户模型 U1 旅程可发现 U2 任务效率 U3 理解认知 U4 信任掌控                  │
                 │ U5 无障碍包容 U6 跨端情境 U7 体验度量与研究 U8 体验治理                        │
+                └──────────────────────────────────────────────────────────────────────────────┘
+                ┌──────────────────────── 生产实测（P 域 · v3.1 新增）──────────────────────────┐
+                │ P0 环境档位与目标指纹  P1 内置模型与版本固定  P2 任务矩阵与真实回执             │
+                │ P3 配额硬闸与证据归档                                                         │
                 └──────────────────────────────────────────────────────────────────────────────┘
                 ┌──────────────────────────── 基础能力（L 域）───────────────────────────────┐
                 │ L0 契约 L1 装配 L2 数据 L3 页面 L4 交互 L5 体验基础 L6 治理 L7 恢复 L8 能力    │
@@ -122,6 +134,7 @@
 | U0–U8 | 真实的人是否好用、愿意用、用得下去 | P0 项 100%、P1 项 ≥90%；体验红线 0；关键任务/满意度/无障碍达标 | 真机 + 真实用户 + 遥测 |
 | O0–O9 | AI 班底是否真的交付了结果、是否自主、是否值得 | 红线 0；P0 岗位/任务达阈值；业务结果达标或如实标未验证 | 环境状态 + 外部回执 + 业务数据 |
 | ADR/HIR | AI 的价值是否随自主率提升而提升 | AVR 五条同时成立；否则只能报告观察值 | 账本 + 审批 + 回执 + 工时 |
+| P0–P3 | 生产环境里，客户端内置模型是否被真实任务触发并走通链路 | 环境档位非 local-preview；每个内置模型 ≥1 条真实任务；回执/产物/配额台账齐备；blocked 0 | 真实回执 + 产物 + 账本 + 成本台账 |
 | M | 机制是否让验收持续发生 | 徽章/总表/复验/债务/漂移告警齐备 | 归档 + 看板 |
 
 ### 3.3 与 v2.0 的映射（向后兼容）
@@ -689,6 +702,7 @@
 7. `outputs/acceptance/regression/`：套件、门禁、验链、类型检查原始日志摘要；
 8. `outputs/acceptance/coverage.json`：逐条检查项的 pass/fail/skip/not-run 与理由；
 9. `outputs/acceptance/REPORT.md`：按 v3 模板成文，含**覆盖率声明 / 证据分级 / 收尾报告 / 自检表**四段硬性内容 + U 记分卡 + O 记分卡 + ADR/HIR 表。
+10. `outputs/acceptance/live/`（v3.1）：`live-report.json/md` + `transcripts/*.json`（逐任务轨迹与判定）+ `receipts/*.json`（真实回执）+ `artifacts/*`（生图/生视频产物）+ `budget-ledger.jsonl` / `budget-summary.json`（配额与成本台账）。
 
 ### 8.2 证据等级（保留 v2 定义）
 
@@ -749,19 +763,22 @@
 
 ---
 
-## 9. 判定、红线与例外 v3
+## 9. 判定、红线与例外 v3.1
 
-### 9.1 三层判定（L / U / O 各自判定，再合成）
+### 9.1 四层判定（L / U / O / P 各自判定，再合成）
 
 | 层 | 通过 | 条件通过 | 未验证 | 不通过 |
 |---|---|---|---|---|
 | L（基础） | 全部 P0/P1 通过，红线 0，覆盖 ≥95% | 仅 P2 未修且有工单/期限 | 有关键层未执行 | 任一 L 红线或 P0 失败 |
 | U（体验） | P0 项 100%、P1 ≥90%、体验红线 0、关键指标达标 | P1/P2 体验债有 owner/期限 | 用户研究未做（只能用 C/D 级） | 体验红线或 P0 任务不可完成 |
 | O（交付） | 红线 0、P0 岗位/任务达标、结果达标或如实标未验证 | 部分 P1/P2 未达标但有降档/限制措施 | 无真实模型/无业务数据（只能写“结构合规/能力未验证”） | 交付红线或假成功/越权/对账失败 |
+| P（生产实测） | 环境档位 ∈ {client-runtime, deployed}；每个内置模型 ≥1 条真实任务通过；回执/产物/配额台账齐备；blocked/failed 0 | 部分 P2 任务未达标或模型未覆盖，但已登记验收债与复验日期 | 凭据缺失 / 目标不可达 / 仅跑 selftest（**不得写通过**） | 假成功、无回执写完成、配额被击穿、用本机预览冒充生产 |
 
 **整体结论规则**：
 
 - 对外发布/宣称“已验收”：必须 L 通过 + U 通过 + O 至少条件通过；O 未验证时只能写“结构合规，能力未验证”，不得对外宣称能力或结果；
+- **宣称“生产环境真机验收通过”（v3.1）**：必须额外满足 P 通过（环境档位非 `local-preview`、内置模型真实任务全绿、配额台账与回执齐备）；P 未验证时只能写“本机预览结构验收通过，生产实测未验证”；
+- 只跑 `acceptance:live --selftest`（本地替身）不构成任何 P 域证据；
 - 任何红线 → 不通过；
 - U 或 O 未验证 → 整体“条件通过（未验证项已登记验收债）”，且必须在徽章上标注限定语（如 `acceptance: L-pass/U-pass/O-structural@sha`）。
 
@@ -815,6 +832,7 @@
 | 档位 | 时长 | 内容 | 适用 |
 |---|---|---|---|
 | 冒烟 S | ~2–4h（T1 44 项；脚本自动 + 人工抽查） | L0/L1 + L3 路由 + L4 关键任务 + U P0 自动化 + O 红线扫描 + ADR 粗算 | 每次发布前 |
+| 生产实测 P（v3.1） | ~30–60min（P 域 18 项） | 目标探测与指纹 + 内置模型真实任务（LLM 推理/多模态/工具循环 + 生图 ≤8 张 + 生视频 ≤3 段）+ 配额台账 + 覆盖率/报告 | 上线前 / 模型或客户端变更后 / 季度 |
 | 标准轮 R1/R2 | 1–2 人日 | T1 全量 + 变更相关 T2 + 红线相关项：L0–L16 机检 + U 自动化 + U 定性走查（≥5 用户/角色）+ O 结构 + ADR 基线 + 回归 | 里程碑/双周 |
 | 全量轮 F | 3–5 人日 | T1+T2 全量（必要时含 T3）：R1 + 完整 U 研究 + O 任务套件 ×N 试验 + 红队 + 真实设备矩阵 + 统计报告 | 上线前/季度 |
 | 长跑轮 L | 7–28 天 | 长跑 + 业务结果 + ADR/HIR 趋势 + AVR + 漂移 | 试点仓/季度 |
@@ -837,8 +855,9 @@
 12 红队与对抗：acceptance:redteam（OWASP LLM/Agentic P0 用例 + 目标劫持/记忆投毒）
 13 长跑：acceptance:soak --hours 24/168/672（按档位）
 14 回归：suite + domain suite + db:verify-chain + typecheck + release:gate
-15 覆盖率与报告：acceptance:coverage → acceptance:report（v3 模板）
-16 收口：缺陷工单 + 修复 + 复验（R2）+ 徽章 + 舰队总表 + 陷阱回写 + 验收债登记
+15 生产实测（v3.1，P 域）：acceptance:live（--env client-runtime|deployed；真实模型任务 + 配额硬闸 + 回执/产物）
+16 覆盖率与报告：acceptance:coverage → acceptance:report（v3.1 模板，含 P 域记分卡）
+17 收口：缺陷工单 + 修复 + 复验（R2）+ 徽章 + 舰队总表 + 陷阱回写 + 验收债登记
 ```
 
 ### 10.3 环境与夹具治理（v2 + v3 增补）
@@ -880,12 +899,17 @@
 | `pnpm acceptance:ui` | L3/L4 页面与入口探针 | `outputs/acceptance/ui/*` |
 | `pnpm acceptance:experience` | v2 走查（保留） | `outputs/acceptance/experience/*` |
 | `pnpm acceptance:ux` | U 域自动化（axe/键盘/缩放/几何/遥测） | `outputs/acceptance/ux/*` |
+| `pnpm acceptance:live` | P 域生产实测（真实模型 + 配额台账 + 回执；`--env client-runtime|deployed`；`--selftest` 仅自检） | `outputs/acceptance/live/*` |
 | `pnpm acceptance:outcome` | O 域任务套件（trial/状态断言/回执） | `outputs/acceptance/outcome/*` |
 | `pnpm acceptance:autonomy` | ADR/HIR/HMPO + 反作弊 | `outputs/acceptance/autonomy/*` |
 | `pnpm acceptance:redteam` | OWASP/目标劫持/记忆投毒用例 | `outputs/acceptance/redteam/*` |
 | `pnpm acceptance:soak` | 24h/7d/28d 长跑采样 | `outputs/acceptance/soak/*` |
 | `pnpm acceptance:coverage` | 检查单逐项覆盖率 | `outputs/acceptance/coverage.json` |
 | `pnpm acceptance:report` | 汇总报告 v3 | `outputs/acceptance/REPORT.md` |
+
+编排器（`fleet-run.mjs`）新增参数：`--env <档位>`、`--live`、`--live-only`（只跑 P 域 + 覆盖率 + 报告）、
+`--require-live`（P 域非通过即非零退出，适合发布门禁）、`--allow-prod-writes`（生产档位写入授权）。
+生产档位下编排器**不装依赖、不迁移种子、不起本机预览、不关停目标进程**。
 
 ### 11.2 profile v2（`acceptance/profile.json`）
 
@@ -939,6 +963,47 @@
 }
 ```
 
+**v3.1 追加两个可选节（保持 `schemaVersion` 不变，向后兼容）**：
+
+```jsonc
+{
+  "environment": {
+    "kind": "local-preview",              // local-preview | client-runtime | deployed
+    "allowWrites": false,                 // 生产档位默认只读；写入需 CLI --allow-prod-writes 或此处显式 true
+    "supportDir": null,                   // client-runtime：桌面客户端支持目录（缺省按产品名推导）
+    "target": {},                         // deployed 必填：{ pcUrl, bMobileUrl, cMobileUrl, apiUrl }
+    "timeouts": { "healthMs": 8000, "probeMs": 20000 }
+  },
+  "live": {
+    "enabled": true,                      // false = 本仓未声明真实模型任务（P 域写“未验证”）
+    "requireRealModels": false,           // true = 发布门禁口径（等价 --require-live）
+    "allowDb": false,                     // 是否允许 live 任务执行 SQL 断言（生产默认 false）
+    "budgets": {                          // 硬上限：只能收紧，不能放宽（基座下限见 §18.4）
+      "maxLlmCalls": 40, "maxLlmTokens": 300000,
+      "maxImages": 8, "maxVideoClips": 3, "minVideoSeconds": 10, "maxVideoSeconds": 15, "maxVideoSecondsTotal": 45,
+      "maxCostCny": 120, "maxWallClockMin": 45
+    },
+    "models": [
+      { "id": "deepseek-v4.1-flash", "kind": "llm",   "model": "deepseek-flash", "adapter": "dsh-harness", "apiKeyEnv": "DEEPSEEK_API_KEY", "baseUrlEnv": "DEEPSEEK_BASE_URL" },
+      { "id": "seedream-5.0",        "kind": "image", "model": "seedream-5.0",   "adapter": "gen-http",   "apiKeyEnv": "SEEDREAM_API_KEY",  "baseUrlEnv": "SEEDREAM_ENDPOINT" },
+      { "id": "seedance-2.5",        "kind": "video", "model": "seedance-2.5",   "adapter": "gen-http",   "apiKeyEnv": "SEEDANCE_API_KEY",  "baseUrlEnv": "SEEDANCE_ENDPOINT" }
+    ],
+    "tasks": [
+      { "id": "LLM-R1", "kind": "llm", "chain": "dsh-harness", "model": "deepseek-v4.1-flash",
+        "criticality": "P0", "title": "…", "prompt": "…最后另起一行输出 TASK_COMPLETE",
+        "expect": ["涨|价|策略"], "expectAll": ["TASK_COMPLETE"] },
+      { "id": "IMG-01", "kind": "image", "model": "seedream-5.0", "images": 2, "minArtifacts": 1, "prompt": "…" },
+      { "id": "VID-01", "kind": "video", "model": "seedance-2.5", "durationSeconds": 12, "durationRange": [10, 15], "prompt": "…" },
+      { "id": "PROD-01", "kind": "product", "presetKey": "<岗位>", "input": "<派单标题>", "state_asserts": [{ "http": { "url": "http://127.0.0.1:8787/health", "status": 200 } }] }
+    ]
+  }
+}
+```
+
+- `expect` 是**任一命中**（宽松语义判定），`expectAll` 是**必须全部命中**（硬性标记，如 `TASK_COMPLETE`）；
+- `kind` = `llm | image | video | product`；`chain` 省略时按模型 `adapter` 推导；
+- 生图 `images`（张）与生视频 `durationSeconds`（秒）直接进配额闸；缺省 1 张 / 12s。
+
 ### 11.3 数据契约
 
 | 文件 | 作用 | 关键字段 |
@@ -952,7 +1017,7 @@
 
 ### 11.4 报告模板 v3（硬性小节）
 
-1. 环境与资产指纹；2. 覆盖率声明（范围内文件/精读/机检/抽样/未读 + 裁剪理由）；3. 结果总览（L/U/O 三层判定）；4. U 记分卡；5. O 记分卡；6. ADR/HIR 表（§6.9 最小字段）；7. 红线检查；8. 统计与校准（样本/CI/κ/评分者）；9. 失败与修复清单；10. 验收债与豁免；11. 未覆盖与遗留；12. 证据分级与索引；13. 收尾报告；14. 自检表。
+1. 环境与资产指纹（含 environment 档位、客户端 VERSION、dsh 版本、凭据状态）；2. 覆盖率声明（范围内文件/精读/机检/抽样/未读 + 裁剪理由）；3. 结果总览（L/U/O/P 四层判定）；4. U 记分卡；5. P 域记分卡（模型/任务/配额/成本/链路深度）；6. O 记分卡；7. ADR/HIR 表（§6.9 最小字段）；8. 红线检查；9. 统计与校准（样本/CI/κ/评分者）；10. 失败与修复清单；11. 验收债与豁免；12. 未覆盖与遗留；13. 证据分级与索引；14. 收尾报告；15. 自检表。
 
 ### 11.5 与 CI/门禁的关系
 
@@ -1030,6 +1095,15 @@ T-01 门禁误伤内部写路径；T-02 按钮存在但点不动；T-03 控制�
 | T-48 | 介入次数降了，但每次介入更久 | 只测频率不测当量 | HMPO（人工分钟/结果）+ P90 |
 | T-49 | 自主率涨、质量跌 | 质量换自主 | 质量/投诉/退款护栏非劣化 |
 | T-50 | 分母注水/去重缺失 | 交付件单位含糊 | 最小实质标准 + 去重键 + 抽检审计 |
+
+### 13.3 v3.1 新增（T-51–T-54）
+
+| # | 症状 | 根因 | 检查手段 |
+|---|---|---|---|
+| T-51 | 报告写“生产环境验收通过”，实际跑的是本机预览 | 未声明/未校验环境档位，默认 localhost + mock 被当成生产 | `environment.kind` + 目标指纹（commit/VERSION/provider）+ provider 非 mock |
+| T-52 | 内置模型“配置齐全”却从未被任务触发过 | 只验配置与连通，没有任务级实测 | 每个模型 ≥1 条真实任务 + 回执 + 产物 + 实际返回 model id |
+| T-53 | 一次验收烧掉几十张图/多段视频 | 只有口头“少跑几个 case”，没有硬上限 | 配额闸 + `budget-ledger.jsonl` + 超限 fail-closed |
+| T-54 | 只拿到 `task_id` 就写“出片成功” | 未验证产物可下载与时长 | 产物落盘 + URL 可下载 + 时长/张数核验 + 回执 |
 
 ---
 
@@ -1234,7 +1308,84 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 
 ---
 
-## 18. 变更记录
+## 18. 生产环境真实验收（P 域 · v3.1 新增）
+
+> 一句话：**v1–v3.0 的“真机”是本机预览；v3.1 起，“生产环境真机验收”必须有环境档位、真实模型任务、真实回执、配额台账。** 四者缺一，只能写“未验证”。
+
+### 18.1 问题诊断（为什么必须补这一层）
+
+| 事实 | 后果 |
+|---|---|
+| 执行器默认 `pnpm preview:all`（本机 3000/3001/3002/8787）+ 本地演示库种子 | 验的是源码树，不是客户拿到的客户端/部署 |
+| `.env` 默认 `LLM_PROVIDER=mock`，dsh E6 门禁也走本地 Mock LLM | 客户端内置模型（DeepSeek V4.1 Flash / Seedream 5.0 / Seedance 2.5）**从未被任务触发** |
+| 生图/生视频按张按秒计费，成本数百倍于文本 token | 没有硬上限时，“实测”会把成本与配额一起打穿 |
+| 生成任务返回 `task_id` 不等于产物可用 | 无回执/无产物的“完成”是 T-19 假成功的高发区 |
+
+### 18.2 环境档位（必须显式声明）
+
+| 档位 | 定义 | 允许的步骤 | 禁止的步骤 |
+|---|---|---|---|
+| `local-preview` | 本机三端预览 + 本地演示库 + 允许 mock | 装依赖、迁移、种子、起/停预览、夹具写入 | 宣称“生产验收通过” |
+| `client-runtime` | 已安装的桌面客户端运行时（自包含 PG/NATS + 客户端内置模型配置；缺省 server 8787 / web 5173） | 只读探测、真实模型任务、目标内既有夹具 | 迁移种子复位、关停客户端进程、改写客户端 `.env` |
+| `deployed` | 客户可访问的正式地址 + 正式库 | 只读探测、真实模型任务 | 未显式 `--allow-prod-writes` 的任何写入；未声明 target 的默认证 |
+
+声明方式：`acceptance/profile.json#environment`，或 CLI `--env <档位>`（CLI 优先）。
+生产档位缺 `environment.target`（`deployed`）时验收器判“目标未声明”，不得默认打本机端口。
+
+### 18.3 四条真实链路（证据深度不同，报告必须逐任务标注）
+
+| 链路 | 走什么 | 覆盖的组件 | 证据 |
+|---|---|---|---|
+| `dsh-harness` | 客户端内置 DeepSeek Harness（dsh）headless：真实 provider → 工具调用经 `tools/pre-execute` 围栏瀑布 → `session/event` 落哈希链账本 | dsh 锁版 + `deepseek-official` 路由 + `workloom-fence` + `workloom-audit` | `transcripts/*.json`：`fenceHits`、`audit.chain`（逐条重算通过）、`auditLines` |
+| `model-gateway` | OpenAI 兼容网关（`/chat/completions`）直连，含多模态 `image_url` | 模型推理/视觉理解能力 | `receipts/*.json`：endpoint / 实际 model / tokens |
+| `gen-http` | 火山方舟 Ark：生图 `POST {base}/images/generations`（同步）、生视频 `POST {base}/contents/generations/tasks`（任务制 + 轮询） | Seedream 5.0 / Seedance 2.5 | 产物落盘（`artifacts/*`）+ `task_id`/`video_url`/时长 + 回执 |
+| `product-dispatch` | 经产品自身入口（trpc `threads.dispatch` + `threads.get`）派单，用**环境状态/回执**判分 | 产品运行时 → model-router → provider | `asserts` + `falseSuccess` 判定 + 回执 |
+
+纪律：`model-gateway` 与 `gen-http` **不含围栏与账本**，不能替代 `dsh-harness`；要宣称“走通生产链路（含 DeepSeek Harness）”，必须至少有一条 `dsh-harness` 任务通过。
+
+### 18.4 任务矩阵与配额硬闸（默认值 = 产品所有者 2026-09-20 口径）
+
+| 类别 | 最少任务 | 配额上限（基座下限，profile 只能更紧） |
+|---|---|---|
+| LLM 推理（`deepseek-v4.1-flash`） | 1（P0） | 调用 ≤40 次；token ≤300k |
+| LLM 多模态理解 | 1（P1） | 同上 |
+| LLM 工具循环（围栏 + 账本） | 1（P0） | 同上 |
+| 生图（`seedream-5.0`） | 1（P1，可多 case） | **合计 ≤8 张** |
+| 生视频（`seedance-2.5`） | 1（P1，可多 case） | **≤3 段，每段 10–15s，总 ≤45s** |
+| 产品派单（端到端） | 1（P0，可选） | 计入 LLM 调用上限 |
+| 成本 | — | ≤¥120（估算；账单另行对账） |
+| 墙钟 | — | ≤45 分钟 |
+
+执行纪律：
+
+1. **超限即中止**（fail-closed）：`budget.reserve` 拒绝后任务状态写 `blocked` 并进台账，禁止静默跳过；
+2. **先占额后回填**：实际用量少于预估不退还（保守口径），多于预估补记；
+3. **产物必须落盘**：生图/生视频产物写入 `live/artifacts/`，URL 必须可下载（否则判失败，对应 T-54）；
+4. **凭据只从环境/秘密存储解析**：报告只写“已配置/缺失 + 掩码”，密钥永不落盘；
+5. **selftest 只证明管道**：`--selftest` 用本地替身，产物是合成数据，报告必须标记“非生产实测证据”。
+
+### 18.5 判定、报告与命令
+
+- 判定：见 §9.1 的 P 层判定；`blocked` 与 `selftest` 一律“未验证”，不得写“通过”；
+- 报告：`live-report.json/md`（环境指纹、模型就绪、逐任务链路与回执、配额台账、未验证清单）；
+- 命令：
+
+```bash
+pnpm acceptance:live --env client-runtime                     # 客户端运行时
+pnpm acceptance:live --env deployed --require-live            # 生产部署 + 发布门禁口径
+node scripts/acceptance/fleet-run.mjs --repo <repo> --env client-runtime --live-only
+pnpm acceptance:live:selftest                                 # 仅自检管道（非证据）
+```
+
+### 18.6 与舰队机制的关系
+
+- 徽章：P 未验证时徽章必须带限定语（`acceptance: L-pass/U-pass/O-structural/P-unverified@sha`）；
+- 复验触发：模型版本、dsh 版本、提示词、技能权限、客户端载荷版本变更 → P 域重跑（M-07 TTL 同步收紧）；
+- 成本与配额：每次生产实测的 `budget-ledger.jsonl` 随报告归档，纳入季度成本口径（L13/O3）。
+
+---
+
+## 19. 变更记录
 
 | 版本 | 日期 | 变更 | 来源 |
 |---|---|---|---|
@@ -1242,3 +1393,4 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 | rdas/v1.1 | 2026-09-19 | 增补 L9 性能、L6 供应链、L11 兼容、L5 无障碍、机制 6 条 | 两仓试点倒推 |
 | rdas/v2.0 | 2026-09-19 | L0–L15 全量覆盖 + 6 域 + 外场机制 + 117 项检查单 | 舰队验收规范 |
 | **rdas/v3.0** | **2026-09-19** | **L16（6）+ U0–U8（56）+ O0–O9（55）+ ADR/HIR 专章（16）+ M-06–13（8）= 141 项新增（总 258）+ T-19–50 + 12 红线 + 三层判定 + 统计/证据/报告升级** | **本文件；重点补强用户体验与自主经营交付结果，新增 AI 班底自主交付率/人工介入率维度** |
+| **rdas/v3.1** | **2026-09-20** | **P 域生产实测 18 项（总 276）+ 环境档位（local-preview/client-runtime/deployed）+ 内置模型真实任务（DeepSeek V4.1 Flash / Seedream 5.0 / Seedance 2.5）+ 配额硬闸（图 ≤8 张、视频 ≤3 段且各 10–15s）+ 四链路证据标注 + T-51–T-54 + 四层判定** | **产品所有者 2026-09-20 要求：把真机验收做成生产环境真实验收，触发客户端内置模型走完整生产链路（含底层 DeepSeek Harness）** |

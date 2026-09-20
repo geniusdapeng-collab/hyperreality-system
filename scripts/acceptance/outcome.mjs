@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * outcome.mjs · O 域受控任务套件执行器（RDAS v3.0 M2）
+ * outcome.mjs · O 域受控任务套件执行器（RDAS v3.1 M2）
  *
  * 任务套件：acceptance/outcomes/*.yaml（格式见 docs/acceptance/outcome-suite.example.yaml）
  * 每次尝试：真实入口派发 → 轮询线程状态 → （可选）脚本化人工介入 → 状态断言/HTTP 断言/回执校验
@@ -38,7 +38,7 @@ const DB_URL = process.env.DATABASE_URL ?? readEnvValue("DATABASE_URL");
 
 const files = explicitSuite ? [resolve(REPO_ROOT, explicitSuite)] : (existsSync(SUITE_DIR) ? readdirSync(SUITE_DIR).filter((f) => /\.ya?ml$/.test(f)).map((f) => join(SUITE_DIR, f)) : []);
 if (!files.length) {
-  const template = `# RDAS v3.0 O 域任务套件模板（复制为 <role>.yaml 并填写）
+  const template = `# RDAS v3.1 O 域任务套件模板（复制为 <role>.yaml 并填写）
 role: channel-ops
 agentPreset: channel-watcher
 tasks:
@@ -63,7 +63,7 @@ tasks:
 `;
   mkdirSync(SUITE_DIR, { recursive: true });
   writeFileSync(join(SUITE_DIR, "outcome-suite.example.yaml"), template);
-  const report = { at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.0", configured: false, note: "未配置 acceptance/outcomes/*.yaml；已生成模板。O 域按“未验证”处理。", trials: [] };
+  const report = { at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1", configured: false, note: "未配置 acceptance/outcomes/*.yaml；已生成模板。O 域按“未验证”处理。", trials: [] };
   writeFileSync(join(OUT_DIR, "outcome-report.json"), JSON.stringify(report, null, 1));
   writeFileSync(join(OUT_DIR, "outcome-report.md"), `# O 域任务套件报告\n\n未配置 \`acceptance/outcomes/*.yaml\`；已生成模板 \`acceptance/outcomes/outcome-suite.example.yaml\`。O 域按“结构合规/能力未验证”处理，不得写通过。\n`);
   console.log("[acceptance:outcome] 未配置任务套件：configured=false（已生成模板）");
@@ -197,7 +197,7 @@ const stats = {
   passed: trials.filter((t) => t.pass).length,
 };
 const report = {
-  at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.0", configured: true,
+  at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1", configured: true,
   provider: readEnvValue("LLM_PROVIDER") ?? "unknown", dataMode: profile.dataMode ?? "unknown",
   suites: files.map((f) => f.replace(REPO_ROOT, ".")), stats,
   falseSuccess: trials.filter((t) => t.falseSuccess).length,
@@ -205,7 +205,7 @@ const report = {
 };
 writeFileSync(join(OUT_DIR, "outcome-report.json"), JSON.stringify(report, null, 1));
 writeFileSync(join(OUT_DIR, "trials.jsonl"), `${trials.map((t) => JSON.stringify(t)).join("\n")}\n`);
-const md = ["# O 域受控任务套件报告（RDAS v3.0 M2）", "", `- 任务 ${stats.tasks}；尝试 ${stats.trials}；pass@1=${stats.passAt1}；pass^${stats.k}=${stats.passAtK}；clarify=${stats.clarify}；假成功=${report.falseSuccess}`, `- LLM_PROVIDER=${report.provider}${/mock/i.test(report.provider) ? "（能力未验证）" : ""}`, "", "| 任务 | trial | 状态 | 介入 | 断言 | 结论 |", "|---|---:|---|---|---|---|"];
+const md = ["# O 域受控任务套件报告（RDAS v3.1 M2）", "", `- 任务 ${stats.tasks}；尝试 ${stats.trials}；pass@1=${stats.passAt1}；pass^${stats.k}=${stats.passAtK}；clarify=${stats.clarify}；假成功=${report.falseSuccess}`, `- LLM_PROVIDER=${report.provider}${/mock/i.test(report.provider) ? "（能力未验证）" : ""}`, "", "| 任务 | trial | 状态 | 介入 | 断言 | 结论 |", "|---|---:|---|---|---|---|"];
 for (const t of trials) md.push(`| ${t.taskId} | ${t.trial} | ${t.status ?? "-"} | ${t.interventions.map((i) => i.class).join(",") || "-"} | ${t.asserts.map((a) => `${a.ok ? "✓" : "✗"}${a.type}`).join(" ") || "-"} | ${t.pass ? "通过" : t.falseSuccess ? "**假成功**" : "未通过"} |`);
 writeFileSync(join(OUT_DIR, "outcome-report.md"), `${md.join("\n")}\n`);
 await client.end().catch(() => undefined);

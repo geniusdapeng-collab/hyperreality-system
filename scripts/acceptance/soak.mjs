@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * soak.mjs · O5 长跑采样器（RDAS v3.0）
+ * soak.mjs · O5 长跑采样器（RDAS v3.1）
  *
  * 按固定间隔采样：/health、端口、threads 成功/失败增量、事件增量、时间戳。
  * 支持小数小时（本地冒烟测试），产出 soak-report.{json,md}。
@@ -61,7 +61,7 @@ while (Date.now() < deadline) {
 }
 const first = samples[0], last = samples[samples.length - 1];
 const report = {
-  at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.0",
+  at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1",
   hours: HOURS, intervalS: INTERVAL_S, samples,
   summary: {
     samples: samples.length,
@@ -73,7 +73,7 @@ const report = {
   },
 };
 writeFileSync(join(OUT_DIR, "soak-report.json"), JSON.stringify(report, null, 1));
-writeFileSync(join(OUT_DIR, "soak-report.md"), `# O5 长跑报告（RDAS v3.0）\n\n- 时长 ${HOURS}h；样本 ${report.summary.samples}；health 失败 ${report.summary.healthFail}\n- completed Δ${report.summary.completedDelta}；failed Δ${report.summary.failedDelta}；events Δ${report.summary.eventsDelta}\n\n> 长跑只证明“采样窗口内未观察到系统性异常”，不替代 7d/28d 完整长跑。\n`);
+writeFileSync(join(OUT_DIR, "soak-report.md"), `# O5 长跑报告（RDAS v3.1）\n\n- 时长 ${HOURS}h；样本 ${report.summary.samples}；health 失败 ${report.summary.healthFail}\n- completed Δ${report.summary.completedDelta}；failed Δ${report.summary.failedDelta}；events Δ${report.summary.eventsDelta}\n\n> 长跑只证明“采样窗口内未观察到系统性异常”，不替代 7d/28d 完整长跑。\n`);
 await client.end().catch(() => undefined);
 console.log(`[acceptance:soak] 完成：样本 ${report.summary.samples}；health 失败 ${report.summary.healthFail}；输出 ${OUT_DIR}`);
 if (report.summary.healthFail > 0) process.exitCode = 1;
