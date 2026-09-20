@@ -49,6 +49,7 @@ export function resolveLiveModels(models = [], env = process.env) {
     const kind = m.kind ?? "llm";
     const adapter = m.adapter ?? (kind === "llm" ? "dsh-harness" : "gen-http");
     const missing = [];
+    const warnings = [];
     const resolved = { id: m.id, kind, adapter, model: m.model ?? null, baseUrl: null, credentialEnv: null };
     if (adapter === "dsh-harness" || adapter === "model-gateway") {
       const key = pickEnv([...(m.apiKeyEnv ? [m.apiKeyEnv] : []), DSH_DEEPSEEK_DEFAULTS.apiKeyEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackApiKeyEnvs], env);
@@ -57,7 +58,8 @@ export function resolveLiveModels(models = [], env = process.env) {
       resolved.baseUrl = base.value ?? DSH_DEEPSEEK_DEFAULTS.baseURL;
       resolved.model = m.model ?? resolveModelFromBaseUrl(resolved.baseUrl) ?? DSH_DEEPSEEK_DEFAULTS.model;
       if (!key.value) missing.push(`凭据未配置（可用环境变量：${unique([m.apiKeyEnv, DSH_DEEPSEEK_DEFAULTS.apiKeyEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackApiKeyEnvs]).join(" / ")}）`);
-      if (!base.value) missing.push(`端点未配置（可用环境变量：${unique([m.baseUrlEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackBaseEnvs]).join(" / ")}），将使用内置默认 ${DSH_DEEPSEEK_DEFAULTS.baseURL}`);
+      // 端点缺失不是阻断项：dsh 的 deepseek 适配器有内置默认端点（可用环境变量覆盖）
+      if (!base.value) warnings.push(`端点未显式配置，使用内置默认 ${DSH_DEEPSEEK_DEFAULTS.baseURL}（可用 ${unique([m.baseUrlEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackBaseEnvs]).join(" / ")} 覆盖）`);
       if (!m.model) resolved.modelNote = `model 未显式声明，按端点推导/内置默认 ${resolved.model}（dsh 内置目录：deepseek-flash 支持文本+图像）`;
     } else if (adapter === "gen-http" || adapter === "arkcli") {
       const key = pickEnv([...(m.apiKeyEnv ? [m.apiKeyEnv] : []), kind === "image" ? "SEEDREAM_API_KEY" : "SEEDANCE_API_KEY", "VOLCENGINE_ARK_API_KEY", "ARK_API_KEY"], env);
@@ -70,7 +72,7 @@ export function resolveLiveModels(models = [], env = process.env) {
       resolved.credentialEnv = null;
       resolved.model = m.model ?? null;
     }
-    return { ...resolved, ready: missing.length === 0, missing };
+    return { ...resolved, ready: missing.length === 0, missing, warnings };
   });
 }
 

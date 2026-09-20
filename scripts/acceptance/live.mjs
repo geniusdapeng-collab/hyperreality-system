@@ -17,14 +17,21 @@
  * 用法：
  *   node scripts/acceptance/live.mjs --out outputs/acceptance/live           # 按 profile.live 跑
  *   node scripts/acceptance/live.mjs --tasks LLM-R1,IMG-01 --env deployed
+ *   node scripts/acceptance/live.mjs --env-file ~/.workloom/live.env          # 凭据从仓库外秘密文件读取
  *   node scripts/acceptance/live.mjs --selftest                               # 无凭据自检管道
  *   node scripts/acceptance/live.mjs --require-live                            # blocked 即非零退出（发布门禁用）
+ *
+ * 凭据来源（三者可混用，优先级：进程环境 > --env-file > 客户端运行时 .env）：
+ *   ① 进程环境（CI secret / Keychain 导出 / `security find-generic-password … -w`）；
+ *   ② `--env-file <path>`：仓库外文件（推荐 `~/.workloom/live.env`，chmod 600，永不入库）；
+ *   ③ `--env client-runtime` 时自动读取 `<客户端支持目录>/runtime/.env` 补齐缺失键。
+ * 报告只写来源与键名，任何密钥值都不落盘、不进日志。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { cliArgs, findRepoRoot, loadProfile } from "./lib/profile.mjs";
-import { fingerprintEnvironment, fingerprintLines, resolveEnvironment, probeEnvironment } from "./lib/target.mjs";
+import { fingerprintEnvironment, fingerprintLines, loadEnvFile, resolveEnvironment, probeEnvironment } from "./lib/target.mjs";
 import { createBudget, normalizeBudgets } from "./lib/live/budget.mjs";
 import {
   createMultimodalFixture,
@@ -49,6 +56,10 @@ const REQUIRE_LIVE = has("--require-live");
 const ONLY_TASKS = arg("--tasks", null)?.split(",").map((s) => s.trim()).filter(Boolean) ?? null;
 const TASK_TIMEOUT_MS = Number(arg("--timeout-s", "0")) > 0 ? Number(arg("--timeout-s")) * 1000 : 8 * 60_000;
 const ALLOW_PROD_WRITES = has("--allow-prod-writes");
+/** 凭据文件（推荐放在仓库外，如 ~/.workloom/live.env；只读、只进进程内存，不进报告） */
+const ENV_FILE = arg("--env-file", null);
+/** 客户端运行时档位：是否从客户端 `.env` 兜底读取缺失凭据（默认开） */
+const KEYS_FROM_CLIENT = !has("--no-keys-from-client");
 
 mkdirSync(join(OUT_DIR, "artifacts"), { recursive: true });
 mkdirSync(join(OUT_DIR, "receipts"), { recursive: true });
@@ -85,7 +96,47 @@ if (SELFTEST) {
   notes.push("自检模式：全部调用打到本地替身（stub），产物为合成数据，仅验证执行器管道");
 }
 
-resolvedModels = resolveLiveModels(modelsForRun, process.env);
+/**
+ * 凭据来源解析（只记来源与**键名**，永不记录值）：
+ *   ① `--env-file <path>`：仓库外的秘密文件（推荐 ~/.workloom/live.env，chmod 600）；
+ *   ② 客户端运行时档位：`<supportDir>/runtime/.env` 兜底补齐缺失键（客户端自己配的凭据即可复用）；
+ *   ③ 进程环境（含 macOS Keychain 导出的变量、CI secret、dsh 凭据 seam）。
+ * 优先级：显式进程环境 > env-file > 客户端 .env（同名键不覆盖已有值，避免意外串仓）。
+ */
+const credentialSources = [];
+const runnerEnv = { ...process.env };
+if (ENV_FILE) {
+  const abs = resolve(ENV_FILE);
+  if (!existsSync(abs)) {
+    notes.push(`--env-file 指向的文件不存在：${abs}（按未配置凭据处理）`);
+  } else {
+    const kv = loadEnvFile(abs);
+    let filled = 0;
+    for (const [key, value] of Object.entries(kv)) {
+      if (value && !runnerEnv[key]) { runnerEnv[key] = value; filled += 1; }
+    }
+    credentialSources.push({ source: "env-file", path: abs, keys: Object.keys(kv).filter((k) => kv[k]), filled });
+  }
+}
+if (KEYS_FROM_CLIENT && environment.kind === "client-runtime" && environment.supportDir) {
+  const clientEnvPath = join(environment.supportDir, "runtime", ".env");
+  if (existsSync(clientEnvPath)) {
+    const kv = loadEnvFile(clientEnvPath);
+    /** 只取模型凭据相关键：不把客户端 JWT/PII/DB 口令带进验收进程（最小权限） */
+    const CREDENTIAL_KEY_RE = /^(DEEPSEEK_|LLM_|SEEDREAM_|SEEDANCE_|VOLCENGINE_|ARK_)/;
+    const picked = Object.fromEntries(Object.entries(kv).filter(([key]) => CREDENTIAL_KEY_RE.test(key)));
+    let filled = 0;
+    for (const [key, value] of Object.entries(picked)) {
+      if (value && !runnerEnv[key]) { runnerEnv[key] = value; filled += 1; }
+    }
+    credentialSources.push({ source: "client-runtime-env", path: clientEnvPath, keys: Object.keys(picked).filter((k) => picked[k]), filled });
+  } else {
+    notes.push(`客户端运行时未找到 .env：${clientEnvPath}（可先用向导「真实大模型」步骤写入，或用 --env-file）`);
+  }
+}
+credentialSources.push({ source: "process-env", keys: Object.keys(process.env).filter((k) => /^(DEEPSEEK|LLM|SEEDREAM|SEEDANCE|VOLCENGINE|ARK)_/.test(k)), filled: null });
+
+resolvedModels = resolveLiveModels(modelsForRun, runnerEnv);
 
 /* ---------------------------- 任务清单 ---------------------------- */
 const declaredTasks = Array.isArray(liveProfile.tasks) ? liveProfile.tasks : [];
@@ -213,15 +264,15 @@ async function runTask(task) {
           prompt: task.prompt,
           rulesUrl: SELFTEST && stub ? `${stub.baseUrl}/rules` : `${environment.urls.api}/trpc/fence.activeRules`,
           env: {
-            DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ?? process.env.LLM_API_KEY ?? "",
-            DEEPSEEK_BASE_URL: process.env.LLM_BASE_URL ?? process.env.DEEPSEEK_BASE_URL ?? "",
+            DEEPSEEK_API_KEY: runnerEnv.DEEPSEEK_API_KEY ?? runnerEnv.LLM_API_KEY ?? "",
+            DEEPSEEK_BASE_URL: runnerEnv.LLM_BASE_URL ?? runnerEnv.DEEPSEEK_BASE_URL ?? "",
           },
           timeoutMs: TASK_TIMEOUT_MS,
           imagePath: fixturePath,
         });
       } else {
         const image = task.imageFixture ? readImageFixture(resolve(REPO_ROOT, task.imageFixture)) : null;
-        out = await runChatTask({ resolved, prompt: task.prompt, timeoutMs: TASK_TIMEOUT_MS, image });
+        out = await runChatTask({ resolved, prompt: task.prompt, timeoutMs: TASK_TIMEOUT_MS, image, env: runnerEnv });
       }
       budget.commit({ taskId: task.id, kind: "llm", tokens: out.tokens ?? 0, detail: chain });
       const verified = verifyExpectations(effectiveTask, out);
@@ -242,7 +293,7 @@ async function runTask(task) {
       const units = Number(task.images ?? 1);
       const gate = budget.reserve({ taskId: task.id, kind: "image", units, detail: chain });
       if (!gate.allowed) return { ...base, status: "blocked", reason: gate.reason, ms: Date.now() - startedAt };
-      const out = await runImageTask({ resolved, task, timeoutMs: Math.max(TASK_TIMEOUT_MS, 5 * 60_000), artifactsDir: join(OUT_DIR, "artifacts") });
+      const out = await runImageTask({ resolved, task, timeoutMs: Math.max(TASK_TIMEOUT_MS, 5 * 60_000), artifactsDir: join(OUT_DIR, "artifacts"), env: runnerEnv });
       budget.commit({ taskId: task.id, kind: "image", units, detail: chain });
       const verified = verifyExpectations(task, out);
       return {
@@ -261,7 +312,7 @@ async function runTask(task) {
       if (!gate.allowed) return { ...base, status: "blocked", reason: gate.reason, ms: Date.now() - startedAt };
       const out = await runVideoTask({
         resolved, task, timeoutMs: Math.max(TASK_TIMEOUT_MS, 20 * 60_000),
-        artifactsDir: join(OUT_DIR, "artifacts"), pollMs: SELFTEST ? 200 : 8000,
+        artifactsDir: join(OUT_DIR, "artifacts"), pollMs: SELFTEST ? 200 : 8000, env: runnerEnv,
       });
       budget.commit({ taskId: task.id, kind: "video", units, detail: chain });
       const verified = verifyExpectations(task, out);
@@ -374,9 +425,11 @@ const report = {
       : "生产档位：默认只读；写入需 --allow-prod-writes",
   },
   fingerprint,
+  credentialSources,
   models: resolvedModels.map((m) => ({
     id: m.id, kind: m.kind, adapter: m.adapter, model: m.model, baseUrl: m.baseUrl,
     ready: m.ready, missing: m.missing, credentialEnv: m.credentialEnv ?? null, modelNote: m.modelNote ?? null,
+    warnings: m.warnings ?? [],
   })),
   tasks: results,
   budget: budgetSummary,
@@ -431,6 +484,11 @@ function renderMarkdown(r) {
     md.push("");
   }
   md.push("## 二、内置模型与凭据状态");
+  md.push("");
+  md.push("凭据来源（只记来源与键名，绝不记录值）：");
+  for (const c of r.credentialSources ?? []) {
+    md.push(`- \`${c.source}\`${c.path ? ` → ${c.path}` : ""}：${(c.keys ?? []).filter(Boolean).join(", ") || "（无相关键）"}`);
+  }
   md.push("");
   md.push("| 模型 | 模态 | 链路 | 模型 ID | 端点 | 凭据 | 状态 |");
   md.push("|---|---|---|---|---|---|---|");

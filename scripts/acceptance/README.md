@@ -60,6 +60,24 @@ pnpm acceptance:live --env deployed --require-live
 凭据：只从环境变量/秘密存储解析（`DEEPSEEK_API_KEY`、`VOLCENGINE_ARK_API_KEY` / `SEEDREAM_API_KEY` / `SEEDANCE_API_KEY`），
 **禁止写进 profile、报告或仓库**；缺凭据时任务状态为 `blocked`，报告只能写“未验证”。
 
+### 真实 key 放哪里（三种投递方式，可混用）
+
+优先级：**进程环境 > `--env-file` > 客户端运行时 `.env`**（同名键不覆盖已有值）。报告只记录来源与键名，密钥值不落盘、不进日志。
+
+| 方式 | 怎么做 | 适用 |
+|---|---|---|
+| ① 进程环境 / Keychain（推荐） | 钥匙串存：`security add-generic-password -a "$USER" -s workloom-live -w '<key>' -U`；跑验收时由包装脚本导出，例如 `DEEPSEEK_API_KEY="$(security find-generic-password -s workloom-live-deepseek -w)" pnpm acceptance:live --env client-runtime` | macOS 本机、不想落任何文件 |
+| ② 仓库外秘密文件 | 建 `~/.workloom/live.env`（`chmod 600`）写 `DEEPSEEK_API_KEY=…`、`VOLCENGINE_ARK_API_KEY=…`，然后 `pnpm acceptance:live --env deployed --env-file ~/.workloom/live.env` | 需要一次配好、多次复跑 |
+| ③ 客户端运行时 `.env` | 在真实客户端里用落地向导「真实大模型」步骤写入（或直接编辑 `<支持目录>/runtime/.env`），验收器在 `--env client-runtime` 时自动补齐缺失键 | 验“客户端内置模型”本身 |
+
+必需的键（按要跑的模型选）：
+
+- LLM：`DEEPSEEK_API_KEY`（+ 可选 `DEEPSEEK_BASE_URL`，默认 `https://api.deepseek.com`）
+- 生图：`SEEDREAM_API_KEY` 或共用 `VOLCENGINE_ARK_API_KEY`（+ 可选 `SEEDREAM_ENDPOINT` / `SEEDREAM_MODEL`）
+- 生视频：`SEEDANCE_API_KEY` 或共用 `VOLCENGINE_ARK_API_KEY`（+ 可选 `SEEDANCE_ENDPOINT` / `SEEDANCE_MODEL`）
+
+安全纪律：key 只进 Keychain / 仓库外文件 / 客户端运行时 `.env`；**不要**贴到聊天、Issue、PR、`.env.example` 或任何入库文件里。
+
 `regression/summary.json` 约定：
 
 ```json
