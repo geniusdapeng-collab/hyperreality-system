@@ -1361,9 +1361,29 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 1. **超限即中止**（fail-closed）：`budget.reserve` 拒绝后任务状态写 `blocked` 并进台账，禁止静默跳过；
 2. **先占额后回填**：实际用量少于预估不退还（保守口径），多于预估补记；
 3. **产物必须落盘**：生图/生视频产物写入 `live/artifacts/`，URL 必须可下载（否则判失败，对应 T-54）；
-4. **凭据只从环境/秘密存储解析**（v3.1 实现：进程环境 > `--env-file <仓库外文件>` > 客户端 `runtime/.env`）：
+4. **凭据只从环境/秘密存储解析，且必须**自动发现**（v3.1.1 起，验收器内置）**：
    报告只写“来源 + 键名 + 已配置/缺失”，密钥永不落盘、不进日志；key 只进 Keychain、仓库外秘密文件或客户端运行时 `.env`，
-   不得贴进聊天/Issue/PR/任何入库文件；
+   不得贴进聊天/Issue/PR/任何入库文件。
+
+   **凭据解析顺序（自动，无需每次手动指定）**：
+
+   | 顺序 | 来源 | 说明 |
+   |---|---|---|
+   | ① | 进程环境 | CI secret、`security find-generic-password … -w` 导出、部署注入 |
+   | ② | `--keys-file <path>` | 显式指定；优先级高于自动发现（`--env-file` 为兼容别名，但与 Node 自带同名参数冲突：文件不存在时 Node 先报错，正式口径用 `--keys-file`） |
+   | ③ | `$WORKLOOM_LIVE_ENV` | 环境变量指向的仓库外文件 |
+   | ④ | `~/.workloom/live.env` | **默认封存位**（`chmod 600`） |
+   | ⑤ | macOS Keychain | `workloom-live-deepseek` → `DEEPSEEK_API_KEY`；`workloom-live-ark` → `VOLCENGINE_ARK_API_KEY` |
+   | ⑥ | 客户端 `runtime/.env` | 仅 `--env client-runtime`，且只取模型凭据键（`DEEPSEEK_/LLM_/SEEDREAM_/SEEDANCE_/VOLCENGINE_/ARK_`） |
+
+   - 同名键**不覆盖**已有值（避免串仓）；`--no-auto-keys` 可关闭 ③④⑤，`--no-keys-from-client` 可关闭 ⑥；
+   - **自证**：任一任务报告里 `live-report.json#credentialSources` 必须列出实际命中的来源与键名；
+     三模型 `ready=true` 才允许进入真实调用；
+   - **缺凭据 = blocked**（不是 fail，也不是通过）；`--require-live` 时整体非零退出，适配发布门禁；
+   - **封存一次即可**：`security add-generic-password -a "$USER" -s workloom-live-deepseek -w '<key>' -U`；
+     `security add-generic-password -a "$USER" -s workloom-live-ark -w '<key>' -U`；或写入 `~/.workloom/live.env`。
+   - **客户端打包纪律**：key 不得打进安装包/载荷（不变量 11）；安装后在**本机**注入客户端 `runtime/.env`
+     或 Keychain，使客户端首启即真实可用（详见 §18.7）。
 5. **selftest 只证明管道**：`--selftest` 用本地替身，产物是合成数据，报告必须标记“非生产实测证据”。
 
 ### 18.5 判定、报告与命令
@@ -1384,6 +1404,28 @@ pnpm acceptance:live:selftest                                 # 仅自检管道�
 - 徽章：P 未验证时徽章必须带限定语（`acceptance: L-pass/U-pass/O-structural/P-unverified@sha`）；
 - 复验触发：模型版本、dsh 版本、提示词、技能权限、客户端载荷版本变更 → P 域重跑（M-07 TTL 同步收紧）；
 - 成本与配额：每次生产实测的 `budget-ledger.jsonl` 随报告归档，纳入季度成本口径（L13/O3）。
+
+### 18.7 客户端形态的凭据落位（打包 ≠ 打包密钥）
+
+把产品打成自包含客户端安装包时，**安装包里不允许出现任何模型 key**（不变量 11：秘密不进文件/制品）。
+正确做法是「安装包只装产品，key 在**本机安装后**注入」：
+
+```bash
+# 1) 安装/启动客户端一次（bootstrap 会生成 <支持目录>/runtime/.env）
+# 2) 本机注入模型凭据（只写本机，不进任何仓库/制品）
+ENVF="<客户端支持目录>/runtime/.env"
+grep -q '^DEEPSEEK_API_KEY=.' "$ENVF" || printf '\nDEEPSEEK_API_KEY=%s\n' "$(security find-generic-password -s workloom-live-deepseek -w)" >> "$ENVF"
+grep -q '^VOLCENGINE_ARK_API_KEY=.' "$ENVF" || printf 'VOLCENGINE_ARK_API_KEY=%s\n' "$(security find-generic-password -s workloom-live-ark -w)" >> "$ENVF"
+grep -q '^LLM_PROVIDER=mock' "$ENVF" && sed -i '' 's/^LLM_PROVIDER=mock/LLM_PROVIDER=deepseek/' "$ENVF"
+# 3) 重启客户端；用 `--env client-runtime` 跑 P 域实测，确认 credentialSources 命中 client-runtime-env
+```
+
+纪律：
+
+1. 支持目录权限 `700`、`.env` 权限 `600`；key 只在本机文件 + Keychain；
+2. 分享/分发 `.app` 或 `.dmg` 前，**先确认制品里没有 key**（`grep -r "<key 片段>" 制品目录` 应为空）；
+3. 客户机上推荐只放 Keychain，不放明文 `.env`；
+4. 每次客户端升级/重装后重跑一次「3)」的确认命令——这是 M-07 徽章复验的组成部分。
 
 ---
 

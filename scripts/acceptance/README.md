@@ -62,13 +62,20 @@ pnpm acceptance:live --env deployed --require-live
 
 ### 真实 key 放哪里（三种投递方式，可混用）
 
-优先级：**进程环境 > `--env-file` > 客户端运行时 `.env`**（同名键不覆盖已有值）。报告只记录来源与键名，密钥值不落盘、不进日志。
+**v3.1.1 起自动发现**（不传任何参数也会按序找）：`--keys-file`（显式）→ `$WORKLOOM_LIVE_ENV` → `~/.workloom/live.env`
+→ macOS Keychain（`workloom-live-deepseek` / `workloom-live-ark`）→ 客户端 `runtime/.env`（仅 `--env client-runtime`）。
+同名键不覆盖已有值；报告只记录来源与键名，密钥值不落盘、不进日志。`--no-auto-keys` / `--no-keys-from-client` 可分别关闭后两段。
+
+> ⚠ 不要用 `--env-file`：它与 Node 自带参数同名，文件不存在时 Node 会先崩；`--env-file` 仅作历史兼容别名保留。
 
 | 方式 | 怎么做 | 适用 |
 |---|---|---|
 | ① 进程环境 / Keychain（推荐） | 钥匙串存：`security add-generic-password -a "$USER" -s workloom-live -w '<key>' -U`；跑验收时由包装脚本导出，例如 `DEEPSEEK_API_KEY="$(security find-generic-password -s workloom-live-deepseek -w)" pnpm acceptance:live --env client-runtime` | macOS 本机、不想落任何文件 |
-| ② 仓库外秘密文件 | 建 `~/.workloom/live.env`（`chmod 600`）写 `DEEPSEEK_API_KEY=…`、`VOLCENGINE_ARK_API_KEY=…`，然后 `pnpm acceptance:live --env deployed --env-file ~/.workloom/live.env` | 需要一次配好、多次复跑 |
+| ② 仓库外秘密文件 | 建 `~/.workloom/live.env`（`chmod 600`）写 `DEEPSEEK_API_KEY=…`、`VOLCENGINE_ARK_API_KEY=…`；默认位会被自动发现，指定别处时用 `--keys-file <path>` | 需要一次配好、多次复跑 |
 | ③ 客户端运行时 `.env` | 在真实客户端里用落地向导「真实大模型」步骤写入（或直接编辑 `<支持目录>/runtime/.env`），验收器在 `--env client-runtime` 时自动补齐缺失键 | 验“客户端内置模型”本身 |
+
+封存位置固定后**不需要每次传 `--env-file`**：钥匙串用 `-s workloom-live-deepseek` / `-s workloom-live-ark`，文件用 `~/.workloom/live.env`，验收器会自动命中。
+自证：`outputs/acceptance/live/live-report.json#credentialSources` 会列出实际来源与键名（只有键名，没有值）；三个模型 `ready=true` 才允许真实调用。
 
 必需的键（按要跑的模型选）：
 

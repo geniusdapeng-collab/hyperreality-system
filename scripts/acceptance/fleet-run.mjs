@@ -49,7 +49,7 @@ const LIVE = has("--live");
 const LIVE_ONLY = has("--live-only");
 const REQUIRE_LIVE = has("--require-live");
 const ALLOW_PROD_WRITES = has("--allow-prod-writes");
-const LIVE_ENV_FILE = arg("--env-file", null);
+const LIVE_ENV_FILE = arg("--keys-file", null) ?? arg("--env-file", null);
 const PRODUCTION = Boolean(ENV_KIND) && ENV_KIND !== "local-preview";
 const PORTS = { pc: 3000, bMobile: 3001, cMobile: 3002, server: 8787 };
 
@@ -413,7 +413,7 @@ const liveStep = ["live", [
   ...(ENV_KIND ? ["--env", ENV_KIND] : []),
   ...(REQUIRE_LIVE ? ["--require-live"] : []),
   ...(ALLOW_PROD_WRITES ? ["--allow-prod-writes"] : []),
-  ...(LIVE_ENV_FILE ? ["--env-file", resolve(LIVE_ENV_FILE)] : []),
+  ...(LIVE_ENV_FILE ? ["--keys-file", resolve(LIVE_ENV_FILE)] : []),
 ], "scripts/acceptance/live.mjs"];
 
 const acceptanceAll = [

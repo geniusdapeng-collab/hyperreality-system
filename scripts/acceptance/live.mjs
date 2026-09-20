@@ -17,19 +17,23 @@
  * 用法：
  *   node scripts/acceptance/live.mjs --out outputs/acceptance/live           # 按 profile.live 跑
  *   node scripts/acceptance/live.mjs --tasks LLM-R1,IMG-01 --env deployed
- *   node scripts/acceptance/live.mjs --env-file ~/.workloom/live.env          # 凭据从仓库外秘密文件读取
+ *   node scripts/acceptance/live.mjs --keys-file ~/.workloom/live.env         # 凭据从仓库外秘密文件读取
  *   node scripts/acceptance/live.mjs --selftest                               # 无凭据自检管道
  *   node scripts/acceptance/live.mjs --require-live                            # blocked 即非零退出（发布门禁用）
  *
- * 凭据来源（三者可混用，优先级：进程环境 > --env-file > 客户端运行时 .env）：
+ * 凭据来源（可混用，自动发现，优先级：进程环境 > --keys-file > $WORKLOOM_LIVE_ENV > ~/.workloom/live.env > Keychain > 客户端运行时 .env）：
  *   ① 进程环境（CI secret / Keychain 导出 / `security find-generic-password … -w`）；
- *   ② `--env-file <path>`：仓库外文件（推荐 `~/.workloom/live.env`，chmod 600，永不入库）；
- *   ③ `--env client-runtime` 时自动读取 `<客户端支持目录>/runtime/.env` 补齐缺失键。
+ *   ② `--keys-file <path>`：仓库外文件（推荐 `~/.workloom/live.env`，chmod 600，永不入库；`--env-file` 为兼容别名，
+ *      但注意与 Node 自带同名参数冲突——文件不存在时 Node 会先报错，因此正式口径用 `--keys-file`）；
+ *   ③ 自动发现：`$WORKLOOM_LIVE_ENV` → `~/.workloom/live.env` → macOS Keychain
+ *      （`workloom-live-deepseek` / `workloom-live-ark`）→ `--env client-runtime` 时客户端 `<支持目录>/runtime/.env`。
+ *   `--no-auto-keys` 可关闭自动发现。**封存好的 key 无需每次手动指定。**
  * 报告只写来源与键名，任何密钥值都不落盘、不进日志。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { cliArgs, findRepoRoot, loadProfile } from "./lib/profile.mjs";
 import { fingerprintEnvironment, fingerprintLines, loadEnvFile, resolveEnvironment, probeEnvironment } from "./lib/target.mjs";
 import { createBudget, normalizeBudgets } from "./lib/live/budget.mjs";
@@ -56,10 +60,15 @@ const REQUIRE_LIVE = has("--require-live");
 const ONLY_TASKS = arg("--tasks", null)?.split(",").map((s) => s.trim()).filter(Boolean) ?? null;
 const TASK_TIMEOUT_MS = Number(arg("--timeout-s", "0")) > 0 ? Number(arg("--timeout-s")) * 1000 : 8 * 60_000;
 const ALLOW_PROD_WRITES = has("--allow-prod-writes");
-/** 凭据文件（推荐放在仓库外，如 ~/.workloom/live.env；只读、只进进程内存，不进报告） */
-const ENV_FILE = arg("--env-file", null);
+/**
+ * 凭据文件（推荐放在仓库外，如 ~/.workloom/live.env；只读、只进进程内存，不进报告）。
+ * 主口径 `--keys-file`；`--env-file` 仅作兼容别名（与 Node 自带参数同名，文件缺失时 Node 会先崩）。
+ */
+const ENV_FILE = arg("--keys-file", null) ?? arg("--env-file", null);
 /** 客户端运行时档位：是否从客户端 `.env` 兜底读取缺失凭据（默认开） */
 const KEYS_FROM_CLIENT = !has("--no-keys-from-client");
+/** 自动发现封存凭据（默认开；--no-auto-keys 关闭） */
+const AUTO_KEYS = !has("--no-auto-keys");
 
 mkdirSync(join(OUT_DIR, "artifacts"), { recursive: true });
 mkdirSync(join(OUT_DIR, "receipts"), { recursive: true });
@@ -105,18 +114,46 @@ if (SELFTEST) {
  */
 const credentialSources = [];
 const runnerEnv = { ...process.env };
-if (ENV_FILE) {
-  const abs = resolve(ENV_FILE);
+/**
+ * 自动发现封存凭据（v3.1.1）：
+ *   ① `--env-file`（显式）→ ② `$WORKLOOM_LIVE_ENV` → ③ `~/.workloom/live.env`
+ *   → ④ macOS Keychain（workloom-live-deepseek / workloom-live-ark）→ ⑤ 客户端 runtime/.env（下方）。
+ * 只补齐缺失键，不覆盖已有值；只记录来源与键名，值永不落盘/回显。
+ */
+const autoEnvFiles = [
+  ENV_FILE ? { path: resolve(ENV_FILE), kind: "env-file-explicit" } : null,
+  !ENV_FILE && process.env.WORKLOOM_LIVE_ENV ? { path: resolve(process.env.WORKLOOM_LIVE_ENV), kind: "env-file-WORKLOOM_LIVE_ENV" } : null,
+  !ENV_FILE && AUTO_KEYS ? { path: join(homedir(), ".workloom", "live.env"), kind: "env-file-default" } : null,
+].filter(Boolean);
+
+for (const entry of autoEnvFiles) {
+  const abs = entry.path;
   if (!existsSync(abs)) {
-    notes.push(`--env-file 指向的文件不存在：${abs}（按未配置凭据处理）`);
-  } else {
-    const kv = loadEnvFile(abs);
-    let filled = 0;
-    for (const [key, value] of Object.entries(kv)) {
-      if (value && !runnerEnv[key]) { runnerEnv[key] = value; filled += 1; }
-    }
-    credentialSources.push({ source: "env-file", path: abs, keys: Object.keys(kv).filter((k) => kv[k]), filled });
+    if (entry.kind !== "env-file-default") notes.push(`${entry.kind} 指向的文件不存在：${abs}（继续按其他来源解析）`);
+    continue;
   }
+  const kv = loadEnvFile(abs);
+  let filled = 0;
+  for (const [key, value] of Object.entries(kv)) {
+    if (value && !runnerEnv[key]) { runnerEnv[key] = value; filled += 1; }
+  }
+  credentialSources.push({ source: entry.kind, path: abs, keys: Object.keys(kv).filter((k) => kv[k]), filled });
+}
+
+/** macOS Keychain 兜底：封存好的 key 不需要每次手动导出 */
+if (AUTO_KEYS && process.platform === "darwin") {
+  const keychainSlots = [
+    { service: "workloom-live-deepseek", env: "DEEPSEEK_API_KEY" },
+    { service: "workloom-live-ark", env: "VOLCENGINE_ARK_API_KEY" },
+  ];
+  const found = [];
+  for (const slot of keychainSlots) {
+    if (runnerEnv[slot.env]) continue;
+    const res = spawnSync("security", ["find-generic-password", "-s", slot.service, "-w"], { encoding: "utf-8" });
+    const value = (res.stdout ?? "").trim();
+    if (res.status === 0 && value) { runnerEnv[slot.env] = value; found.push(slot.env); }
+  }
+  if (found.length) credentialSources.push({ source: "macos-keychain", path: "login.keychain-db", keys: found, filled: found.length });
 }
 if (KEYS_FROM_CLIENT && environment.kind === "client-runtime" && environment.supportDir) {
   const clientEnvPath = join(environment.supportDir, "runtime", ".env");
