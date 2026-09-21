@@ -189,6 +189,10 @@ export async function runDshTask({
     : 0;
   const answer = extractDshAnswer(out);
   const ok = res.code === 0 && Boolean(answer);
+  /** 失败时保留最后一条可读错误（dsh 的 HTTP_4xx/网络错误都在 stdout/stderr 尾部） */
+  const failureLine = ok
+    ? null
+    : (out.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("[workloom-")).slice(-2).join(" ") || `dsh 退出码 ${res.code}`);
   // 账本链验证（与 E6 门禁同一验证器）：链断 = 生产链路证据无效，必须在任务结果里暴露
   let chain = null;
   if (auditLines > 0) {
@@ -200,6 +204,7 @@ export async function runDshTask({
   return {
     status: ok ? "ok" : "failed",
     answer,
+    reason: ok ? undefined : failureLine.slice(0, 240),
     exitCode: res.code,
     ms,
     model,
@@ -225,9 +230,18 @@ function extractDshAnswer(out) {
     .filter((l) => !l.startsWith("[") && !l.startsWith("▸") && !l.startsWith("✅") && !l.startsWith("❌"));
   const completeAt = lines.findIndex((l) => l.includes("TASK_COMPLETE"));
   if (completeAt >= 0) {
-    // 最终答案可能跨多行（结论 + 依据 + TASK_COMPLETE 结尾）：回溯取到上一个段落边界
-    const tail = lines.slice(Math.max(0, completeAt - 4), completeAt + 1).join("\n");
-    return tail.slice(-800);
+    /**
+     * 最终答案可能跨很多行（结论 + 依据 + 风险 + TASK_COMPLETE 收尾）。
+     * 只取最后几行会把实质内容截掉，导致判定“缺少期望”假失败（2026-09-20 实测）——
+     * 因此按字符数回溯取足够长的尾部（默认 2000 字符）。
+     */
+    let chars = 0;
+    const picked = [];
+    for (let i = completeAt; i >= 0 && chars < 2000; i -= 1) {
+      picked.unshift(lines[i]);
+      chars += lines[i].length + 1;
+    }
+    return picked.join("\n");
   }
   const tail = lines.slice(-5).join("\n");
   return tail.length > 8 ? tail.slice(-800) : null;
@@ -322,7 +336,12 @@ export async function runImageTask({ resolved, task, timeoutMs = 300_000, env = 
         size: task.size ?? "1024x1024",
         response_format: "url",
         watermark: task.watermark ?? false,
-        ...(count > 1 ? { sequential_image_generation: "auto", sequential_image_generation_options: { max_images: count } } : {}),
+        /**
+         * 多张图口径（2026-09-20 实测）：seedream-5.0-pro **不支持** `sequential_image_generation`
+         * （Ark 返回 InvalidParameter: not supported by the current model），但支持 `n`（HTTP 200、返回 2 张）。
+         * 因此统一用 `n`；需要“连续图”语义的模型请在 profile 里显式传 params。
+         */
+        n: count,
         ...(task.params ?? {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),

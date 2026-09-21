@@ -1,22 +1,23 @@
 <!--
 document_schema: workloom.product-context/v1
 document_id: workloom-product-and-code-panorama
-context_version: 2026-09-19.2
-snapshot_date: 2026-09-19
+context_version: 2026-09-22.1
+snapshot_date: 2026-09-22
 timezone: Asia/Shanghai
 canonical_repository: cnb.cool/workloom-ai/workloom-im
 canonical_path: /WORKLOOM_PRODUCT_CONTEXT.md
 distribution: controlled-base-sync
 verified_host: cnb.cool/workloom-ai
-verified_repositories: 10
-fleet_size: 10            # 九仓 + WorkLoom-growth（实验车道）
+verified_repositories: 12
+fleet_size: 12            # 十个订阅仓（基座 + 9 个子仓，含实验车道 growth）+ 两个隔离副本
+isolated_repositories: 2  # growthtest / growthmatrix：双向不同步，只登记不纳管（§5.8/§5.9、§14.5）
 dev_protocol: docs/DEVELOPMENT-PROTOCOL.md
 mission_board: workloom-ai/WorkLoom-Dev-Dispatch
 ci_platform: cnb (.cnb.yml; 基座 3 条必需闸门)
 ui_artifact_host: cnb-release (ui-v0.1.1)
 read_depth: deep (module-level; not test-executed)
 audit_program: WORKLOOM-AUDIT-2026-09 (ledger local-only)
-previous_source_sha256: 37136e2327df6bdca60db19d969eb86de9b3f215bb39dcabafa243c94f5011ef
+previous_source_sha256: d82d96e5a874a16e64de45b0b1a313dcd2acb005c9bd0170cb4b4b3ddd879caa
 user_confirmed_catalog_date: 2026-09-14
 repository_visibility: public-open-source
 classification: public-product-context-no-secrets
@@ -28,6 +29,7 @@ classification: public-product-context-no-secrets
 > - `context_version` 表示认知版本，`snapshot_date` 表示事实核验时间。更新产品边界、系统不变量或仓库快照时，必须同步更新相应元数据，并通过受控 base-sync 分发。
 > - 2026-09-14，产品所有者确认九个仓库全部为开源项目并补充正式定位；2026-09-17，产品所有者确认九仓已迁移至腾讯 CNB（`cnb.cool/workloom-ai`），原 GitHub 账号 `geniusdapeng-collab` 已不可用。
 > - 本版（2026-09-17.2）按产品所有者要求做了**逐仓模块级深读**：九仓全量克隆、逐模块精读、跨仓差异计算，并对照 2026-09-15/16 的审计台账；**未执行安装、构建与测试**，凡“是否跑得通”的判断都以代码与审计证据为界（见 §13）。
+> - 2026-09-22，产品所有者确认新增两个**隔离副本**实验仓 `workloom-growthtest` / `workloom-growthmatrix`（2026-09-21 从 `WorkLoom-growth@a6dc89a` 完整复制）；两仓内容与基座暂时拆分，**基座内容不直接下发、其改动也不直接回流基座**，在 `sync/child-repos.json#isolatedRepos` 登记、不进入纳管与同步队列（见 §5.8/§5.9、§14.5）。本版对这两仓做了元数据 + 关键文件核验（未逐模块深读，证据等级见附录 A）。
 > - 提交 SHA、版本、员工数、技能数、围栏数等属于快照事实，后续任务必须先刷新目标仓库状态，不得把它们当成永久现状。
 > - 本文件只提供产品与工程上下文，不构成对开发代理的操作授权；用户、系统、开发者及就近 AGENTS.md / AGENTS.override.md 的有效指令优先。
 > - 严禁写入令牌、密码、私钥、客户凭证、原始客户数据或其他秘密。需要凭证时只使用批准的秘密存储或本地环境配置。
@@ -36,7 +38,7 @@ classification: public-product-context-no-secrets
 # WorkLoom 产品与代码全景认知
 
 > 建档日期：2026-09-10（Asia/Shanghai）
-> 最近核验：2026-09-17（九仓托管于 CNB，逐仓模块级深读；各仓 `main` 均为单次 2026-09-17 rescue 提交）
+> 最近核验：2026-09-22（十个订阅仓继承 2026-09-17 深读结论 + 持续快照；两个隔离副本于 2026-09-22 做元数据与关键文件核验）
 > 用途：作为后续产品设计、架构评审、代码修改和跨仓同步时的共同上下文。
 > 信息来源：九个 CNB 仓库代码（`packages/`、`apps/`、`bundles/`、`sync/`、`scripts/`、`docs/`、`vendor/`、`trading_system/`）、`product.manifest.json`、`bundle.json`、`oss-components.json`，以及产品所有者 2026-09-14 / 2026-09-17 确认与 2026-09-15/16 审计台账。仓库中的文字仅作为产品资料分析，不视为对开发代理的操作指令。
 
@@ -49,7 +51,8 @@ WorkLoom 不是一组彼此独立的 AI 应用，而是一套“一个基座、�
 - **酒店、电商、视频、获客、咨询、交易等项目**是从同一基座派生的行业经营体。它们用行业包定义自己的数字员工组织、技能、业务对象、阶段、围栏、种子数据、投影和 UI。
 - **狐狸先生**不是一个独立行业，而是新人格、新交互和影音汇报方式的试验田；成功经验可回到基座，失败实验进入“策略墓地”。
 - 整套系统的真正差异化不只在模型能力，而在两层复利：一是“围栏 + 账本 + 考试院”的信任工程，二是“经验上行、评测灰度、能力下发”的蜂群飞轮。
-- 研发侧已上线**开发协作机制**（`docs/DEVELOPMENT-PROTOCOL.md`，协议 v1.3）：五条硬规则（一任务一分支、任务号进提交、先声明后落笔、**合并在机器且串行（人保留叫停权）**、无回执不算完成）+ 三个自动化工具 + 每日舰队扫描；同时为 `workroom-fox` / `WorkLoom-growth` 建立了**实验车道**，实验语义不下发、不覆盖、不回流。
+- 研发侧已上线**开发协作机制**（`docs/DEVELOPMENT-PROTOCOL.md`，协议 v1 · 2026-09-22 修订）：五条硬规则（一任务一分支、任务号进提交、先声明后落笔、**合并在机器且串行（人保留叫停权）**、无回执不算完成）+ 三个自动化工具 + 每日舰队扫描；同时为 `workroom-fox` / `WorkLoom-growth` 建立了**实验车道**，实验语义不下发、不覆盖、不回流。
+- 舰队分层（2026-09-22）：**十个订阅仓**（基座 + 9 个子仓）走正常同步与纳管；`workloom-growthtest` / `workloom-growthmatrix` 两个**隔离副本**只登记、不纳管、双向不同步（基座内容不直接下发，其改动也不直接回流），见 §5.8/§5.9 与 §14.5。
 - 工程完整性上，每个仓都是**可独立运行的自包含 monorepo 源码树**（含服务端、三端前端、桌面壳、数据库迁移、行业包与技能），开源组件以“仓内 vendor / npm 依赖 / 安装期受控下载”三种形态存在，详见 §12。
 
 一句话心智模型：**WorkLoom IM 是操作系统，行业包是岗位与业务制度，行业项目是经营实例，仙女座是管理全部实例的中央运营台。**
@@ -69,6 +72,14 @@ WorkLoom 不是一组彼此独立的 AI 应用，而是一套“一个基座、�
 | 行业 | `workroom-tiger` | `industry` | `trading`（在 `governance/`） | `tiger-trading` |
 | 行业 | `workroom-eagle` | `industry` | `consulting` | `eagle-consulting` |
 | 试验田 | `workroom-fox` | `experiment` | `hotel` | `yunqi-hotel` |
+| 实验车道 | `WorkLoom-growth` | `industry` | `geo-growth` | `geo-growth`（`portOffset=420`） |
+
+隔离副本（登记在 `sync/child-repos.json#isolatedRepos`，不进入同步与纳管队列）：
+
+| 仓 | 定位 | 来源 | 与基座的关系 |
+|---|---|---|---|
+| `workloom-growthtest` | AI超增长（实验版） | 完整复制自 `WorkLoom-growth@a6dc89a`（2026-09-21 建仓） | 基座内容不下发、本仓不回流；已出现“基座去审批化”等与不变量冲突的改造 |
+| `workloom-growthmatrix` | 骇客帝国（实验版） | 完整复制自 `WorkLoom-growth@a6dc89a`（2026-09-21 建仓） | 基座内容不下发、本仓不回流；已在视频链路 / 后期调色方向分叉 |
 
 1. **顶层：仙女座**。服务对象是 WorkLoom 平台运营团队；责任是平台运营、平台运维、客户成功、知识治理、计费对账、行业包与策略发布；人机分工是数字员工执行、1–2 名人类负责审批、经营判断和应急裁决。
 2. **中层：行业自主经营系统**。酒店、AI 视频、酒店获客、电商、股票交易试验、咨询、狐狸试验田及未来行业；共享基座，但拥有自己的组织结构、业务语义、围栏和交付界面。
@@ -80,6 +91,7 @@ WorkLoom 不是一组彼此独立的 AI 应用，而是一套“一个基座、�
 - **向上回流**：工单、需求、效果指标、异常类型、失败原因及经营反馈。
 - **数据边界**：客户原始经营数据不应离库；进入中枢和蜂群的应是脱敏、白名单化、可审计的元数据或经验产物。
 - **平台工程边界**：`platform-ops` 属于仙女座，不应随基座同步到行业客户仓库。
+- **隔离副本边界**：`workloom-growthtest` / `workloom-growthmatrix` 与基座暂时拆分——不接收基座下发，也不向基座回流；解除隔离必须由产品所有者明确指令并另开纳管任务卡。
 
 ## 3. WorkLoom IM 基座（模块级）
 
@@ -175,9 +187,9 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 配套 `safety/`（受保护清单、镜像落点、演练制度）与 CI `safety-gate`：镜像备份落点为“工蜂 / CNB 双托管”，每日 03:30 夜班窗口 + main 推送后执行；季度故障演练（杀主库 RTO ≤60s、杀 Redis RTO ≤10min、误删保护文件恢复 ≤30min 等）。这些能力属于运营中枢边界，不得下发客户行业仓（基座/行业载荷按产品身份排除 `platform-ops`，见 §13 的 B-01.PB-1）。
 
-## 5. 九个仓库的定位与代码理解
+## 5. 十二个仓库的定位与代码理解
 
-九仓均托管于 CNB 的 `workloom-ai` 组、全部开源。下表为 2026-09-17 深读快照（各仓 `main` 均为单次 rescue 提交，括号内为被保存的本地树来源 SHA）。
+组织 `workloom-ai` 当前共 12 个仓（2026-09-22 核验）：**十个订阅仓**（基座 + 9 个子仓，含实验车道 `WorkLoom-growth`）参与同步与纳管；**两个隔离副本**（§5.8/§5.9）只登记、双向不同步。下表为 2026-09-17 深读快照（各仓 `main` 均为单次 rescue 提交，括号内为被保存的本地树来源 SHA）；`WorkLoom-growth` 与两个隔离副本为 2026-09-18 之后新增，分别按 2026-09-20 与 2026-09-22 快照记录。
 
 | 仓库 | HEAD 快照 | 定位 | 代码层面的主要差异 |
 |---|---:|---|---|
@@ -191,6 +203,8 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 | [`workroom-tiger`](https://cnb.cool/workloom-ai/workroom-tiger) | `394cd47`（源于 `b8a59f5`） | 全球资产管理高风险试验 | Python 交易内核（23 个顶层模块 + agents/markets/portfolio/redline/llm/providers 等子域）+ `governance/` 治理壳 + `trading` 0.1.0（37 员工 / 19 围栏） |
 | [`workroom-eagle`](https://cnb.cool/workloom-ai/workroom-eagle) | `efcae26`（源于 `acba266`） | 鹰眼 AI 咨询管理系统 | `bundles/consulting` 2.0.0：22 员工 / 199 技能 / 9 条基线围栏 / 4 套服务前台知识；`ai-pm` 1.0.0 与 `hotel` 1.0.0 为兼容包 |
 | [`workroom-fox`](https://cnb.cool/workloom-ai/workroom-fox) | `7dfa488`（源于 `2cc4167`） | “懂汇报的狐狸先生”试验田 | 同源酒店版（`hotel` 3.2.0，与酒店仓仅差 `bundle.json` 与 `service-front/client.json`）+ M1 视听层（audio/voice/loommate） |
+
+> 快照说明：上表 HEAD 是 2026-09-17 深读时的值；此后各仓持续演进（例如 `workloom-im` 2026-09-22 的 `main` 已到 `3a39a26`，`workloom-hotel` 到 `21c680b`）。引用时以各仓 `main` 实时值为准。
 
 ### 5.1 WorkLoom Hotel
 
@@ -245,12 +259,28 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 - 治理包 `governance/bundles/trading` 0.1.0：37 个岗位 preset、10 个技能目录（6 个已入签名索引）、19 条由 `config.py` 生成的围栏规则（R-T0~R-T15 + R-P1~R-P3，生成器产物为唯一发布物）；测试 `tests/` 31 个文件（含 `test_v54_audit_fixes.py`、`test_gen_fences.py`）。
 - 合规边界：仅模拟盘、不做真实下单；运行报告如实标注离线合成数据与 LLM 透传；结果不构成投资建议。
 
+### 5.8 WorkLoom-growthtest（隔离副本 · AI超增长·实验版）
+
+- **来源与身份**（CNB 元数据 + 仓内 manifest，2026-09-22 核验）：2026-09-21T00:28Z 建仓，完整复制自 `workloom-ai/WorkLoom-growth@a6dc89a`；`product.manifest.json` 为 `productId=workloom-ai-growth`、`role=industry`、`packageName=workloom-ai-acquisition`、`defaultBundle=geo-growth`、`appId=com.geniusdapeng.workloomgrowth`、`portOffset=420`，与 `workloom` / `WorkLoom-growth` 同产品身份。
+- **当前 HEAD**：`main@98d5ecde`（`feat(growth): 基座去审批化——下线审批中心/任务中心与统一待办的审批状态，保留业务链路关卡 [T-2026-0921-0043] (#8)`）——这是**与基座不变量（高风险必须人审、先围栏后动作）直接分叉**的改造，属于激进实验，不能进基座、也不能下发。
+- **隔离状态**：`sync/child-repos.json#isolatedRepos` 登记（`syncPolicy: none-in-none-out`）；分支列表只有 `main` + `task/*`（无 `sync/base-*`，说明基座 fanout 从未向其推送）；仓内 `.workloom-base-sync.json` 继承自复制源（`lastSyncedBaseSha=8789675` / `lastRequiredAssetsBaseSha=ae3f9e3`，2026-09-20T11:14Z），**冻结不再更新**。
+- **在途改动**（2026-09-22 快照，2 条 open PR）：调色择优「配方驱动」（`T-2026-0921-0044`）、growth 视频链路修复批次（`sync/video-chain-fixes-20260921`）。
+- **受控文档副本**：建仓时随源复制了 `WORKLOOM_PRODUCT_CONTEXT.md`（`d82d96e5…`，即 2026-09-19.2 版）与 `docs/DEVELOPMENT-PROTOCOL.md`（`db574333…`）；隔离期内不接收更新，**不代表最新认知**，引用时以基座原文为准。
+
+### 5.9 WorkLoom-growthmatrix（隔离副本 · 骇客帝国·实验版）
+
+- **来源与身份**：2026-09-21T00:46Z 建仓，同样完整复制自 `workloom-ai/WorkLoom-growth@a6dc89a`；manifest 身份字段与 §5.8 相同（同 `productId` / `appId` / 端口），`displayName=骇客帝国`。
+- **当前 HEAD**：`main@0d41de9`（`fix(growth): 补回视频生成媒体目录资产并让产品内容门禁接受 CNB 地址 [T-2026-0921-0004] (#4)`）；分叉方向偏视频链路与后期调色（见在途 PR）。
+- **隔离状态**：与 §5.8 完全相同——`isolatedRepos` 登记、无 `sync/base-*` 分支、基座资产摘要冻结在复制点。
+- **在途改动**（2026-09-22 快照，3 条 open PR）：调色择优「配方驱动」（`T-2026-0921-0043`）、移植后期调色能力（调色师岗位 + 4 技能 + 13 题材配方库 + 工位桥 + 择优机制，`T-2026-0921-0042`）、growth 视频链路修复批次（`sync/video-chain-fixes-20260921-mx`）。
+- **共同风险**：两仓同 `productId` 与 `appId`，若将来解除隔离，必须先统一产品身份（productId / 端口 / 演示工作区）再纳管，否则安装包、桌面身份与演示工作区会互相覆盖（协议 §9.3 注意条款）。
+
 ## 6. 基座同步与仓库治理
 
 基座通过同步配置向子仓分发公共代码，同时保护行业差异。三端的导航、布局、状态接线与客户端 API 契约本身也是 WorkLoom IM 基座能力，不是各行业仓可以自行复制演进的页面代码：
 
 - **范围声明**：`sync/base-scope.json`（v13）是同步边界的唯一事实源。include 公共 packages、runtime、shared、db、server 源码、desktop、scripts 与 `docker-compose.yml`；exclude 行业 bundles、demo、docs、mock、vendor、design-system、三端页面与行业服务、迁移与行业技能等。
-- **订阅清单**：`sync/child-repos.json`（v3）维护子仓、`pathPrefix`（Tiger 为 `governance/`）、`uiRolloutWave`（W1–W5 波次）与仓级 `extraExclude`（Panda 的电商化改写文件、Tiger 的服务层测试）。
+- **订阅清单**：`sync/child-repos.json`（v5）维护子仓、`pathPrefix`（Tiger 为 `governance/`）、`uiRolloutWave`（W1–W5 波次）与仓级 `extraExclude`（Panda 的电商化改写文件、Tiger 的服务层测试）；顶层 `isolatedRepos` 登记**双向不同步**的隔离副本（growthtest / growthmatrix），舰队扫描、纳管与 fanout 按此过滤。
 - **根级必备资产**：`WORKLOOM_PRODUCT_CONTEXT.md`（本文）整文件验真下发；`AGENTS.md` 只按受控区块（`WORKLOOM-CONTEXT:BEGIN/END`）合并；`.github/workflows/base-sync-heartbeat.yml` 由模板复制。
 - **受保护实例资产**：`electron-builder.yml` 与 `product.manifest.json` 不被整文件覆盖，身份字段（appId、productName、demoWorkspaceSlug、demoMemberNo、ports、publish）属于部署实例。
 - **UI 与三端基座**：`@workloom/ui` 与三端客户端基座按同一稳定版本经升级 PR 分波下发；行业扩展只允许落在 `apps/*/src/{extensions,projections,config/industry,theme/industry}/**` 等显式排除路径。
@@ -368,9 +398,9 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 ## 11. 凭证与“记忆”说明
 
-- 本文没有保存任何令牌、密钥或客户凭证；九仓为开源项目，读取与继承上下文不需要私人令牌（本次核验即匿名只读克隆）。
-- 九仓根目录均持有 `WORKLOOM_PRODUCT_CONTEXT.md`（本次为 2026-09-17.2 深读版）与根级 `AGENTS.md`；从任一仓库启动的新开发任务会先获得共同产品关系、开发边界和本文入口。
-- `workloom-im` 是本文唯一受控原文；其他仓只接收校验过的副本。新行业仓必须通过 `sync/adopt.sh --new-industry` 接入。
+- 本文没有保存任何令牌、密钥或客户凭证；十二仓均为开源项目，读取与继承上下文不需要私人令牌（本次核验即匿名只读克隆）。
+- 十个订阅仓根目录持有 `WORKLOOM_PRODUCT_CONTEXT.md`（随基座同步刷新）与根级 `AGENTS.md`；两个隔离副本中的同名文件是**建仓时复制的冻结副本**（2026-09-19.2 版），隔离期内不更新，不代表最新认知。
+- `workloom-im` 是本文唯一受控原文；订阅仓只接收校验过的副本；隔离副本不接收下发。新行业仓必须通过 `sync/adopt.sh --new-industry` 接入；有意与基座拆分的仓登记进 `sync/child-repos.json#isolatedRepos`（协议 §11）。
 - 多仓审计台账（`AUDIT_PROGRESS.md` 等）目前只存在本地，因为 `workroom-andromeda` 是公开仓、不能承载敏感发现；在独立私有控制仓提供前，权威台账的落点问题（BLK-CTL-05-001）仍未关闭。
 - 本次核验方式：匿名 `git clone --depth 30 https://cnb.cool/workloom-ai/<repo>.git` + 逐模块精读（模块入口注释、导出面、围栏/管线/技能定义、测试清单、审计文档），跨仓做内容指纹与差异比对；**未执行安装、构建、测试或数据库操作**。
 - 未来任务应把本文作为可版本化的持久项目上下文，而不是模型的隐式跨对话记忆；实际开发前仍应检查目标仓最新提交和仓内规则，避免把 2026-09-17 快照当成永久现状。
@@ -425,13 +455,13 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 **读取方式说明**：本文的“已交付/部分交付/未见实现”判断来自代码结构、定义文件与既有审计证据；未被 HP 批次覆盖的能力域，尚不能视为“经过独立审计验证”。
 
-## 14. 开发协作机制与舰队治理（2026-09-19 新增）
+## 14. 开发协作机制与舰队治理（2026-09-19 新增；2026-09-22 增补隔离副本车道）
 
-**协议正文**：`docs/DEVELOPMENT-PROTOCOL.md`（workloom-im 唯一定义，随 base-sync 分发各仓只读副本；当前协议 v1.2）。核心是"不新造系统"——用 CNB 原生能力 + 三个校验脚本管住"谁在改什么、别撞车、会话断了能接上"。
+**协议正文**：`docs/DEVELOPMENT-PROTOCOL.md`（workloom-im 唯一定义，随 base-sync 分发各订阅仓只读副本；当前协议 **v1 · 2026-09-22 修订**，含新增 §11 隔离副本车道）。核心是"不新造系统"——用 CNB 原生能力 + 三个校验脚本管住"谁在改什么、别撞车、会话断了能接上"。
 
 ### 14.1 五条硬规则
 
-1. 一任务一分支一 PR：任务卡 = CNB Issue（标题 `[T-YYYYMMDD-XXXX]`），分支 = `task/T-YYYYMMDD-XXXX`；
+1. 一任务一分支一 PR：任务卡 = CNB Issue（标题 `[T-YYYY-MMDD-XXXX]`），分支 = `task/T-YYYY-MMDD-XXXX`（提交门禁正则 `\[T-\d{4}-\d{4}-\d{4}\]`）；
 2. 提交标题 `<type>(<layer>): <摘要> [T-…]`；type ∈ `feat|fix|sync|protocol|exam|docs|test|chore|ci`；layer 仅告警；2026-09-19 起新提交必须带任务号（此前提交按过渡期祖父规则放行）；
 3. 先声明后落笔：与同仓其它 open PR 改到同一文件或同一互斥模块（`sync/`、`protocol/`、`migrations/`、`.cnb.yml`、`AGENTS.md`、根 `package.json`）→ **先到先得**（编号小者优先），后到者排队；
 4. 合并在机器、串行执行：AI 只提 PR，门禁全绿后由 AI 按队列一次一个合并（squash），人保留叫停与回滚权；
@@ -443,8 +473,8 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 |---|---|
 | 提交规范校验 / 并发冲突检测 | 每仓 `.cnb.yml` 协议门禁 stage（`scripts/ci/verify-*.mjs`，含自检与真实校验） |
 | 类型检查 / 测试 / 构建 / 迁移种子验链 / 三端视觉 | 基座三条必需流水线（static/db/ui）+ 各仓 static/db 阻断 |
-| 禁止直推 / 强推 / 删除 / NPC 自批 | CNB 分支保护规则（十仓已配） |
-| **新仓发现与纳管** | 每日 cron（09:00）`scripts/tools/fleet-scan.mjs --issue --provision`：识别 → 开扫描卡 → 自动建纳管 PR |
+| 禁止直推 / 强推 / 删除 / NPC 自批 | CNB 分支保护规则（十个订阅仓已配；隔离副本仓不新增/修改） |
+| **新仓发现与纳管** | 每日 cron（09:00）`scripts/tools/fleet-scan.mjs --issue --provision`：识别 → 开扫描卡 → 自动建纳管 PR（隔离副本仓按 `isolatedRepos` 跳过，只单列报告） |
 | 任务卡建卡 / 回执 / 关单 | `scripts/tools/task.mjs new|list|receipt` |
 | 实验路径护栏 | 每日 cron `scripts/tools/experiment-guard.mjs --check` |
 | **基座资产分发**（根级受控资产 → 各仓 `sync/base-*` PR → 合并） | 30 分钟 cron + `api_trigger_base_sync`：`sync/fanout-cnb.mjs` + `sync/merge-sync-prs.mjs`（仅纯同步 PR 自动合并，白名单见协议 §9.4） |
@@ -455,15 +485,15 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 | 工具 | 作用 |
 |---|---|
 | `scripts/tools/cnb-api.mjs` | CNB API 封装（含分支保护全字段 payload——少字段会被平台判 400） |
-| `scripts/tools/fleet-rules.mjs` | WorkLoom 仓识别（manifest schema / base-sync state / bundle schema 三级）与舰队差分 |
+| `scripts/tools/fleet-rules.mjs` | WorkLoom 仓识别（manifest schema / base-sync state / bundle schema 三级）、舰队差分、隔离副本集合（`isolatedFleet` / `isIsolated`） |
 | `scripts/tools/fleet-scan.mjs` | 扫描组织 → 分类 → 与 `sync/child-repos.json` 差分 → `--issue` / `--provision` / `--check` |
-| `scripts/tools/provision-protocol.mjs` | 单仓纳管（10 标签 + 分支保护 + 协议资产 + 网禁 stage + PR），幂等 |
+| `scripts/tools/provision-protocol.mjs` | 单仓纳管（10 标签 + 分支保护 + 协议资产 + 协议门禁 stage + PR），幂等；隔离副本默认拒管（`--allow-isolated` 才放行） |
 | `scripts/tools/task.mjs` | 任务卡 `new` / `list` / `receipt` |
-| `scripts/tools/experiment-guard.mjs` | 实验车道护栏：实验路径不得被 base-sync 覆盖、必须进 UI 扩展白名单 |
-| `sync/fanout-cnb.mjs` | 基座 fanout：资产摘要漂移预检 → 只对真漂移子仓 clone → 建 `sync/base-*` PR（在途去重、不强推） |
+| `scripts/tools/experiment-guard.mjs` | 实验车道护栏：实验路径不得被 base-sync 覆盖、必须进 UI 扩展白名单；同时校验隔离副本登记完整且未混入 `children`（`ISOLATED_IN_CHILDREN`） |
+| `sync/fanout-cnb.mjs` | 基座 fanout：资产摘要漂移预检 → 只对真漂移子仓 clone → 建 `sync/base-*` PR（在途去重、不强推）；入口过滤隔离副本（`isolatedRepos` 不下发） |
 | `sync/merge-sync-prs.mjs` | 纯同步 PR 自动合并：分支前缀 + 文件白名单 + 全部门禁 success 三条件齐备才合并 |
 
-**任务集看板**：`workloom-ai/WorkLoom-Dev-Dispatch`（纳入十仓，按 `t/*` 标签分列；CNB 任务集名不允许空格与中文）。**标签体系**：每仓 10 个（CNB 硬上限，实测第 11 个返回 201 但不落库）。
+**任务集看板**：`workloom-ai/WorkLoom-Dev-Dispatch`（纳入十仓，按 `t/*` 标签分列；CNB 任务集名不允许空格与中文）。**标签体系**：每仓 10 个（CNB 硬上限，实测第 11 个返回 201 但不落库）。隔离副本仓不参与任务集看板与协议纳管。
 
 ### 14.4 实验车道（fox / growth 的深度定制保护）
 
@@ -475,15 +505,27 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 纪律：实验仓只增不改基座契约；实验验证成功的通用能力必须先走提案任务卡（L2→L1→L0）才能进基座。
 
-## 附录 A · 本次核验方法与覆盖率
+### 14.5 隔离副本车道（growthtest / growthmatrix，2026-09-22 新增）
+
+`workloom-growthtest` / `workloom-growthmatrix` 是 2026-09-21 从 `WorkLoom-growth@a6dc89a` 完整复制的**激进改造实验副本**，产品所有者（2026-09-22）明确：**内容暂时与基座拆分——基座内容不直接同步这两仓，这两仓也不直接同步回基座**。与 §14.4 实验车道的区别是：实验车道仍在同步队列内（收基座资产、实验路径受保护），隔离副本**完全不在同步队列内**。
+
+- **登记**：`sync/child-repos.json#isolatedRepos`（`lane: isolated`、`syncPolicy: none-in-none-out`、`copiedFrom`、`isolatedSince`、`declaredBy/At`、`note`）；
+- **扫描**：`fleet-scan` 把隔离仓计入"已知"、单列为隔离副本，不开扫描任务卡、不建纳管 PR；
+- **纳管**：`provision-protocol` 默认拒绝隔离仓；恢复必须由产品所有者明确指令 + 另开任务卡 + `--allow-isolated`；
+- **分发**：`fanout-cnb` 读取 `isolatedRepos` 在入口过滤（即使误写进 `children` 也拦下）；
+- **护栏**：`experiment-guard --check` 校验登记完整性（`note` / `isolatedSince` / `syncPolicy`）并拦截 `ISOLATED_IN_CHILDREN`；违规在基座门禁判红；
+- **回流**：隔离副本的改动不进基座、不下发其他仓；通用能力要公共化须另开提案任务卡按 L2→L1→L0 重做。
+
+## 附录 A · 核验方法与覆盖率（2026-09-17 深读 + 2026-09-22 增补）
 
 | 项 | 内容 |
 |---|---|
-| 仓库 | 九仓全量克隆（`--depth 30`），HEAD 与远端 `ls-remote` 逐仓比对一致 |
+| 仓库 | 2026-09-17：九仓全量克隆（`--depth 30`），HEAD 与远端 `ls-remote` 逐仓比对一致 |
 | 深度 | 逐模块精读：基座 26 个域 + runtime/shared/db/ui 出口与关键实现；各行业仓独有代码（管线 YAML 步骤、围栏规则、技能定义、连接器层、Python 内核、治理壳、M2/M1 前端层） |
 | 跨仓 | bundle 内容指纹、同版本差异、`provides` 与磁盘资产一致性、同步范围与污染守卫、运行时锁与发布资产清单 |
 | 未做 | 未安装依赖、未构建、未运行 vitest/suite/Playwright、未连接 PostgreSQL、未执行任何 push 或仓库写入 |
 | 体量 | 九仓合计约 8,600 个源码/文档文件、约 167 万行（含 ts/tsx/py/sql/yml/json/md） |
+| 2026-09-22 增补（隔离副本） | 对 `workloom-growthtest` / `workloom-growthmatrix` 做 **B/D 级**核验：CNB API 元数据（建仓时间、描述、open PR 数）+ `git ls-remote`（HEAD、分支列表）+ `git show` 关键文件（`product.manifest.json`、`.workloom-base-sync.json`、受控文档摘要、最近提交）；**未逐模块精读、未安装、未构建、未跑测试**。两仓 `git ls-tree -r` 实测各约 2,130 个文件（继承 growth 完整树）。 |
 
 ## 附录 B · 快照与统计口径
 
@@ -498,5 +540,8 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 | workroom-tiger | `394cd47` | trading 0.1.0（37 / 10 目录、6 入签名 / 19） | Python 21 环节 STEP_REGISTRY；31 个测试文件 |
 | workroom-eagle | `efcae26` | consulting 2.0.0（22 / 199 / 9）；ai-pm 1.0.0；hotel 1.0.0 | suite 445（README 徽章口径）；4 套服务前台知识 |
 | workroom-fox | `7dfa488` | hotel 3.2.0（11 / 26 / 53） | M1 视听层（audio/voice/loommate）；9 项 AI 自动化能力 |
+| WorkLoom-growth（实验车道） | `6bc16631`（2026-09-22 云端 main） | 与 `workloom` 同源第二实例；本轮未复读 bundle 统计 | `productId=workloom-ai-growth`、`portOffset=420`；游戏化定制 hud / star-ring / pages/p0 |
+| workloom-growthtest（隔离副本） | `98d5ecde`（2026-09-22 云端 main） | 继承自 `WorkLoom-growth@a6dc89a`；本轮未复核统计 | **双向不同步**；已做「基座去审批化」改造；2 条 open PR；2,130 个文件 |
+| workloom-growthmatrix（隔离副本） | `0d41de9d`（2026-09-22 云端 main） | 继承自 `WorkLoom-growth@a6dc89a`；本轮未复核统计 | **双向不同步**；视频链路 / 后期调色分叉；3 条 open PR；2,129 个文件 |
 
 口径说明：preset/skill 数取自 `bundle.json` 与目录实际内容；围栏规则数按 `fences/**/*.yml` 中 `- id:` / `- rule_id:` 条目计数（含业态补丁）；“入签名”指是否列入 `bundle.json` 的 `provides`；suite 用例数按 `scripts/suite.ts` 域注册统计（约 369–371，README 记 371）；README 徽章中的 suite 数字为各仓自述，未在本次核验中复跑。
