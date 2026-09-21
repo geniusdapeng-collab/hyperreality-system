@@ -302,7 +302,13 @@ async function runTask(task) {
           rulesUrl: SELFTEST && stub ? `${stub.baseUrl}/rules` : `${environment.urls.api}/trpc/fence.activeRules`,
           env: {
             DEEPSEEK_API_KEY: runnerEnv.DEEPSEEK_API_KEY ?? runnerEnv.LLM_API_KEY ?? "",
-            DEEPSEEK_BASE_URL: runnerEnv.LLM_BASE_URL ?? runnerEnv.DEEPSEEK_BASE_URL ?? "",
+            /**
+             * dsh 的 deepseek-official 适配器默认走 **Messages 协议**（`<root>/v1/messages`），
+             * 因此要指到 DeepSeek 的 Anthropic 兼容根 `https://api.deepseek.com/anthropic`；
+             * `LLM_BASE_URL` 是产品 model-router 的 OpenAI 兼容根（`https://api.deepseek.com`），
+             * 直接拿它给 dsh 会 404（2026-09-20 实测）。优先级：DEEPSEEK_BASE_URL > LLM_BASE_URL。
+             */
+            DEEPSEEK_BASE_URL: runnerEnv.DEEPSEEK_BASE_URL ?? runnerEnv.LLM_BASE_URL ?? "",
           },
           timeoutMs: TASK_TIMEOUT_MS,
           imagePath: fixturePath,
@@ -316,7 +322,7 @@ async function runTask(task) {
       const status = out.status === "ok" && verified.ok ? "ok" : out.status === "blocked" ? "blocked" : "failed";
       return {
         ...base, chain, status, ms: out.ms ?? Date.now() - startedAt,
-        reason: out.status === "blocked" ? out.reason : verified.ok ? undefined : `未满足期望：${verified.detail}`,
+        reason: failureReason(out, verified),
         answer: (out.answer ?? "").slice(0, 800),
         receipt: out.receipt ?? null,
         evidence: out.evidence ?? null,
@@ -336,7 +342,7 @@ async function runTask(task) {
       return {
         ...base, chain, status: out.status === "ok" && verified.ok ? "ok" : out.status === "blocked" ? "blocked" : "failed",
         ms: out.ms ?? Date.now() - startedAt,
-        reason: out.status === "blocked" ? out.reason : verified.ok ? undefined : `未满足期望：${verified.detail}`,
+        reason: failureReason(out, verified),
         artifacts: out.artifacts ?? [],
         receipt: out.receipt ?? null,
         units,
@@ -356,7 +362,7 @@ async function runTask(task) {
       return {
         ...base, chain, status: out.status === "ok" && verified.ok ? "ok" : out.status === "blocked" ? "blocked" : "failed",
         ms: out.ms ?? Date.now() - startedAt, taskId: out.taskId ?? null,
-        reason: out.status === "blocked" ? out.reason : verified.ok ? undefined : `未满足期望：${verified.detail}`,
+        reason: failureReason(out, verified),
         artifacts: out.artifacts ?? [],
         receipt: out.receipt ?? null,
         units,
@@ -482,6 +488,16 @@ console.log(`[acceptance:live] 结论：${verdict}；任务 ${results.length}（
 if (REQUIRE_LIVE && verdict !== "pass") process.exitCode = 1;
 
 /* ---------------------------- helpers ---------------------------- */
+/**
+ * 统一失败原因口径：blocked 用原始原因；调用失败保留**适配器原始错误**（不再只剩“未满足期望”）；
+ * 调用成功但判定不过才写“未满足期望”。这样报告能直接指出 404/参数不支持等真实原因。
+ */
+function failureReason(out, verified) {
+  if (out.status === "blocked") return out.reason;
+  if (out.status !== "ok") return `调用失败：${String(out.reason ?? "未知原因").slice(0, 240)}`;
+  return verified.ok ? undefined : `未满足期望：${verified.detail}`;
+}
+
 function verifyExpectations(task, out) {
   const problems = [];
   const text = `${out.answer ?? ""} ${(out.artifacts ?? []).map((a) => a.path ?? a.url ?? "").join(" ")} ${out.reason ?? ""}`;
