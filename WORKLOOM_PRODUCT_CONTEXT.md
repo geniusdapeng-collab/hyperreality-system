@@ -14,7 +14,7 @@ isolated_repositories: 2  # growthtest / growthmatrix：双向不同步，只登
 dev_protocol: docs/DEVELOPMENT-PROTOCOL.md
 mission_board: workloom-ai/WorkLoom-Dev-Dispatch
 ci_platform: cnb (.cnb.yml; 基座 3 条必需闸门)
-ui_artifact_host: cnb-release (ui-v0.1.1)
+ui_artifact_host: cnb-release (ui-v0.1.6)
 read_depth: deep (module-level; not test-executed)
 audit_program: WORKLOOM-AUDIT-2026-09 (ledger local-only)
 previous_source_sha256: d82d96e5a874a16e64de45b0b1a313dcd2acb005c9bd0170cb4b4b3ddd879caa
@@ -286,7 +286,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 - **UI 与三端基座**：`@workloom/ui` 与三端客户端基座按同一稳定版本经升级 PR 分波下发；行业扩展只允许落在 `apps/*/src/{extensions,projections,config/industry,theme/industry}/**` 等显式排除路径。
 - **污染守卫**：路径黑名单含 `^bundles/`、`^demo/`、`^docs/demo`、`^scripts/seed`、`^scripts/demo` 与 `hotel-baseline`、`ai-pm`、`yunqi`、`ecommerce`、`panda-cineforge`、`platform-ops` 等子串；单次常规同步上限 200 文件，新行业接入放宽至 450，超限即中止并要求人工核对。
 - **平台工程不出仓**：Andromeda 的 `extraExclude` 显式排除 `platform-ops/**`，与 `safety/` 保护清单、载荷身份策略（B-01.PB-1）形成三重护栏。
-- **实际同步基线**：八个子仓的 `.workloom-base-sync.json` 记录 `lastSyncedBaseSha=4f2296f…`（2026-09-16，基座 `PR #16` 合并点）；`requiredRootAssetsSha256` 随“基座 fanout → 子仓 `sync/base-*` PR → 门禁全绿自动合并”的通道持续收敛（2026-09-19 起，机制见 `docs/FLEET-AUTO-SYNC.md`；运行时代码按协议 §1/§9.5 走代码车道——门禁全绿 + 冷却期 + 串行，同样由 AI 合并，人保留叫停权）。
+- **实际同步基线**（2026-09-22 实测，快照事实，引用前先刷新）：各订阅子仓的 `.workloom-base-sync.json` 在最近一轮 required-only fanout（2026-09-21T16:26Z）后记录 `lastRequiredAssetsBaseSha=9bd0d268…`（本批基座合并点），`lastSyncedBaseSha=55f57a9…`（实验车道 `WorkLoom-growth` 为 `8789675…`，因其 lastSyncedBaseSha 仅在 full 波次推进）；`requiredRootAssetsSha256` 随“基座 fanout → 子仓 `sync/base-*` PR → 门禁全绿自动合并”的通道持续收敛（2026-09-19 起，机制见 `docs/FLEET-AUTO-SYNC.md`；运行时代码按协议 §1/§9.5 走代码车道——门禁全绿 + 冷却期 + 串行，同样由 AI 合并，人保留叫停权）。
 
 后续跨仓开发默认顺序：先判断能力属于公共基座、平台中枢还是行业包；公共机制优先在 `workloom-im` 实现并通过同步下发；行业语义仅在对应 bundle/子仓实现；平台运营工程仅在 Andromeda；同步后逐仓运行类型检查、测试、围栏/评测和打包门禁，不能只看文件复制成功。
 
@@ -351,7 +351,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 - **基座 `workloom-im`**：`static-gate`（安装/秘密扫描/runtime 锁/typecheck/UI 治理/供应链与发布策略/base-sync 与客户端接入/三端构建）、`db-gate`（PG17+pgvector/迁移种子幂等/哈希链/集成测试/server E2E/全场景套件）、`ui-gate`（三端构建 + Playwright 响应式/视觉/无障碍）三条均为**必需检查**；`ui-release`（`api_trigger_ui_release`）负责构建并发布 `@workloom/ui` 到 CNB Release；
 - **八个子仓**：`static-gate`（安装/产品身份/三端构建）与 `db-gate`（PG17+pgvector/迁移/种子幂等/验链）为**阻断**；`test-gate`（typecheck/主测试/全场景套件）为**显式非阻断**，登记既有债务；
-- **UI 制品**：`@workloom/ui` 已从失效的 GitHub Release 迁移到 CNB Release（`ui-v0.1.1`，91,187 字节），`integrityByVersion` 同步更新；这是台账 DEF-P1-0015「下游 CI 既有红灯」的根因修复；
+- **UI 制品**：`@workloom/ui` 已从失效的 GitHub Release 迁移到 CNB Release（迁移首发 `ui-v0.1.1`，91,187 字节），`integrityByVersion` 同步更新；这是台账 DEF-P1-0015「下游 CI 既有红灯」的根因修复。截至 2026-09-22 最新已发布制品为 **`ui-v0.1.6`**（2026-09-19T14:04Z），订阅仓按 `.workloom-ui.json` 记录各自消费版本（实测例：workloom-hotel `0.1.6`、WorkLoom-growth `0.1.1`，随 ui-v* 波次推进）；
 - **视觉基线**：Linux 基线在 CNB 同镜像内重生成后入库，`ui-gate` 由非阻断转为必需（实测约 4 分钟全绿）。
 
 ### 9.2 `bundles/platform` 双份漂移
@@ -415,7 +415,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
    - `vendor/supermickey/`：视频制作引擎（约 11MB，四层架构：剧本→制作→渲染→后期，含 `architecture-v2`、`seedance-micromotion`、`systems`、`templates`），**只在 `hyperreality-system` 与 `workloom`（获客）** 中。
    - `packages/base/computer-use/toolkit/`（约 296KB）：Anthropic computer-use 能力栈的仓内 vendored 形态，与 65 动作三层感知同栈。
    - 数字人素材：`apps/web/public/models/kaykit/`（5 个 GLB 角色 + 道具，**CC0 可商用**，76 组骨骼动画）；`apps/web/public/live2d/`（Mao 模型 4.4MB + shizuku 备份，**Live2D Free Material License，可商用**），配 `apps/web/src/components/loommate/`（Live2D 主后端 + 兜底海报 + 口型/表情/动作驱动四要素，登记文档 `VENDOR.md`）。写实 3D TalkingHead 路径因许可与观感问题已于 2026-09-06 移除。
-2. **npm 依赖（锁定但不随仓携带）**：React、Hono、tRPC、Vite、Tailwind、Three Fiber、Pixi/Live2D 渲染插件、pg、zod 等，由 `package.json` + `pnpm-lock.yaml` 锁定，安装时从 registry 获取；共享 UI 包 `@workloom/ui` 作为**版本化制品**分发（2026-09-18 起托管在 CNB Release：`https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.1/workloom-ui-0.1.1.tgz`，由 `ui-release` 流水线构建发布，`integrityByVersion` 记录 SHA-512）。
+2. **npm 依赖（锁定但不随仓携带）**：React、Hono、tRPC、Vite、Tailwind、Three Fiber、Pixi/Live2D 渲染插件、pg、zod 等，由 `package.json` + `pnpm-lock.yaml` 锁定，安装时从 registry 获取；共享 UI 包 `@workloom/ui` 作为**版本化制品**分发（2026-09-18 起托管在 CNB Release，由 `ui-release` 流水线构建发布，`integrityByVersion` 记录 SHA-512；截至 2026-09-22 的最高版本/最新发布为 `ui-v0.1.6`（86,345 字节，2026-09-19T14:04Z；平台未设 `is_latest` 标记），下载形如 `https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.6/workloom-ui-0.1.6.tgz`，具体版本以 CNB Release 列表与各仓 `.workloom-ui.json` 为准）。
 3. **安装期受控下载（带 sha256，不随仓携带）**：Node 24.19.0（darwin arm64/x64、win x64）、npm 11.17.0、PostgreSQL 17（PostgresApp / zonky 嵌入包）、nats-server 2.11.4 等，登记在 `scripts/release-assets.json` 与各仓 `.workloom-runtime-deps/`（含 `metadata.json` 与 `package-lock.json` 的精确闭包；B-01.SC-4 已做到每产品 runtime lock + 三目标 os/cpu 闭包 + 12 直接依赖 verify）。
 
 补充机制（2026-09-19 升级）：`oss-components.json` 已扩为**全量清单 v2**，并新增**每周上游扫描机制**（`feat(base): 开源组件全量清单 v2 + 每周上游扫描机制`，commit `44f48c38`）。`oss-components.json`（根目录）是受监测开源组件清单（name / repo / channel / current / cadence / gate / scope / notes），配 `skills/oss-watch/SKILL.md`、`scripts/oss-watch.sh` 与 `.oss-watch-state.json`，实现“清单登记 → 周期扫描 → 更新计划 → 一键执行 → 全量门禁 → 发布”；纪律是**扫描自动、升级走独立 PR 并由 AI 在门禁全绿后按协议 §1/§9.5 合并**（破坏性/大版本升级按 §3 人审放行，人保留叫停与回滚权）。清单里相当一部分是“选型在案、未进运行时”（如 mem0、presidio、langfuse、deepeval、promptfoo、skyvern、gui-agents、wrenai、lago、copilotkit、tauri、litestream 等），不要把清单条目等同于已集成组件。
