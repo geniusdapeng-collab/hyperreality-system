@@ -1,13 +1,13 @@
 {
   "baseRepo": "workloom-ai/workloom-im",
   "lastSyncedBaseSha": "55f57a90c3f3edfe4bb664977eac085437048e43",
-  "lastSyncAt": "2026-09-21T16:40:36.291Z",
+  "lastSyncAt": "2026-09-21T17:05:18.280Z",
   "filesTouched": 1,
-  "lastRequiredAssetsBaseSha": "734869a7b488391fc313ae04921372108726a05d",
+  "lastRequiredAssetsBaseSha": "210675a66f9beabe14ff26c7bba34fb5f05e4ab2",
   "lastSyncMode": "required-only",
   "pathPrefix": ".",
   "requiredRootAssetsSha256": {
-    "WORKLOOM_PRODUCT_CONTEXT.md": "96286c14ede815ed9bca9906e155d551a06529067a4bca7785793ff0a70b3feb",
+    "WORKLOOM_PRODUCT_CONTEXT.md": "cea905be2e1b98a33dcfdda60ff78018a0c85ffa65172deffb4956455b90a294",
     "AI-AUTONOMOUS-OPERATIONS.md": "7217ea891d3d71e57e667f9848ea248f67d86f52abf744ad028e1fc6d882aa59",
     "docs/DEVELOPMENT-PROTOCOL.md": "fbb68bf6a5a7551a3d2fa63032fa0800f6b0bba004c2038d85accb0dba0e6d78",
     "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md": "4c495d8b4c82ad8ef0694e376246b883f1c76313b10433c8ef5135aceb1d82db",
