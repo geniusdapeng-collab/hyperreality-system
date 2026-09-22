@@ -31,7 +31,6 @@ import {
   EventIdChip,
   LevelBadge,
   Skeleton,
-  XpBar,
 } from "../../components/hud";
 import { useNavigationAccess } from "../../shell/NavigationAccess";
 
@@ -223,18 +222,15 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
               {a.online ? "夜班在线" : a.readonly ? "只读" : "待命"}
             </span>
           </div>
-          {/* 战绩条（游戏化展示层，手册 §3 界面叙事；XP=动作×2+积分，确定性推导） */}
-          <div className="mt-1.5">
-            <XpBar done={a.game.xp - a.game.xpFloor} total={a.game.xpNext - a.game.xpFloor} />
-          </div>
+          {/* 列表瘦身（2026-09 易用性批次）：段位 XP 条、关联围栏标签与积分币移出卡片，
+              完整战绩/围栏绑定/能量明细统一由详情页承载（点卡片进入）。 */}
           <div className="mt-2 flex items-center gap-1 overflow-hidden">
-            {a.fenceBindings.slice(0, 2).map((r, index) => <FenceBindingTag key={r} label={`关联围栏 ${index + 1}`} />)}
-            {a.skills.length > 0 && <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-body text-ink3"><Icon name="package" size={13} />{a.skills.length} 技能包</span>}
+            {a.skills.length > 0 && <span className="inline-flex shrink-0 items-center gap-1 text-body text-ink3"><Icon name="package" size={13} />{a.skills.length} 技能包</span>}
+            <span className="ml-auto text-body text-ink3">详情 →</span>
           </div>
           <div className="mt-2 flex gap-3 border-t border-line/60 pt-2 text-body text-ink3">
             <span><b className="font-orb text-holo">{a.stats.actions30}</b> 动作</span>
             <span>采纳 <b className="font-orb text-go">{pct(a.stats.adoptionRate)}</b></span>
-            <span className="ml-auto"><b className="font-orb text-gold">{a.stats.credits30.toLocaleString()}</b> 币</span>
           </div>
         </>
       )}
@@ -367,7 +363,7 @@ function RosterHome() {
           <EmptyState
             icon={<Icon name="team" size={24} />}
             title="新工作区暂无成员卡片"
-            hint="从装配中心启用行业官方员工包后，成员会显示在这里。"
+            hint="去「行业包中心」装上适合你业务的员工包，团队成员就会出现在这里。"
             actionLabel={canManage ? "加装成员岗位" : undefined}
             onAction={canManage ? () => nav("/assembly") : undefined}
           />
@@ -395,7 +391,7 @@ function RosterHome() {
                 >
                   <span className="inline-flex items-center gap-1"><Icon name="partner" size={15} aria-hidden="true" />加装数字员工岗位</span>
                 </button>
-                <span className="text-body text-ink3">未声明关联围栏的数字员工，其写操作会被系统阻断。</span>
+                <span className="text-body text-ink3">没绑定规则的数字员工只能看不能动——它的任何改动操作都会被系统拦下。</span>
               </div>
             )}
           </>

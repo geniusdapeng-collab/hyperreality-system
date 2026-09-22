@@ -434,7 +434,7 @@ export default function P22() {
     <>
       <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">数据与治理口径</div>
       <div className="rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink2">
-        页面只显示当前租户和工作区的数据；写操作进入事件账本，知识发布会联动审批中心。
+        页面只显示当前公司和工作区的数据；改动都会留痕，知识发布会先到审批中心等你确认。
       </div>
       <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-body text-ink3">
         <div className="mb-1 text-body font-bold text-ink2">待审知识</div>
@@ -819,7 +819,7 @@ export default function P22() {
     </div>
   );
   const statsSection = overview === null ? (
-    <EmptyState icon={<Icon name="report" size={24} />} title="暂无运营数据" hint="C 端产生会话/工单后，这里聚合今日运营投影" />
+    <EmptyState icon={<Icon name="report" size={24} />} title="暂无运营数据" hint="住客的对话和工单产生后，今天的处理情况会汇总在这里" />
   ) : (
     <>
       <div className="mb-2 text-body font-bold tracking-wider text-ink2">今日运营总览（{overview.date} · 会话与工单聚合）</div>
@@ -926,7 +926,7 @@ export default function P22() {
               <div className="mt-1 break-all font-mono text-body text-holo">{docDrawer.sourceUrl}</div>
             )}
             <div className="mt-3 rounded-lg border border-line bg-card p-3">
-              <div className="mb-1.5 text-body font-bold text-ink2">内容预览（检索索引投影）</div>
+              <div className="mb-1.5 text-body font-bold text-ink2">内容预览</div>
               {docDrawer.status !== "active" ? (
                 <div className="text-body text-ink3">
                   {docDrawer.status === "pending_review" ? "待审文档未入检索索引——待审区批准生效后可检索" : "已停用文档不在检索索引中"}

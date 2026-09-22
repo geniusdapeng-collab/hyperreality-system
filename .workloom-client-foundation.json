@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.7",
-  "sourceRef": "refs/tags/ui-v0.1.7",
-  "sourceCommit": "704c210060510087029be6f8db1efec153b422fa",
+  "version": "0.1.8",
+  "sourceRef": "refs/tags/ui-v0.1.8",
+  "sourceCommit": "4dd3ae79e2cde0f9eb9d5b7fcf109ad1faae496e",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "73e4836ac2814ca707458574487f60e7e5d01a22f7d5cb6df34ae26b524e8b71",
+      "sha256": "b427e22d8ab062bcc6644cd076ffedff3bdbef0015bbfb11c4f83dd46c3eb680",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -275,7 +275,7 @@
       "mode": 420
     },
     "apps/web/src/App.tsx": {
-      "sha256": "d0fbf644c184ec83c37c6cc56df814b56d083078fa5f4d293448dc3479f07173",
+      "sha256": "7f691c714d911671e796abc6d490196704e2f40e25b90122cc80fbbb4b98082a",
       "mode": 420
     },
     "apps/web/src/audio/ambience.ts": {
@@ -559,7 +559,7 @@
       "mode": 420
     },
     "apps/web/src/pages/accounts/Workspaces.tsx": {
-      "sha256": "460b87f85a86677e204ff40fc0ed84fba62e8e6bcc8b617c19b1c06104c2640a",
+      "sha256": "329a9fb5a5c898b48539ae6e26dcc8d61d68ed50db1c9e38f9af07cc93ced683",
       "mode": 420
     },
     "apps/web/src/pages/dev/DevMatrix.tsx": {
@@ -567,7 +567,7 @@
       "mode": 420
     },
     "apps/web/src/pages/observability/Observability.tsx": {
-      "sha256": "4a5f6a8c8c980d417711e0f5b2adcf1dbe8e2f6453235d9b03cc925e173a7842",
+      "sha256": "9f07087ad622b03a99b9d62df10029df86e4bffea943ee4af83e22e5bce3bd53",
       "mode": 420
     },
     "apps/web/src/pages/onboarding/CustomizeWizard.tsx": {
@@ -591,7 +591,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p0/P0.tsx": {
-      "sha256": "61c437ef09ae62764e003277748d7328ad53d457b84ba137e34239aa985cc927",
+      "sha256": "ea0b1175fc4ae8dead1e4295f57015cc9dafa6a5ffc365015196fb31ac310d90",
       "mode": 420
     },
     "apps/web/src/pages/p1/P1.tsx": {
@@ -599,7 +599,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p2/P2.tsx": {
-      "sha256": "9ce4e26c5b26ad3f56448ad50786cf2d7092d9ec391bc0ff5fc5a0c1745652e2",
+      "sha256": "9f8be1c06d3629f831b39e24a616206f34f27c7db45c50d8db82a1add51794d8",
       "mode": 420
     },
     "apps/web/src/pages/p21/P21.tsx": {
@@ -607,7 +607,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p22/P22.tsx": {
-      "sha256": "ec8ae825affa09863644deeeb5e4d0ce4deb36d69b3974915092d8906b843da2",
+      "sha256": "30f6f9b2c81d4a36c6bdf7dfe4044e6fd09bc9ce7c5dad002b304ca719cac8af",
       "mode": 420
     },
     "apps/web/src/pages/p23/P23.tsx": {
@@ -663,7 +663,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p6/P6.tsx": {
-      "sha256": "afa22618e0cf1b8055692ce640787f26025c7f45b1609138c2070dd7ff148075",
+      "sha256": "d0415b25dcf50a9f8cee7afd361929140083abf9ae4ebd9928989e10584b8497",
       "mode": 420
     },
     "apps/web/src/pages/p7/P7.tsx": {
@@ -671,7 +671,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p8/P8.tsx": {
-      "sha256": "f1101a75c18f8902a8421a6dd7b2a1506aa74a8158e578df908719c16e8852b7",
+      "sha256": "c1189c8eddb2af3bdfc341b59c769e2daccee53cc0ecd1547ea5f889f839332d",
       "mode": 420
     },
     "apps/web/src/pages/p9/P9.tsx": {
@@ -699,7 +699,7 @@
       "mode": 420
     },
     "apps/web/src/shell/NavigationAccess.tsx": {
-      "sha256": "9f0f515109233394afe2699d8d7b261896dc2f1f8e82fab02dd7fba8ae7eef6d",
+      "sha256": "ccfe88d74471523c9cc70f4182c00f86f426171ad81a7cc5cf9f458d2774ee71",
       "mode": 420
     },
     "apps/web/src/shell/NavMenu.test.ts": {
@@ -715,7 +715,7 @@
       "mode": 420
     },
     "apps/web/src/shell/SideNav.tsx": {
-      "sha256": "8292296e769fa177a280159f305a42aa3a1dec5d9b281c671b463679b88c73e9",
+      "sha256": "5c0fcc2e61b9ee750b4822643e717503a12ec1c6f2b56cb1414dfc44c6dac0cc",
       "mode": 420
     },
     "apps/web/src/styles/subtitle.css": {
@@ -755,7 +755,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "b18b59e87f2aad4cf41610022b8c7d9ea13057510a22478e7a503ea79e9f036b",
+      "sha256": "44fb348d36606d859349f437bf6bcd477e8ed75d00c9fd756d911bf54a4f1cc5",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -819,7 +819,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "57e3a666f5b3476db1ddfe0fd9b8ae364bca833b5e8f43b8df1e00a704d9c03b",
+      "sha256": "ed693f91d2bd2f3e8be81c57ec621833ee47c8bea55f97a58bad1ce8f13890d0",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {

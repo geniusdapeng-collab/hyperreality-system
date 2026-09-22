@@ -239,7 +239,7 @@ export function NavigationAccessBoundary({ pathname, children }: { pathname: str
       <AsyncState
         status="forbidden"
         title="当前身份不能访问此页面"
-        description="该入口受工作区角色或版本能力限制。如需使用，请联系管理员调整权限或版本。"
+        description="你当前的角色或版本没有这个入口的权限。如需使用，请联系管理员调整权限或版本。"
         action={<Link to={fallbackRoute} className="wl-button wl-button--secondary">前往可用页面</Link>}
       />
     );

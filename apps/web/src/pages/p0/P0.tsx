@@ -589,7 +589,7 @@ export default function P0() {
                   )}
                 </div>
               ))}
-              {queue.length > 2 && <Link to="/executive" className="break-words text-body text-amber-300">其余 {queue.length - 2} 件 → 经营驾驶舱</Link>}
+              {queue.length > 2 && <Link to="/executive" className="break-words text-body text-amber-300">其余 {queue.length - 2} 件 → 老板视图</Link>}
             </div>
           )}
         </div>

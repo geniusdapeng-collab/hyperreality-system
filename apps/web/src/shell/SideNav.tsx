@@ -269,6 +269,7 @@ export function SideNav({ entries: providedEntries }: { entries?: readonly Navig
       activeRoute={pathname}
       onNavigate={openEntry}
       collapsed={collapsed}
+      expandAllGroups={normalizedQuery.length > 0}
       onCollapsedChange={mobile ? undefined : (next) => updateMode(next ? "collapsed" : "expanded")}
       className={`${mobile ? "relative h-dvh shadow-2xl" : "sticky top-0 h-screen shrink-0"} bg-bg950/97 backdrop-blur-md`}
       header={(
