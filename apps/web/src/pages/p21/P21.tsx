@@ -1,5 +1,5 @@
 /**
- * P21 董事长视图（数字CEO · D21）
+ * P21 老板视图（数字CEO · D21）
  * 治理状态 / 简报流 / 待审分层 / 成绩单 / 节拍手动触发 / 深度授权六步向导 / 一键撤回
  */
 import { useEffect, useState } from "react";
@@ -8,6 +8,7 @@ import { RejectDialog } from "../../components/RejectDialog";
 import { actionText, actorText, payloadText, shortId } from "../../lib/display";
 import { Icon, Input, clientChineseText, clientValueText } from "@workloom/ui";
 import { Bridge } from "../../shell/Bridge";
+import { useNavigationAccess } from "../../shell/NavigationAccess";
 
 const StatusPill = ({ tone, children }: { tone: "ok" | "warn" | "info"; children: React.ReactNode }) => (
   <span className={`inline-block rounded border px-2 py-0.5 text-body ${tone === "ok" ? "border-go/50 text-go" : tone === "warn" ? "border-warn/50 text-warn" : "border-line text-ink3"}`}>{children}</span>
@@ -49,7 +50,7 @@ interface BriefRow { event_id: string; created_at: string; payload: { decision: 
 
 interface ChairmanItem {
   approval_id: string; event_id: string;
-  snapshot: { action?: string; params?: Record<string, unknown>; ceo_escalated?: boolean; ceo_rationale?: string };
+  snapshot: { action?: string; title?: string; summary?: string; params?: Record<string, unknown>; ceo_escalated?: boolean; ceo_rationale?: string };
   payload: { decision: { action: string; basis?: string[] }; who: { id: string } };
 }
 
@@ -74,6 +75,8 @@ const BEATS: Array<[string, string]> = [
 ];
 
 export default function P21() {
+  const { canAction } = useNavigationAccess();
+  const canApprove = canAction("approval.decide");
   const [state, setState] = useState<StateResp | null>(null);
   const [briefs, setBriefs] = useState<BriefRow[]>([]);
   const [score, setScore] = useState<Scorecard | null>(null);
@@ -175,7 +178,7 @@ export default function P21() {
             <div className="mb-1 text-body tracking-[.2em] text-ink3">待审分层</div>
             公司负责人审批 {state?.pendingByTier.l2_captain ?? 0} 件<br />
             集团负责人审批 {state?.pendingByTier.l3_fleet ?? 0} 件<br />
-            <b className="text-gold">请示董事长 {state?.pendingByTier.l4_chairman ?? 0} 件</b>
+            <b className="text-gold">请示老板 {state?.pendingByTier.l4_chairman ?? 0} 件</b>
           </div>
           {score && (
             <div className="rounded-lg border border-line bg-card p-3 text-body text-ink2">
@@ -220,7 +223,7 @@ export default function P21() {
         </div>
       }
     >
-      <PageHeader title="董事长视图 · 数字负责人" desc="您只做两件事：听汇报、批少数关键决策。其余工作由公司负责人带领数字团队完成。" />
+      <PageHeader title="老板视图 · 数字负责人" desc="您只做两件事：听汇报、批少数关键决策。其余工作由公司负责人带领数字团队完成。" />
 
       {msg && <div className="mb-3 rounded border border-holo/40 bg-panel px-3 py-2 text-body text-holo">{msg}</div>}
 
@@ -282,14 +285,22 @@ export default function P21() {
       )}
 
       {queue.length > 0 && (
-        <Panel title={`请您决策（${queue.length} 件 · 董事长级）`}>
+        <Panel title={`请您决策（${queue.length} 件 · 老板级）`}>
           <div className="space-y-2">
             {queue.map((q) => {
               const snap = q.snapshot;
               const basis = q.payload.decision.basis ?? [];
               return (
                 <div key={q.approval_id} className="rounded-lg border border-gline bg-card p-3">
-                  <div className="mb-1 flex flex-wrap items-center gap-2 text-body text-ink3">
+                  {/* 业务标题与摘要是种子的第一展示面（V4 走查修复：原先只渲染技术 ID + 动作码，
+                      游客看到的是「···1 调整 / 补充信息：688」级别的乱码体验） */}
+                  <div className="break-words text-sm font-bold text-ink">
+                    {clientChineseText(snap.title, actionText(snap.action ?? q.payload.decision.action))}
+                  </div>
+                  {snap.summary && clientChineseText(snap.summary, "") && (
+                    <div className="mt-0.5 break-words text-body text-ink2">{clientChineseText(snap.summary, "")}</div>
+                  )}
+                  <div className="mb-1 mt-1 flex flex-wrap items-center gap-2 text-body text-ink3">
                     <span className="font-mono">{shortId(q.approval_id)}</span>
                     <span>{actionText(snap.action ?? q.payload.decision.action)}</span>
                     {snap.ceo_escalated && <span className="rounded border border-holo/40 px-1 text-holo">公司负责人谨慎上浮</span>}
@@ -304,10 +315,14 @@ export default function P21() {
                       {basis.map((b, i) => <div key={i}>· {clientValueText(b)}</div>)}
                     </details>
                   )}
-                  <div className="wl-action-row mt-2 flex flex-wrap gap-2">
-                    <button onClick={() => void decide(q.approval_id, "approve")} className="inline-flex items-center gap-1 rounded border border-go/50 px-3 py-1 text-body text-go hover:bg-go/10"><Icon name="check" size={14} />批准</button>
-                    <button onClick={() => void decide(q.approval_id, "reject")} className="inline-flex items-center gap-1 rounded border border-warn/50 px-3 py-1 text-body text-warn hover:bg-warn/10"><Icon name="error" size={14} />驳回</button>
-                  </div>
+                  {canApprove ? (
+                    <div className="wl-action-row mt-2 flex flex-wrap gap-2">
+                      <button onClick={() => void decide(q.approval_id, "approve")} className="inline-flex items-center gap-1 rounded border border-go/50 px-3 py-1 text-body text-go hover:bg-go/10"><Icon name="check" size={14} />批准</button>
+                      <button onClick={() => void decide(q.approval_id, "reject")} className="inline-flex items-center gap-1 rounded border border-warn/50 px-3 py-1 text-body text-warn hover:bg-warn/10"><Icon name="error" size={14} />驳回</button>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-body text-ink3">只读体验中 · 正式开通后即可拍板</div>
+                  )}
                 </div>
               );
             })}
