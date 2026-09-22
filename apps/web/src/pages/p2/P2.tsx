@@ -287,7 +287,7 @@ export default function P2() {
           {!ready ? (
             <><Skeleton count={2} height={44} label="会话摘要正在加载" /><Skeleton count={4} label="会话内容正在加载" /></>
           ) : !thread ? (
-            <EmptyState icon={<Icon name="tasks" size={24} />} title="线程不存在或已越权清空" hint="从左侧会话列表选择一条任务线程" />
+            <EmptyState icon={<Icon name="tasks" size={24} />} title="这个任务不存在，或已被清理" hint="从左侧会话列表选择一条任务线程" />
           ) : events.length === 0 ? (
             <EmptyState icon={<Icon name="chat" size={24} />} title="还没有会话内容" hint="选择一位数字员工或说出第一句话" />
           ) : (

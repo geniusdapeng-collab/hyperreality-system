@@ -43,7 +43,7 @@ export default function Workspaces() {
   return (
     <main className="mx-auto min-w-0 max-w-4xl px-5 py-8" data-workloom-client="b-pc">
       <div className="mb-6">
-        <h1 className="text-h1 font-black text-ink">租户与工作区</h1>
+        <h1 className="text-h1 font-black text-ink">公司与工作区</h1>
         <p className="mt-1 text-body leading-relaxed text-ink3">
           每个工作区的数据、权限和事件账本独立隔离；您只会看到当前身份有权访问的范围。
         </p>

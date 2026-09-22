@@ -203,7 +203,8 @@ export default function P6() {
         </div>
         <div className="mt-1.5 text-holo"><Icon name={skillIcon(s)} size={22} /></div>
         <h4 className="mt-1.5 text-body font-bold text-ink">{displayName(s)}</h4>
-        <div className="mt-1 text-body leading-relaxed text-ink2">{displayDesc(s)}</div>
+        {/* 列表瘦身（2026-09 易用性批次）：描述限两行，用量/驳回明细默认折叠，卡片只留决策需要的信息 */}
+        <div className="mt-1 line-clamp-2 text-body leading-relaxed text-ink2">{displayDesc(s)}</div>
         {/* 绑定围栏可见（P6E2） */}
         {s.fence_bindings.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
@@ -212,23 +213,30 @@ export default function P6() {
             </span>
           </div>
         )}
-        {/* F8.5 使用看板：调用次数 / 采纳率 / 驳回模式（绑定 Agent 事件投影） */}
-        <div className="mt-2 text-body text-ink3">
-          {u && u.calls30 > 0 ? (
-            <>
-              <b className="font-orb text-holo">{u.calls30}</b> 次调用 · 采纳率{" "}
-              <b className={u.adoptionRate !== null && u.adoptionRate >= 0.8 ? "text-go" : "text-warn"}>
-                {u.adoptionRate !== null ? `${Math.round(u.adoptionRate * 100)}%` : "—"}
-              </b>
-              {u.adoptionRate !== null && u.adoptionRate < 0.6 && <span className="text-warn">（采纳率偏低，建议优化或下架）</span>}
+        {/* F8.5 使用看板：默认折叠，避免驳回原因长文撑破卡片 */}
+        <details className="mt-2 text-body text-ink3">
+          <summary className="cursor-pointer select-none">
+            {u && u.calls30 > 0 ? (
+              <>
+                <b className="font-orb text-holo">{u.calls30}</b> 次调用 · 采纳率{" "}
+                <b className={u.adoptionRate !== null && u.adoptionRate >= 0.8 ? "text-go" : "text-warn"}>
+                  {u.adoptionRate !== null ? `${Math.round(u.adoptionRate * 100)}%` : "—"}
+                </b>
+                {u.adoptionRate !== null && u.adoptionRate < 0.6 && <span className="text-warn">（偏低）</span>}
+              </>
+            ) : (
+              "近 30 天暂无调用记录"
+            )}
+          </summary>
+          {u && u.calls30 > 0 && (
+            <div className="mt-1">
+              {u.adoptionRate !== null && u.adoptionRate < 0.6 && <div className="text-warn">采纳率偏低，建议优化或下架</div>}
               {u.rejectReasons.length > 0 && (
                 <div className="mt-0.5">驳回原因：{u.rejectReasons.map((x) => `${clientValueText(x.reason)} × ${x.count}`).join("；")}</div>
               )}
-            </>
-          ) : (
-            "近 30 天暂无数字员工调用记录"
+            </div>
           )}
-        </div>
+        </details>
         {/* 已装给谁（P6E2 →P8）/ 装备动作（readonly 隐藏 E2.6） */}
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {installed ? (
@@ -309,7 +317,7 @@ export default function P6() {
         <>
           <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">能力沉淀闭环</div>
           <div className="rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink2">
-            执行 → 沉淀为技能和记忆 → 数字员工复用 → 再执行；审批结果和驳回原因会回流为评估数据。
+            干得越多越顺手：每次执行都会沉淀成经验和记忆，批准与驳回的原因也会变成它的学习材料。
           </div>
           <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink3">
             <div className="mb-1 text-body font-bold text-ink2">安全约束</div>
@@ -320,7 +328,7 @@ export default function P6() {
           </div>
           <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-body text-ink3">
             <div className="mb-1 text-body font-bold text-ink2">待确认建议</div>
-            <b className="font-orb text-holo text-h2">{suggestions.length}</b> 条（同类任务每周出现至少 3 次时生成建议）
+            <b className="font-orb text-holo text-h2">{suggestions.length}</b> 条（同一类活一周出现 3 次以上，系统就会建议固化成技能）
           </div>
         </>
       }
@@ -533,7 +541,7 @@ function SkillWizard({
       boundary || "（未填）",
       "",
       `关联围栏：${selectedRules.length > 0 ? selectedRules.join("、") : "暂无"}`,
-      "创建后需先完成模拟回放，再允许安装。",
+      "新技能要先在模拟环境跑一遍验证，通过后才能安装。",
     ].join("\n");
   }, [name, desc, trigger, steps, boundary, fences, ruleOptions]);
 
@@ -646,7 +654,7 @@ function SkillWizard({
               {boundary.trim() && (
                 <div className="mt-1.5 flex items-center gap-1.5 text-body text-warn">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-warn" />
-                  已生成围栏声明草稿：边界文本将随技能生效，并始终受围栏判定管辖
+                  已生成规则草稿：它会随技能一起生效，技能的每个动作都受规则约束
                 </div>
               )}
               <div className="mt-2 flex flex-wrap gap-1.5">

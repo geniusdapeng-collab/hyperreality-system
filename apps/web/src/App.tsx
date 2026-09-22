@@ -88,7 +88,7 @@ function Shell() {
   // 非产品路由（开发矩阵/落地向导）不带常驻导航；其余全部页面左侧导航常驻
   const bare = pathname === "/dev" || pathname.startsWith("/onboarding") || pathname === "/login" || pathname === "/activate" || pathname === "/invite";
   return (
-    <div data-workloom-client="b-pc" data-wl-theme="dark" className="flex min-h-screen min-w-0 max-w-full overflow-x-hidden">
+    <div data-workloom-client="b-pc" data-wl-theme="dark" className="flex min-h-screen min-w-0 max-w-full overflow-x-clip">
       {/* 无导航壳页面（/dev、/login、/activate、/invite…）必须有明确出口：
           这类页面此前只能靠浏览器后退，客户会“进得去出不来”。 */}
       {bare && pathname !== "/" && (
