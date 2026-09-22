@@ -166,7 +166,7 @@ if (fs.existsSync(envExample)) {
 // 跨行业统一的语音/人物/命名交付契约。把截图中出现过的回归模式固化成发布门禁，
 // 避免某个行业仓同步基座时又带回长文案、随机换声或“人名+岗位”叠层。
 requireSource("apps/web/src/components/welcomeScripts.ts", [
-  { includes: "董事长您好，我是织伴，您的 AI 小秘书", message: "欢迎开场必须使用精简版文案" },
+  { includes: "老板您好，我是织伴，您的 AI 小秘书", message: "欢迎开场必须使用精简版文案" },
   { excludes: "接下来给我一分钟", message: "欢迎开场不得恢复一分钟长介绍" },
 ]);
 requireSource("apps/web/src/voice/VoiceEngine.ts", [
