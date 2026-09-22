@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CeremonyStage, type CeremonyActor } from "./CeremonyStage";
 import { MateWelcome } from "./MateWelcome";
 import type { BundleWelcomeProjection } from "./welcomeScripts";
+import { welcomeCardsOf } from "./welcomeScripts";
 import { Icon, useManagedSurface } from "@workloom/ui";
 
 const CONFETTI_COLORS = ["#d6dce4", "#f0f4f9", "#ffd98a", "#8fa9c9", "#a8b2be"];
@@ -66,7 +67,7 @@ export function WelcomeCeremony({
   });
   const lastReported = useRef<WelcomeStep | null>(null);
   const currentStep: WelcomeStep = phase === "mate" ? "mate" : phase === "modal" ? "summary" : "team";
-  const roleLabel = role === "owner" ? "董事长" : role === "manager" ? "管理员" : role === "readonly" ? "观察成员" : "团队成员";
+  const roleLabel = role === "owner" ? "老板" : role === "manager" ? "管理员" : role === "readonly" ? "观察成员" : "团队成员";
   const welcomeSurface = useManagedSurface<HTMLDivElement>({
     open: true,
     kind: "welcome",
@@ -220,11 +221,11 @@ export function WelcomeCeremony({
             这不是演示视频：<b style={{ color: "#d6dce4" }}>看到的一切都能点开、能派活、能拍板</b>，数据会随您的操作真实流转。
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", width: "min(960px, 100%)", gap: 20, marginBottom: 48 }}>
-            {[
+            {(welcomeCardsOf(welcome) ?? [
               { t: "可操作的演示运行态", d: "晨报、审批、夜班、考试均可体验。示例数据会清楚标识，您的有效操作仍产生事件与留痕。" },
               { t: "隔离定制 · 原子切换", d: "新装配先在隔离草案中预览与考试；通过后才一次性切换，原装配保留快照并可回滚。" },
               { t: "向导定制 · 持证上岗", d: "说出您的行业，落地向导自动生成团队编制、装配技能，考试达标才上岗——10 分钟拥有您的专属版。" },
-            ].map((c) => (
+            ]).map((c) => (
               <div key={c.t} style={{
                 minWidth: 0, padding: "22px 20px", borderRadius: 18, textAlign: "left",
                 background: "linear-gradient(165deg, rgba(28,32,37,.85), rgba(21,24,28,.75))",

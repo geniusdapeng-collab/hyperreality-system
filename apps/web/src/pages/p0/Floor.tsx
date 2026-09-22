@@ -236,7 +236,7 @@ export function FloorView({
         roundRect(ctx, sx - lw / 2, sy + 6, lw, 12, 6); ctx.stroke();
         ctx.fillStyle = "#33262b"; ctx.fillText(label, sx, sy + 15);
         if (a.state === "asking") {
-          bubble(ctx, sx, sy - 46, a.pendingTier === "l4_chairman" ? "请您定（董事长级）" : "请您定", "#e8890c");
+          bubble(ctx, sx, sy - 46, a.pendingTier === "l4_chairman" ? "请您定（老板级）" : "请您定", "#e8890c");
           // 聚光灯
           const sp = ctx.createRadialGradient(sx, sy, 2, sx, sy, 30);
           sp.addColorStop(0, "rgba(255,190,106,.28)"); sp.addColorStop(1, "rgba(255,190,106,0)");

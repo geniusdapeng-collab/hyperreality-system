@@ -41,7 +41,7 @@ const MODEL_NAME_TEXT: Record<string, string> = {
   mock: "演示模型",
   "mock-llm": "演示模型",
   "human-operator": "人工处理",
-  "human-chairman": "董事长人工决策",
+  "human-chairman": "老板人工决策",
 };
 
 function modelName(value: string | undefined): string {

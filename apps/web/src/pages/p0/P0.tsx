@@ -382,7 +382,7 @@ export default function P0() {
       const lines = clientChineseText(data.latestBriefing.text, BRIEFING_FALLBACK).split("\n");
       return lines.slice(0, 3).join(" ");
     }
-    if (data.mode === "disabled") return "董事长，我还未获授权。到「董事长视图」完成深度授权后，我就开始为您工作。";
+    if (data.mode === "disabled") return "老板，我还未获授权。到「老板视图」完成深度授权后，我就开始为您工作。";
     return "团队待命。您可以直接对我下指令，或等我按节拍向您汇报。";
   }, [data]);
 
@@ -568,8 +568,8 @@ export default function P0() {
             </div>
           ))}
 
-          {/* L4 请示卡（聚光灯） */}
-          {canApprove && queue.length > 0 && (
+          {/* L4 请示卡（聚光灯）：有审批动作权可拍板；只读角色（游客）仍可看见待决事项——这是示例工作区最有说服力的展示面 */}
+          {(canApprove || canReadApprovals) && queue.length > 0 && (
             <div className="space-y-2 rounded-xl border border-amber-400/40 bg-amber-400/5 p-3 shadow-[0_0_40px_rgba(255,190,106,.12)]">
               <div className="text-body tracking-[.2em] text-amber-300">请您决策 · {queue.length} 件</div>
               {queue.slice(0, 2).map((q) => (
@@ -579,10 +579,14 @@ export default function P0() {
                     <span className="ml-2 text-ink3">{payloadText(q.snapshot.params ?? {}, 80)}</span>
                   </div>
                   {q.snapshot.ceo_rationale && <div className="mt-1 break-words text-body text-holo">公司负责人意见：{clientChineseText(q.snapshot.ceo_rationale, "负责人意见待确认")}</div>}
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button onClick={() => void decide(q.approval_id, "approve")} className="inline-flex items-center gap-1 rounded border border-go/50 px-3 py-1 text-body text-go"><Icon name="check" size={14} />批准</button>
-                    <button onClick={() => void decide(q.approval_id, "reject")} className="inline-flex items-center gap-1 rounded border border-warn/50 px-3 py-1 text-body text-warn"><Icon name="error" size={14} />驳回</button>
-                  </div>
+                  {canApprove ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button onClick={() => void decide(q.approval_id, "approve")} className="inline-flex items-center gap-1 rounded border border-go/50 px-3 py-1 text-body text-go"><Icon name="check" size={14} />批准</button>
+                      <button onClick={() => void decide(q.approval_id, "reject")} className="inline-flex items-center gap-1 rounded border border-warn/50 px-3 py-1 text-body text-warn"><Icon name="error" size={14} />驳回</button>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-body text-ink3">只读体验中 · 正式开通后即可拍板</div>
+                  )}
                 </div>
               ))}
               {queue.length > 2 && <Link to="/executive" className="break-words text-body text-amber-300">其余 {queue.length - 2} 件 → 经营驾驶舱</Link>}
@@ -634,7 +638,7 @@ export default function P0() {
       <Overlay
         open={canApprove && askPick !== null}
         title="请您决策"
-        description={askPick ? `${askPick.pendingTier === "l4_chairman" ? "董事长级" : askPick.pendingTier === "l3_fleet" ? "集团负责人级" : "公司负责人级"}事项` : undefined}
+        description={askPick ? `${askPick.pendingTier === "l4_chairman" ? "老板级" : askPick.pendingTier === "l3_fleet" ? "集团负责人级" : "公司负责人级"}事项` : undefined}
         onClose={() => setAskPick(null)}
         footer={askPick && (
           <>
@@ -663,7 +667,7 @@ export default function P0() {
               团队全员就位
             </div>
             <div className={`mt-2 text-body text-ink3 transition-opacity duration-700 ${ceremony >= 4 ? "opacity-100" : "opacity-0"}`}>
-              向您报到，董事长
+              向您报到，老板
             </div>
           </div>
         </div>
