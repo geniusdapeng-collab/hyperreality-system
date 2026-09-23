@@ -171,18 +171,22 @@ export function parseModelPolicy(text: string): { policy: ModelPolicy | null; is
     if (sp.window && !["any", "off-peak-only"].includes(sp.window)) issues.push(`场景「${name}」window 非法：${String(sp.window)}`);
   }
   const plans = (doc.plans ?? DEFAULT_MODEL_POLICY.plans) as Record<PlanId, PlanStrategy>;
+  // 生效场景 = 底座默认 ∪ 行业声明：行业包只声明自己的场景、套餐沿用底座默认时，
+  // 默认套餐对底座场景的覆盖仍然有效（正是下方 scenes 合并的语义）。
+  // 之前按"仅行业声明"判定，会把完全合法的行业策略误判为未定义场景并 fail-closed（ai-pm 实测）。
+  const effectiveScenes = { ...DEFAULT_MODEL_POLICY.scenes, ...scenes };
   for (const [pid, ps] of Object.entries(plans)) {
     if (!["lite", "standard", "smart"].includes(pid)) { issues.push(`套餐「${pid}」非法（须为 lite/standard/smart）`); continue; }
     for (const [scene, tier] of Object.entries(ps.tierOverrides ?? {})) {
       if (!VALID_TIERS.includes(tier)) issues.push(`套餐「${pid}」覆盖场景「${scene}」tier 非法：${String(tier)}`);
-      if (!scenes[scene]) issues.push(`套餐「${pid}」覆盖了未定义场景「${scene}」`);
+      if (!effectiveScenes[scene]) issues.push(`套餐「${pid}」覆盖了未定义场景「${scene}」`);
     }
   }
   if (issues.length > 0) return { policy: null, issues };
   return {
     policy: {
       version: String(doc.version ?? "v3.0"),
-      scenes: { ...DEFAULT_MODEL_POLICY.scenes, ...scenes }, // 行业场景覆盖底座默认，未点名场景继承
+      scenes: effectiveScenes, // 行业场景覆盖底座默认，未点名场景继承
       plans: { ...DEFAULT_MODEL_POLICY.plans, ...plans },
     },
     issues: [],

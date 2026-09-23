@@ -84,6 +84,22 @@ plans:
     expect(resolveTier(policy!, "cs-answer", "smart")).toBe("L2");
   });
 
+  it("行业包只声明自己的场景、套餐沿用底座默认时不误报未定义场景", () => {
+    // 回归（2026-09-23）：ai-pm 示例包声明自家 scene_policy 但不声明 plans，
+    // 此前按"仅行业声明"校验底座默认套餐 → 全部场景被判未定义并 fail-closed。
+    const { policy, issues } = parseModelPolicy(`
+scene_policy_placeholder: true
+scenes:
+  industry-radar: { tier: L1 }
+  prd-forge: { tier: L2 }
+`);
+    expect(issues.filter((issue) => /未定义场景/.test(issue))).toEqual([]);
+    expect(policy).not.toBeNull();
+    expect(resolveTier(policy!, "industry-radar", "standard")).toBe("L1");
+    // 底座默认套餐仍对底座场景生效（继承语义不变）
+    expect(resolveTier(policy!, "cs-answer", "smart")).toBe("L2");
+  });
+
   it("非法 tier / 非法 fallback / 覆盖未定义场景 → 逐条报错", () => {
     const { policy, issues } = parseModelPolicy(`
 scenes:

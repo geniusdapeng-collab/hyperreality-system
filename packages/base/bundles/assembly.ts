@@ -898,16 +898,16 @@ async function computeAssemblyScoped(
     ? archiveSchema.required.filter((k) => !archive || !(k in archive))
     : [];
   const checkArchive: CheckItem = !archiveSchema
-    ? { key: "archive", label: "档案 forbidden 校验", ok: false, slot: "archive",
-        detail: "缺少 schemas/archive.schema.json", fix: "补齐档案 Schema（五要素之①档案，§2.3）" }
+    ? { key: "archive", label: "客户档案硬约束校验", ok: false, slot: "archive",
+        detail: "缺少客户档案结构文件", fix: "在行业包里补齐客户档案结构（必备文件之一）" }
     : requiredMissing.length > 0
-      ? { key: "archive", label: "档案 forbidden 校验", ok: false, slot: "archive",
-          detail: `一店一档缺必填字段组：${requiredMissing.join("、")}`, fix: "回 P3 补齐一店一档必填字段组" }
+      ? { key: "archive", label: "客户档案硬约束校验", ok: false, slot: "archive",
+          detail: `客户档案缺必填字段组：${requiredMissing.join("、")}`, fix: "到「经营报告 · 客户档案」补齐必填字段组" }
       : forbiddenCount === 0 && isActive
-        ? { key: "archive", label: "档案 forbidden 校验", ok: false, slot: "archive",
-            detail: "档案 forbidden 硬约束为空（L1.6 至少 1 条）", fix: "回 P3 档案补 forbidden 硬约束" }
-        : { key: "archive", label: "档案 forbidden 校验", ok: true, slot: "archive",
-            detail: `一店一档 ${fieldGroups} 字段组 · forbidden 硬约束 ${isActive ? forbiddenCount : "激活时复核"} 条` };
+        ? { key: "archive", label: "客户档案硬约束校验", ok: false, slot: "archive",
+            detail: "客户档案硬约束为空（至少需要 1 条）", fix: "到「经营报告 · 客户档案」补上硬约束" }
+        : { key: "archive", label: "客户档案硬约束校验", ok: true, slot: "archive",
+            detail: `客户档案 ${fieldGroups} 组字段 · 硬约束 ${isActive ? forbiddenCount : "启用时复核"} 条` };
 
   /* ---------- 槽② 枚举 + 校验② 枚举冲突检测 ---------- */
   const objectsJson = assets.objectsJson;
@@ -925,13 +925,13 @@ async function computeAssemblyScoped(
     ...stageConflict,
   ];
   const checkEnums: CheckItem = !objectsJson || !stagesJson
-    ? { key: "enums", label: "枚举冲突检测", ok: false, slot: "enums",
-        detail: "缺少 schemas/objects.json 或 schemas/stages.json", fix: "补齐对象与阶段枚举（五要素之②枚举）" }
+    ? { key: "enums", label: "业务对象与阶段一致性", ok: false, slot: "enums",
+        detail: "缺少业务对象或经营阶段清单", fix: "在行业包里补齐业务对象与经营阶段" }
     : enumConflicts.length > 0
-      ? { key: "enums", label: "枚举冲突检测", ok: false, slot: "enums",
+      ? { key: "enums", label: "业务对象与阶段一致性", ok: false, slot: "enums",
           detail: enumConflicts.join("；"), fix: "消除枚举冲突后重跑校验" }
-      : { key: "enums", label: "枚举冲突检测", ok: true, slot: "enums",
-          detail: `${objTypes.length} 对象 × 经营${stageIds.length}阶段，无冲突` };
+      : { key: "enums", label: "业务对象与阶段一致性", ok: true, slot: "enums",
+          detail: `已声明 ${objTypes.length} 类业务对象、${stageIds.length} 个经营阶段，无冲突` };
 
   /* ---------- 槽③ 工具集 + 校验③ 工具探针健康 ---------- */
   const presets = assets.presets;
@@ -962,13 +962,13 @@ async function computeAssemblyScoped(
     else if (a.status !== "ready") probeFails.push(`「${a.name} ${a.version}」状态 ${a.status}（invalid/disabled 不可装配 L3.7）`);
   }
   const checkTools: CheckItem = presets.length === 0
-    ? { key: "tools", label: "工具探针健康", ok: false, slot: "tools",
-        detail: "无 preset 可探针（presets/*.yml 缺失）", fix: "补齐 Agent preset（五要素之⑤班组）" }
+    ? { key: "tools", label: "工具可用性检查", ok: false, slot: "tools",
+        detail: "没有可检查的岗位（缺少岗位定义文件）", fix: "在行业包里补齐数字员工岗位定义" }
     : probeFails.length > 0
-      ? { key: "tools", label: "工具探针健康", ok: false, slot: "presets",
-          detail: probeFails.join("；"), fix: "修复 preset 实例状态（→P8 船员名册）" }
-      : { key: "tools", label: "工具探针健康", ok: true, slot: "tools",
-          detail: `${presets.length} preset 探针全绿 · 工具 ${toolNames.length} 项` };
+      ? { key: "tools", label: "工具可用性检查", ok: false, slot: "presets",
+          detail: probeFails.join("；"), fix: "到「数字员工」页修复岗位状态" }
+      : { key: "tools", label: "工具可用性检查", ok: true, slot: "tools",
+          detail: `${presets.length} 个岗位检查通过 · 工具 ${toolNames.length} 项` };
 
   /* ---------- 槽④ 围栏包 + 校验④ 围栏绑定完整 ---------- */
   const fenceFiles = assets.fenceFiles;
@@ -1008,13 +1008,13 @@ async function computeAssemblyScoped(
     };
   });
   const checkFences: CheckItem = fencePacks.length === 0
-    ? { key: "fences", label: "围栏绑定完整", ok: false, slot: "fences",
-        detail: "缺少 fences/*.yml 围栏包", fix: "补齐围栏包（五要素之④围栏）" }
+    ? { key: "fences", label: "安全规则绑定完整", ok: false, slot: "fences",
+        detail: "缺少安全规则包", fix: "在行业包里补齐安全规则包" }
     : fenceFails.length > 0
-      ? { key: "fences", label: "围栏绑定完整", ok: false, slot: "presets",
-          detail: fenceFails.join("；"), fix: "在 preset 中补齐围栏声明（F2.10）" }
-      : { key: "fences", label: "围栏绑定完整", ok: true, slot: "fences",
-          detail: `基线 ${baselineCount} 条 🔒 单调守卫 · ${agentsOut.filter((a) => !a.readonly).length} 员绑定全合法` };
+      ? { key: "fences", label: "安全规则绑定完整", ok: false, slot: "presets",
+          detail: fenceFails.join("；"), fix: "在岗位定义里补齐安全规则声明" }
+      : { key: "fences", label: "安全规则绑定完整", ok: true, slot: "fences",
+          detail: `平台基线 ${baselineCount} 条（只可收紧）· ${agentsOut.filter((a) => !a.readonly).length} 个岗位绑定全部合法` };
 
   /* ---------- 槽⑥ 工作台 UI + 校验⑤ UI 用例同步 ---------- */
   const uiCases = assets.uiCases;
@@ -1022,29 +1022,29 @@ async function computeAssemblyScoped(
   const casePages = [...new Set(cases.map((c) => c.page))];
   const unregistered = casePages.filter((p) => !(REGISTERED_PAGES as readonly string[]).includes(p));
   const checkUi: CheckItem = !uiCases
-    ? { key: "ui", label: "UI 用例同步", ok: false, slot: "ui",
-        detail: "缺少 ui/cases.json 状态用例清单", fix: "补齐工作台 UI 用例（五要素之⑥皮肤）" }
+    ? { key: "ui", label: "界面状态用例", ok: false, slot: "ui",
+        detail: "缺少界面状态用例清单", fix: "在行业包里补齐工作台界面用例" }
     : unregistered.length > 0
-      ? { key: "ui", label: "UI 用例同步", ok: false, slot: "ui",
-          detail: `用例引用未注册页面：${unregistered.join("、")}`, fix: "同步页面注册表或修正用例" }
-      : { key: "ui", label: "UI 用例同步", ok: true, slot: "ui",
-          detail: `${casePages.length} 页 · 状态用例 ${cases.length} 条同步` };
+      ? { key: "ui", label: "界面状态用例", ok: false, slot: "ui",
+          detail: `用例引用了未注册页面：${unregistered.join("、")}`, fix: "同步页面登记或修正用例" }
+      : { key: "ui", label: "界面状态用例", ok: true, slot: "ui",
+          detail: `${casePages.length} 个页面 · ${cases.length} 条界面状态用例已就位` };
 
   /* ---------- 槽⑦ 模型路由策略（v3.0：非阻断——缺失用底座默认；存在但非法 → 标红拒绝激活） ---------- */
   let modelPolicyScenes = 0;
   let checkModelPolicy: CheckItem;
   if (assets.modelPolicyText === null) {
-    checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: true, slot: "model-policy",
-      detail: "未提供 model-policy.yml，使用底座默认路由策略（L2.6 行业可覆盖）" };
+    checkModelPolicy = { key: "model_policy", label: "模型与成本策略", ok: true, slot: "model-policy",
+      detail: "未单独配置，使用平台默认模型策略" };
   } else {
     const parsed = parseModelPolicy(assets.modelPolicyText);
     if (parsed.policy) {
       modelPolicyScenes = Object.keys(parsed.policy.scenes).length;
-      checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: true, slot: "model-policy",
-        detail: `model-policy.yml 合法 · ${modelPolicyScenes} 场景（含底座继承）· 三档套餐映射` };
+      checkModelPolicy = { key: "model_policy", label: "模型与成本策略", ok: true, slot: "model-policy",
+        detail: `模型策略已就绪 · ${modelPolicyScenes} 个使用场景 · 三档能力映射` };
     } else {
-      checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: false, slot: "model-policy",
-        detail: `model-policy.yml 非法：${parsed.issues.join("；")}`, fix: "修正场景表（tier 须为 L1/L2/L3）后重跑校验" };
+      checkModelPolicy = { key: "model_policy", label: "模型与成本策略", ok: false, slot: "model-policy",
+        detail: `模型策略配置有误：${parsed.issues.join("；")}`, fix: "修正各场景对应的能力档位后重新校验" };
     }
   }
 
@@ -1052,26 +1052,29 @@ async function computeAssemblyScoped(
   const failedSlots = new Set(checks.filter((c) => !c.ok).map((c) => c.slot));
 
   const slots: SlotState[] = [
-    { id: "archive", label: "① 档案 Schema", filled: !!archiveSchema, failed: failedSlots.has("archive"),
+    { id: "archive", label: "① 客户档案结构", filled: !!archiveSchema, failed: failedSlots.has("archive"),
       summary: checkArchive.detail },
-    { id: "enums", label: "② 对象与阶段枚举", filled: !!objectsJson && !!stagesJson, failed: failedSlots.has("enums"),
-      summary: objectsJson && stagesJson ? `${objTypes.length} 对象 × 经营${stageIds.length}阶段` : "待填充" },
+    { id: "enums", label: "② 业务对象与阶段", filled: !!objectsJson && !!stagesJson, failed: failedSlots.has("enums"),
+      summary: objectsJson && stagesJson ? `已声明 ${objTypes.length} 类业务对象、${stageIds.length} 个经营阶段` : "待填充" },
     { id: "tools", label: "③ 工具集", filled: toolNames.length > 0, failed: false,
-      summary: toolNames.length > 0 ? toolNames.slice(0, 5).join(" · ") + (toolNames.length > 5 ? ` 等 ${toolNames.length} 项` : "") : "待填充" },
-    { id: "fences", label: "④ 围栏包 / 群规", filled: fencePacks.length > 0, failed: failedSlots.has("fences"),
-      summary: fencePacks.length > 0 ? `${fenceFiles[0]} · 基线 ${baselineCount} 条 🔒 单调守卫` : "待填充", go: "p5" },
-    { id: "presets", label: "⑤ Agent 班组 / 通讯录", filled: presets.length > 0 && agentRows.length > 0,
+      // 只给业务口径的数量与写入分类：工具名是内部标识（team.briefing.write 之类），不进客户端
+      summary: toolNames.length > 0
+        ? `已登记 ${toolNames.length} 项工具能力（含 ${toolNames.filter((name) => /write|\.(create|send|publish|update)/.test(name)).length} 项写入类）`
+        : "待填充" },
+    { id: "fences", label: "④ 安全规则包", filled: fencePacks.length > 0, failed: failedSlots.has("fences"),
+      summary: fencePacks.length > 0 ? `平台基线 ${baselineCount} 条 · 行业规则包已就位` : "待填充", go: "p5" },
+    { id: "presets", label: "⑤ 数字员工班组", filled: presets.length > 0 && agentRows.length > 0,
       failed: failedSlots.has("presets"),
       summary: presets.length > 0
-        ? `${presets.length} preset · 围栏绑定校验 ${fenceFails.length > 0 ? `${fenceFails.length} 项失败` : "✓"}`
+        ? `${presets.length} 个岗位 · 安全规则绑定校验 ${fenceFails.length > 0 ? `${fenceFails.length} 项失败` : "通过"}`
         : "待填充", go: "p8" },
-    { id: "ui", label: "⑥ 工作台 UI / 皮肤", filled: !!uiCases, failed: failedSlots.has("ui"),
-      summary: uiCases ? `${casePages.length} 页 · 状态用例 ${cases.length} 条同步` : "待填充" },
-    { id: "model-policy", label: "⑦ 模型路由策略", filled: assets.modelPolicyText !== null,
+    { id: "ui", label: "⑥ 工作台界面", filled: !!uiCases, failed: failedSlots.has("ui"),
+      summary: uiCases ? `${casePages.length} 个页面 · ${cases.length} 条界面状态用例` : "待填充" },
+    { id: "model-policy", label: "⑦ 模型与成本策略", filled: assets.modelPolicyText !== null,
       failed: failedSlots.has("model-policy"),
       summary: assets.modelPolicyText !== null
-        ? (checkModelPolicy.ok ? `model-policy.yml · ${modelPolicyScenes} 场景` : checkModelPolicy.detail)
-        : "底座默认（可经 model-policy.yml 覆盖）" },
+        ? (checkModelPolicy.ok ? `已配置 ${modelPolicyScenes} 个使用场景` : checkModelPolicy.detail)
+        : "平台默认（可按行业单独配置）" },
   ];
 
   return {
