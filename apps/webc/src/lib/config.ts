@@ -6,7 +6,13 @@
  * - 文案支持 {brand} / {agent} 占位符
  */
 
-import { accessibleForeground, clientChineseText, parseHexColor, validateLightBrandTheme } from "@workloom/ui";
+import {
+  accessibleForeground,
+  clientChineseText,
+  parseHexColor,
+  registerClientSafeTerms,
+  validateLightBrandTheme,
+} from "@workloom/ui";
 
 export type TabKey = "chat" | "service" | "tickets" | "messages" | "me";
 
@@ -38,6 +44,12 @@ export interface ServiceEntry {
 export interface FrontConfig {
   /** 公开站点标识；仅用于命中服务端 SERVICE_C_WORKSPACE_MAP，不是 workspaceId */
   workspaceKey?: string;
+  /**
+   * 行业术语白名单（由 Bundle 的 ui.safeTerms 经投影生成器写入）：
+   * 住客端答复里的行业通用词（客房网络、渠道名等）按装配投影放行，
+   * 未声明时基座中文显示边界行为不变。
+   */
+  safeTerms?: string[];
   brandName: string;
   agentName: string;
   /** 头像/Logo 字符（emoji 或单字） */
@@ -208,8 +220,16 @@ export function validateFrontConfig(value: unknown): value is FrontConfig {
     Array.isArray(raw.demoHistory)
     && raw.demoHistory.every((item) => (item?.role === "user" || item?.role === "ai") && displayText(item.text))
   );
+  // 行业术语白名单只能来自受控契约（短拉丁整词，≤40 条）；形状不符即拒绝整份投影。
+  const safeTermsValid = raw.safeTerms === undefined || (
+    Array.isArray(raw.safeTerms)
+    && raw.safeTerms.length <= 40
+    && raw.safeTerms.every((term) => typeof term === "string"
+      && term.length >= 2 && term.length <= 24
+      && /^[A-Za-z][A-Za-z0-9]*(?:[.-][A-Za-z0-9]+)*$/.test(term))
+  );
 
-  return memberLevelsValid && demoHistoryValid && raw.quickReplies.every((item) =>
+  return memberLevelsValid && demoHistoryValid && safeTermsValid && raw.quickReplies.every((item) =>
     displayText(item?.label)
     && (item.sendText === undefined || displayText(item.sendText))
     && (item.serviceKind === undefined || nonEmptyString(item.serviceKind))
@@ -235,6 +255,8 @@ export function validateFrontConfigShell(value: unknown): value is FrontConfigSh
 
 function useSafeConfig(message: string): void {
   current = SAFE_CONFIG;
+  // 中性安全态不继承上一次装配的行业术语白名单。
+  registerClientSafeTerms([]);
   loadState = { ready: false, source: "safe", message };
 }
 
@@ -257,6 +279,7 @@ export async function loadConfig(): Promise<FrontConfig> {
           if (!validateFrontConfig(projection)) useSafeConfig("行业服务配置不完整或格式错误");
           else {
             current = projection;
+            registerClientSafeTerms(projection.safeTerms);
             loadState = { ready: true, source: "remote" };
           }
         }

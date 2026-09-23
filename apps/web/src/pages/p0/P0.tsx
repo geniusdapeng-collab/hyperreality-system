@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { RejectDialog } from "../../components/RejectDialog";
 import { CommandCard } from "../../components/CommandCard";
-import { actionText, actorText , payloadText } from "../../lib/display";
+import { actionText, actorText, floorStatusText, payloadText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
 import { SkillDistBanner } from "../../components/SkillDistBanner";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
@@ -43,7 +43,7 @@ interface Theater {
 }
 interface ChairmanItem {
   approval_id: string; event_id: string;
-  snapshot: { action?: string; params?: Record<string, unknown>; ceo_rationale?: string; title?: string };
+  snapshot: { action?: string; params?: Record<string, unknown>; ceo_rationale?: string; title?: string; summary?: string };
   payload: { decision: { action: string } };
 }
 interface WelcomeState {
@@ -578,6 +578,9 @@ export default function P0() {
                     <b>{clientChineseText(q.snapshot.title, actionText(q.snapshot.action ?? q.payload.decision.action))}</b>
                     <span className="ml-2 text-ink3">{payloadText(q.snapshot.params ?? {}, 80)}</span>
                   </div>
+                  {q.snapshot.summary && clientChineseText(q.snapshot.summary, "") && (
+                    <div className="mt-0.5 break-words text-body text-ink3">{clientChineseText(q.snapshot.summary, "")}</div>
+                  )}
                   {q.snapshot.ceo_rationale && <div className="mt-1 break-words text-body text-holo">公司负责人意见：{clientChineseText(q.snapshot.ceo_rationale, "负责人意见待确认")}</div>}
                   {canApprove ? (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -651,7 +654,7 @@ export default function P0() {
         {askPick && (
           <div className="min-w-0 space-y-2">
             <div className="break-words text-sm font-bold text-ink">{clientChineseText(askPick.name, actorText(askPick.presetKey))}</div>
-            <div className="break-words text-body leading-relaxed text-ink2">{clientChineseText(askPick.statusLine, "当前事项需要您确认")}</div>
+            <div className="break-words text-body leading-relaxed text-ink2">{floorStatusText(askPick.statusLine, "当前事项需要您确认")}</div>
           </div>
         )}
       </Overlay>

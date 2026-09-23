@@ -8,7 +8,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { FloorAgent } from "../pages/p0/Floor";
-import { actionText, actorText } from "./display";
+import { actionText, actorText, floorStatusText } from "./display";
 import { clientChineseText } from "@workloom/ui";
 
 export interface DirectorEvent {
@@ -42,7 +42,8 @@ export function askingDirectorEvent(seq: number, agent: FloorAgent): DirectorEve
     kind: "ask",
     agentId: agent.id,
     agentName,
-    text: clientChineseText(agent.statusLine, `${agentName} 向您请示`),
+    // 请示气泡：内部动作码必须先经动作字典，否则整句回落成兜底文案。
+    text: floorStatusText(agent.statusLine, `${agentName} 向您请示`),
   };
 }
 

@@ -9,7 +9,7 @@
  * 扩展纪律：基座只保留公共术语；行业岗位、动作与字段显示名必须通过
  * 当前已验签 Bundle 的 terminology 投影注入，禁止在客户端追加行业词表。
  */
-import { clientChineseText, clientFieldLabel, clientStatusLabel, clientValueText } from "@workloom/ui";
+import { clientChineseText, clientFieldLabel, clientStatusLabel, clientValueText, registerClientSafeTerms } from "@workloom/ui";
 
 let DISPLAY_TERMINOLOGY: Readonly<Record<string, string>> = {};
 
@@ -18,6 +18,14 @@ export function hydrateDisplayTerminology(terminology: Record<string, string>): 
   DISPLAY_TERMINOLOGY = Object.freeze(Object.fromEntries(
     Object.entries(terminology).filter(([, value]) => clientChineseText(value, "") === value.trim()),
   ));
+}
+
+/**
+ * 行业术语白名单随装配投影注入（`ui.safeTerms`）：行业通用缩写与品牌词在
+ * 中文显示边界内放行，其它规则不变。切换身份/工作区时必须传空数组清空。
+ */
+export function hydrateClientSafeTerms(terms: readonly string[] | undefined): void {
+  registerClientSafeTerms(terms ?? []);
 }
 
 /**
@@ -465,4 +473,22 @@ function payloadValueText(value: unknown, depth = 0): string {
 export function payloadText(after: unknown, maxLen = 160): string {
   if (after == null) return "";
   return payloadValueText(after).slice(0, maxLen);
+}
+
+/**
+ * 数字职场「头顶气泡」文案（D25）：服务端的 statusLine 形如
+ * 「最近：competitor.fetch」「请示待裁：price.adjust」，前缀是中文状态、
+ * 后半段是内部动作码。动作码必须先经动作字典，否则中文显示边界会把整句
+ * 回落成「当前状态待确认」（RDAS 实测：职场气泡 5/11 位员工不可读）。
+ */
+const FLOOR_STATUS_PREFIX = /^(请示待裁|遇阻|刚完成|最近)：(.+)$/;
+
+export function floorStatusText(line: string | null | undefined, fallback: string): string {
+  const raw = (line ?? "").trim();
+  if (!raw) return fallback;
+  const matched = FLOOR_STATUS_PREFIX.exec(raw);
+  if (matched?.[1] && matched[2]) {
+    return `${matched[1]}：${actionText(matched[2].trim())}`;
+  }
+  return clientChineseText(raw, fallback);
 }

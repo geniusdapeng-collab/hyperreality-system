@@ -1,7 +1,7 @@
 {
   "schemaVersion": "workloom.ui-consumer-state/v1",
   "package": "@workloom/ui",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "contractVersion": "2.0.0",
   "source": "workloom-ai/workloom-im",
   "updatePolicy": "upgrade-pr-only",
@@ -23,8 +23,8 @@
   ],
   "artifact": {
     "type": "github-release-tarball",
-    "assetName": "workloom-ui-0.1.8.tgz",
-    "url": "https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.8/workloom-ui-0.1.8.tgz",
-    "sha512": "sha512-RUkSt59H1XPuHLPdsxGp/0VYtGnHqk1ZaSGG0euWnD2kXRoGOUXIksTuTQa9DPAFoS/ldD2KvBExQMeHO2SfGg=="
+    "assetName": "workloom-ui-0.1.9.tgz",
+    "url": "https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.9/workloom-ui-0.1.9.tgz",
+    "sha512": "sha512-7OVDLNYwo+8snmDNhFHm4/yYU2Pye9vgqE//jflbemaxUiWouquSMR1y8K6S+zHcT3mm7rZl8Er4YsriyLx7KQ=="
   }
 }

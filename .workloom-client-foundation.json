@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.8",
-  "sourceRef": "refs/tags/ui-v0.1.8",
-  "sourceCommit": "4dd3ae79e2cde0f9eb9d5b7fcf109ad1faae496e",
+  "version": "0.1.9",
+  "sourceRef": "refs/tags/ui-v0.1.9",
+  "sourceCommit": "1d121e570384e03bc51653a53ce1f4eaa6c5119f",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "b427e22d8ab062bcc6644cd076ffedff3bdbef0015bbfb11c4f83dd46c3eb680",
+      "sha256": "2ccba74441e3d8419209c49d8e869995db0208843ef1be71594e80541e2131ea",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -335,7 +335,7 @@
       "mode": 420
     },
     "apps/web/src/components/Floor3D.tsx": {
-      "sha256": "65ab3593bff75ff3bd36828777ab1158b6b4f037b1f0954449c5b81e0669a852",
+      "sha256": "aa26cc125e70125a4f08a7f41e735abf54fbfdae697d646e7b64e9ed66f03dfa",
       "mode": 420
     },
     "apps/web/src/components/GazeSystem.tsx": {
@@ -479,11 +479,11 @@
       "mode": 420
     },
     "apps/web/src/lib/display.test.ts": {
-      "sha256": "c6b874b9f6e4e2ebb031de8f3db6efc72c604ee76e64d889158cc8c19e53b4a7",
+      "sha256": "1fe9f60678c52469c73aeeb96297b0b4fc5d6a3fe3558212d55eec22d137612d",
       "mode": 420
     },
     "apps/web/src/lib/display.ts": {
-      "sha256": "67eb812f701031f983ae39d5317c70c4363379c791dee004e80719d93a286df0",
+      "sha256": "bdd9d837dd645b1c6c4b583590b91b5bac524d0a8c592d00d01ecb4aeb2d15aa",
       "mode": 420
     },
     "apps/web/src/lib/naming.test.ts": {
@@ -503,7 +503,7 @@
       "mode": 420
     },
     "apps/web/src/lib/theaterDiff.ts": {
-      "sha256": "04447e83cdcee7d8c99665cabb5f4ba0e804bcd59830d5785967b85814b62835",
+      "sha256": "1d3965eed9f5e07cbe3de48aa4cb1e08d132685cf5fef1c38ba98d31f57dbcbb",
       "mode": 420
     },
     "apps/web/src/lib/trpc.test.ts": {
@@ -591,7 +591,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p0/P0.tsx": {
-      "sha256": "ea0b1175fc4ae8dead1e4295f57015cc9dafa6a5ffc365015196fb31ac310d90",
+      "sha256": "4a961ba39f6c210aa0c18a8e4e6f8099e2d62f0e357014c5a9237b6d45282e3c",
       "mode": 420
     },
     "apps/web/src/pages/p1/P1.tsx": {
@@ -699,7 +699,7 @@
       "mode": 420
     },
     "apps/web/src/shell/NavigationAccess.tsx": {
-      "sha256": "ccfe88d74471523c9cc70f4182c00f86f426171ad81a7cc5cf9f458d2774ee71",
+      "sha256": "b77125a40da6af752f1da8e60112ce2752c7e19058f2271c954c5776d25d2757",
       "mode": 420
     },
     "apps/web/src/shell/NavMenu.test.ts": {
@@ -755,7 +755,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "44fb348d36606d859349f437bf6bcd477e8ed75d00c9fd756d911bf54a4f1cc5",
+      "sha256": "9c1bb9ae20217b7dfbb213bd4009f51b21059352836f1b6b7c8ae3de14ff8599",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -779,7 +779,7 @@
       "mode": 420
     },
     "apps/webb/src/lib/trpc.ts": {
-      "sha256": "1d42c323a57e4ea87b427633c2cc03ab0b0028d81817a76a7b0f3c19625fe81b",
+      "sha256": "ee70aa78957dbea9fdab207064d495cf990f1d235b319d2c25f8eb2b5a3ffdf6",
       "mode": 420
     },
     "apps/webb/src/lib/useResource.test.ts": {
@@ -819,7 +819,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "ed693f91d2bd2f3e8be81c57ec621833ee47c8bea55f97a58bad1ce8f13890d0",
+      "sha256": "6d7987dfc9f5347dfa9ec0be22874aba71301f348dcda5298d3def0fa15d7140",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {
@@ -863,7 +863,7 @@
       "mode": 420
     },
     "apps/webc/src/lib/config.ts": {
-      "sha256": "ff134a3fff151125366005e0f9aa012fb8e7a347a79ebbbec9fcddd56404fa66",
+      "sha256": "c4108201384c21742f987a395fde188359c6c040ff06d10cda5e5f8f7963e83f",
       "mode": 420
     },
     "apps/webc/src/lib/demo.ts": {

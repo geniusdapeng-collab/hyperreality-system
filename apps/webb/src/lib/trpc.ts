@@ -1,5 +1,6 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@workloom/server/router";
+import { registerClientSafeTerms } from "@workloom/ui";
 import { DEMO_WORKSPACE, storageKey } from "./product";
 
 const ACCESS_KEY = storageKey("access-token");
@@ -31,6 +32,27 @@ export function clearSession() {
   sessionStorage.removeItem(ACCESS_KEY);
   sessionStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(GUEST_KEY);
+  // 退出即清空行业术语白名单，避免下一位登录者继承上一工作区的放行词表。
+  registerClientSafeTerms([]);
+}
+
+interface AccessBundlePayload {
+  bundle?: { configured?: boolean; ui?: { safeTerms?: string[] } };
+}
+
+/**
+ * 装配投影就绪后登记行业术语白名单（`ui.safeTerms`）。
+ * 移动端只消费服务端已验签的投影；缺省为空集，旧工作区行为不变。
+ * 已拿到 access.me 结果的调用方直接传入，避免重复请求。
+ */
+export async function hydrateIndustryTerms(payload?: AccessBundlePayload): Promise<void> {
+  try {
+    const access = payload ?? await trpc.access.me.query() as AccessBundlePayload;
+    registerClientSafeTerms(access.bundle?.configured ? access.bundle.ui?.safeTerms : []);
+  } catch {
+    // 装配读取失败时回退基座默认边界；权限/装配错误态由页面各自呈现。
+    registerClientSafeTerms([]);
+  }
 }
 
 export async function logoutSession(): Promise<void> {
@@ -48,12 +70,13 @@ export function savedWorkspace() {
 
 export async function restoreSession(): Promise<boolean> {
   if (sessionStorage.getItem(ACCESS_KEY)) {
-    try { await trpc.access.me.query(); return true; } catch { sessionStorage.removeItem(ACCESS_KEY); }
+    try { await hydrateIndustryTerms(await trpc.access.me.query() as AccessBundlePayload); return true; } catch { sessionStorage.removeItem(ACCESS_KEY); }
   }
   if (localStorage.getItem(GUEST_KEY) === "1") {
     try {
       const result = await trpc.accounts.auth.guestEnter.mutate({ device: "B 端移动客户端" });
       setSession({ accessToken: result.token, workspaceSlug: result.workspace.slug, guest: true });
+      await hydrateIndustryTerms();
       return true;
     } catch { clearSession(); return false; }
   }
@@ -62,6 +85,7 @@ export async function restoreSession(): Promise<boolean> {
   try {
     const result = await trpc.accounts.auth.refresh.mutate({ refreshToken, workspaceSlug: savedWorkspace(), device: "B 端移动客户端" });
     setSession({ accessToken: result.accessToken, refreshToken: result.refreshToken, workspaceSlug: savedWorkspace() });
+    await hydrateIndustryTerms();
     return true;
   } catch {
     clearSession();
@@ -72,5 +96,6 @@ export async function restoreSession(): Promise<boolean> {
 export async function enterGuest() {
   const result = await trpc.accounts.auth.guestEnter.mutate({ device: "B 端移动客户端" });
   setSession({ accessToken: result.token, workspaceSlug: result.workspace.slug, guest: true });
+  await hydrateIndustryTerms();
   return result;
 }
