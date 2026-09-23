@@ -19,11 +19,11 @@ export default defineConfig({
     port: Number(process.env.WEB_PORT ?? 5173),
     // /health 同代理：前端「环境守门员」（BackendGate）经此探测后端就绪态，
     // 覆盖第三方工具只起 web 不起 server 的首启场景
-    proxy: { "/trpc": trpcProxy, "/health": trpcProxy },
+    proxy: { "/trpc": trpcProxy, "/health": trpcProxy, "/api": trpcProxy },
   },
   preview: {
     port: Number(process.env.WEB_PORT ?? 5173),
-    proxy: { "/trpc": trpcProxy, "/health": trpcProxy },
+    proxy: { "/trpc": trpcProxy, "/health": trpcProxy, "/api": trpcProxy },
   },
   test: {
     // @workloom/ui 发布包内部用无扩展名相对导入（`./language`）：打包器能解析、Node ESM 不能。

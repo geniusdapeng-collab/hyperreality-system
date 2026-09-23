@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.11",
-  "sourceRef": "refs/tags/ui-v0.1.11",
-  "sourceCommit": "a80933a34cbc7a9fe9ef137b856fafa4e786c5fe",
+  "version": "0.1.12",
+  "sourceRef": "refs/tags/ui-v0.1.12",
+  "sourceCommit": "9ec8a32746e2e109139da8ae205a5e721748b20c",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "22e9f4abe0ebc48a8ff186919e3ccc14d469e4113c23f2e9bdacc85b7f85a20b",
+      "sha256": "b685ffffff693b5cc8fbfb0c2ff352911c365a1af8f30c165f2d89f609bd5aef",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -726,6 +726,14 @@
       "sha256": "cc8a4da15772a62b9d122ea6afbe49262ec6d12f301c0450ed019ca9a407302e",
       "mode": 420
     },
+    "apps/web/src/voice/neuralVoice.test.ts": {
+      "sha256": "e82b0c4584e84a62c1a68f44023eb74b539801cbf0b109be8531f650d81dab69",
+      "mode": 420
+    },
+    "apps/web/src/voice/neuralVoice.ts": {
+      "sha256": "cb2992522c317fb1931e6bfaf296f5ad322a92c956fe74905ba5bb80f5ab0924",
+      "mode": 420
+    },
     "apps/web/src/voice/SubtitleBar.test.tsx": {
       "sha256": "27bd5dda42d443cdf95981e2ce0e963e17d25441797c5ac442b9a323214a1b03",
       "mode": 420
@@ -739,7 +747,7 @@
       "mode": 420
     },
     "apps/web/src/voice/VoiceEngine.ts": {
-      "sha256": "fcdc1851d9dd38019237f75df92513887ee4def1b32072edd4431499e259fea5",
+      "sha256": "f5de2ee7c9adffc3e0e8f4a6ab869789963d3a1618ced85c809d5b706f4764ff",
       "mode": 420
     },
     "apps/web/tsconfig.json": {
@@ -747,7 +755,7 @@
       "mode": 420
     },
     "apps/web/vite.config.ts": {
-      "sha256": "654f9d17aadbe60af2dcfc543a77d54844bdf76dc5da30aa82378e0a1f4fdd85",
+      "sha256": "df78fa7098772cb1e10d344a14461290c8005676e545491962a93f0e87e98307",
       "mode": 420
     },
     "apps/webb/index.html": {
@@ -755,7 +763,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "395ac0b4c9a84ca1f1b7ef10b72ecbc74dbe9bd80dfa65152f78014df17cd159",
+      "sha256": "fc9e54ad5a1f91c114ec76aa9e64037fd42ff7ef2406db2a659a37cbfb2e2b1e",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -819,7 +827,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "fb013f58397e743ef358be511f430398fdf2fd0533f83a897eeef76be074b999",
+      "sha256": "0a71bc722070878c6ea5106217158aebb0506fd3e0aeae24a22e7502fbac59b3",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {
