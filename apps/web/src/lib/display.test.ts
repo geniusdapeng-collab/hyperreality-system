@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { actionText, actorText, approvalGestureText, chineseDisplayName, hydrateDisplayTerminology, payloadText, skillDisplayName, versionText } from "./display";
+import { actionText, actorText, approvalGestureText, chineseDisplayName, floorStatusText, hydrateClientSafeTerms, hydrateDisplayTerminology, payloadText, skillDisplayName, versionText } from "./display";
+import { clientChineseText } from "@workloom/ui";
 
 describe("技能中文展示名（基座：技能中心不得裸奔内部 id）", () => {
   it("首段即中文短名（含破折号分隔）", () => {
@@ -60,5 +61,30 @@ describe("审批手势文案", () => {
     expect(approvalGestureText("edit")).toBe("已修改后批准");
     expect(approvalGestureText("reject")).toBe("已驳回");
     expect(approvalGestureText("private_gesture")).toBe("审批已处理");
+  });
+});
+
+describe("数字职场气泡（内部动作码先经动作字典）", () => {
+  it("请示/最近/遇阻/刚完成前缀后的动作码映射为中文", () => {
+    hydrateDisplayTerminology({ "action.competitor.fetch": "竞对价格抓取", "action.price.adjust": "调价审批" });
+    expect(floorStatusText("最近：competitor.fetch", "当前状态待确认")).toBe("最近：竞对价格抓取");
+    expect(floorStatusText("请示待裁：price.adjust", "当前状态待确认")).toBe("请示待裁：调价审批");
+    expect(floorStatusText("遇阻：inspection.scan", "当前状态待确认")).toBe("遇阻：扫描");
+  });
+
+  it("未收录动作码也给中文兜底，不裸奔原始码；中文状态原样保留", () => {
+    hydrateDisplayTerminology({});
+    expect(floorStatusText("最近：vendor.unknown.thing", "当前状态待确认")).toBe("最近：系统操作");
+    expect(floorStatusText("飞猪渠道新客首图发布", "当前状态待确认")).toBe("飞猪渠道新客首图发布");
+    expect(floorStatusText("", "待命")).toBe("待命");
+  });
+});
+
+describe("行业术语白名单投影", () => {
+  it("行业包声明的术语放行，切换工作区后清空", () => {
+    hydrateClientSafeTerms(["WiFi", "OCC"]);
+    expect(clientChineseText("客房 WiFi 密码为房间号后四位", "信息待确认")).toBe("客房 WiFi 密码为房间号后四位");
+    hydrateClientSafeTerms([]);
+    expect(clientChineseText("客房 WiFi 密码为房间号后四位", "信息待确认")).toBe("信息待确认");
   });
 });

@@ -19,7 +19,7 @@ import {
 import { Link } from "react-router";
 import type { BaseClientActionPermission } from "@workloom/shared";
 import { ensureDemoLogin, trpc } from "../lib/trpc";
-import { hydrateDisplayTerminology } from "../lib/display";
+import { hydrateClientSafeTerms, hydrateDisplayTerminology } from "../lib/display";
 import {
   NAV_ENTRIES,
   isNavigationPathPermitted,
@@ -77,9 +77,11 @@ export interface ActiveBundleUi {
     terminology: Record<string, string>;
     navigation: { slots: BundleNavigationSlot[] };
     home: { widgets: Array<{ slot: string; component: string; clients: Array<"pc" | "b-mobile" | "c-mobile">; props: Record<string, unknown> }> };
-    welcome?: { system: string[]; keywords: string[] };
+    welcome?: { system: string[]; keywords: string[]; cards?: Array<{ t: string; d: string }> };
     objects: string[];
     workflows: string[];
+    /** 客户端中文显示边界的行业术语白名单（行业包声明，合规注入通道）。 */
+    safeTerms?: string[];
   };
 }
 
@@ -137,6 +139,7 @@ export function NavigationAccessProvider({ children }: { children: ReactNode }) 
     let cancelled = false;
     // 切换身份/工作区时先清空上一行业的投影，避免短暂串用旧术语。
     hydrateDisplayTerminology({});
+    hydrateClientSafeTerms([]);
     setStatus("loading");
     setBundleStatus("loading");
     setSubject(null);
@@ -158,6 +161,7 @@ export function NavigationAccessProvider({ children }: { children: ReactNode }) 
           if (projection.configured) {
             activeBundle = projection;
             hydrateDisplayTerminology(projection.ui.terminology);
+            hydrateClientSafeTerms(projection.ui.safeTerms);
             bundleEntries = navigationEntriesFromBundle(projection.bundleId, projection.ui.navigation.slots);
             nextBundleStatus = "ready";
           }
