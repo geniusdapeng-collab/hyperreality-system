@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.10",
-  "sourceRef": "refs/tags/ui-v0.1.10",
-  "sourceCommit": "7fbd85cb476f9424e44b943109dd254806a61a77",
+  "version": "0.1.11",
+  "sourceRef": "refs/tags/ui-v0.1.11",
+  "sourceCommit": "a80933a34cbc7a9fe9ef137b856fafa4e786c5fe",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "39888e4653096d36f2558755cf7e9b9d3a2a58be1dc87c22c75495a6c11b8ff4",
+      "sha256": "22e9f4abe0ebc48a8ff186919e3ccc14d469e4113c23f2e9bdacc85b7f85a20b",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -671,7 +671,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p8/P8.tsx": {
-      "sha256": "582330b9ff7cd9b09d5a7c90ec6f05ee670682a29a8bbe1402eda7d045d78745",
+      "sha256": "3cffa950380d31795f11500914c57a9fb3cdaf0f2e0991126867c37d2a7d39eb",
       "mode": 420
     },
     "apps/web/src/pages/p9/P9.tsx": {
@@ -755,7 +755,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "82f61ab308c70cafe996d471693e564248d043c745c7f7fff7d790f9ec76522f",
+      "sha256": "395ac0b4c9a84ca1f1b7ef10b72ecbc74dbe9bd80dfa65152f78014df17cd159",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -819,7 +819,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "d8dec90d2de679cbd354d7e65c1d25958da0f4409f90288c4952da7f063802de",
+      "sha256": "fb013f58397e743ef358be511f430398fdf2fd0533f83a897eeef76be074b999",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {

@@ -183,13 +183,15 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
           }`}>
             <AgentAvatarOf name={displayName} presetKey={a.presetKey} size={30} ring={false} />
           </div>
-          <span className="absolute -right-1.5 -bottom-1 rounded border border-line bg-bg900 px-1 font-mono text-body leading-tight text-ink3">
-            {versionText(a.version)}
-          </span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-body font-bold text-ink">
             <span className="min-w-0 break-words">{displayName}</span>
+            {/* 版本徽标从头像角落移入名称行：绝对定位在 40px 容器里会把「第 3.0 版」折成三行
+                （2026-09-23 实机走查：列表换行问题的一部分），移入正文后按需自然换行。 */}
+            <span className="shrink-0 rounded border border-line bg-bg900 px-1 font-mono text-body font-normal text-ink3">
+              {versionText(a.version)}
+            </span>
             {canManage && <button
               type="button"
               title="设置显示别名；岗位名称不会改变"
