@@ -3,7 +3,17 @@
  * dev 启动提示（E：默认启动行为调整）
  * pnpm dev 仅起 PC 端（保持开发习惯）；首次接触本仓的开发者/AI Agent 必须先跑 preview:all 看三端全貌。
  */
+const { spawnSync } = require("node:child_process");
 const C = { mag: "\x1b[1;35m", cyn: "\x1b[1;36m", yel: "\x1b[1;33m", rst: "\x1b[0m" };
+
+// 派生构建（@workloom/ui、@workloom/industry-contract 的 dist）不入库：
+// 源码改了没重建时，行业投影会 fail-closed、新增导出不可见，症状是"功能没生效"。
+const derived = spawnSync(process.execPath, [require("node:path").join(__dirname, "check-derived-builds.mjs"), "--quiet"], {
+  encoding: "utf8",
+});
+if (derived.status !== 0) {
+  console.log(`${C.yel}⚠ 派生构建陈旧（行业投影可能 fail-closed）：${C.rst}\n${(derived.stderr || "").trim()}`);
+}
 console.log(`
 ${C.mag}╔══════════════════════════════════════════════════════════════════╗
 ║  💡 当前仅启动 PC 端开发模式（server:8787 + web:5173）              ║

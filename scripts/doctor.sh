@@ -35,6 +35,15 @@ ok "仓库根：$(pwd)"
 [ -f .env ] && ok ".env 在位" || warn ".env 缺失 → cp .env.example .env（start.sh 会自动补）"
 [ -d node_modules ] && ok "依赖已安装（node_modules 在位）" || warn "依赖未安装 → pnpm install"
 [ -d vendor/dsh ] && ok "vendor/dsh 锁版 fork 在位（rc.6 只读基线，D12）" || bad "vendor/dsh 缺失（仓库不完整，重新克隆）"
+# 派生构建（dist 不入库）：源码改了没重建时行业投影会 fail-closed，症状是"功能没生效"
+if command -v node >/dev/null 2>&1 && [ -f scripts/check-derived-builds.mjs ]; then
+  if BUILD_CHECK=$(node scripts/check-derived-builds.mjs --quiet 2>&1); then
+    ok "派生构建新鲜（@workloom/ui、@workloom/industry-contract）"
+  else
+    bad "派生构建陈旧 → pnpm -C packages/ui build && pnpm -C packages/industry-contract build"
+    printf '%s\n' "$BUILD_CHECK" | sed 's/^/     /'
+  fi
+fi
 
 # ---------- 模型（dsh-TUI /doctor：模型配置；D4 口径 mock 离线可跑） ----------
 sec "模型（LLM）"

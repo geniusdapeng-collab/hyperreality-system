@@ -73,7 +73,7 @@ export function validateSubject(subject, options = {}) {
   const match = SUBJECT_RE.exec(text);
   if (!match) {
     return {
-      errors: [`格式不符：期望 "<type>(<layer>): <摘要> [T-YYYYMMDD-XXXX]"，实际 "${text}"`],
+      errors: [`格式不符：期望 "<type>(<layer>): <摘要> [T-YYYY-MMDD-XXXX]"，实际 "${text}"`],
       warnings,
     };
   }

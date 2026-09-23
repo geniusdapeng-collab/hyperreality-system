@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { auditExperimentLane, insideManagedRoot, matchesAny } from "./experiment-rules.mjs";
+import { auditExperimentLane, auditIsolatedRepos, insideManagedRoot, matchesAny } from "./experiment-rules.mjs";
 
 const baseScope = (overrides = {}) => ({
   include: ["packages/base/**", "packages/runtime/**"],
@@ -47,5 +47,27 @@ describe("实验车道护栏", () => {
     assert.equal(insideManagedRoot("apps/web/src/a.ts"), true);
     assert.equal(insideManagedRoot("apps/server/src/a.ts"), false);
     assert.equal(matchesAny("apps/web/src/extensions/a.tsx", ["apps/*/src/extensions/**"]), true);
+  });
+});
+
+describe("隔离副本护栏", () => {
+  const valid = { repo: "org/copy", note: "激进改造实验副本", isolatedSince: "2026-09-21", syncPolicy: "none-in-none-out" };
+
+  it("登记完整且未混入 children → 无告警", () => {
+    const findings = auditIsolatedRepos({ children: [{ repo: "org/hotel" }], isolatedRepos: [valid] });
+    assert.deepEqual(findings, []);
+  });
+
+  it("隔离仓混入 children → ISOLATED_IN_CHILDREN（会被 fanout 下发）", () => {
+    const findings = auditIsolatedRepos({ children: [{ repo: "org/copy" }], isolatedRepos: [valid] });
+    assert.deepEqual(findings.map((item) => item.code), ["ISOLATED_IN_CHILDREN"]);
+  });
+
+  it("缺 note / isolatedSince / syncPolicy → 逐项报错", () => {
+    const findings = auditIsolatedRepos({ children: [], isolatedRepos: [{ repo: "org/copy" }] });
+    assert.deepEqual(
+      findings.map((item) => item.code).sort(),
+      ["MISSING_ISOLATION_NOTE", "MISSING_ISOLATION_SINCE", "MISSING_SYNC_POLICY"],
+    );
   });
 });

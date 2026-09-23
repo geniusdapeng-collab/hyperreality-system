@@ -158,7 +158,7 @@ describe("简报模板合成（via=rule 数字全真）", () => {
     };
     const text = composeBriefing("daily", facts, "公司CEO");
     expect(text).toContain("晨报");
-    expect(text).toContain("L4 请示董事长 1 件");
+    expect(text).toContain("L4 请示老板 1 件");
     expect(text).toContain("可下钻溯源");
   });
 });

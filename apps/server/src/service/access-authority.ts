@@ -176,7 +176,9 @@ export function memberAccessGrants(input: {
     navigation.add("members.read");
   }
   if (input.role === "owner") navigation.add("partners.read");
-  if (!input.guest && input.plan !== "community") navigation.add("night.read");
+  // 夜班日报是示例工作区最有说服力的只读展示面，游客亦可读；
+  // 写操作（night.manage 等）仍由下方 actions.clear() 与 writeProcedure 双重阻断。
+  if (input.plan !== "community") navigation.add("night.read");
 
   if (!input.guest) {
     const roleActions = input.role === "owner" ? OWNER_ACTIONS
@@ -207,8 +209,9 @@ export function memberAccessGrants(input: {
     actions.delete("night.manage");
   }
   // 游客令牌可能借用 owner 的成员主键，但永远按只读体验会话处理。
+  // 只读保留 approvals.read：「请您拍板」队列是示例工作区核心展示面，游客看得见但批不了
+  // （决策动作权限为空集 + writeProcedure 服务端 403 兜底）；inbox/成员/伙伴/工作区管理仍不开放。
   if (input.guest) {
-    navigation.delete("approvals.read");
     navigation.delete("inbox.read");
     navigation.delete("workspace.manage");
     navigation.delete("members.read");

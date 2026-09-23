@@ -56,6 +56,26 @@ const ChineseDisplayText = (max: number) => z.string().min(1).max(max)
   .refine((value) => /\p{Script=Han}/u.test(value), "面向用户的文案必须包含中文，不得直接释放代码字段")
   .refine((value) => !RawClientField.test(value), "面向用户的文案不得混入底层 snake_case 或 camelCase 字段");
 
+/**
+ * 客户端可显示行业术语（`ui.safeTerms`）：行业通用的拉丁缩写与品牌词，
+ * 例如客房网络、渠道直连、行业指标缩写。这些词会随行业包投影注册进客户端的
+ * 中文显示边界白名单，避免「含有行业通用词的中文业务文案」被整串回落成兜底文案。
+ *
+ * 纪律：只允许行业自己声明，基座不内置任何行业词（D18 底座行业零残留）；
+ * 平台红线（SQL、JSON、snake_case/camelCase 字段名、内部主键）不接受声明，
+ * 由客户端注册表与契约双重拒绝。
+ */
+const CLIENT_SAFE_TERM_DENY = new Set([
+  "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "NULL", "TRUE", "FALSE", "UNDEFINED",
+  "INTERNAL", "SERVER", "ERROR", "STACK", "TRACE", "JSON", "UUID", "ID",
+]);
+const ClientSafeTerm = z.string().trim()
+  .min(2, "行业术语至少 2 个字符")
+  .max(20, "行业术语最多 20 个字符")
+  .regex(/^[A-Za-z][A-Za-z0-9]*(?:[.-][A-Za-z0-9]+)*$/, "行业术语只能是拉丁字母、数字、点与连字符组成的整词")
+  .refine((value) => !CLIENT_SAFE_TERM_DENY.has(value.toUpperCase().replace(/[.-]/g, "")), "该标识属于平台保留记号，不允许作为行业术语放开")
+  .refine((value) => !/^[a-z][a-z0-9]*[A-Z]/.test(value), "小写起头的驼峰形态是结构化字段，不允许作为行业术语放开");
+
 const WorkforceCode = z.string().trim().regex(
   /^[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)*$/,
   "必须使用小写英文、数字、连字符、下划线或点组成的受控标识",
@@ -184,6 +204,11 @@ export const BrandThemeSchema = z.object({
 export const BundleUiSchema = z.object({
   schemaVersion: z.literal(BUNDLE_UI_SCHEMA_VERSION),
   terminology: z.record(z.string(), ChineseDisplayText(80)).default({}),
+  /**
+   * 客户端中文显示边界的行业术语白名单（合规注入通道）：行业通用缩写/品牌词
+   * 只能由行业包声明，由客户端在装配投影就绪时注册。缺省为空集，基座行为不变。
+   */
+  safeTerms: z.array(ClientSafeTerm).max(40, "行业术语白名单最多 40 条").optional(),
   navigation: z.object({
     slots: z.array(z.object({
       capabilityId: CapabilityId,
@@ -210,6 +235,14 @@ export const BundleUiSchema = z.object({
   welcome: z.object({
     system: z.array(ChineseDisplayText(240)).min(1).max(12),
     keywords: z.array(ChineseDisplayText(24)).min(1).max(6),
+    /**
+     * 首次运行主弹窗的行业场景卡：用真实业务场景回答"这套系统在干什么"，
+     * 替代基座通用的机制说明卡。缺省时基座展示通用三张卡（向后兼容）。
+     */
+    cards: z.array(z.object({
+      t: ChineseDisplayText(24),
+      d: ChineseDisplayText(160),
+    }).strict()).min(1).max(4).optional(),
   }).strict().optional(),
   objects: z.array(ChineseDisplayText(80)).max(100).default([]),
   workflows: z.array(ChineseDisplayText(80)).max(100).default([]),

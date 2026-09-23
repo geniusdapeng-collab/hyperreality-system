@@ -56,3 +56,32 @@ export function auditExperimentLane({ children = [], baseScope = {} }) {
   }
   return findings;
 }
+
+/**
+ * 隔离副本登记的护栏（与实验车道不同：隔离副本**不接收任何基座下发**）。
+ * 校验三件事：
+ *  ① 隔离仓不得同时出现在 `children` 里（否则 fanout 会下发基座内容）；
+ *  ② 每条登记必须写明 `note`（为什么隔离）与 `isolatedSince`（何时起）；
+ *  ③ `syncPolicy` 必须是 `none-in-none-out`（双向不同步），避免“登记了但语义不明”。
+ * @returns {{code: string, repo: string, message: string}[]}
+ */
+export function auditIsolatedRepos({ children = [], isolatedRepos = [] } = {}) {
+  const findings = [];
+  const childRepos = new Set((children ?? []).map((child) => child?.repo).filter(Boolean));
+  for (const entry of isolatedRepos ?? []) {
+    const repo = entry?.repo ?? "<unknown>";
+    if (childRepos.has(repo)) {
+      findings.push({ code: "ISOLATED_IN_CHILDREN", repo, message: "隔离副本同时出现在 children 里，fanout 会把基座内容下发到该仓" });
+    }
+    if (!String(entry?.note ?? "").trim()) {
+      findings.push({ code: "MISSING_ISOLATION_NOTE", repo, message: "隔离副本必须写明 note（隔离原因 / 解除条件）" });
+    }
+    if (!String(entry?.isolatedSince ?? "").trim()) {
+      findings.push({ code: "MISSING_ISOLATION_SINCE", repo, message: "隔离副本必须写明 isolatedSince（生效日期）" });
+    }
+    if (entry?.syncPolicy !== "none-in-none-out") {
+      findings.push({ code: "MISSING_SYNC_POLICY", repo, message: "隔离副本的 syncPolicy 必须显式声明为 none-in-none-out（基座不下发 / 本仓不回流）" });
+    }
+  }
+  return findings;
+}

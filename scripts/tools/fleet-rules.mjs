@@ -41,22 +41,49 @@ export function classifyRepo({ manifestText, baseSyncText, bundleText } = {}) {
   return { isWorkloom: false, reason: "无 WorkLoom 标记" };
 }
 
-/** 已纳管集合 = 基座仓 + sync/child-repos.json 的 children */
+const asJson = (value) => (typeof value === "string" ? parseJsonSafe(value) : value);
+
+/**
+ * 隔离副本集合（`sync/child-repos.json#isolatedRepos`）。
+ * 隔离副本既不接收基座下发，也不向基座回流：舰队扫描不纳管、fanout 不分发、纳管脚本拒绝执行。
+ * @returns {Set<string>}
+ */
+export function isolatedFleet(childReposJson) {
+  const parsed = asJson(childReposJson);
+  const isolated = new Set();
+  for (const entry of parsed?.isolatedRepos ?? []) {
+    if (entry?.repo) isolated.add(entry.repo);
+  }
+  return isolated;
+}
+
+/** 单个仓是否被登记为隔离副本 */
+export function isIsolated(slug, childReposJson) {
+  return isolatedFleet(childReposJson).has(slug);
+}
+
+/** 已纳管集合 = 基座仓 + sync/child-repos.json 的 children + 已登记的隔离副本 */
 export function knownFleet(baseRepo, childReposJson) {
-  const parsed = typeof childReposJson === "string" ? parseJsonSafe(childReposJson) : childReposJson;
+  const parsed = asJson(childReposJson);
   const known = new Set();
   if (baseRepo) known.add(baseRepo);
   for (const child of parsed?.children ?? []) {
     if (child?.repo) known.add(child.repo);
   }
+  for (const repo of isolatedFleet(parsed)) known.add(repo);
   return known;
 }
 
 /**
- * @returns {{known: string[], newWorkloom: object[], unrelated: string[]}}
+ * 舰队差分：已纳管（订阅）/ 隔离副本 / 新发现 WorkLoom 仓 / 非 WorkLoom 仓。
+ * 隔离副本必须从“新发现”里剔除，否则每日舰队扫描会重复给它们开纳管 PR。
+ * @param {{repos: string[], classifications: object, known: Set<string>|string[], isolated?: Set<string>|string[]}} input
+ * @returns {{known: string[], isolated: string[], newWorkloom: object[], unrelated: string[]}}
  */
-export function diffFleet({ repos, classifications, known }) {
+export function diffFleet({ repos, classifications, known, isolated = new Set() }) {
+  const isolatedSet = isolated instanceof Set ? isolated : new Set(isolated);
   const knownList = [];
+  const isolatedList = [];
   const newWorkloom = [];
   const unrelated = [];
   for (const repo of repos) {
@@ -65,10 +92,11 @@ export function diffFleet({ repos, classifications, known }) {
       unrelated.push(repo);
       continue;
     }
-    if (known.has(repo)) knownList.push(repo);
+    if (isolatedSet.has(repo)) isolatedList.push(repo);
+    else if (known.has(repo)) knownList.push(repo);
     else newWorkloom.push({ repo, ...verdict });
   }
-  return { known: knownList, newWorkloom, unrelated };
+  return { known: knownList, isolated: isolatedList, newWorkloom, unrelated };
 }
 
 /** 仓库短名 → 协议提交 layer（与 protocol-rules 的 LAYER_BY_REPO 同源，额外支持未知仓回退） */
@@ -79,4 +107,3 @@ export function layerForFleetRepo(slug, layerByRepo) {
   }
   return null;
 }
-

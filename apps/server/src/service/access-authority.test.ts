@@ -99,15 +99,21 @@ describe("三端访问权威", () => {
     expect(grants.actionPermissions).toEqual([]);
   });
 
-  it("游客即使借用 owner 成员主键也按最小只读范围失败关闭", async () => {
+  it("游客即使借用 owner 成员主键也按只读体验范围失败关闭", async () => {
     const access = await resolveAuthoritativeClientAccess(
       { ...claim, memberNo: "GUEST", name: "游客", role: "readonly" },
       undefined,
       deps({ member: memberFacts }),
     );
     expect(access.subject).toMatchObject({ kind: "guest", role: "readonly" });
-    expect(access.navigationPermissions).not.toContain("approvals.read");
+    // 只读展示面保留：审批队列与夜班日报可见（V4 游客走查：看不见等于系统"没东西"）
+    expect(access.navigationPermissions).toContain("approvals.read");
+    expect(access.navigationPermissions).toContain("night.read");
+    // 管理面与写面仍失败关闭
+    expect(access.navigationPermissions).not.toContain("inbox.read");
     expect(access.navigationPermissions).not.toContain("workspace.manage");
+    expect(access.navigationPermissions).not.toContain("members.read");
+    expect(access.navigationPermissions).not.toContain("partners.read");
     expect(access.actionPermissions).toEqual([]);
   });
 

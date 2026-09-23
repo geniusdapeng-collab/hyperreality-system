@@ -4,8 +4,10 @@
  *   ① 标签体系（CNB 每仓上限 10）② main 分支保护 ③ 协议文档 + CI 校验脚本 ④ .cnb.yml 协议门禁 stage ⑤ 分支 + PR
  * 用法：
  *   node scripts/tools/provision-protocol.mjs --repo workloom-ai/<name> [--base-repo workloom-ai/workloom-im]
- *        [--branch chore/protocol-onboarding-YYYYMMDD] [--dry-run] [--skip-push]
+ *        [--branch chore/protocol-onboarding-YYYYMMDD] [--dry-run] [--skip-push] [--allow-isolated]
  * 说明：只创建 PR；合并由 AI 在门禁全绿后按协议 §1 串行执行（人保留叫停权）。
+ *       隔离副本（sync/child-repos.json#isolatedRepos）默认拒绝纳管——它们不接收基座下发；
+ *       确需恢复时必须由产品所有者明确指令，并显式传 --allow-isolated。
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
@@ -13,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createLabel, createPull, createBranchProtection, listBranchProtections, listLabels,
   branchProtectionPayload, rawFile, requireToken } from "./cnb-api.mjs";
+import { isIsolated } from "./fleet-rules.mjs";
 
 export const FLEET_LABELS = {
   "t/draft": "6c757d",
@@ -120,10 +123,19 @@ export async function provisionProtocol(slug, options = {}) {
     branch = `chore/protocol-onboarding-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
     dryRun = false,
     skipPush = false,
+    allowIsolated = false,
     log = console.log,
   } = options;
   const token = requireToken();
   log(`== 纳管 ${slug}`);
+
+  const fleetText = await rawFile(baseRepo, "main", "sync/child-repos.json");
+  if (isIsolated(slug, fleetText) && !allowIsolated) {
+    throw new Error(
+      `${slug} 已登记为隔离副本（sync/child-repos.json#isolatedRepos）：不接收基座下发、也不向基座回流。` +
+        `如产品所有者已明确要求恢复同步，请另开纳管任务卡并显式传 --allow-isolated。`,
+    );
+  }
 
   await ensureLabels(slug, { dryRun, log });
   await ensureBranchProtection(slug, { dryRun, log });
@@ -217,6 +229,7 @@ function main() {
   const options = {
     dryRun: process.argv.includes("--dry-run"),
     skipPush: process.argv.includes("--skip-push"),
+    allowIsolated: process.argv.includes("--allow-isolated"),
     layer: process.argv.includes("--layer") ? process.argv[process.argv.indexOf("--layer") + 1] : undefined,
     taskId: process.argv.includes("--task-id") ? process.argv[process.argv.indexOf("--task-id") + 1] : undefined,
   };
