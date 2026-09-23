@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { classifyRepo, diffFleet, knownFleet, layerForFleetRepo } from "./fleet-rules.mjs";
+import { classifyRepo, diffFleet, isIsolated, isolatedFleet, knownFleet, layerForFleetRepo } from "./fleet-rules.mjs";
 import { injectGate } from "./provision-protocol.mjs";
 
 describe("WorkLoom 仓识别", () => {
@@ -39,6 +39,36 @@ describe("舰队差分", () => {
     const map = { "workloom-growth": "growth" };
     assert.equal(layerForFleetRepo("workloom-ai/WorkLoom-growth", map), "growth");
   });
+
+  it("隔离副本登记：knownFleet 收录、isolatedFleet 单列、不会再被当作新仓", () => {
+    const registry = {
+      children: [{ repo: "workloom-ai/workloom-hotel" }],
+      isolatedRepos: [
+        { repo: "workloom-ai/workloom-growthtest", note: "x", isolatedSince: "2026-09-21", syncPolicy: "none-in-none-out" },
+        { repo: "workloom-ai/workloom-growthmatrix", note: "y", isolatedSince: "2026-09-21", syncPolicy: "none-in-none-out" },
+      ],
+    };
+    const known = knownFleet("workloom-ai/workloom-im", registry);
+    const isolated = isolatedFleet(registry);
+    assert.equal(isolated.size, 2);
+    assert.equal(isIsolated("workloom-ai/workloom-growthtest", registry), true);
+    assert.equal(isIsolated("workloom-ai/workloom-hotel", registry), false);
+    assert.equal(known.has("workloom-ai/workloom-growthtest"), true);
+
+    const diff = diffFleet({
+      repos: ["workloom-ai/workloom-im", "workloom-ai/workloom-growthtest", "workloom-ai/workloom-growthmatrix", "workloom-ai/new-one"],
+      classifications: {
+        "workloom-ai/workloom-im": { isWorkloom: true },
+        "workloom-ai/workloom-growthtest": { isWorkloom: true },
+        "workloom-ai/workloom-growthmatrix": { isWorkloom: true },
+        "workloom-ai/new-one": { isWorkloom: true },
+      },
+      known,
+      isolated,
+    });
+    assert.deepEqual(diff.isolated, ["workloom-ai/workloom-growthtest", "workloom-ai/workloom-growthmatrix"]);
+    assert.deepEqual(diff.newWorkloom.map((item) => item.repo), ["workloom-ai/new-one"]);
+  });
 });
 
 describe("门禁注入", () => {
@@ -63,4 +93,3 @@ describe("门禁注入", () => {
     assert.equal(injectGate(yaml).changed, false);
   });
 });
-

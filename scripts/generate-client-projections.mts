@@ -120,6 +120,11 @@ if ((profile.membership || profile.orders) && !front.adapterId) {
 }
 const projection = {
   ...source,
+  /**
+   * 行业术语白名单随装配投影下发（唯一事实源是 bundle.json 的 ui.safeTerms）：
+   * 住客端答复/工单文案里的行业通用词据此放行，避免整串回落成兜底文案。
+   */
+  safeTerms: manifest.workloom.ui.safeTerms ?? [],
   projection: {
     bundleId: manifest.workloom.industry,
     bundleVersion: manifest.version,

@@ -58,7 +58,7 @@ export async function getSettings(workspaceId: string, memberNo: string): Promis
   // 缺省设置（不落库，首次保存才落）
   return {
     settings: {
-      member_no: memberNo, display_name: "董事长", persona_key: "tianmei",
+      member_no: memberNo, display_name: "老板", persona_key: "tianmei",
       persona_custom: {}, voice_key: "sweet", voice_on: true, widget_size: "large",
       quiet_start: "22:00", quiet_end: "08:00", channels: {},
     },

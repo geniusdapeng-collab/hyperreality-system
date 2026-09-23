@@ -192,7 +192,7 @@ ${o.label} ${JSON.stringify(o.params)}
   const pick = viable.find((o) => o.stance === "balanced") ?? viable.find((o) => o.stance === "conservative") ?? viable[0];
   const recommendation = pick
     ? `建议「${pick.label}」：${viable.length}/${options.length} 方案通过红队与围栏校验`
-    : "全部方案未通过红队/围栏校验，建议暂缓并上浮董事长";
+    : "全部方案未通过红队/围栏校验，建议暂缓并上浮老板";
 
   return { facts, cases, options, recommendation, via };
 }

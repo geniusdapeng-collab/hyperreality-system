@@ -44,7 +44,7 @@ export function composeBoardPack(input: {
   const proposals: string[] = [];
   if (sc.hitRate !== null) {
     if (sc.hitRate > 0.85 && sc.outcomeCounts.hit + sc.outcomeCounts.miss + sc.outcomeCounts.fail >= 5) {
-      proposals.push(`决策命中率 ${(sc.hitRate * 100).toFixed(0)}%>85%：建议适度扩大表现稳定的自治边界，请董事长批示`);
+      proposals.push(`决策命中率 ${(sc.hitRate * 100).toFixed(0)}%>85%：建议适度扩大表现稳定的自治边界，请老板批示`);
     } else if (sc.hitRate < 0.6) {
       proposals.push(`决策命中率 ${(sc.hitRate * 100).toFixed(0)}%<60%：建议收紧自治带一档并复盘失败模式`);
     }

@@ -241,7 +241,7 @@ ${item.action} ${JSON.stringify(item.params)}
         options: [
           { label: "批准执行", recommended: verdict.kind === "approve" },
           { label: "驳回", recommended: verdict.kind === "reject" },
-          { label: "上浮董事长", recommended: verdict.kind === "escalate" },
+          { label: "上浮老板", recommended: verdict.kind === "escalate" },
         ],
         recommendation: verdict.rationale,
         basis: [
@@ -327,7 +327,7 @@ export async function runBreakerBeat(
       after: { tightened_to: tightened.autonomy },
       basis: [
         `自治期 KPI ${verdict.metric}=${verdict.actual} 跌破宪章下限 ${verdict.floor}（窗口 ${charter.circuit_breaker.window_days} 天）`,
-        "自治边界自动收紧一档并通知董事长（方案 §六：自治权是挣来的，也会被收回）",
+        "自治边界自动收紧一档并通知老板（方案 §六：自治权是挣来的，也会被收回）",
       ],
     });
   });

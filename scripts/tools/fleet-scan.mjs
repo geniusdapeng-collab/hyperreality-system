@@ -8,8 +8,10 @@
  *   node scripts/tools/fleet-scan.mjs --provision            # 自动纳管新仓（创建 PR，不合并）
  *   node scripts/tools/fleet-scan.mjs --issue                # 有新仓时在基座开一张 src/auto 任务卡
  *   node scripts/tools/fleet-scan.mjs --self-test            # 规则自检
+ *
+ * 隔离副本（sync/child-repos.json#isolatedRepos）只登记、不纳管：扫描报告单列，--issue/--provision 一律跳过。
  */
-import { classifyRepo, diffFleet, knownFleet } from "./fleet-rules.mjs";
+import { classifyRepo, diffFleet, isolatedFleet, knownFleet } from "./fleet-rules.mjs";
 import { createIssue, listRepos, rawFile, requireToken } from "./cnb-api.mjs";
 import { provisionProtocol } from "./provision-protocol.mjs";
 
@@ -37,23 +39,34 @@ function selfTest() {
       console.error(`✗ self-test: ${JSON.stringify(input)} 期望 ${expected}，实际 ${verdict.isWorkloom}`);
     }
   }
-  const known = knownFleet("workloom-ai/workloom-im", { children: [{ repo: "workloom-ai/hotel" }] });
+  const registry = {
+    children: [{ repo: "workloom-ai/hotel" }],
+    isolatedRepos: [{ repo: "workloom-ai/workloom-growthtest", note: "隔离副本" }],
+  };
+  const known = knownFleet("workloom-ai/workloom-im", registry);
+  const isolated = isolatedFleet(registry);
   const diff = diffFleet({
-    repos: ["workloom-ai/workloom-im", "workloom-ai/hotel", "workloom-ai/new-one", "other/repo"],
+    repos: ["workloom-ai/workloom-im", "workloom-ai/hotel", "workloom-ai/new-one", "other/repo", "workloom-ai/workloom-growthtest"],
     classifications: {
       "workloom-ai/workloom-im": { isWorkloom: true },
       "workloom-ai/hotel": { isWorkloom: true },
       "workloom-ai/new-one": { isWorkloom: true },
       "other/repo": { isWorkloom: false },
+      "workloom-ai/workloom-growthtest": { isWorkloom: true },
     },
     known,
+    isolated,
   });
   if (diff.newWorkloom.length !== 1 || diff.newWorkloom[0].repo !== "workloom-ai/new-one") {
     failed += 1;
     console.error("✗ self-test: 新仓识别不正确", JSON.stringify(diff));
   }
+  if (diff.isolated.length !== 1 || diff.isolated[0] !== "workloom-ai/workloom-growthtest") {
+    failed += 1;
+    console.error("✗ self-test: 隔离副本未从新仓通道剔除", JSON.stringify(diff));
+  }
   if (failed) process.exit(1);
-  console.log("✓ fleet-scan self-test 通过（分类 5 例 + 差分 1 例）");
+  console.log("✓ fleet-scan self-test 通过（分类 5 例 + 差分 2 例：新仓 / 隔离副本）");
 }
 
 async function scan({ org, baseRepo, log = () => {} }) {
@@ -76,8 +89,9 @@ async function scan({ org, baseRepo, log = () => {} }) {
   }
   const childReposJson = await rawFile(baseRepo, "main", "sync/child-repos.json");
   const known = knownFleet(baseRepo, childReposJson);
-  const diff = diffFleet({ repos, classifications, known });
-  return { repos, classifications, known: [...known], diff };
+  const isolated = isolatedFleet(childReposJson);
+  const diff = diffFleet({ repos, classifications, known, isolated });
+  return { repos, classifications, known: [...known], isolated: [...isolated], diff };
 }
 
 async function main() {
@@ -96,6 +110,7 @@ async function main() {
     baseRepo,
     total: result.repos.length,
     known: result.diff.known,
+    isolated: result.diff.isolated,
     newWorkloom: result.diff.newWorkloom,
     unrelated: result.diff.unrelated,
   };
@@ -103,8 +118,13 @@ async function main() {
   else {
     console.log(`\n组织 ${org}：共 ${summary.total} 个仓库`);
     console.log(`  已纳管 WorkLoom 仓：${summary.known.length}`);
+    console.log(`  隔离副本仓（登记但不纳管、不下发）：${summary.isolated.length}${summary.isolated.length ? " → " + summary.isolated.join(", ") : ""}`);
     console.log(`  新发现 WorkLoom 仓：${summary.newWorkloom.length}${summary.newWorkloom.length ? " → " + summary.newWorkloom.map((item) => item.repo).join(", ") : ""}`);
     console.log(`  非 WorkLoom 仓：${summary.unrelated.length}`);
+  }
+
+  if (summary.isolated.length && (issue || provision)) {
+    console.log(`  ⏸ 隔离副本按 sync/child-repos.json#isolatedRepos 跳过纳管：${summary.isolated.join(", ")}`);
   }
 
   if (issue && summary.newWorkloom.length) {
@@ -140,4 +160,3 @@ main().catch((error) => {
   console.error(`舰队扫描失败：${error?.message ?? error}`);
   process.exit(1);
 });
-

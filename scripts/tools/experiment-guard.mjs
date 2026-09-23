@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * 实验车道护栏：确保实验仓（fox / growth 等）的深度定制不会被同步覆盖、也不会卡死 UI 升级。
+ * 实验车道护栏：确保实验仓（fox / growth 等）的深度定制不会被同步覆盖、也不会卡死 UI 升级；
+ * 同时校验隔离副本（growthtest / growthmatrix）的"双向不同步"登记是否完整。
  * 用法：
  *   node scripts/tools/experiment-guard.mjs            # 人读报告
  *   node scripts/tools/experiment-guard.mjs --json      # 机器可读
@@ -10,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { auditExperimentLane } from "./experiment-rules.mjs";
+import { auditExperimentLane, auditIsolatedRepos } from "./experiment-rules.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (path) => JSON.parse(readFileSync(join(root, path), "utf8"));
@@ -28,27 +29,46 @@ function selfTest() {
   const unsafeSync = auditExperimentLane({ children, baseScope: scope({ include: ["apps/web/**"] }) });
   const noExtension = [{ ...children[0], industryExtensionPaths: [] }];
   const unsafeUi = auditExperimentLane({ children: noExtension, baseScope: scope() });
+  const isolatedOk = auditIsolatedRepos({
+    children,
+    isolatedRepos: [{ repo: "org/copy", note: "激进改造副本", isolatedSince: "2026-09-21", syncPolicy: "none-in-none-out" }],
+  });
+  const isolatedLeak = auditIsolatedRepos({ children, isolatedRepos: [{ repo: "org/fox" }] });
   const ok = safe.length === 0
     && unsafeSync.some((item) => item.code === "SYNC_WOULD_OVERWRITE")
-    && unsafeUi.some((item) => item.code === "UI_UPGRADE_WOULD_FAIL");
+    && unsafeUi.some((item) => item.code === "UI_UPGRADE_WOULD_FAIL")
+    && isolatedOk.length === 0
+    && isolatedLeak.some((item) => item.code === "ISOLATED_IN_CHILDREN")
+    && isolatedLeak.some((item) => item.code === "MISSING_ISOLATION_NOTE")
+    && isolatedLeak.some((item) => item.code === "MISSING_ISOLATION_SINCE")
+    && isolatedLeak.some((item) => item.code === "MISSING_SYNC_POLICY");
   if (!ok) {
-    console.error("✗ self-test 失败", JSON.stringify({ safe, unsafeSync, unsafeUi }, null, 2));
+    console.error("✗ self-test 失败", JSON.stringify({ safe, unsafeSync, unsafeUi, isolatedOk, isolatedLeak }, null, 2));
     process.exit(1);
   }
-  console.log("✓ experiment-guard self-test 通过（合规 1 例 + 违规 2 例）");
+  console.log("✓ experiment-guard self-test 通过（合规 1 例 + 违规 2 例 + 隔离登记 2 例）");
 }
 
 function main() {
   if (process.argv.includes("--self-test")) return selfTest();
   const baseScope = read("sync/base-scope.json");
   const childRepos = read("sync/child-repos.json");
-  const findings = auditExperimentLane({ children: childRepos.children ?? [], baseScope });
+  const findings = [
+    ...auditExperimentLane({ children: childRepos.children ?? [], baseScope }),
+    ...auditIsolatedRepos({ children: childRepos.children ?? [], isolatedRepos: childRepos.isolatedRepos ?? [] }),
+  ];
   const experiments = (childRepos.children ?? []).filter((child) => child.lane === "experiment");
+  const isolated = childRepos.isolatedRepos ?? [];
   if (process.argv.includes("--json")) {
-    console.log(JSON.stringify({ experiments: experiments.map((child) => child.repo), findings }, null, 2));
+    console.log(JSON.stringify({
+      experiments: experiments.map((child) => child.repo),
+      isolatedRepos: isolated.map((entry) => entry.repo),
+      findings,
+    }, null, 2));
   } else {
     console.log(`实验车道仓：${experiments.map((child) => child.repo).join(", ") || "（无）"}`);
-    if (!findings.length) console.log("✓ 实验路径全部安全：既不会被 base-sync 覆盖，也在 UI 升级白名单内");
+    console.log(`隔离副本仓（双向不同步）：${isolated.map((entry) => entry.repo).join(", ") || "（无）"}`);
+    if (!findings.length) console.log("✓ 实验路径全部安全：既不会被 base-sync 覆盖，也在 UI 升级白名单内；隔离副本登记完整且未混入 children");
     for (const item of findings) console.error(`✗ [${item.code}] ${item.repo} ${item.path} :: ${item.message}`);
   }
   if (process.argv.includes("--check") && findings.length) process.exit(1);

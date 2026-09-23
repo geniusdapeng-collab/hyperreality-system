@@ -56,6 +56,22 @@ describe("行业包契约", () => {
     expect(() => parseBundleManifest(invalid)).toThrow();
   });
 
+  it("客户端行业术语白名单只接受行业整词，并拒绝平台保留记号", () => {
+    const withTerms = structuredClone(manifest) as Record<string, any>;
+    withTerms.workloom.ui.safeTerms = ["WiFi", "OCC", "RevPAR", "Wi-Fi"];
+    expect(parseBundleManifest(withTerms).workloom.ui.safeTerms).toEqual(["WiFi", "OCC", "RevPAR", "Wi-Fi"]);
+
+    for (const term of ["SELECT", "orderStatus", "private_field", "A", "TOOLONGLATINTOKENVALUE", " 带空格"]) {
+      const invalid = structuredClone(manifest) as Record<string, any>;
+      invalid.workloom.ui.safeTerms = [term];
+      expect(() => parseBundleManifest(invalid), `应拒绝 ${term}`).toThrow();
+    }
+
+    const tooMany = structuredClone(manifest) as Record<string, any>;
+    tooMany.workloom.ui.safeTerms = Array.from({ length: 41 }, (_, i) => `TERM${i}`);
+    expect(() => parseBundleManifest(tooMany)).toThrow();
+  });
+
   it("兼容范围失败关闭", () => {
     expect(satisfiesCompatibility("0.3.0", ">=0.1.0 <1.0.0")).toBe(true);
     expect(satisfiesCompatibility("1.0.0", ">=0.1.0 <1.0.0")).toBe(false);
