@@ -20,6 +20,7 @@ import { bundlesRoot } from "@workloom/base/bundles";
 import { registerFeedbackEnumsFromDisk } from "@workloom/base/evolve";
 import { startSkillDistAutoSync, buildManifest, receiveReflux, type RefluxPayload } from "@workloom/base/skill-ops";
 
+import { readVoiceFile, synthesizeVoice, voiceStationConfig } from "./voice/station.js";
 const app = new Hono();
 
 app.use(
@@ -39,6 +40,41 @@ app.use(
 
 /** 裸健康检查（不进 tRPC，供 start.sh/编排探活） */
 app.get("/health", (c) => c.json({ ok: true, service: "workloom-im-server" }));
+
+/**
+ * 本机克隆音色（小织/织伴的默认音色）[VOICE-DEFAULT]
+ *  - GET /api/voice/status → 工位是否就绪（客户端据此决定是否走克隆音色，不探测就不猜）
+ *  - GET /api/voice/speech?text=…&profile=… → 返回 wav；工位不可达/未配置一律 503，
+ *    客户端按契约回落到系统女声并锁定同一音色（宁可换声线，也不让播报消失）。
+ * 声纹只在本机工位：服务端只传 profile 名与文本，不搬运参考音频。
+ */
+const voiceConfig = voiceStationConfig();
+app.get("/api/voice/status", (c) =>
+  c.json({
+    enabled: voiceConfig.enabled,
+    configured: Boolean(voiceConfig.token),
+    profile: voiceConfig.profile,
+    bridge: voiceConfig.bridgeUrl,
+  }));
+
+app.get("/api/voice/speech", async (c) => {
+  const text = c.req.query("text") ?? "";
+  const profile = c.req.query("profile") || voiceConfig.profile;
+  const result = await synthesizeVoice(text, { config: voiceConfig, profile });
+  if (!result.ok) {
+    return c.json({ error: result.error, message: result.message, profile: result.profile }, 503);
+  }
+  const audio = await readVoiceFile(result.file);
+  return new Response(audio, {
+    status: 200,
+    headers: {
+      "content-type": "audio/wav",
+      "cache-control": "no-store",
+      "x-voice-profile": result.profile,
+      "x-voice-cached": result.cached ? "1" : "0",
+    },
+  });
+});
 
 /** tRPC v11 over HTTP（fetch adapter；httpBatchLink 由客户端侧决定） */
 app.all("/trpc/*", async (c) => {
