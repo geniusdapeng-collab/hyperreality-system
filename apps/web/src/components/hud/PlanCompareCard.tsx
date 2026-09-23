@@ -41,9 +41,9 @@ export function PlanCompareCard({
             <div className="mb-1 break-words text-body font-bold text-ink">{clientValueText(p.summary)}</div>
             <div className="break-words text-body text-ink2">影响面：{clientValueText(p.impact)}</div>
             <div className="mt-1 text-body text-ink3">
-              预估 <b className="font-orb text-gold">{p.estCredits}</b> 积分 · 命中 {p.fences.length} 条围栏
+              预估 <b className="font-orb text-gold">{p.estCredits}</b> 积分 · 命中 {p.fences.length} 条安全规则
             </div>
-            {p.overFence && <div className="mt-1 text-body text-warn">超出围栏 · 采用前须前往审批中心双人确认</div>}
+            {p.overFence && <div className="mt-1 text-body text-warn">超出安全规则 · 采用前须前往审批中心双人确认</div>}
             <div className="mt-2">
               {adoptedId === p.id ? (
                 <span className="inline-flex items-center gap-1 text-body font-bold text-go"><Icon name="check" size={14} />已采用（已写事件）</span>

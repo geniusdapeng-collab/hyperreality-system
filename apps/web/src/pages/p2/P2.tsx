@@ -216,7 +216,7 @@ export default function P2() {
             </div>
           </div>
           <div className="rounded-lg border border-line bg-card p-3">
-            <div className="mb-1.5 text-body font-bold text-holo">围栏判定</div>
+            <div className="mb-1.5 text-body font-bold text-holo">安全规则判定</div>
             <div className="flex gap-2.5 font-mono text-body">
               <span className="text-go">放行 {meter.pass}</span>
               <span className="text-warn">复核 {meter.review}</span>
@@ -339,7 +339,7 @@ export default function P2() {
                     action={actionText(ev.decision.action)}
                     eventId={ev.event_id}
                     receipt={receiptOf(ev)}
-                    rules={(ev.rule_impact ?? []).map((r) => `关联围栏 · ${dictText(RULE_RESULT_TEXT, r.result)}`)}
+                    rules={(ev.rule_impact ?? []).map((r) => `关联安全规则 · ${dictText(RULE_RESULT_TEXT, r.result)}`)}
                     credits={ev.model_trace?.credits}
                   >
                     {payloadText(ev.decision.after)}
@@ -355,7 +355,7 @@ export default function P2() {
                       <Icon name="approval" size={15} />待我审批 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
                     </span>
                     <span className="font-mono text-body text-ink3">{shortId(a.approval_id)}</span>
-                    {a.snapshot.rule_version && <span className="text-body text-holo">命中关联围栏</span>}
+                    {a.snapshot.rule_version && <span className="text-body text-holo">命中关联安全规则</span>}
                   </div>
                   {(a.snapshot.before !== undefined || a.snapshot.after !== undefined) && (
                     <div className="mb-3 grid grid-cols-1 gap-2 text-body sm:grid-cols-2">

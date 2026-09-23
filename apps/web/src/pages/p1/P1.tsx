@@ -238,7 +238,7 @@ export default function P1() {
         <div className="mb-3 rounded-lg border border-line bg-card p-3">
           <div className="mb-1.5 text-body font-bold text-holo">夜班中心</div>
           <NightStatusPill state={pillState} window="22:00–08:00" onClick={() => { window.location.href = "/night"; }} />
-          {night?.run?.fenceSnapshot && <div className="mt-1.5 text-body text-ink3">围栏配置已锁定并留痕</div>}
+          {night?.run?.fenceSnapshot && <div className="mt-1.5 text-body text-ink3">安全规则已锁定并留痕</div>}
         </div>
       )}
       {/* 在线成员（人机混编 P1E6） */}

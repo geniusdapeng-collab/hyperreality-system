@@ -55,13 +55,13 @@ const EXAM_TYPE_TEXT: Record<string, string> = {
 };
 const ATTRIBUTION_TEXT: Record<string, string> = {
   intent: "意图理解错", skill: "技能产出错", knowledge: "知识检索错",
-  tool: "工具调用错", "fence-config": "围栏配置错", "model-tier": "模型档位错",
+  tool: "工具调用错", "fence-config": "安全规则配置错", "model-tier": "模型档位错",
 };
 const EXAM_STATUS_TEXT: Record<string, string> = {
   pending: "等待开始", running: "考试中", completed: "已完成", failed: "考试失败", grading: "判卷中",
 };
 const SUBJECT_TEXT: Record<string, string> = {
-  skill: "技能执行", fence: "围栏治理", "knowledge-base": "知识检索", crew: "团队协作", "biz-flow": "业务流程",
+  skill: "技能执行", fence: "安全规则治理", "knowledge-base": "知识检索", crew: "团队协作", "biz-flow": "业务流程",
 };
 
 function safeNarrative(value: string | null | undefined, fallback: string): string {
@@ -136,9 +136,9 @@ export default function P24() {
       setLoadMessage("");
       setLoadState("ready");
     } catch (error) {
-      console.warn("读取考试院数据失败", error);
+      console.warn("读取考试数据失败", error);
       const failure = toUiFailure(error);
-      setLoadMessage(operationFailure(error, "读取考试院数据"));
+      setLoadMessage(operationFailure(error, "读取考试数据"));
       setLoadState(failure.kind === "forbidden" ? "forbidden" : "error");
     }
   }, []);
@@ -202,7 +202,7 @@ export default function P24() {
       <div className="mx-auto max-w-[760px] px-6 py-16 text-ink">
         <AsyncState
           status={loadState === "forbidden" ? "forbidden" : loadState === "error" ? "error" : "loading"}
-          title={loadState === "loading" ? "正在读取考试院" : undefined}
+          title={loadState === "loading" ? "正在读取考试数据" : undefined}
           description={loadMessage || "考试版本、门禁和成绩确认完成前，不会显示空数据或放行结论。"}
           onRetry={loadState === "error" ? () => void load() : undefined}
         />
@@ -215,7 +215,7 @@ export default function P24() {
       {/* 头部 */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold">考试院</h1>
+          <h1 className="text-lg font-bold">上岗考试</h1>
           <p className="mt-0.5 break-words text-body text-ink2">数字员工评测 · 四维记分卡 · 规则判卷与模型判卷双轨运行 · 红线一票否决</p>
         </div>
         {canRunExam ? <button
@@ -238,7 +238,7 @@ export default function P24() {
 
       <div className="wl-section-layout">
         <SectionNavigation
-          label="考试院分区"
+          label="上岗考试分区"
           items={TAB_ITEMS.map((item) => item.id === "questions" ? { ...item, badge: questions.length } : item)}
           activeId={tab}
           onSelect={(item) => selectTab(item.id as Tab)}
@@ -310,7 +310,7 @@ export default function P24() {
                         <span className="shrink-0 rounded bg-alert/15 px-2 py-0.5 font-medium text-alert">
                           {s.attribution ? ATTRIBUTION_TEXT[s.attribution] ?? "其他原因" : "待归因"}
                         </span>
-                        <span className="text-ink2">{safeNarrative(s.suggestion, "请根据本题结果复核相关技能、知识或围栏配置。")}</span>
+                        <span className="text-ink2">{safeNarrative(s.suggestion, "请根据本题结果复核相关技能、知识或安全规则配置。")}</span>
                       </div>
                     ))}
                   </div>

@@ -47,7 +47,7 @@ export function HandoffCard({
         <span className="inline-flex items-center gap-1.5 text-h2 font-black tracking-wide text-goldhi"><Icon name="night" size={17} />昨夜日报 · 夜班中心</span>
         <span className="text-body text-ink3">{data.deliveredAt} 送达</span>
         <span className="hidden flex-1 sm:inline" />
-        <span className="max-w-full break-words text-body text-holo">围栏快照 {versionText(data.fenceSnapshot)}</span>
+        <span className="max-w-full break-words text-body text-holo">安全规则快照 {versionText(data.fenceSnapshot)}</span>
       </div>
       {/* 三栏大数字（Orbitron 发光；战果✓绿 / 待审批◆琥珀 / 求援▲红——固定语义 §6） */}
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">

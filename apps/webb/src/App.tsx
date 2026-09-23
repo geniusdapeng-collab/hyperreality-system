@@ -150,7 +150,7 @@ function TodayPage({ navigate, me, entries }: { navigate: (path: string) => void
         </div>
         {canOpenInbox && approvals.length > 0 && <Card><div className="row"><h2>优先处理审批</h2><Badge tone="warning">{approvals.length} 项</Badge></div><p className="item-copy">最高风险事项会排在待办页前面，提交后可从事件账本核对回执。</p><div className="action-row"><Button variant="primary" onClick={() => navigate("/inbox")}>查看待办</Button></div></Card>}
         {canOpenTasks && <><div className="row"><h2>数字员工正在做</h2><Button variant="quiet" onClick={() => navigate("/tasks")}>查看全部</Button></div>
-        <div className="stack">{running.slice(0, 3).map((thread) => <AgentWorkCard key={thread.id} work={{ id: thread.id, actor: thread.agent_id ? "数字员工" : "等待分派", humanOwner: me.identity.name, goal: thread.title, stage: clientStatusLabel(thread.status), progress: { completed: thread.progress_done, total: thread.progress_total || undefined, next: thread.status === "pending_review" ? "等待人类裁决" : "继续执行当前里程碑" }, reason: "进度来自当前工作区的任务事件。", needsHuman: thread.status === "pending_review" ? { action: "查看并裁决当前结果", consequence: "任务会保持等待，不会自行越过围栏。" } : undefined, risk: thread.status === "pending_review" ? "medium" : "none", receipt: { requestId: thread.id }, recovery: "可进入任务页查看、暂停或接管" }} />)}{running.length === 0 && <AsyncState status="empty" title="目前没有运行中的任务" description="新任务创建后，会在这里展示执行者、阶段、依据和需要你的动作。" />}</div></>}
+        <div className="stack">{running.slice(0, 3).map((thread) => <AgentWorkCard key={thread.id} work={{ id: thread.id, actor: thread.agent_id ? "数字员工" : "等待分派", humanOwner: me.identity.name, goal: thread.title, stage: clientStatusLabel(thread.status), progress: { completed: thread.progress_done, total: thread.progress_total || undefined, next: thread.status === "pending_review" ? "等待人类裁决" : "继续执行当前里程碑" }, reason: "进度来自当前工作区的任务事件。", needsHuman: thread.status === "pending_review" ? { action: "查看并裁决当前结果", consequence: "任务会保持等待，不会自行越过安全规则。" } : undefined, risk: thread.status === "pending_review" ? "medium" : "none", receipt: { requestId: thread.id }, recovery: "可进入任务页查看、暂停或接管" }} />)}{running.length === 0 && <AsyncState status="empty" title="目前没有运行中的任务" description="新任务创建后，会在这里展示执行者、阶段、依据和需要你的动作。" />}</div></>}
         {canOpenNight && <><NightShiftStatus status={night.configured ? clientStatusLabel(night.run?.status ?? "pending") : "尚未配置"} nextRun={night.run?.runDate ? formatTime(night.run.runDate) : undefined} needsHuman={needsHuman} />
         <div className="action-row"><Button onClick={() => navigate("/night")}>查看夜班</Button></div></>}
       </>;
@@ -187,7 +187,7 @@ function ApprovalsPage({ canDecide }: { canDecide: boolean }) {
     {notice && <div className="status-strip" role="status">{notice}</div>}
     <Resource state={resource.state} retry={resource.reload} empty={({ approvals }) => approvals.length === 0}>{({ approvals, reasons }) => <div className="stack">{approvals.map((approval) => {
       const readonly = !canDecide || approval.status !== "pending";
-      return <DecisionPackage key={approval.approval_id} decision={{ title: approval.event?.decision?.action ? "待确认的经营动作" : "待确认事项", action: "批准后由受控执行链继续处理", summary: `由${approval.event?.who?.id ? "数字员工" : "系统流程"}发起，当前状态为${clientStatusLabel(approval.status)}。`, before: clientValueText(approval.snapshot.before), after: clientValueText(approval.snapshot.after), evidence: approval.event?.rule_impact?.length ? [{ title: `命中 ${approval.event.rule_impact.length} 条规则`, source: "围栏判断" }] : [{ title: "审批事件已进入待办", source: "事件账本" }], risk: approval.snapshot.high_risk ? "high" : "medium", fence: approval.snapshot.high_risk ? "高风险动作必须由人类明确裁决" : "当前动作需要人类确认", impact: clientValueText(approval.snapshot.after), rollback: "审批前不会执行；执行后的回滚方式以对应任务回执为准。", eventId: approval.event_id }} actions={!readonly ? <><Button variant="primary" disabled={Boolean(busy)} onClick={() => setApproving(approval)}>批准</Button><Button variant="danger" disabled={Boolean(busy)} onClick={() => { setReason(reasons[0]?.code ?? "other"); setRejecting(approval); }}>驳回</Button></> : undefined} />;
+      return <DecisionPackage key={approval.approval_id} decision={{ title: approval.event?.decision?.action ? "待确认的经营动作" : "待确认事项", action: "批准后由受控执行链继续处理", summary: `由${approval.event?.who?.id ? "数字员工" : "系统流程"}发起，当前状态为${clientStatusLabel(approval.status)}。`, before: clientValueText(approval.snapshot.before), after: clientValueText(approval.snapshot.after), evidence: approval.event?.rule_impact?.length ? [{ title: `命中 ${approval.event.rule_impact.length} 条规则`, source: "安全规则判断" }] : [{ title: "审批事件已进入待办", source: "事件账本" }], risk: approval.snapshot.high_risk ? "high" : "medium", fence: approval.snapshot.high_risk ? "高风险动作必须由人类明确裁决" : "当前动作需要人类确认", impact: clientValueText(approval.snapshot.after), rollback: "审批前不会执行；执行后的回滚方式以对应任务回执为准。", eventId: approval.event_id }} actions={!readonly ? <><Button variant="primary" disabled={Boolean(busy)} onClick={() => setApproving(approval)}>批准</Button><Button variant="danger" disabled={Boolean(busy)} onClick={() => { setReason(reasons[0]?.code ?? "other"); setRejecting(approval); }}>驳回</Button></> : undefined} />;
     })}</div>}</Resource>
     <Overlay open={Boolean(approving)} title="确认批准" description="审批决定会写入事件账本；批准不等于外部动作已经生效。" onClose={() => { if (!busy) setApproving(null); }} dismissOnBackdrop={!busy} dismissOnEscape={!busy} footer={<><Button disabled={Boolean(busy)} onClick={() => setApproving(null)}>取消</Button><Button variant="primary" busy={busy === approving?.approval_id} onClick={() => approving && void decide(approving, "approve")}>确认批准</Button></>}>
       <p>影响摘要：{clientValueText(approving?.snapshot.after)}。提交后请继续核对外部执行回执。</p>
@@ -282,7 +282,7 @@ function LedgerPage({ modelsOnly = false }: { modelsOnly?: boolean }) {
     return batches.flat().filter((event) => !modelsOnly || event.model_trace).sort((a, b) => new Date(b.context?.time ?? 0).getTime() - new Date(a.context?.time ?? 0).getTime());
   }, [modelsOnly]);
   const resource = useResource(loader);
-  return <div className="page"><PageHeading title={modelsOnly ? "模型路由" : "事件账本"} description={modelsOnly ? "查看任务实际使用的模型、档位和消耗证据。" : "查看谁在什么时间执行了什么，以及结果是否同步。"} />
+  return <div className="page"><PageHeading title={modelsOnly ? "模型与成本" : "事件账本"} description={modelsOnly ? "查看任务实际使用的模型、档位和消耗证据。" : "查看谁在什么时间执行了什么，以及结果是否同步。"} />
     <Resource state={resource.state} retry={resource.reload} empty={(events) => events.length === 0}>{(events) => modelsOnly ? <div className="stack">{events.slice(0, 80).map((event) => <Card key={event.event_id}><div className="row"><h2>{event.model_trace?.model_id ? "已记录模型调用" : "模型待确认"}</h2><Badge tone={event.receipt?.synced ? "success" : "warning"}>{event.receipt?.synced ? "已同步" : "待核实"}</Badge></div><p className="item-copy">实际模型：{clientValueText(event.model_trace?.model_id)}；能力档位：{clientValueText(event.model_trace?.tier)}；积分：{clientValueText(event.model_trace?.credits)}。</p><div className="item-meta"><span>{event.thread.title}</span><span>{formatTime(event.context?.time)}</span><span>事件{clientIdentifierText(event.event_id)}</span></div></Card>)}</div> : <LedgerTimeline items={events.slice(0, 80).map((event) => ({ id: event.event_id, action: event.decision?.action ? "业务动作已记录" : "任务事件已记录", actor: event.thread.title, time: formatTime(event.context?.time), result: event.receipt?.synced ? "结果已同步到事件账本。" : "同步状态仍待核实。", verified: Boolean(event.receipt?.synced) }))} />}</Resource>
   </div>;
 }
@@ -301,10 +301,10 @@ function TrustListPage({ kind }: { kind: TrustListKind }) {
   }, [kind]);
   const resource = useResource(loader);
   const labels = {
-    exams: ["考试院", "查看考试版本、门禁状态和最近结果。"],
-    memory: ["组织记忆", "查看当前工作区可见记忆；高影响编辑请在 PC 完成。"],
+    exams: ["上岗考试", "查看考试版本、门禁状态和最近结果。"],
+    memory: ["组织经验", "查看当前工作区可见经验；高影响编辑请在 PC 完成。"],
     night: ["夜班中心", "查看最近班次及是否需要人工介入。"],
-    guardrails: ["围栏规则", "查看自动、待审与阻断规则。"],
+    guardrails: ["安全规则", "查看自动、待审与阻断规则。"],
     skills: ["技能中心", "查看当前工作区可用的数字员工技能。"],
     agents: ["数字员工", "查看当前工作区已装配的数字员工。"],
     members: ["成员", "查看当前工作区成员和角色。"],
@@ -344,8 +344,8 @@ function AccountPage({ navigate, onLogout, me, entries, partner, scope, availabl
     onLogout();
   };
   const links = [
-    ["事件账本", "/events", "ledger"], ["考试院", "/exams", "exam"], ["组织记忆", "/memory", "memory"],
-    ["夜班中心", "/night", "night"], ["模型路由", "/models", "model"], ["围栏规则", "/guardrails", "rules"],
+    ["事件账本", "/events", "ledger"], ["上岗考试", "/exams", "exam"], ["组织经验", "/memory", "memory"],
+    ["夜班中心", "/night", "night"], ["模型与成本", "/models", "model"], ["安全规则", "/guardrails", "rules"],
     ["数字员工", "/agents", "agents"], ["成员", "/members", "team"],
   ] as const;
   const permittedPaths = new Set(permittedBMobileRoutes(links.map(([, path]) => path), entries));

@@ -68,11 +68,11 @@ export function AgentActionMessage({
         {(rules.length > 0 || credits !== undefined || memoryRefs.length > 0) && (
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-line pt-1.5 text-body text-ink3">
             {rules.map((r, index) => (
-              <span key={r} className="text-holo2">命中围栏规则 {index + 1}</span>
+              <span key={r} className="text-holo2">命中安全规则 {index + 1}</span>
             ))}
             {credits !== undefined && <span>能量 <b className="font-orb text-gold">{credits}</b></span>}
             {memoryRefs.map((m, index) => (
-              <span key={m}>引用组织记忆 {index + 1}</span>
+              <span key={m}>引用组织经验 {index + 1}</span>
             ))}
           </div>
         )}

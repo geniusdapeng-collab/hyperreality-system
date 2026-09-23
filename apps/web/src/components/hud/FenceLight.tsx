@@ -39,7 +39,7 @@ export function FenceLight({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-body font-bold text-ink">
           <span className="min-w-0 break-words">{clientValueText(name)}</span>
-          {baseline && <Icon name="lock" label="集团基线围栏，只可加严" size={14} />}
+          {baseline && <Icon name="lock" label="集团基线安全规则，只可加严" size={14} />}
         </div>
         {desc && <div className="break-words text-body text-ink3">{clientValueText(desc)}</div>}
       </div>

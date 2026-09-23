@@ -60,9 +60,9 @@ export default function P5() {
       setLoadMessage("");
       setLoadState("ready");
     } catch (error) {
-      console.warn("读取围栏规则失败", error);
+      console.warn("读取安全规则失败", error);
       const failure = toUiFailure(error);
-      setLoadMessage(operationFailure(error, "读取围栏规则"));
+      setLoadMessage(operationFailure(error, "读取安全规则"));
       setLoadState(failure.kind === "forbidden" ? "forbidden" : "error");
     }
   }, []);
@@ -315,7 +315,7 @@ export default function P5() {
               </div>
             ))}
             <div className="rounded-lg border border-line bg-bg800/40 p-3 text-body text-ink3">
-              所有直接操作、子任务和自动化触发都经过同一套围栏；硬约束优先于工作区规则。
+              所有直接操作、子任务和自动化触发都经过同一套安全规则；平台硬约束优先于工作区自定规则。
               断网时仍按最近一次有效规则拦截；行业默认值由当前行业包提供，基座不内置行业数值。
             </div>
           </div>

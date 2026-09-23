@@ -89,7 +89,7 @@ export default function P3() {
       return;
     }
     await trpc.approvals.decide.mutate({ approvalId: a.approval_id, gesture: g });
-    setBanner({ level: "info", text: "审批结果已写入事件账本，并用于校准组织记忆。" });
+    setBanner({ level: "info", text: "审批结果已写入事件账本，并用于校准组织经验。" });
     await load();
   }, [load]);
 
@@ -148,7 +148,7 @@ export default function P3() {
               <div className="rounded-2xl border border-line bg-card p-3.5">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="inline-flex items-center gap-1 text-body font-black text-goldhi"><Icon name="night" size={14} />昨夜日报</span>
-                  {run?.fenceSnapshot && <span className="text-body text-holo">围栏快照已锁定</span>}
+                  {run?.fenceSnapshot && <span className="text-body text-holo">安全规则快照已锁定</span>}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {([
@@ -194,7 +194,7 @@ export default function P3() {
                     <span className="font-mono text-body text-ink3">{shortId(a.approval_id)}</span>
                   </div>
                   {a.snapshot.rule_version && (
-                    <div className="mb-1 text-body text-holo">命中关联围栏</div>
+                    <div className="mb-1 text-body text-holo">命中关联安全规则</div>
                   )}
                   {(a.snapshot.before !== undefined || a.snapshot.after !== undefined) && (
                     <div className="mb-2.5 rounded-lg border border-line bg-bg800/60 p-2.5 font-mono text-body">
