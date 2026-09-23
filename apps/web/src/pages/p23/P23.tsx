@@ -99,7 +99,7 @@ export default function P23() {
       setDataState("ready");
     } catch (error) {
       if (requestId !== dataSequence.current) return;
-      console.warn("读取组织记忆失败", error);
+      console.warn("读取组织经验失败", error);
       const failure = toUiFailure(error);
       setStateMessage(failure.message);
       setDataState(failure.kind === "forbidden" ? "forbidden" : "error");
@@ -125,7 +125,7 @@ export default function P23() {
       setBanner({ level: "info", text: `服务端已确认停用这条记忆${result.eventId ? `，账本事件 ${shortId(result.eventId)}` : ""}。后续决策不再引用该记忆。` });
       await load(true);
     } catch (error) {
-      console.warn("停用组织记忆失败", error);
+      console.warn("停用组织经验失败", error);
       setBanner({ level: "alert", text: operationFailure(error, "记忆停用") });
     } finally {
       setBusy(null);
@@ -187,7 +187,7 @@ export default function P23() {
       setBanner({ level: "info", text: "服务端已确认更新，校准记录已写入事件账本。" });
       await load(true);
     } catch (error) {
-      console.warn("更新组织记忆失败", error);
+      console.warn("更新组织经验失败", error);
       setBanner({ level: "alert", text: operationFailure(error, "记忆更新") });
     } finally {
       setBusy(null);
@@ -227,7 +227,7 @@ export default function P23() {
       });
       await load(true);
     } catch (error) {
-      console.warn("组织记忆提炼失败", error);
+      console.warn("组织经验提炼失败", error);
       setBanner({ level: "alert", text: operationFailure(error, "记忆提炼") });
     } finally {
       setBusy(null);
@@ -257,7 +257,7 @@ export default function P23() {
           <AsyncState
             status={accessStatus === "error" ? "error" : "loading"}
             title={accessStatus === "loading" ? "正在确认记忆权限" : undefined}
-            description="身份确认完成前，系统保持只读并且不会显示组织记忆。"
+            description="身份确认完成前，系统保持只读并且不会显示组织经验。"
             onRetry={accessStatus === "error" ? reloadAccess : undefined}
           />
         </div>
@@ -271,7 +271,7 @@ export default function P23() {
         <div className="mx-auto max-w-3xl px-5 py-16">
           <AsyncState
             status={dataState === "forbidden" ? "forbidden" : dataState === "error" ? "error" : "loading"}
-            title={dataState === "loading" ? "正在读取组织记忆" : undefined}
+            title={dataState === "loading" ? "正在读取组织经验" : undefined}
             description={stateMessage || undefined}
             onRetry={dataState === "error" ? () => void load() : undefined}
           />
@@ -283,7 +283,7 @@ export default function P23() {
   return (
     <Bridge>
       <div className="mx-auto w-full min-w-0 max-w-5xl px-3 py-6 sm:px-5">
-        <div className="mb-1 text-lg font-bold text-ink">组织记忆中心</div>
+        <div className="mb-1 text-lg font-bold text-ink">组织经验中心</div>
         <div className="mb-4 break-words text-body text-ink3">
           企业的口味、规矩与教训，是数字员工持续改进的依据。内容可读、可改、可停用，每次变更都写入不可篡改的事件账本。
         </div>
@@ -305,7 +305,7 @@ export default function P23() {
           </div>
         )}
         {dataState === "loading" && (
-          <div className="mb-3"><BannerAlert level="info">正在按新条件读取组织记忆，完成前继续显示上一次成功快照且不开放写操作。</BannerAlert></div>
+          <div className="mb-3"><BannerAlert level="info">正在按新条件读取组织经验，完成前继续显示上一次成功快照且不开放写操作。</BannerAlert></div>
         )}
 
         {/* 进化积分卡（M5：北极星 + 趋势斜率） */}
@@ -483,7 +483,7 @@ export default function P23() {
             <div className="font-semibold text-ink">服务端影响预览</div>
             <div className="mt-1">记忆：{impact.affectedMemoryIds.length} 条</div>
             <div>数字员工：{impact.agents.length ? impact.agents.map((item) => item.name).join("、") : "没有已知直接引用"}</div>
-            <div>关联围栏：{impact.rules.length ? impact.rules.map((item) => item.name).join("、") : "没有已知直接引用"}</div>
+            <div>关联安全规则：{impact.rules.length ? impact.rules.map((item) => item.name).join("、") : "没有已知直接引用"}</div>
             <div>进行中任务：{impact.activeTasks.length ? impact.activeTasks.map((item) => item.title).join("、") : "没有已知直接引用"}</div>
             <div className="mt-1 text-ink3">{impact.futureTaskPolicy}</div>
           </div>}

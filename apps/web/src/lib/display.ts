@@ -232,7 +232,7 @@ export const OBJECT_TYPE_TEXT: Record<string, string> = {
   rule: "规则",
   member: "成员",
   agent: "数字员工",
-  memory: "组织记忆",
+  memory: "组织经验",
   ticket: "服务工单",
   workspace: "工作区",
 };
@@ -260,7 +260,7 @@ export const THREAD_MODE_TEXT: Record<string, string> = {
 
 /** 动作码 → 中文（底座通用域） */
 export const ACTION_TEXT: Record<string, string> = {
-  "memory.upsert": "更新组织记忆",
+  "memory.upsert": "更新组织经验",
   // 夜班
   "night.note": "夜班记录",
   "night.package": "生成夜班日报",

@@ -170,7 +170,7 @@ export default function P7() {
             任一校验失败都会拒绝激活<br />
             校验、激活和切换全部写入事件账本<br />
             草稿不会进入分发<br />
-            行业围栏只能在基座围栏上加严
+            行业安全规则只能在基座安全规则上加严
           </div>
           {selected && (
             <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-body text-ink3">
@@ -236,7 +236,7 @@ export default function P7() {
               )}
             </div>
 
-            {/* P7E5 BundleWizard：五要素（档案/枚举/工具/围栏包/班组骨架 + 名称/版本/变更/围栏/负责人） */}
+            {/* P7E5 BundleWizard：五要素（档案/枚举/工具/安全规则包/班组骨架 + 名称/版本/变更/安全规则/负责人） */}
             {wizardOpen && canManage && (
               <Overlay
                 open
@@ -267,10 +267,10 @@ export default function P7() {
                     <input value={draft.version} onChange={(e) => setDraft({ ...draft, version: e.target.value })}
                       className="mt-1 w-full rounded-md border border-line bg-bg px-2.5 py-1.5 font-mono text-body text-ink outline-none focus:border-gline" />
                   </label>
-                  <label className="text-body text-ink3">继承围栏方案
+                  <label className="text-body text-ink3">继承安全规则方案
                     <select value={draft.fenceRef} onChange={(e) => setDraft({ ...draft, fenceRef: e.target.value })}
                       className="mt-1 w-full rounded-md border border-line bg-bg px-2.5 py-1.5 text-body text-ink outline-none focus:border-gline">
-                      <option value="base-governance/v1">基座通用治理围栏</option>
+                      <option value="base-governance/v1">基座通用治理安全规则</option>
                     </select>
                   </label>
                   <label className="text-body text-ink3">负责人
@@ -299,7 +299,7 @@ export default function P7() {
             )}
 
             {/* P7E1 六槽位卡 */}
-            <div id="sec-slots" className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+            <div id="sec-slots" className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))]">
               {selected.slots.map((s) => (
                 <button
                   key={s.id}
@@ -317,7 +317,7 @@ export default function P7() {
                     {s.failed ? <><Icon name="error" size={12} className="inline" /> 校验失败</> : s.filled ? <><Icon name="check" size={12} className="inline" /> 已装配</> : "待填充"}
                   </span>
                   <Icon name={SLOT_ICON[s.id] ?? "puzzle"} size={22} className="mb-1.5" />
-                  <h4 className="text-body font-bold text-ink2">{clientChineseText(s.label, "装配项")}</h4>
+                  <h4 className="pr-16 text-body font-bold text-ink2">{clientChineseText(s.label, "装配项")}</h4>
                   <p className={`mt-1 text-body leading-relaxed ${s.failed ? "text-alert" : "text-ink3"}`}>{clientChineseText(s.summary, s.filled ? "已完成装配" : "等待补充配置")}</p>
                   {s.go && <p className="mt-1 text-body text-holo">{s.go === "p5" ? "→ 前往规则与权限" : "→ 前往团队成员"}</p>}
                 </button>
@@ -336,7 +336,7 @@ export default function P7() {
                   <Icon name="reset" size={13} className="inline" /> 重跑校验
                 </button>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5">
+              <div className="mt-3 grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,160px),1fr))]">
                 {selected.checks.map((c) => (
                   <div key={c.key} title={clientChineseText(c.detail, "查看下方校验详情")}
                     className={`rounded-xl border px-2 py-2.5 text-center text-body ${
@@ -380,11 +380,11 @@ export default function P7() {
               </div>
             )}
 
-            {/* P7E2 Agent 班组卡：preset 清单与围栏绑定校验状态；点击 →P8 */}
+            {/* P7E2 Agent 班组卡：preset 清单与安全规则绑定校验状态；点击 →P8 */}
             <div id="sec-crew" className="mt-4 rounded-xl border border-line bg-card p-4">
               <div className="mb-2.5 text-body font-bold text-ink2">
                 数字员工班组 · 岗位清单
-                <span className="ml-2 text-body font-normal text-ink3">未声明关联围栏的写操作会被系统阻断 · 点击查看成员档案</span>
+                <span className="ml-2 text-body font-normal text-ink3">未声明关联安全规则的写操作会被系统阻断 · 点击查看员工档案</span>
               </div>
               {selected.agents.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-body text-ink3">
@@ -402,7 +402,7 @@ export default function P7() {
                           {a.readonly && <span className="ml-1 rounded border border-line px-1 text-body text-ink3">只读岗位</span>}
                         </div>
                         <div className="mt-0.5 text-body text-ink3">
-                          {actorText(a.presetKey)} · {a.readonly ? "只读岗位无需写入围栏" : a.fenceBindings.length > 0 ? `已绑定 ${a.fenceBindings.length} 条围栏` : "未声明围栏"}
+                          {actorText(a.presetKey)} · {a.readonly ? "只读岗位无需写入安全规则" : a.fenceBindings.length > 0 ? `已绑定 ${a.fenceBindings.length} 条安全规则` : "未声明安全规则"}
                           {" "}{a.fenceOk ? <Icon name="check" size={13} className="inline text-go" /> : <span className="inline-flex items-center gap-1 text-alert"><Icon name="error" size={13} />禁写</span>}
                         </div>
                       </div>

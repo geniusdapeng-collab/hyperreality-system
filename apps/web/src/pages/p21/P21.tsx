@@ -112,7 +112,7 @@ export default function P21() {
   };
   const feedback = async (eventId: string, signal: "up" | "down") => {
     await trpc.captain.feedback.mutate({ eventId, signal });
-    setMsg(`已记录您的${signal === "up" ? "点赞" : "点踩"}（入组织记忆，影响后续决策）`);
+    setMsg(`已记录您的${signal === "up" ? "点赞" : "点踩"}（入组织经验，影响后续决策）`);
   };
 
   const decide = async (approvalId: string, gesture: "approve" | "reject") => {

@@ -165,7 +165,7 @@ export default function CustomizeWizard() {
       {step === "staffing" && (
         <div className="mt-4 min-w-0 rounded-xl border border-line bg-card p-5">
           <div className="break-words text-body font-semibold">② 描述您的行业与经营重点</div>
-          <p className="mt-1 break-words text-body leading-relaxed text-ink3">真实模型输出须通过结构、围栏引用和写入岗位保护校验，才会保存为可确认草案。</p>
+          <p className="mt-1 break-words text-body leading-relaxed text-ink3">真实模型输出须通过结构、安全规则引用和写入岗位保护校验，才会保存为可确认草案。</p>
           <textarea
             value={industry}
             onChange={(event) => setIndustry(event.target.value)}
@@ -193,7 +193,7 @@ export default function CustomizeWizard() {
                   <span className="block break-words text-ink3 sm:inline">{clientValueText(member.description)}</span>
                 </div>
               ))}
-              <div className="mt-2 break-words text-body text-ink3">可执行围栏 {draft.fences.length} 条 · 待后续安装的技能建议 {draft.skills_suggested.length} 项</div>
+              <div className="mt-2 break-words text-body text-ink3">可执行安全规则 {draft.fences.length} 条 · 待后续安装的技能建议 {draft.skills_suggested.length} 项</div>
               {generationMode !== "real" && (
                 <div className="mt-3 break-words rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-body leading-relaxed text-amber-200">
                   这是模拟骨架，仅供预览，服务端不会允许装配或上岗。请返回标准落地向导接入真实模型，再重新生成。
@@ -215,7 +215,7 @@ export default function CustomizeWizard() {
 
       {step === "exam" && assembly && (
         <div className="mt-4 min-w-0 rounded-xl border border-line bg-card p-5">
-          <div className="break-words text-body font-semibold">③ 逐岗位上岗考（未全员通过前，候选员工与围栏保持停用）</div>
+          <div className="break-words text-body font-semibold">③ 逐岗位上岗考（未全员通过前，候选员工与安全规则保持停用）</div>
           <div className="mt-2 rounded border border-line bg-bg800 px-3 py-2 text-body text-ink3">
             <div>候选装配版本：{versionText(String(assembly.version))}</div>
             <div className="mt-1 break-words">装配内容已由服务端指纹锁定，考试期间发生变化将拒绝切换。</div>
@@ -276,7 +276,7 @@ export default function CustomizeWizard() {
       {step === "done" && assembly?.status === "active" && (
         <div className="mt-4 min-w-0 rounded-xl border border-go/40 bg-go/10 p-5">
           <div className="break-words text-[15px] font-bold text-go">专属团队已通过绑定上岗考并激活</div>
-          <p className="mt-2 break-words text-body leading-relaxed text-ink2">服务端已核验装配{versionText(String(assembly.version))}与内容指纹，数字员工及围栏现已进入运行态。技能建议仍需通过技能市场安装；正式经营模式还须完成真实模型与经营主体门禁。</p>
+          <p className="mt-2 break-words text-body leading-relaxed text-ink2">服务端已核验装配{versionText(String(assembly.version))}与内容指纹，数字员工及安全规则现已进入运行态。技能建议仍需通过技能市场安装；正式经营模式还须完成真实模型与经营主体门禁。</p>
           {examResult?.candidates && examResult.candidates.length > 0 && (
             <div className="mt-3 min-w-0 rounded-lg border border-line bg-bg800 px-3 py-2 text-body text-ink2">
               <div className="break-words font-semibold text-go">逐岗位实测通过 {examResult.candidates.filter((item) => item.passed).length}/{examResult.candidates.length}</div>

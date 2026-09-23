@@ -132,7 +132,7 @@ export default function P6() {
     setBusy(`sug-${s.key}`);
     try {
       const r = await trpc.skills.awareness.confirm.mutate({ suggestion: s, target: "trigger", schedule: "0 8 * * 1" });
-      setBanner({ level: "info", text: `已固化为每周一 08:00 运行的定时任务；自动执行仍受围栏管辖。任务回执 ${shortId(r.artifactId)}，账本凭证 ${shortId(r.eventId)}。` });
+      setBanner({ level: "info", text: `已固化为每周一 08:00 运行的定时任务；自动执行仍受安全规则管辖。任务回执 ${shortId(r.artifactId)}，账本凭证 ${shortId(r.eventId)}。` });
       await load(true);
     } catch (e) {
       console.warn("固化定时任务失败", e);
@@ -161,7 +161,7 @@ export default function P6() {
     try {
       const r = await trpc.skills.install.mutate({ skillId });
       const skillName = displayName(skills.find((item) => item.id === skillId) ?? { id: skillId, level: "team", bundle: null, name: skillId, version: "", description: "", fence_bindings: [], desensitized: false });
-      setBanner({ level: "info", text: `已装备「${skillName}」；${r.bindings.length ? `同时启用 ${r.bindings.length} 条关联围栏。` : "该技能没有额外围栏。"}` });
+      setBanner({ level: "info", text: `已装备「${skillName}」；${r.bindings.length ? `同时启用 ${r.bindings.length} 条关联安全规则。` : "该技能没有额外安全规则。"}` });
       await load(true);
     } catch (e) {
       console.warn("安装技能失败", e);
@@ -177,7 +177,7 @@ export default function P6() {
     try {
       await trpc.skills.uninstall.mutate({ skillId });
       const skillName = displayName(skills.find((item) => item.id === skillId) ?? { id: skillId, level: "team", bundle: null, name: skillId, version: "", description: "", fence_bindings: [], desensitized: false });
-      setBanner({ level: "warn", text: `已卸载「${skillName}」；随技能启用的关联围栏已同步撤销。` });
+      setBanner({ level: "warn", text: `已卸载「${skillName}」；随技能启用的关联安全规则已同步撤销。` });
       await load(true);
     } catch (e) {
       console.warn("卸载技能失败", e);
@@ -205,11 +205,11 @@ export default function P6() {
         <h4 className="mt-1.5 text-body font-bold text-ink">{displayName(s)}</h4>
         {/* 列表瘦身（2026-09 易用性批次）：描述限两行，用量/驳回明细默认折叠，卡片只留决策需要的信息 */}
         <div className="mt-1 line-clamp-2 text-body leading-relaxed text-ink2">{displayDesc(s)}</div>
-        {/* 绑定围栏可见（P6E2） */}
+        {/* 绑定安全规则可见（P6E2） */}
         {s.fence_bindings.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             <span className="rounded border border-line bg-bg800/60 px-1.5 py-0.5 text-body text-holo">
-              已关联 {s.fence_bindings.length} 条围栏
+              已关联 {s.fence_bindings.length} 条安全规则
             </span>
           </div>
         )}
@@ -323,7 +323,7 @@ export default function P6() {
             <div className="mb-1 text-body font-bold text-ink2">安全约束</div>
             行业共享上架前必须脱敏<br />
             正式环境只允许已签名的白名单技能<br />
-            技能动作始终经过围栏判定<br />
+            技能动作始终经过安全规则判定<br />
             安装、卸载和创建都会写入事件账本
           </div>
           <div className="mt-2.5 rounded-lg border border-line bg-card p-3 text-body text-ink3">
@@ -424,7 +424,7 @@ export default function P6() {
             {/* 空态（F8.1）：未安装任何技能 → 仅显官方技能 + 新建入口 */}
             {nothingInstalled && (
               <div className="mb-3">
-                <EmptyState title="尚未装备任何技能" hint="可以从官方技能开始；安装时会同步启用关联围栏，卸载时同步撤销。" />
+                <EmptyState title="尚未装备任何技能" hint="可以从官方技能开始；安装时会同步启用关联安全规则，卸载时同步撤销。" />
               </div>
             )}
 
@@ -432,7 +432,7 @@ export default function P6() {
             <div id="sec-official" className="mb-2 text-body font-bold tracking-wider text-ink2">
               官方技能 · 随行业包分发
             </div>
-            <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            <div className="mb-5 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))]">
               {officials.map(renderCard)}
             </div>
 
@@ -442,7 +442,7 @@ export default function P6() {
                 <div id="sec-team" className="mb-2 text-body font-bold tracking-wider text-ink2">
                   团队技能（银边 · 本工作区自建）
                 </div>
-                <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="mb-5 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))]">
                   {teams.length > 0 ? teams.map(renderCard) : (
                     <div className="col-span-2 rounded-lg border border-dashed border-line p-4 text-center text-body text-ink3">
                       还没有团队技能——可用下方「打造新装备」零代码创建
@@ -458,7 +458,7 @@ export default function P6() {
                 <div id="sec-industry" className="mb-2 text-body font-bold tracking-wider text-ink2">
                   行业共享（已脱敏）
                 </div>
-                <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="mb-5 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))]">
                   {industries.length > 0 ? industries.map(renderCard) : (
                     <div className="col-span-2 rounded-lg border border-dashed border-line p-4 text-center text-body text-ink3">
                       当前行业联盟暂无共享技能
@@ -516,7 +516,7 @@ function SkillWizard({
       const rules = await trpc.fence.rules.query() as Array<{ rule_id: string; name: string; status: string }>;
       setRuleOptions(rules.filter((r) => r.status === "active").map((r) => ({
         rule_id: r.rule_id,
-        name: clientChineseText(r.name, "关联围栏"),
+        name: clientChineseText(r.name, "关联安全规则"),
       })));
     })();
   }, [ready]);
@@ -540,7 +540,7 @@ function SkillWizard({
       "安全边界（什么不做）",
       boundary || "（未填）",
       "",
-      `关联围栏：${selectedRules.length > 0 ? selectedRules.join("、") : "暂无"}`,
+      `关联安全规则：${selectedRules.length > 0 ? selectedRules.join("、") : "暂无"}`,
       "新技能要先在模拟环境跑一遍验证，通过后才能安装。",
     ].join("\n");
   }, [name, desc, trigger, steps, boundary, fences, ruleOptions]);
@@ -643,7 +643,7 @@ function SkillWizard({
               />
             </div>
             <div className="rounded-lg border border-line bg-card p-3">
-              <div className="mb-1.5 text-body font-bold text-ink2">③ 不能做什么 → 自动生成围栏声明</div>
+              <div className="mb-1.5 text-body font-bold text-ink2">③ 不能做什么 → 自动生成安全规则声明</div>
               <textarea
                 value={boundary}
                 onChange={(e) => setBoundary(e.target.value)}
@@ -666,9 +666,9 @@ function SkillWizard({
                     className={`cursor-pointer rounded border px-2 py-0.5 text-body ${
                       fences.includes(r.rule_id) ? "border-holo/60 bg-holo/10 text-holo" : "border-line text-ink3 hover:border-holo/40"
                     }`}
-                    title={clientChineseText(r.name, "关联围栏")}
+                    title={clientChineseText(r.name, "关联安全规则")}
                   >
-                    {clientChineseText(r.name, "关联围栏")}
+                    {clientChineseText(r.name, "关联安全规则")}
                   </button>
                 ))}
               </div>
@@ -721,7 +721,7 @@ function SkillWizard({
               <div className="mb-1.5 text-body font-bold text-ink2">技能草稿预览</div>
               <pre className="whitespace-pre-wrap rounded-lg border border-line bg-bg900 p-3 font-mono text-body leading-relaxed text-ink2">{preview}</pre>
               <div className="mt-2 text-body leading-relaxed text-ink3">
-                确认创建后进入版本管理；关联围栏随安装生效、卸载撤销；正式环境仅允许已签名的白名单技能。
+                确认创建后进入版本管理；关联安全规则随安装生效、卸载撤销；正式环境仅允许已签名的白名单技能。
               </div>
             </div>
             {created && (
@@ -732,9 +732,9 @@ function SkillWizard({
                     已模拟回放 {dryReport.replayed} 条：
                     {dryReport.perRule.length > 0 ? dryReport.perRule.map((r) => (
                       <div key={r.ruleId} className="mt-1">
-                        {clientChineseText(ruleOptions.find((rule) => rule.rule_id === r.ruleId)?.name, "关联围栏")}：放行 {r.pass} 条、需复核 {r.wouldReview} 条、阻断 {r.wouldBlock} 条
+                        {clientChineseText(ruleOptions.find((rule) => rule.rule_id === r.ruleId)?.name, "关联安全规则")}：放行 {r.pass} 条、需复核 {r.wouldReview} 条、阻断 {r.wouldBlock} 条
                       </div>
-                    )) : <span className="text-ink3">（无绑定围栏可回放）</span>}
+                    )) : <span className="text-ink3">（无绑定安全规则可回放）</span>}
                   </div>
                 )}
               </div>

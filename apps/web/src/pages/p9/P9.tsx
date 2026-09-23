@@ -223,7 +223,7 @@ export default function P9() {
         <div className="mb-1.5 text-body font-bold text-holo">班组状态</div>
         <NightStatusPill state={pillState} window="22:00–08:00" />
         {run?.fenceSnapshot && (
-          <div className="mt-1.5 text-body text-ink3">当班围栏 {versionText(run.fenceSnapshot)}（可回溯）</div>
+          <div className="mt-1.5 text-body text-ink3">当班安全规则 {versionText(run.fenceSnapshot)}（可回溯）</div>
         )}
       </div>
       <div className="mb-3 rounded-lg border border-line bg-card p-3">
@@ -256,7 +256,7 @@ export default function P9() {
   return (
     <Bridge
       left={hasSnapshot ? left : <AsyncState status={loadState === "error" ? "error" : loadState === "forbidden" ? "forbidden" : "loading"} description={loadMessage || undefined} onRetry={loadState === "error" ? () => void load() : undefined} />}
-      right={hasSnapshot ? right : <AsyncState status="loading" title="班组信息尚未就绪" description="班次状态确认后再显示围栏和计量信息。" />}
+      right={hasSnapshot ? right : <AsyncState status="loading" title="班组信息尚未就绪" description="班次状态确认后再显示安全规则和计量信息。" />}
     >
       <div className="flex min-h-full flex-col">
         {/* GroupHeader */}
@@ -300,7 +300,7 @@ export default function P9() {
             <EmptyState icon={<Icon name="night" size={24} />} title="夜班未配置" hint="请前往规则与权限页面完成夜班配置。" actionLabel="去配置 →" onAction={() => navigate("/guardrails")} />
           ) : (
             <>
-              <SystemDivider time="22:00" summary={`夜班开始 · 当班围栏${versionText(run?.fenceSnapshot)} · 候选清单 ${run?.candidateCount ?? 0} 项已确认`} />
+              <SystemDivider time="22:00" summary={`夜班开始 · 当班安全规则${versionText(run?.fenceSnapshot)} · 候选清单 ${run?.candidateCount ?? 0} 项已确认`} />
               {events.map((ev) => {
                 if (ev.decision.action === "night.note" && ev.who.type === "human") {
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{String((ev.decision.after as { text?: string })?.text ?? "")}</HumanBubble>;
@@ -357,7 +357,7 @@ export default function P9() {
               disabled={busy === "note"}
               onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") void sendNote(); }}
-              placeholder="给班组留言…（留言会留痕，触发的动作仍需经过围栏）"
+              placeholder="给班组留言…（留言会留痕，触发的动作仍需经过安全规则）"
               className="flex-1 rounded-lg border border-line bg-bg800 px-3 py-2 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
             />
             <button

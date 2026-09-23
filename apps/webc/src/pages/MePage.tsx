@@ -292,7 +292,7 @@ export default function MePage({ onGoChat }: { onGoChat: () => void }) {
                 {bindState === "pending" ? "正在核验并绑定…" : bindState === "failed" ? "重新绑定" : "核验并绑定身份"}
               </button>
               <p className="break-words text-body leading-relaxed text-ink3">
-                正式环境仅在租户已配置短信或渠道身份核验后可用；未配置时系统会明确提示，不会假装发送或绑定成功。
+                正式环境仅在公司已配置短信或渠道身份核验后可用；未配置时系统会明确提示，不会假装发送或绑定成功。
               </p>
             </div>
           )}

@@ -35,7 +35,7 @@ const STATUS: Record<string, { text: string; cls: string }> = {
 };
 const TYPE_TEXT: Record<string, string> = {
   persona: "话术人格", kb: "知识", crew: "编制", threshold: "阈值",
-  skill: "技能", fence: "围栏", brand: "品牌",
+  skill: "技能", fence: "安全规则", brand: "品牌",
 };
 const VERDICT: Record<string, { text: string; cls: string }> = {
   compatible: { text: "兼容", cls: "text-go" },

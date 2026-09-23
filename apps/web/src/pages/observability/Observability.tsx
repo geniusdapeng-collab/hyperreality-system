@@ -146,10 +146,10 @@ export default function Observability({ view }: { view: "events" | "models" }) {
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-h1 font-black tracking-wider">{view === "events" ? "事件账本" : "模型路由"}</h1>
+            <h1 className="text-h1 font-black tracking-wider">{view === "events" ? "事件账本" : "模型与成本"}</h1>
             <p className="mt-1 text-body leading-relaxed text-ink3">
               {view === "events"
-                ? "按时间查看谁执行了什么、围栏如何判定、结果是否已同步。"
+                ? "按时间查看谁执行了什么、安全规则如何判定、结果是否已同步。"
                 : "查看实际模型选择、能力档位、调用时段与积分证据。"}
             </p>
           </div>

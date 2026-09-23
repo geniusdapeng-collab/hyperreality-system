@@ -259,6 +259,10 @@ export default function P4() {
                   <span>{a.event ? `${actorText(a.event.who.id)} · ${actionText(a.event.decision.action)}` : shortId(a.event_id)}</span>
                 </div>
                 {isConflict(a) && <div className="mt-0.5 inline-flex items-center gap-1 text-body text-alert"><Icon name="warning" size={13} />快照已过期</div>}
+                {/* 清单先说清截止时间：超时不自动放行（保持未批准），避免"以为系统会自己处理" */}
+                {!isConflict(a) && a.status === "pending" && a.snapshot.expires_at && (
+                  <div className="mt-0.5 text-body text-ink3">请于 {new Date(a.snapshot.expires_at).toLocaleString("zh-CN", { hour12: false })} 前处理 · 超时保持未批准，不会自动放行</div>
+                )}
               </button>
             ))}
           </div>
@@ -291,7 +295,7 @@ export default function P4() {
                   {selected.event.model_trace.credits ?? 0} 积分
                 </div>
               )}
-              {(selected.event.decision.memory_refs ?? []).length > 0 && <div>引用组织记忆 <span className="text-holo2">{selected.event.decision.memory_refs?.length} 条</span></div>}
+              {(selected.event.decision.memory_refs ?? []).length > 0 && <div>引用组织经验 <span className="text-holo2">{selected.event.decision.memory_refs?.length} 条</span></div>}
               {selected.event.rule_impact.map((r) => (
                 <div key={r.rule_id} className={r.result === "pass" ? "text-go" : r.result === "review" ? "text-warn" : "text-alert"}>
                   规则 {shortId(r.rule_id)} · {versionText(r.version)} · {dictText(RULE_RESULT_TEXT, r.result)}
@@ -366,10 +370,10 @@ export default function P4() {
               summary: selected.event ? `由${actorText(selected.event.who.id)}发起，需要根据证据和影响范围作出裁决。` : "审批事件详情尚未完整同步，请先核对信息。",
               before: <span className="line-through">{payloadText(selected.snapshot.before ?? selected.event?.decision.before ?? null, 120) || "无调整前内容"}</span>,
               after: payloadText(selected.snapshot.after ?? selected.event?.decision.after ?? null, 120) || "无调整后内容",
-              evidence: selected.event?.rule_impact.map((rule) => ({ title: `围栏判断：${dictText(RULE_RESULT_TEXT, rule.result)}`, detail: versionText(rule.version), source: `规则 ${shortId(rule.rule_id)}` })) ?? [],
+              evidence: selected.event?.rule_impact.map((rule) => ({ title: `安全规则判断：${dictText(RULE_RESULT_TEXT, rule.result)}`, detail: versionText(rule.version), source: `规则 ${shortId(rule.rule_id)}` })) ?? [],
               risk: tierOf(selected) === "高风险" ? "high" : tierOf(selected) === "必审" ? "medium" : "low",
-              fence: selected.event?.rule_impact.length ? `命中 ${selected.event.rule_impact.length} 条围栏规则` : "未返回围栏明细，仍需人工确认",
-              memory: selected.event?.decision.memory_refs?.length ? `引用 ${selected.event.decision.memory_refs.length} 条组织记忆` : "未引用组织记忆",
+              fence: selected.event?.rule_impact.length ? `命中 ${selected.event.rule_impact.length} 条安全规则` : "未返回安全规则明细，仍需人工确认",
+              memory: selected.event?.decision.memory_refs?.length ? `引用 ${selected.event.decision.memory_refs.length} 条组织经验` : "未引用组织经验",
               model: selected.event?.model_trace?.model_id,
               impact: selected.event ? `${dictText(OBJECT_TYPE_TEXT, selected.event.object.type)}${selected.event.object.id ? `「${shortId(selected.event.object.id)}」` : ""}` : "影响范围待确认",
               rollback: selected.event?.receipt?.synced ? "动作已有同步回执；如需撤回，请从对应账本事件发起受控回滚。" : "外部生效尚未确认；审批后仍需核对执行回执。",
