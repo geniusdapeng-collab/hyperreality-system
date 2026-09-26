@@ -9,6 +9,7 @@ import { useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { VoiceEngine } from "../../voice/VoiceEngine";
 import { MateLive2D, type MateMood, type MateGesture } from "./MateLive2D";
+import { LoomBall, emotionLabelOf, emotionOfSystem, loomBallEnabled, useStableEmotion, type SystemStatusSignal } from "../loomball";
 import { useAskRailPadding, useSideNavWidth } from "../../lib/useAskRail";
 import { canonicalNavigationPath } from "../../shell/NavMenu";
 import { Icon, clientChineseText, clientValueText, useManagedSurface } from "@workloom/ui";
@@ -28,6 +29,23 @@ interface InboxItem {
 }
 interface MemRow { id: string; layer: string; mkey: string; content: string; source: string; confidence: string; created_at: string }
 interface ChatMsg { from: "me" | "mate"; text: string }
+
+/** 勿扰时段判定（"HH:MM"~"HH:MM"，支持跨零点；格式非法时按不在时段处理，不猜） */
+function inQuietHours(start: string | undefined, end: string | undefined, now: Date): boolean {
+  const parse = (value: string | undefined): number | null => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec((value ?? "").trim());
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59) return null;
+    return hours * 60 + minutes;
+  };
+  const from = parse(start);
+  const to = parse(end);
+  if (from === null || to === null) return false;
+  const at = now.getHours() * 60 + now.getMinutes();
+  return from <= to ? at >= from && at <= to : at >= from || at <= to;
+}
 
 const VOICE_MAP: Record<string, { pitch: number; rate: number; female?: boolean }> = {
   sweet: { pitch: 1.25, rate: 1.02, female: true },
@@ -171,6 +189,22 @@ export function LoomMate() {
   const personaName = settings?.persona_key === "custom"
     ? (settings?.persona_custom?.name ?? "小织")
     : (PERSONA_NAME[settings?.persona_key ?? "tianmei"] ?? "小织");
+
+  /**
+   * 织球「班组状态眼」（基座版）：全局系统状态 → 表情。
+   * 信号全部来自本组件已有的真实轮询（收件箱 + 勿扰时段）：
+   *   · 待人审（kind=judge）→ 待审批；红线（level=red）→ 出错；勿扰时段空闲 → 夜班值守；否则待机。
+   * 说明：`activeRuns`（"班组正在干活"）需要服务端 run 聚合（Growth 车道是 `video.studio.active`），
+   * 基座无视频 run 注册表，这里保持 0——宁可显示待机，也不假装在干活。
+   */
+  const systemSignal: SystemStatusSignal = {
+    activeRuns: 0,
+    awaitingApprovals: items.filter((it) => it.kind === "judge").length,
+    recentFailure: items.some((it) => it.level === "red"),
+    quietHours: inQuietHours(settings?.quiet_start, settings?.quiet_end, new Date()),
+  };
+  const systemEmotion = useStableEmotion(emotionOfSystem(systemSignal));
+  const systemEmotionText = emotionLabelOf(systemEmotion);
 
   const load = useCallback(async () => {
     await ensureDemoLogin();
@@ -458,7 +492,7 @@ export function LoomMate() {
         <button
           role="button"
           onClick={() => { setMini(false); persistLocal("loommate.mini", "0"); }}
-          title={`${personaName}（拖拽挪位置 · 点击聊聊）`}
+          title={loomBallEnabled ? `${personaName}（班组${systemEmotionText} · 拖拽挪位置 · 点击聊聊）` : `${personaName}（拖拽挪位置 · 点击聊聊）`}
           aria-label={`${personaName}助手；回车打开对话，方向键移动，按住 Shift 可加速移动`}
           aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight"
           onKeyDown={(e) => {
@@ -472,7 +506,15 @@ export function LoomMate() {
           }}
           className="relative block h-16 w-16 overflow-hidden rounded-full border-2 border-gold/60 bg-bg900 shadow-xl transition-transform hover:scale-110"
         >
-          <img src="/live2d/mao/poster.png" alt={personaName} draggable={false} className="h-full w-full object-cover" />
+          {loomBallEnabled ? (
+            /* 小角落态：静态小头像 → 织球（班组此刻在干什么，一眼看得见；
+               形象本体与人格不进这颗球——那是大形象的职责） */
+            <span className="flex h-full w-full items-center justify-center bg-bg900">
+              <LoomBall emotion={systemEmotion} size={56} live followGaze={false} title={`班组${systemEmotionText}`} />
+            </span>
+          ) : (
+            <img src="/live2d/mao/poster.png" alt={personaName} draggable={false} className="h-full w-full object-cover" />
+          )}
           {unread > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-alert px-1 text-body font-bold text-white shadow-lg">
               {unread}

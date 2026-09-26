@@ -22,6 +22,7 @@ import { useNavigate, useParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { displayNameOf, setAliasLocal } from "../../lib/naming";
 import { AgentAvatarOf } from "../../components/AgentAvatar";
+import { LoomBall, TONE_CLASS, emotionLabelOf, emotionOfAgent, emotionToneOf, loomBallEnabled } from "../../components/loomball";
 import { FENCE_LEVEL_TEXT, RULE_RESULT_TEXT, actionText, capabilityText, dictText, shortId, versionText } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 import { Button, Icon, Overlay, clientChineseText } from "@workloom/ui";
@@ -47,6 +48,9 @@ interface AgentRow {
   readonly: boolean; status: string; invalidReason: string | null;
   fenceBindings: string[]; skills: string[];
   nightShift: boolean; highRisk: boolean; description: string; online: boolean;
+  /** 织球工作状态信号（服务端事件/审批只读投影，T-2026-0926-0001 公共化） */
+  lastAction: string | null; lastActionAt: string | null;
+  pendingApprovals: number; blockedRecent: number;
   stats: {
     actions30: number; adopted30: number; rejected30: number;
     adoptionRate: number | null; credits30: number; offPeakRatio: number | null;
@@ -142,6 +146,12 @@ function HumanCard({ h }: { h: HumanRow }) {
 function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; onOpen: (id: string) => void }) {
   const invalid = a.status === "invalid";
   const displayName = displayNameOf({ presetKey: a.presetKey, roleName: a.name });
+  /* 织球：岗位此刻状态（映射唯一事实源 = components/loomball/agent-emotion.ts）
+     —— 文字 chip 与球同源，避免「球在忙、文字说待命」 */
+  const emotion = emotionOfAgent(a);
+  const tone = emotionToneOf(emotion);
+  const emotionText = emotionLabelOf(emotion);
+  const ballLive = tone === "busy" || tone === "wait"; // 只有真的在干活/等拍板才驱动动画
   const [aliasOpen, setAliasOpen] = useState(false);
   const [alias, setAlias] = useState(displayName === a.name ? "" : displayName);
   const [aliasBusy, setAliasBusy] = useState(false);
@@ -176,6 +186,11 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
       }`}
     >
       <div className="flex items-start gap-2.5">
+        {loomBallEnabled && (
+          <div className="relative -ml-1 shrink-0 pt-0.5" title={`${displayName} · ${emotionText}`}>
+            <LoomBall emotion={emotion} size={40} live={ballLive} hoverActivate={!ballLive} followGaze={false} />
+          </div>
+        )}
         <div className="relative shrink-0">
           {/* 数字人统一形象（与 3D 职场同源角色——认得出"世界里的他"） */}
           <div className={`flex h-10 w-10 items-center justify-center rounded-md border-2 ${
@@ -219,8 +234,12 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
               等级/段位、30 天动作与采纳率、安全规则明细统一进「员工档案」详情页，
               避免卡片在窄列里换行成三四行（2026-09-23 走查：列表字段再瘦身）。 */}
           <div className="mt-2.5 flex min-w-0 items-center justify-between gap-2">
-            <span className={`shrink-0 text-body ${a.readonly ? "text-go" : a.online ? "text-holo" : "text-ink3"}`}>
-              {a.online ? "夜班在线" : a.readonly ? "只读岗位" : "待命"}
+            {/* 状态 chip 与球同源（球 aria-hidden，语义只由这行文字承担） */}
+            <span className="flex shrink-0 items-center gap-1.5">
+              {a.readonly && <span className="text-body text-go">只读</span>}
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-body ${TONE_CLASS[tone]}`}>
+                {emotionText}
+              </span>
             </span>
             {a.skills.length > 0 && (
               <span className="inline-flex min-w-0 items-center gap-1 text-body text-ink3">

@@ -118,6 +118,13 @@ const INDUSTRY_HTML = /\.html?$/i;
 const LABEL_DICTIONARY_FILE = /(?:^|\/)(?:copy|i18n|labels?|locales?|messages?|strings?)(?:[._-][^/]*)?\.(?:json|ya?ml)$/i;
 const CLIENT_PUBLIC_INDUSTRY_SOURCE = /^apps\/(?:web|webb|webc)\/public\/industry\/.+\.[cm]?[jt]sx?$/i;
 const MANAGED_SURFACE_STYLESHEET = "packages/ui/src/components.css";
+/**
+ * 上游 vendor 资产（`apps/<客户端>/src/vendor/<组件>/**`、`packages/ui/src/vendor/**`）：
+ * 逐字节保留的上游源码（MIT 等，PINNED 锁 commit），其双语数据/文档字符串属于上游内容，
+ * **不是产品文案面**——产品文案一律由组件层（中文）承担，故整目录豁免客户端文案与浮面治理；
+ * 仍受供应链（oss-components 登记 + 许可证）、产物体积与安全门禁约束。
+ */
+const UPSTREAM_VENDOR_ASSET = /^(?:apps\/(?:web|webb|webc)\/src|packages\/ui\/src)\/vendor\/[A-Za-z0-9._-]+\//;
 const CLIENT_SOURCE_EXCLUSION = /(?:^|\/)(?:__tests__|coverage|dist|node_modules)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$|\.d\.[cm]?ts$/i;
 const BUNDLE_UI_CONFIG_FILE = /^(?:apps\/(?:web|webb|webc)\/public\/industry\/.+\.json|apps\/webc\/public\/service-front\.config\.json|bundles\/[^/]+\/(?:floor-scene\.json|service-front\/client\.json))$/;
 const CLIENT_WEB_MANIFEST_FILE = /^apps\/(?:web|webb|webc)\/public\/(?:.+\/)?(?:manifest\.json|[^/]+\.webmanifest)$/i;
@@ -371,6 +378,7 @@ function literalLanguageRules(text, kind = "页面文本") {
 /** 门禁文件发现本身也做成可测试规则，避免新增扩展名或共享组件后静默漏扫。 */
 export function isClientSurfaceSource(fileName) {
   const normalized = fileName.replaceAll("\\", "/").replace(/^\.\//, "");
+  if (UPSTREAM_VENDOR_ASSET.test(normalized)) return false;
   return (CLIENT_SOURCE_ROOT.test(normalized) || CLIENT_PUBLIC_WORKER.test(normalized)
       || CLIENT_PUBLIC_INDUSTRY_SOURCE.test(normalized))
     && CLIENT_SOURCE_FILE.test(normalized)

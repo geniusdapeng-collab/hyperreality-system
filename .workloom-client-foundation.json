@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.12",
-  "sourceRef": "refs/tags/ui-v0.1.12",
-  "sourceCommit": "9ec8a32746e2e109139da8ae205a5e721748b20c",
+  "version": "0.1.13",
+  "sourceRef": "refs/tags/ui-v0.1.13",
+  "sourceCommit": "600dd140f49f1d6b20d228969eb8a62408159513",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "b685ffffff693b5cc8fbfb0c2ff352911c365a1af8f30c165f2d89f609bd5aef",
+      "sha256": "1627e75bd260ab87a69cd33adaaa4ee062e97b4385eaeaf51cecc3c7482b6080",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -410,8 +410,52 @@
       "sha256": "d05d92260e2987d6ae5f21baaffaeca0a0916fc3e2376bf7c76cf2527ae148d9",
       "mode": 420
     },
+    "apps/web/src/components/loomball/agent-emotion.test.ts": {
+      "sha256": "2df87d0fdc850a72d6bb00956ef7d7ea365796b0eba562ea473e66d9763bdc08",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/agent-emotion.ts": {
+      "sha256": "54e070f8357f7aba6be02f0f9fa7d8576cce6064b89c08a9bb0e4b0d6a86b000",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/emotions-workloom.ts": {
+      "sha256": "9f704d077f54709b6bb56a5b071761d2d9e7d911feb07c29dd873b6d49868ad4",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/engine.test.ts": {
+      "sha256": "ab21ed8f246d1d219b69d87fdb77500d51e5af70e8b2809f6bcf3a4415e2f060",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/engine.ts": {
+      "sha256": "02e2c80f334feaa054612b61111eb400a67eac211112ab624938c533d751501a",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/index.ts": {
+      "sha256": "3e70cc914b61fb4e19b91c84bf30dfede0f64c55e8ed0a4ed78876bb221938b4",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/LoomBall.disabled.test.tsx": {
+      "sha256": "8b6d8273a45a9026d86933f1c019aa30aca34b0f135509df41cc1fc2df5977e8",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/LoomBall.test.tsx": {
+      "sha256": "66e92f3aa863990f96f579c2f38be0d12c3bd361c3ed6c920c06a7314b827241",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/LoomBall.tsx": {
+      "sha256": "9e561d754b0fced2caddd7a612ea23b55159755da6414e95d84a99caaf8c907a",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/provenance.test.ts": {
+      "sha256": "f3f8fecf21c0997627dafc6f128099d942be51639ba7dd953a45539c38f62ada",
+      "mode": 420
+    },
+    "apps/web/src/components/loomball/useStableEmotion.ts": {
+      "sha256": "a00b08f9f35bb4b36ad368a0f225d84730ee16dd13a7a2d855fe24cf2a8599a4",
+      "mode": 420
+    },
     "apps/web/src/components/loommate/LoomMate.tsx": {
-      "sha256": "cca3a106758e70f8074a21ba991e7816b9cea38e3a1437623392b857e3ba0a43",
+      "sha256": "7713f3c1332937d2781720bc67d1fc7a4acee4641f30d863ae15bd2b212218f1",
       "mode": 420
     },
     "apps/web/src/components/loommate/MateLive2D.tsx": {
@@ -671,7 +715,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p8/P8.tsx": {
-      "sha256": "3cffa950380d31795f11500914c57a9fb3cdaf0f2e0991126867c37d2a7d39eb",
+      "sha256": "02cdc45b7b9d38c431de021fda35ec8293a9792a873df8219b39dc619efb43ff",
       "mode": 420
     },
     "apps/web/src/pages/p9/P9.tsx": {
@@ -726,6 +770,30 @@
       "sha256": "cc8a4da15772a62b9d122ea6afbe49262ec6d12f301c0450ed019ca9a407302e",
       "mode": 420
     },
+    "apps/web/src/vendor/loomball/grok-ball.js": {
+      "sha256": "d03f37f261da2e22e55e9b0fa40dcdab62f0a6c6dd419632a088a7c4c9bb79fa",
+      "mode": 420
+    },
+    "apps/web/src/vendor/loomball/grok-ball.ts": {
+      "sha256": "13f773427f7bd0617ee2bfabeed4e343ade94853820465c098f9311dc66fec98",
+      "mode": 420
+    },
+    "apps/web/src/vendor/loomball/index.ts": {
+      "sha256": "fa3f03f0c65c81fcd9b2b9aca3eaaf80c16f789f5c1d7d8a96a44f17bab9727c",
+      "mode": 420
+    },
+    "apps/web/src/vendor/loomball/LICENSE": {
+      "sha256": "b8822ea9da7704044227a433c4d3be2cadfef48307c690b1699abb77604d3532",
+      "mode": 420
+    },
+    "apps/web/src/vendor/loomball/NOTICE.md": {
+      "sha256": "b9a98234edb5167b29bb722c86529c5826a127873915f9c58a1c40764a32bd3c",
+      "mode": 420
+    },
+    "apps/web/src/vendor/loomball/PINNED": {
+      "sha256": "d6c0d3a9957bae9c8611e14d5cbdb738fbf494e922f84578e41ee91a0fad292b",
+      "mode": 420
+    },
     "apps/web/src/voice/neuralVoice.test.ts": {
       "sha256": "e82b0c4584e84a62c1a68f44023eb74b539801cbf0b109be8531f650d81dab69",
       "mode": 420
@@ -763,7 +831,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "fc9e54ad5a1f91c114ec76aa9e64037fd42ff7ef2406db2a659a37cbfb2e2b1e",
+      "sha256": "dc922592854016c080e16603f05e3d6a577d8f1dbef99f92c179190cee859235",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -827,7 +895,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "0a71bc722070878c6ea5106217158aebb0506fd3e0aeae24a22e7502fbac59b3",
+      "sha256": "281453f3a51128c01f6d5f28177c2b6e5aa564a8ad2831a31414bc8446cf3f94",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {
