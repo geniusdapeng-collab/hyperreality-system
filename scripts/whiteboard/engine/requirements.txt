@@ -1,0 +1,17 @@
+# vendor/srt-whiteboard 运行时依赖闭包（T-2026-0926-0020）
+#
+# 口径：
+#   · 只声明渲染器真正 import 的四个第三方包（cv2 / numpy / av / PIL）；
+#   · 版本以 2026-09-27 本机实测通过的组合为准（macOS arm64 + Python 3.12）；
+#   · 不做 `pip install -r` 的日常路径——日常由 `prepare_env.py` 建 venv 并补齐缺失包，
+#     本文件是**版本事实**（供 oss-inventory 采集 + 复现排障），避免"上次能跑这次不能跑"。
+#
+# 与 pkgs 的对应关系（prepare_env.py#DEPS）：
+#   cv2 -> opencv-python, numpy, av, PIL -> Pillow
+#
+# 许可证：opencv-python=Apache-2.0、numpy=BSD-3-Clause、av=BSD-3-Clause、Pillow=MIT-CMU；
+# 全部为宽松许可，可商用（已登记进根目录 oss-components.json）。
+opencv-python==5.0.0.93
+numpy==2.5.3
+av==18.1.0
+Pillow==12.3.0

@@ -4,7 +4,7 @@
 
 > 生成器：`scripts/oss-inventory.mjs`（离线事实）＋ `scripts/oss-watch.sh`（上游最新版本）
 > 仓库：workloom-ai/hyperreality-system ｜ 最近一次上游扫描：2026-09-19T03:13:55.000Z
-> 统计：登记组件 90 个 ｜ npm 直接依赖 155 个 ｜ Python 依赖 1 个 ｜ 容器镜像 2 个
+> 统计：登记组件 91 个 ｜ npm 直接依赖 155 个 ｜ Python 依赖 5 个 ｜ 容器镜像 2 个
 
 ## 0. 维护机制（四件事）
 
@@ -84,33 +84,34 @@
 | 61 | browser-use | [github.com/browser-use/browser-use](https://github.com/browser-use/browser-use) · MIT | 停车场（L4 冷启动探索，规划位） | 0.13.10 | 停车场（已选型未引入） | 浏览器自动化分层执行面（L4 探索） | 只用于新平台冷启动，探明后必须固化为 L3 剧本；不得直接进生产主路径 |
 | 62 | Skyvern | [github.com/Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern) · AGPL-3.0 | 停车场（视觉抗改版降级路径，规划位） | 1.0.48 | 停车场（已选型未引入） | 浏览器自动化（视觉驱动降级路径） | ⚠ AGPL-3.0：只允许独立进程形态，禁止链接进分发包；启用前过法务与出站声明 |
 | 63 | computer-use（vendored 工具箱） | [github.com/anthropics/anthropic-quickstarts](https://github.com/anthropics/anthropic-quickstarts) · MIT | repo-vendored-2026-08 | —（未扫描） | 运行时 | packages/base/computer-use（三层感知：CDP/AXTree/截图） | vendored 进仓并本地加固；上游为参考实现（无版本号），升级=人工比对；生产部署纪律见 docs/computer-use-production.md；publish-rpa 的 BrowserDriver 上游 |
-| 64 | BrowserAct 技能包 | [github.com/browser-act/skills](https://github.com/browser-act/skills) · MIT | 观察项（技能市场执行面技能，L2 审批安装） | —（未扫描） | 观察项 | skills/registry/browser-act（执行面技能·可选） | freemium 云依赖（stealth/代理/打码付费）：适配纪律 proxyMode=custom-only、凭据留在客户本机、出站 api.browseract.com 全声明；未进入默认运行时 |
-| 65 | Tencent BrowserSkill | [github.com/Tencent/BrowserSkill](https://github.com/Tencent/BrowserSkill) · MIT | 观察项（2026-08-26 评估：Borrow 协议可借鉴） | cli-v0.3.0 | 观察项 | 浏览器桥接对照组（publish-rpa 权限模型参照） | 只作对照评估，暂不入运行时；publish-rpa 真机发布的权限模型参照对象 |
-| 66 | Scrapling | [github.com/D4Vinci/Scrapling](https://github.com/D4Vinci/Scrapling) · BSD-3-Clause | 观察项（技能市场执行面技能） | v0.4.15 | 观察项 | skills/registry/scrapling-collector（纯本地零出站） | 纯本地零出站采集技能；经 skill:forge 集成，随技能市场分发 |
-| 67 | OpenAdapt | [github.com/OpenAdaptAI/OpenAdapt](https://github.com/OpenAdaptAI/OpenAdapt) · MIT | 停车场（录制回放/流程固化规划位） | v1.16.0 | 停车场（已选型未引入） | 流程固化（人工流程→确定性剧本） | 与意识系统构成「检测高频任务→建议固化→录制编译→剧本上线」管道，未接运行时 |
-| 68 | Agent-S3（gui-agents） | [github.com/simular-ai/Agent-S](https://github.com/simular-ai/Agent-S) · Apache-2.0 | 停车场（桌面 GUI 操控对照实现） | v0.3.2 | 停车场（已选型未引入） | 桌面 GUI 操控（对照/备选） | 与自有 computer-use 能力对照复核；若引入只作独立进程，虚拟输入通道不得劫持真实鼠标 |
-| 69 | WrenAI | [github.com/Canner/WrenAI](https://github.com/Canner/WrenAI) · Apache-2.0 | 停车场（G1 消息图谱 NL 检索：现走薄自译 NL→结构化过滤器） | wren-core-py-v0.8.0 | 停车场（已选型未引入） | 消息图谱 NL 检索（规划位） | 只允许使用其 governed text-to-SQL 引擎能力，且必须独立进程；现网结构回归由薄自译实现承担 |
-| 70 | Lago | [github.com/getlago/lago](https://github.com/getlago/lago) · AGPL-3.0 | 停车场（计量计费由自研计量承担） | v1.53.0 | 停车场（已选型未引入） | 计量计费（可选独立进程） | ⚠ AGPL-3.0 独立部署；现网计量=自研遥测 seam 逐消息 + 账单投影，未引入 |
-| 71 | E2B（执行沙箱 SDK） | [github.com/e2b-dev/E2B](https://github.com/e2b-dev/E2B) · Apache-2.0 | 停车场（不可信代码执行隔离规划位） | e2b@2.51.0 | 停车场（已选型未引入） | 执行沙箱（SaaS 默认形态规划） | 若启用 SaaS 形态，客户代码外发必须经出站声明与审批；首选仍是本地沙箱策略 |
-| 72 | Daytona | [github.com/daytonaio/daytona](https://github.com/daytonaio/daytona) · AGPL-3.0 | 停车场（VPC 自托管沙箱规划位） | v0.190.0 | 停车场（已选型未引入） | 执行沙箱（VPC 自托管，Kata 强化隔离） | ⚠ AGPL-3.0 独立进程；仅在客户 VPC 内自托管形态评估 |
-| 73 | Tauri | [github.com/tauri-apps/tauri](https://github.com/tauri-apps/tauri) · Apache-2.0 / MIT | 停车场（桌面壳候选，正式形态已选 Electron） | tauri-v3.0.0-alpha.1 | 停车场（已选型未引入） | 桌面壳（候选） | 双轨 tag（tauri-v2.x / v1.x）需 tag_prefix 收敛；当前桌面形态为 Electron，Tauri 仅保留为低配门店候选 |
-| 74 | Taro | [github.com/NervJS/taro](https://github.com/NervJS/taro) · MIT | 停车场（小程序端候选，移动端现走响应式 Web） | 4.2.1 | 停车场（已选型未引入） | 微信小程序（候选） | 若启用需一套 React 码出小程序（只读+审批+一键暂停），当前未接入 |
-| 75 | CopilotKit | [github.com/CopilotKit/CopilotKit](https://github.com/CopilotKit/CopilotKit) · MIT | 停车场（Agent 卡片/审批组件候选） | 1.72.0 | 停车场（已选型未引入） | Agent 对话/审批组件（候选） | 仅作组件库复用（AG-UI 协议），消息流必须由 dsh 承接；引入前核对与自有 review-console 的边界 |
-| 76 | ECharts | [github.com/apache/echarts](https://github.com/apache/echarts) · Apache-2.0 | 停车场（工作台图表候选，现网图表为自研轻量组件） | 6.1.0 | 停车场（已选型未引入） | 工作台图表（候选） | 体积较大（需按需引入）；若引入需过三端视觉门禁与首屏预算 |
-| 77 | TipTap | [github.com/ueberdosis/tiptap](https://github.com/ueberdosis/tiptap) · MIT | 停车场（写作编辑器候选） | 3.31.3 | 停车场（已选型未引入） | 工作台写作编辑器（候选） | 编辑器事务→防抖合并→事件流的约定在引入时必须保留（文档即事件） |
-| 78 | SheetJS | [git.sheetjs.com/sheetjs/sheetjs](https://git.sheetjs.com/sheetjs/sheetjs) · Apache-2.0 | 停车场（表格导入导出候选） | 0.18.5 | 停车场（已选型未引入） | 数据表格导入导出（候选） | npm 上的 xlsx 为旧版快照，官方已迁至自建源（cdn.sheetjs.com）；引入时从官方源锁定版本 |
-| 79 | PptxGenJS | [github.com/gitbrent/PptxGenJS](https://github.com/gitbrent/PptxGenJS) · MIT | 停车场（现网用 python-pptx 服务端生成） | 4.0.1 | 停车场（已选型未引入） | 工作台幻灯片导出（候选） | 若引入，与 python-pptx 二选一，避免两套 PPT 生成链路 |
-| 80 | Fabric.js | [github.com/fabricjs/fabric.js](https://github.com/fabricjs/fabric.js) · MIT | 停车场（设计画布候选） | 7.4.0 | 停车场（已选型未引入） | 设计画布（候选） | 注意与自研 dev-bridge/devfabric 命名区分（同名非同一组件）；Canvas 性能需在低配门店 PC 验证 |
-| 81 | WeasyPrint | [github.com/Kozea/WeasyPrint](https://github.com/Kozea/WeasyPrint) · BSD-3-Clause | 停车场（服务端 PDF 渲染候选，现网审计导出为自研） | 62.3 | 停车场（已选型未引入） | 审计报告 PDF 服务端渲染（候选） | 引入前提：确定性渲染 ≤30s、仅独立进程（依赖系统 libpango/cairo） |
-| 82 | Litestream | [github.com/benbjohnson/litestream](https://github.com/benbjohnson/litestream) · Apache-2.0 | 停车场（边缘节点 SQLite 备份候选） | v0.5.17 | 停车场（已选型未引入） | 边缘节点 SQLite 连续备份（候选） | 边缘/社区版形态未启用；启用前定义恢复演练与保留策略 |
-| 83 | sqlite-vec | [github.com/asg017/sqlite-vec](https://github.com/asg017/sqlite-vec) · MIT / Apache-2.0 | 停车场（边缘向量索引候选） | v0.1.9 | 停车场（已选型未引入） | 边缘节点向量检索（候选） | 与 pgvector 保留同一检索契约，避免双实现语义漂移 |
-| 84 | SeaweedFS | [github.com/seaweedfs/seaweedfs](https://github.com/seaweedfs/seaweedfs) · Apache-2.0 | 停车场（VPC 对象存储候选） | 4.47 | 停车场（已选型未引入） | VPC 对象存储（候选） | SaaS 形态默认走云 OSS/S3；自托管仅在客户 VPC 方案中评估 |
-| 85 | KayKit Adventurers（3D 素材） | [github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0) · CC0-1.0 | kaykit-2026-08（5 角色 GLB + 道具） | —（未扫描） | 素材/资产 | apps/web/public/models/kaykit（真人风数字员工角色/动画） | CC0 可商用免署名；76 组骨骼动画、贴图内嵌单文件；装备节点显隐做外观差异化，新增素材需过三端渲染截图 |
-| 86 | Node.js | [github.com/nodejs/node](https://github.com/nodejs/node) · MIT | 24.19.0 | **v26.9.0** ⬆ | 随包二进制 | CI 构建镜像与桌面载荷内嵌运行时 | 引擎下限 >=24（dsh 的 zstd 会话持久化要求）；桌面载荷内嵌 24.19.0，升级需重建载荷并过 app 冒烟 |
-| 87 | pnpm | [github.com/pnpm/pnpm](https://github.com/pnpm/pnpm) · MIT | 10.14.0 | **12.4.2** ⬆ | 开发/构建 | 包管理与 lockfile 格式 | lockfile v9 格式；升级必须九仓同步（packageManager 字段），否则 frozen-lockfile 安装失败 |
-| 88 | npm（桌面载荷安装器） | [github.com/npm/cli](https://github.com/npm/cli) · Artistic-2.0 | 11.17.0 | **12.0.2** ⬆ | 随包二进制 | .workloom-runtime-deps（受控 npm ci 安装桌面运行载荷） | 载荷安装器版本与 package-lock.json 绑定；升级需重跑 runtime:deps:refresh/verify |
-| 89 | python-pptx | [github.com/scanny/python-pptx](https://github.com/scanny/python-pptx) · MIT | 按需安装（未锁定版本） | 1.0.2 | 开发/构建 | scripts/build-capability-pptx.py（能力清单 PPT 生成） | 本地工具链依赖，不随产品分发；版本未锁定属已知缺口（建议后续补 requirements 引脚） |
-| 90 | Playwright（Python · computer-use 工具链） | [github.com/microsoft/playwright-python](https://github.com/microsoft/playwright-python) · Apache-2.0 | >=1.40.0 | **1.46.0** ⬆ | 开发/构建 | packages/base/computer-use/toolkit（安装脚本按 requirements 拉取） | 与 Node 侧 @playwright/test 独立版本线；浏览器二进制由 playwright install 管理，升级需同步预检脚本断言 |
+| 64 | SRT Whiteboard Animation（手绘白板渲染器，随仓分发） | [github.com/geeklee/srt-whiteboard-animation](https://github.com/geeklee/srt-whiteboard-animation) · MIT | kit-696a724 | —（未扫描） | 运行时 | scripts/whiteboard/engine（补丁后的上游渲染脚本：parse_srt / render_stream_whiteboard / stream_render / merge_scenes / render_annotation_preview / prepare_env）、scripts/whiteboard/lib + film.mts（本仓扩展：编排 / 分句配音 / 分幕 / 标注 / 混流）、scripts/whiteboard/lineart_tools.py（本仓扩展：sketch / analyze / check / hand） | 字幕驱动的手绘白板渲染器：本地确定性 CPU 渲染、零 API 依赖、MIT 可商用。Python 依赖闭包见 scripts/whiteboard/engine/requirements.txt（opencv-python/numpy/PyAV/Pillow，全部宽松许可）；venv 由 scripts/whiteboard/engine-install.mts 幂等安装、不入库。本能力自带全部依赖，不要求宿主仓有视频制作子系统 |
+| 65 | BrowserAct 技能包 | [github.com/browser-act/skills](https://github.com/browser-act/skills) · MIT | 观察项（技能市场执行面技能，L2 审批安装） | —（未扫描） | 观察项 | skills/registry/browser-act（执行面技能·可选） | freemium 云依赖（stealth/代理/打码付费）：适配纪律 proxyMode=custom-only、凭据留在客户本机、出站 api.browseract.com 全声明；未进入默认运行时 |
+| 66 | Tencent BrowserSkill | [github.com/Tencent/BrowserSkill](https://github.com/Tencent/BrowserSkill) · MIT | 观察项（2026-08-26 评估：Borrow 协议可借鉴） | cli-v0.3.0 | 观察项 | 浏览器桥接对照组（publish-rpa 权限模型参照） | 只作对照评估，暂不入运行时；publish-rpa 真机发布的权限模型参照对象 |
+| 67 | Scrapling | [github.com/D4Vinci/Scrapling](https://github.com/D4Vinci/Scrapling) · BSD-3-Clause | 观察项（技能市场执行面技能） | v0.4.15 | 观察项 | skills/registry/scrapling-collector（纯本地零出站） | 纯本地零出站采集技能；经 skill:forge 集成，随技能市场分发 |
+| 68 | OpenAdapt | [github.com/OpenAdaptAI/OpenAdapt](https://github.com/OpenAdaptAI/OpenAdapt) · MIT | 停车场（录制回放/流程固化规划位） | v1.16.0 | 停车场（已选型未引入） | 流程固化（人工流程→确定性剧本） | 与意识系统构成「检测高频任务→建议固化→录制编译→剧本上线」管道，未接运行时 |
+| 69 | Agent-S3（gui-agents） | [github.com/simular-ai/Agent-S](https://github.com/simular-ai/Agent-S) · Apache-2.0 | 停车场（桌面 GUI 操控对照实现） | v0.3.2 | 停车场（已选型未引入） | 桌面 GUI 操控（对照/备选） | 与自有 computer-use 能力对照复核；若引入只作独立进程，虚拟输入通道不得劫持真实鼠标 |
+| 70 | WrenAI | [github.com/Canner/WrenAI](https://github.com/Canner/WrenAI) · Apache-2.0 | 停车场（G1 消息图谱 NL 检索：现走薄自译 NL→结构化过滤器） | wren-core-py-v0.8.0 | 停车场（已选型未引入） | 消息图谱 NL 检索（规划位） | 只允许使用其 governed text-to-SQL 引擎能力，且必须独立进程；现网结构回归由薄自译实现承担 |
+| 71 | Lago | [github.com/getlago/lago](https://github.com/getlago/lago) · AGPL-3.0 | 停车场（计量计费由自研计量承担） | v1.53.0 | 停车场（已选型未引入） | 计量计费（可选独立进程） | ⚠ AGPL-3.0 独立部署；现网计量=自研遥测 seam 逐消息 + 账单投影，未引入 |
+| 72 | E2B（执行沙箱 SDK） | [github.com/e2b-dev/E2B](https://github.com/e2b-dev/E2B) · Apache-2.0 | 停车场（不可信代码执行隔离规划位） | e2b@2.51.0 | 停车场（已选型未引入） | 执行沙箱（SaaS 默认形态规划） | 若启用 SaaS 形态，客户代码外发必须经出站声明与审批；首选仍是本地沙箱策略 |
+| 73 | Daytona | [github.com/daytonaio/daytona](https://github.com/daytonaio/daytona) · AGPL-3.0 | 停车场（VPC 自托管沙箱规划位） | v0.190.0 | 停车场（已选型未引入） | 执行沙箱（VPC 自托管，Kata 强化隔离） | ⚠ AGPL-3.0 独立进程；仅在客户 VPC 内自托管形态评估 |
+| 74 | Tauri | [github.com/tauri-apps/tauri](https://github.com/tauri-apps/tauri) · Apache-2.0 / MIT | 停车场（桌面壳候选，正式形态已选 Electron） | tauri-v3.0.0-alpha.1 | 停车场（已选型未引入） | 桌面壳（候选） | 双轨 tag（tauri-v2.x / v1.x）需 tag_prefix 收敛；当前桌面形态为 Electron，Tauri 仅保留为低配门店候选 |
+| 75 | Taro | [github.com/NervJS/taro](https://github.com/NervJS/taro) · MIT | 停车场（小程序端候选，移动端现走响应式 Web） | 4.2.1 | 停车场（已选型未引入） | 微信小程序（候选） | 若启用需一套 React 码出小程序（只读+审批+一键暂停），当前未接入 |
+| 76 | CopilotKit | [github.com/CopilotKit/CopilotKit](https://github.com/CopilotKit/CopilotKit) · MIT | 停车场（Agent 卡片/审批组件候选） | 1.72.0 | 停车场（已选型未引入） | Agent 对话/审批组件（候选） | 仅作组件库复用（AG-UI 协议），消息流必须由 dsh 承接；引入前核对与自有 review-console 的边界 |
+| 77 | ECharts | [github.com/apache/echarts](https://github.com/apache/echarts) · Apache-2.0 | 停车场（工作台图表候选，现网图表为自研轻量组件） | 6.1.0 | 停车场（已选型未引入） | 工作台图表（候选） | 体积较大（需按需引入）；若引入需过三端视觉门禁与首屏预算 |
+| 78 | TipTap | [github.com/ueberdosis/tiptap](https://github.com/ueberdosis/tiptap) · MIT | 停车场（写作编辑器候选） | 3.31.3 | 停车场（已选型未引入） | 工作台写作编辑器（候选） | 编辑器事务→防抖合并→事件流的约定在引入时必须保留（文档即事件） |
+| 79 | SheetJS | [git.sheetjs.com/sheetjs/sheetjs](https://git.sheetjs.com/sheetjs/sheetjs) · Apache-2.0 | 停车场（表格导入导出候选） | 0.18.5 | 停车场（已选型未引入） | 数据表格导入导出（候选） | npm 上的 xlsx 为旧版快照，官方已迁至自建源（cdn.sheetjs.com）；引入时从官方源锁定版本 |
+| 80 | PptxGenJS | [github.com/gitbrent/PptxGenJS](https://github.com/gitbrent/PptxGenJS) · MIT | 停车场（现网用 python-pptx 服务端生成） | 4.0.1 | 停车场（已选型未引入） | 工作台幻灯片导出（候选） | 若引入，与 python-pptx 二选一，避免两套 PPT 生成链路 |
+| 81 | Fabric.js | [github.com/fabricjs/fabric.js](https://github.com/fabricjs/fabric.js) · MIT | 停车场（设计画布候选） | 7.4.0 | 停车场（已选型未引入） | 设计画布（候选） | 注意与自研 dev-bridge/devfabric 命名区分（同名非同一组件）；Canvas 性能需在低配门店 PC 验证 |
+| 82 | WeasyPrint | [github.com/Kozea/WeasyPrint](https://github.com/Kozea/WeasyPrint) · BSD-3-Clause | 停车场（服务端 PDF 渲染候选，现网审计导出为自研） | 62.3 | 停车场（已选型未引入） | 审计报告 PDF 服务端渲染（候选） | 引入前提：确定性渲染 ≤30s、仅独立进程（依赖系统 libpango/cairo） |
+| 83 | Litestream | [github.com/benbjohnson/litestream](https://github.com/benbjohnson/litestream) · Apache-2.0 | 停车场（边缘节点 SQLite 备份候选） | v0.5.17 | 停车场（已选型未引入） | 边缘节点 SQLite 连续备份（候选） | 边缘/社区版形态未启用；启用前定义恢复演练与保留策略 |
+| 84 | sqlite-vec | [github.com/asg017/sqlite-vec](https://github.com/asg017/sqlite-vec) · MIT / Apache-2.0 | 停车场（边缘向量索引候选） | v0.1.9 | 停车场（已选型未引入） | 边缘节点向量检索（候选） | 与 pgvector 保留同一检索契约，避免双实现语义漂移 |
+| 85 | SeaweedFS | [github.com/seaweedfs/seaweedfs](https://github.com/seaweedfs/seaweedfs) · Apache-2.0 | 停车场（VPC 对象存储候选） | 4.47 | 停车场（已选型未引入） | VPC 对象存储（候选） | SaaS 形态默认走云 OSS/S3；自托管仅在客户 VPC 方案中评估 |
+| 86 | KayKit Adventurers（3D 素材） | [github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0) · CC0-1.0 | kaykit-2026-08（5 角色 GLB + 道具） | —（未扫描） | 素材/资产 | apps/web/public/models/kaykit（真人风数字员工角色/动画） | CC0 可商用免署名；76 组骨骼动画、贴图内嵌单文件；装备节点显隐做外观差异化，新增素材需过三端渲染截图 |
+| 87 | Node.js | [github.com/nodejs/node](https://github.com/nodejs/node) · MIT | 24.19.0 | **v26.9.0** ⬆ | 随包二进制 | CI 构建镜像与桌面载荷内嵌运行时 | 引擎下限 >=24（dsh 的 zstd 会话持久化要求）；桌面载荷内嵌 24.19.0，升级需重建载荷并过 app 冒烟 |
+| 88 | pnpm | [github.com/pnpm/pnpm](https://github.com/pnpm/pnpm) · MIT | 10.14.0 | **12.4.2** ⬆ | 开发/构建 | 包管理与 lockfile 格式 | lockfile v9 格式；升级必须九仓同步（packageManager 字段），否则 frozen-lockfile 安装失败 |
+| 89 | npm（桌面载荷安装器） | [github.com/npm/cli](https://github.com/npm/cli) · Artistic-2.0 | 11.17.0 | **12.0.2** ⬆ | 随包二进制 | .workloom-runtime-deps（受控 npm ci 安装桌面运行载荷） | 载荷安装器版本与 package-lock.json 绑定；升级需重跑 runtime:deps:refresh/verify |
+| 90 | python-pptx | [github.com/scanny/python-pptx](https://github.com/scanny/python-pptx) · MIT | 按需安装（未锁定版本） | 1.0.2 | 开发/构建 | scripts/build-capability-pptx.py（能力清单 PPT 生成） | 本地工具链依赖，不随产品分发；版本未锁定属已知缺口（建议后续补 requirements 引脚） |
+| 91 | Playwright（Python · computer-use 工具链） | [github.com/microsoft/playwright-python](https://github.com/microsoft/playwright-python) · Apache-2.0 | >=1.40.0 | **1.46.0** ⬆ | 开发/构建 | packages/base/computer-use/toolkit（安装脚本按 requirements 拉取） | 与 Node 侧 @playwright/test 独立版本线；浏览器二进制由 playwright install 管理，升级需同步预检脚本断言 |
 
 ## 2. 全量直接依赖（本仓事实，含上游最新）
 
@@ -274,10 +275,14 @@
 | `yaml-governance → npm:yaml` | 2.9.0 | npm:yaml@2.9.0 | 开发 | package.json | **2.9.1** ⬆ |
 | `zod` | 4.6.5（声明） | 4.6.5 / ^4.6.5 | 生产 | .workloom-runtime-deps/package.json、apps/server/package.json、packages/base/package.json 等 7 处 | 4.6.5 |
 
-### 2.2 Python 依赖（1 个）
+### 2.2 Python 依赖（5 个）
 
 | 包 | 当前版本 | 声明 | 出现位置 | 上游最新 |
 |---|---|---|---|---|
+| `av` | 18.1.0 | ==18.1.0 | scripts/whiteboard/engine/requirements.txt | —（未扫描） |
+| `numpy` | 2.5.3 | ==2.5.3 | scripts/whiteboard/engine/requirements.txt | —（未扫描） |
+| `opencv-python` | 5.0.0.93 | ==5.0.0.93 | scripts/whiteboard/engine/requirements.txt | —（未扫描） |
+| `Pillow` | 12.3.0 | ==12.3.0 | scripts/whiteboard/engine/requirements.txt | —（未扫描） |
 | `playwright` | >=1.40.0（下限声明） | >=1.40.0 | packages/base/computer-use/toolkit/requirements.txt | 1.46.0 |
 
 ### 2.3 容器镜像（2 个）
