@@ -19,8 +19,8 @@ import { getOwnerPool, getAppPool, getGatewayPool } from "@workloom/db";
 import { bundlesRoot } from "@workloom/base/bundles";
 import { registerFeedbackEnumsFromDisk } from "@workloom/base/evolve";
 import { startSkillDistAutoSync, buildManifest, receiveReflux, type RefluxPayload } from "@workloom/base/skill-ops";
-
 import { readVoiceFile, synthesizeVoice, voiceStationConfig } from "./voice/station.js";
+
 const app = new Hono();
 
 app.use(
@@ -42,7 +42,7 @@ app.use(
 app.get("/health", (c) => c.json({ ok: true, service: "workloom-im-server" }));
 
 /**
- * 本机克隆音色（小织/织伴的默认音色）[VOICE-DEFAULT]
+ * 本机克隆音色（小织/织伴的默认音色）
  *  - GET /api/voice/status → 工位是否就绪（客户端据此决定是否走克隆音色，不探测就不猜）
  *  - GET /api/voice/speech?text=…&profile=… → 返回 wav；工位不可达/未配置一律 503，
  *    客户端按契约回落到系统女声并锁定同一音色（宁可换声线，也不让播报消失）。

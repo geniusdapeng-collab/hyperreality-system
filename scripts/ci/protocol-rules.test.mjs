@@ -7,6 +7,7 @@ import {
   findModuleConflicts,
   isExemptSubject,
   layerForRepo,
+  resolveLockOverlapMode,
   validateSubject,
 } from "./protocol-rules.mjs";
 
@@ -74,6 +75,17 @@ describe("并发冲突规则", () => {
   it("同文件重叠判定", () => {
     assert.deepEqual(findFileOverlaps(["a/b.ts", "c/d.ts"], ["c/d.ts"]), ["c/d.ts"]);
     assert.deepEqual(findFileOverlaps(["a/b.ts"], ["x/y.ts"]), []);
+  });
+
+  it("push 事件降级为提醒：合并已发生，跨 PR 重叠不再判红（回归 2026-09-27 main 误报）", () => {
+    assert.equal(resolveLockOverlapMode({ event: "push" }), "warn");
+    // PR 事件保持先到先得拦截
+    assert.equal(resolveLockOverlapMode({ event: "pull_request" }), "fail");
+    assert.equal(resolveLockOverlapMode({ event: null }), "fail");
+    // 显式覆盖与人工严格模式优先
+    assert.equal(resolveLockOverlapMode({ event: "push", envMode: "fail" }), "fail");
+    assert.equal(resolveLockOverlapMode({ event: "pull_request", envMode: "warn" }), "warn");
+    assert.equal(resolveLockOverlapMode({ event: "pull_request", envMode: "warn", strict: true }), "fail");
   });
 });
 

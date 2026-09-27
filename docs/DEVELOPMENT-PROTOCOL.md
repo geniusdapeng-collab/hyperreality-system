@@ -42,6 +42,7 @@
 - **普通路径**：同一文件被两个 open PR 同时修改 → 后到者拒（`LOCK_OVERLAP_MODE=warn` 可临时降级为告警）。
 - 检测由 `scripts/ci/verify-lock-conflict.mjs` 在 PR 流水线自动执行，无需手工维护锁表；脚本按「PR 编号 / 分支名 / 源分支提交 SHA」三重排除自身 PR。
 - 冲突处置：排队等待先到者合并；紧急任务转人工调度。
+- **事件语义（2026-09-27 修订）**：拦截只发生在 **PR 事件**（先到先得，后到者排队）；**push 事件**（main 上的合并提交）下重叠降级为**提醒**——合并已经发生，门禁拦不住任何东西，若仍判红则每次并发合并都会把 main 打红（实测：`workloom-growth` #211 合入后，因在途 #206/#209 同改 `bundles/ai-video/bundle.json` 被判红，同一内容 PR 门禁全绿）。需要 push 也按 fail 处理时用 `LOCK_OVERLAP_MODE=fail` 或 `--strict`。
 
 ## 5. 提交规范（放宽版）
 

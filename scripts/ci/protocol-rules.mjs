@@ -164,6 +164,25 @@ export function findModuleConflicts(mine, theirs) {
   return [...conflicts].sort();
 }
 
+/**
+ * 锁冲突门禁的处置级别（协议 §4 的 push / PR 语义分离）。
+ *
+ * 背景（2026-09-27 实测）：push 事件（即 main 上的合并提交）下，门禁会把**已经合入的提交**
+ * 与**在途 PR** 比文件重叠。合并已经发生、门禁再拦也拦不住，只会把 main 打成红：
+ * 实例 = workloom-growth PR #211 合入后，因在途 #206/#209 同改 `bundles/ai-video/bundle.json`
+ * → `cnb/push/pipeline-1(static-gate)` 红，而同一内容在 PR 门禁下三门禁全绿。
+ *
+ * 语义：
+ * - **PR 事件**：`fail`（保持先到先得拦截——这是门禁真正能拦住并发编辑的时点）；
+ * - **push 事件**：`warn`（只提醒重叠的在途 PR "需要 rebase 后重跑"，不判红）；
+ * - `LOCK_OVERLAP_MODE=fail|warn` 可显式覆盖事件默认；`--strict` 强制 `fail`（人工复核用）。
+ */
+export function resolveLockOverlapMode({ event = null, envMode = null, strict = false } = {}) {
+  if (strict) return "fail";
+  if (envMode === "fail" || envMode === "warn") return envMode;
+  return event === "push" ? "warn" : "fail";
+}
+
 export function parseChangedPaths(output) {
   return String(output ?? "")
     .split("\n")
