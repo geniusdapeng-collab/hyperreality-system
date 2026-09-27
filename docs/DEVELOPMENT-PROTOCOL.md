@@ -126,6 +126,28 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 2. **公共化必须提案**：实验里验证成功的通用交互能力，先写提案任务卡（L2→L1→L0），不得整包搬进基座；
 3. **新实验仓接入即声明**：舰队扫描发现新仓 → 纳管时同步填写 `lane/experimentNote/experimentPaths/industryExtensionPaths`，否则护栏会报警（`MISSING_NOTE` / `MISSING_PATHS` / `UI_UPGRADE_WOULD_FAIL`）。
 
+### 10.3 受管文件分叉容差（2026-09-27 新增，解除 fox 波次暂停）
+
+**问题**：实验仓声明的自有路径（`industryExtensionPaths`）如果**同时**出现在稳定客户端基座快照里
+（例如 fox 的 `apps/*/src/pages/p0/**`、`apps/*/src/voice/**`），或**已被旧 state 登记成基座受管文件**，
+`client-foundation` 会 fail closed（`客户端基座快照不得占用行业扩展路径` /
+`state 不得把行业扩展登记成基座受管文件`），波次永久卡住。fox 自 0.1.8 起就停在这里。
+
+**决策（产品所有者指令：解决 fox/tiger 覆盖）**：实验车道引入**受管文件分叉容差**，但不是"放宽校验"，而是**退管迁移**：
+
+| 项 | 规则 |
+|---|---|
+| 生效范围 | 仅 `lane: experiment` 的仓；非实验车道（含 tiger 这类行业仓）保持严格 fail closed |
+| 触发条件 | 稳定快照占用该仓声明的 `industryExtensionPaths`，或旧 state 已把这类路径登记为受管文件 |
+| 动作 | 这些路径**不覆盖、不删除**，从新 state 的 `managedFiles` 移除，并在 `state.retiredManagedForks` 留痕（路径 + 退管版本 + 原因） |
+| 代价（必须知情） | 退管路径**从此不再接收基座更新**，由该仓自持；要拿回基座版本需先删除声明并另开迁移任务卡 |
+| 门禁一致性 | rollout 把 `lane` 与 `industryExtensionPaths` 写入仓内 `.workloom-ui-governance.json`；仓内自包含门禁（`verify-client-foundation-consumer.mjs`）据此豁免这些路径，不再要求各仓自持一份扩展声明文件 |
+| 单一事实源 | 仓级扩展路径只认 `sync/child-repos.json#children[].industryExtensionPaths`；仓内私改该声明会在下一次 rollout fail closed |
+
+**暂停仓恢复步骤**：① 在 `sync/child-repos.json` 把 `uiRolloutWave` 从 `paused` 改回真实波次；
+② `node sync/ui-upgrade-pr.mjs --rollout --wave <波次>`（默认按波次顺序，先到先得）；
+③ 升级 PR 门禁全绿后合并；④ 确认 `state.retiredManagedForks` 与仓内文件一一对应。
+
 ## 11. 隔离副本车道（isolated：双向不同步，2026-09-22 新增）
 
 **背景**：`workloom-growthtest`（AI超增长·实验版）与 `workloom-growthmatrix`（骇客帝国·实验版）是 2026-09-21 从
