@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 /**
  * 并发冲突检测（docs/DEVELOPMENT-PROTOCOL.md §4）。
- * 逻辑：取本分支改动文件 → 拉同仓 open PR 的改动文件 → 模块级互斥命中即拒；同文件重叠默认拒（LOCK_OVERLAP_MODE=warn 可降级）。
+ * 逻辑：取本分支改动文件 → 拉同仓 open PR 的改动文件 → 模块级互斥命中即拒；同文件重叠在 PR 事件下默认拒
+ * （LOCK_OVERLAP_MODE=warn 可降级；push 事件见下）。
+ *
+ * 事件语义（2026-09-27 修订）：
+ * - **PR 事件**：按 §4 先到先得拦截（后到者排队），命中即 fail；
+ * - **push 事件（main 合并提交）**：合并已经发生，门禁拦不住任何东西，只降级为**提醒**
+ *   （列出需要 rebase 的在途 PR），否则每次并发合并都会把 main 门禁打红——
+ *   实测：growth PR #211 合入后，因在途 #206/#209 同改 bundle.json 被判红，而同一内容 PR 门禁全绿。
+ *   需要 push 也按 fail 处理时：`LOCK_OVERLAP_MODE=fail` 或 `--strict`。
  *
  * 用法：
  *   node scripts/ci/verify-lock-conflict.mjs                 # PR 流水线默认用法
@@ -10,7 +18,7 @@
  *   LOCK_OVERLAP_MODE=warn node scripts/ci/verify-lock-conflict.mjs
  */
 import { execFileSync } from "node:child_process";
-import { findFileOverlaps, findModuleConflicts, parseChangedPaths } from "./protocol-rules.mjs";
+import { findFileOverlaps, findModuleConflicts, parseChangedPaths, resolveLockOverlapMode } from "./protocol-rules.mjs";
 
 const API = "https://api.cnb.cool";
 
@@ -157,7 +165,21 @@ function selfTest() {
       process.exit(1);
     }
   }
-  console.log("✓ verify-lock-conflict self-test 通过（模块互斥 / 文件重叠 / 无冲突 / 自身 PR 判定 4 例）");
+  const modeCases = [
+    // push 事件（main 合并）→ 只提醒：合并已发生，拦不住任何东西（2026-09-27 误报回归）
+    [{ event: "push" }, "warn"],
+    [{ event: "pull_request" }, "fail"],
+    [{ event: null }, "fail"],
+    [{ event: "push", envMode: "fail" }, "fail"],
+    [{ event: "pull_request", strict: true }, "fail"],
+  ];
+  for (const [input, expected] of modeCases) {
+    if (resolveLockOverlapMode(input) !== expected) {
+      console.error(`✗ self-test: 处置级别解析错误 ${JSON.stringify(input)} 期望 ${expected}`);
+      process.exit(1);
+    }
+  }
+  console.log("✓ verify-lock-conflict self-test 通过（模块互斥 / 文件重叠 / 无冲突 / 自身 PR 判定 4 例 / 事件处置级别 5 例）");
 }
 
 async function main() {
@@ -168,7 +190,9 @@ async function main() {
   // 任何「有 open PR」的流水线里抛 TypeError，被 catch 吞成「跳过冲突检测」，等于门禁静默失效。
   let selfNumber = arg("--pr") ?? (process.env.CNB_PULL_REQUEST !== "true" ? process.env.CNB_PULL_REQUEST : null);
   const strict = process.argv.includes("--strict");
-  const overlapMode = process.env.LOCK_OVERLAP_MODE === "warn" ? "warn" : "fail";
+  const event = process.env.CNB_EVENT ?? null;
+  const overlapMode = resolveLockOverlapMode({ event, envMode: process.env.LOCK_OVERLAP_MODE, strict });
+  const advisory = overlapMode !== "fail";
   const base = arg("--base");
   // CNB 实测语义（2026-09-18，pull_request 构建）：
   //   CNB_BRANCH=main（目标分支）、CNB_BRANCH_SHA=<目标分支提交>、CNB_PULL_REQUEST=true（仅标记）
@@ -197,6 +221,9 @@ async function main() {
     return;
   }
   console.log(`本分支改动 ${mine.length} 个文件（范围 ${range}）`);
+  if (advisory) {
+    console.log(`ℹ 事件=${event ?? "unknown"}：重叠只作提醒（不判红）——合并已发生，命中的在途 PR 需 rebase 后重跑门禁`);
+  }
 
   if (!repoSlug || !process.env.CNB_TOKEN) {
     const message = "缺少 CNB_REPO_SLUG 或 CNB_TOKEN，无法比对同仓 open PR";
@@ -234,7 +261,9 @@ async function main() {
       ? theirNumber < mineNumber
       : true;
     if (moduleConflicts.length) {
-      if (iAmLater) {
+      if (advisory) {
+        console.warn(`! 与 PR #${other.number}「${other.title}」同改互斥模块：${moduleConflicts.join(", ")}（push 事件提醒：该 PR 需 rebase）`);
+      } else if (iAmLater) {
         failed += 1;
         console.error(`✗ 与 PR #${other.number}「${other.title}」互斥模块冲突：${moduleConflicts.join(", ")}`);
         console.error("   模块级互斥路径同一时刻只允许一个任务（协议 §4）——你是后到者，请排队等其合并后 rebase。");
@@ -244,13 +273,13 @@ async function main() {
     }
     if (overlaps.length) {
       const head = `PR #${other.number}「${other.title}」同时修改：${overlaps.slice(0, 5).join(", ")}${overlaps.length > 5 ? " …" : ""}`;
-      if (overlapMode === "fail" && iAmLater) {
+      if (advisory) {
+        console.warn(`! ${head}（push 事件提醒：该 PR 需 rebase 后重跑门禁）`);
+      } else if (iAmLater) {
         failed += 1;
         console.error(`✗ ${head}`);
-      } else if (overlapMode === "fail") {
-        console.warn(`! ${head}（该 PR 后到，由它排队）`);
       } else {
-        console.warn(`! ${head}（LOCK_OVERLAP_MODE=warn，仅告警）`);
+        console.warn(`! ${head}（该 PR 后到，由它排队）`);
       }
     }
   }
