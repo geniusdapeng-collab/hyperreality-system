@@ -6,6 +6,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const STATE_FILE = ".workloom-client-foundation.json";
+const GOVERNANCE_STATE = ".workloom-ui-governance.json";
 const CLIENTS = Object.freeze({ bPc: "apps/web", bMobile: "apps/webb", cMobile: "apps/webc" });
 const REQUIRED_MANAGED_ENTRIES = Object.freeze([
   "apps/web/src/main.tsx",
@@ -23,6 +24,34 @@ const ALLOWED_EXTENSIONS = Object.freeze([
 const IGNORED = Object.freeze(["apps/*/dist/**", "apps/*/node_modules/**", "apps/*/.vite/**", "apps/*/.DS_Store"]);
 
 const hash = (content) => createHash("sha256").update(content).digest("hex");
+
+/**
+ * 实验车道容差：仓级行业扩展路径的唯一事实源是基座 `sync/child-repos.json`，
+ * 由 rollout 写进 `.workloom-ui-governance.json`。只有登记 `lane=experiment` 时才生效；
+ * 缺省（非实验仓 / 未登记）= 退回基座原口径（严格模式）。
+ */
+function readRepoExtensionPaths(root, errors) {
+  const file = join(root, GOVERNANCE_STATE);
+  if (!existsSync(file)) return [];
+  let doc;
+  try {
+    doc = JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    errors.push(`${GOVERNANCE_STATE} 不是有效 JSON：${String(error?.message ?? error).split("\n")[0]}`);
+    return [];
+  }
+  if (doc?.lane !== "experiment") return [];
+  const list = Array.isArray(doc?.industryExtensionPaths) ? doc.industryExtensionPaths : [];
+  const accepted = [];
+  for (const pattern of list) {
+    if (typeof pattern !== "string" || !pattern.startsWith("apps/") || pattern.includes("..") || pattern.includes("\\")) {
+      errors.push(`仓级行业扩展路径非法：${String(pattern)}`);
+      continue;
+    }
+    accepted.push(pattern);
+  }
+  return accepted;
+}
 
 function globToRegExp(glob) {
   let pattern = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&");
@@ -87,7 +116,9 @@ export function verifyClientFoundationConsumer(repoPath) {
   const managed = state.managedFiles && typeof state.managedFiles === "object" ? state.managedFiles : {};
   if (Object.keys(managed).length === 0) errors.push("客户端基座 state 没有受管文件指纹");
   if (Object.keys(managed).length > 500) errors.push("客户端基座受管文件数超过安全上限 500");
+  const repoExtensions = readRepoExtensionPaths(root, errors);
   for (const [path, entry] of Object.entries(managed)) {
+    if (matches(path, repoExtensions)) continue;
     let target;
     try {
       target = safePath(root, path);
@@ -112,7 +143,7 @@ export function verifyClientFoundationConsumer(repoPath) {
   }
   for (const client of Object.values(CLIENTS)) {
     for (const path of walk(root, client)) {
-      if (managed[path] || matches(path, ALLOWED_EXTENSIONS) || matches(path, IGNORED)) continue;
+      if (managed[path] || matches(path, ALLOWED_EXTENSIONS) || matches(path, IGNORED) || matches(path, repoExtensions)) continue;
       errors.push(`客户端根存在非白名单行业文件：${path}`);
     }
   }
@@ -136,7 +167,8 @@ function main() {
     process.exit(1);
   }
   const state = JSON.parse(readFileSync(join(resolve(repo), STATE_FILE), "utf8"));
-  console.log(`✅ PC/B移动/C移动均来自客户端基座 ${state.version}；受管文件指纹零漂移`);
+  const extras = readRepoExtensionPaths(resolve(repo), []);
+  console.log(`✅ PC/B移动/C移动均来自客户端基座 ${state.version}；受管文件指纹零漂移${extras.length ? `（本仓自有扩展路径 ${extras.length} 条由基座声明豁免）` : ""}`);
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) main();
