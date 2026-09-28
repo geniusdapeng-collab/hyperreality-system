@@ -10,6 +10,11 @@ export interface ToolReceipt {
   synced: boolean;
   snapshot_uri?: string;
   verified_at?: string;
+  /**
+   * GR-15：回执来源模式——simulated=演示档案的本地模拟回执；real=真实连接器回执。
+   * 任务卡与事件账本据此区分「假回执」与「真回执」，二者不得外观相同。
+   */
+  mode?: "simulated" | "real";
 }
 
 export interface ToolResult {
@@ -44,7 +49,7 @@ export async function executeDeclaredTool(
   if (!options.simulated) {
     return {
       result: { state: "connector-required" },
-      receipt: { synced: false },
+      receipt: { synced: false, mode: "real" },
     };
   }
   const verifiedAt = new Date().toISOString();
@@ -52,6 +57,7 @@ export async function executeDeclaredTool(
     result: { state: "simulated", input: params },
     receipt: {
       synced: true,
+      mode: "simulated",
       snapshot_uri: `workloom-sim://receipt/${encodeURIComponent(name)}/${Date.now().toString(36)}`,
       verified_at: verifiedAt,
     },

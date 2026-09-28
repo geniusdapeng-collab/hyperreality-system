@@ -7,7 +7,10 @@
 export const THREAD_MODES = ["ask", "agent", "quest"] as const;
 export type ThreadMode = (typeof THREAD_MODES)[number];
 
-/** 任务线程状态机（F3.4）：queued→running→pending_review→completed/failed/paused */
+/**
+ * 任务线程状态机（F3.4）：queued→running→pending_review→completed/failed/paused；
+ * `cancelled` = 步骤审批被驳回后的终态（GR-10：驳回必须联动线程，否则线程僵尸化在 pending_review）。
+ */
 export const THREAD_STATUSES = [
   "queued",
   "running",
@@ -15,6 +18,7 @@ export const THREAD_STATUSES = [
   "completed",
   "failed",
   "paused",
+  "cancelled",
 ] as const;
 export type ThreadStatus = (typeof THREAD_STATUSES)[number];
 

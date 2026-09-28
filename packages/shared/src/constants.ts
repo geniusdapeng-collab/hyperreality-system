@@ -46,8 +46,16 @@ export const OBJECT_LOCK_TIMEOUT_MS = 10_000;
 /** 意识系统频次阈值（F8.4）：同类任务 ≥3 次/周触发「建议固化」 */
 export const AWARENESS_WEEKLY_THRESHOLD = 3;
 
-/** 意图路由超时（P1 超时态）：>3s 显「识别中…」可取消 */
+/**
+ * 意图路由超时（P1 超时态）：>3s 显「识别中…」可取消。
+ * GR-06（2026-09-28 压测）：分场景——
+ *  - 同步交互路径（对话框即时问答类）保持 3s，宁可规则兜底也不让用户等；
+ *  - 交付型派遣（dispatch）放宽到 12s：实测 15+ 次派发 100% 落 timeout_fallback，
+ *    因为真实模型 3s 内根本回不来，等于"意图分类形同虚设"。
+ */
 export const INTENT_ROUTE_TIMEOUT_MS = 3_000;
+export const INTENT_ROUTE_TIMEOUT_SYNC_MS = 3_000;
+export const INTENT_ROUTE_TIMEOUT_DISPATCH_MS = 12_000;
 
 /** 记忆默认置信度（F1.4） */
 export const MEMORY_DEFAULT_CONFIDENCE = 0.5;

@@ -21,7 +21,12 @@ export interface ModelProvider {
   readonly modelId: string;
   /** 健康探针（降级链判定用） */
   healthy(): Promise<boolean>;
-  chat(messages: ChatMessage[]): Promise<ChatResult>;
+  /**
+   * GR-04（2026-09-28 压测）：调用必须可超时、可取消——
+   * 此前 fetch 既无 AbortSignal 也无超时，实测一次 quest-plan 挂 53 秒
+   * （IM 侧更糟：慢模型把 dispatch 挂满 3 分 49 秒），整条请求链被单个模型拖死。
+   */
+  chat(messages: ChatMessage[], opts?: { signal?: AbortSignal; timeoutMs?: number }): Promise<ChatResult>;
 }
 
 /** Mock 定价（演示口径：积分=token 千分位取整，旗舰 ×4） */
@@ -43,7 +48,8 @@ export class MockProvider implements ModelProvider {
   async healthy(): Promise<boolean> {
     return !this.opts.down;
   }
-  async chat(messages: ChatMessage[]): Promise<ChatResult> {
+  async chat(messages: ChatMessage[], opts: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<ChatResult> {
+    if (opts.signal?.aborted) throw new Error("模型调用已取消");
     this.calls += 1;
     if (this.opts.failFirst && this.calls <= this.opts.failFirst) {
       throw new Error(`mock 故障注入（第 ${this.calls} 次）`);
@@ -76,14 +82,27 @@ export class OpenAiCompatibleProvider implements ModelProvider {
       return false;
     }
   }
-  async chat(messages: ChatMessage[]): Promise<ChatResult> {
+  async chat(messages: ChatMessage[], opts: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<ChatResult> {
     // L6.2 强制出站脱敏（任何调用路径都过这一层）
     const masked = messages.map((m) => ({ ...m, content: maskDeep(m.content).value }));
-    const res = await fetch(`${this.cfg.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...this.authHeaders() },
-      body: JSON.stringify({ model: this.modelId, messages: masked, temperature: 0.2 }),
-    });
+    // 场景超时（缺省 120s 兜底，避免"没有超时"这种结构性缺陷）+ 外部取消信号合并
+    const timeoutMs = opts.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : 120_000;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = opts.signal ? AbortSignal.any([opts.signal, timeoutSignal]) : timeoutSignal;
+    let res: Response;
+    try {
+      res = await fetch(`${this.cfg.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...this.authHeaders() },
+        body: JSON.stringify({ model: this.modelId, messages: masked, temperature: 0.2 }),
+        signal,
+      });
+    } catch (err) {
+      // 超时/取消要给出可读原因（降级链据此记 model.degraded）
+      if (opts.signal?.aborted) throw new Error("模型调用已取消（调用方 abort）");
+      if (timeoutSignal.aborted) throw new Error(`模型调用超时（>${Math.round(timeoutMs / 1000)}s）`);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
     if (!res.ok) throw new Error(`模型调用失败：HTTP ${res.status}`);
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;

@@ -2,13 +2,14 @@
  * captain/floor · 数字职场（D25）——员工状态派生 + 场景包
  *
  * 口径：职场地图上员工的每一个动作都是事件库实时派生（忠实纪律：动作即数据）——
- *  - working      有 running/queued 线程（threads.agent_id）
+ *  - working      有 running 线程（threads.agent_id）
+ *  - queued       有排队中线程（threads.status='queued'，建档即归属）
  *  - asking       有 pending 请示且事件 actor=该员工（L2 以上皆举手，tier 随事件上桌）
  *  - blocked      近 30 分钟异常/驳回/围栏熔断事件关联该员工
  *  - celebrating  近 10 分钟线程完成/夜班包生成事件关联该员工（前端 3s 彩带后回位）
  *  - collab       近 10 分钟跨员工交接（write_back/转派）——β 批次走位动画，本批归并 working
  *  - idle         无任务待命（休息角）；disabled 工位清空名牌变灰
- * 优先级：asking > blocked > celebrating > working > idle（disabled 独立于外）
+ * 优先级：blocked > asking（与 celebrating 共存：状态保持 asking，另带 celebrating 标志与双信息气泡）> celebrating > working > queued > idle
  *
  * 场景包：声明式 JSON（地板网格/工位锚点/道具/CEO 指挥台/休息角/入口/主题色），
  * 行业包经 registerFloorSceneProvider() 或 bundles/<industry>/floor-scene.json 覆盖；
@@ -19,7 +20,8 @@ import type pg from "pg";
 /* ================= 类型 ================= */
 
 export type FloorAgentState =
-  | "working" | "asking" | "blocked" | "celebrating" | "collab" | "idle" | "disabled";
+  /** queued（GR-27/X-07）：已建档但尚未开跑的排队任务——此前 `agent_id=NULL` 被 running/queued 过滤条件整条滤掉 */
+  | "working" | "queued" | "asking" | "blocked" | "celebrating" | "collab" | "idle" | "disabled";
 
 export interface FloorAgent {
   id: string;
@@ -30,6 +32,8 @@ export interface FloorAgent {
   currentThread: { id: string; title: string } | null;
   pendingTier: string | null;    // asking 时：l2_captain/l3_fleet/l4_chairman
   approvalId: string | null;     // asking 时：审批单号（原地三手势用）
+  /** 近 10 分钟内该员工刚完成过任务（与 asking 共存：请示仍为主态，庆祝作为附加信号） */
+  celebrating?: boolean;
   statusLine: string;            // 头顶气泡一句话（最近动作中文摘要）
 }
 
@@ -137,7 +141,18 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
     // running/queued 线程（agent_id 归属；取每员工最新一条）
     const running = (await client.query<{ agent_id: string; id: string; title: string }>(
       `SELECT DISTINCT ON (agent_id) agent_id, id, title FROM threads
-       WHERE workspace_id=$1 AND status IN ('running','queued') AND agent_id IS NOT NULL
+       WHERE workspace_id=$1 AND status='running' AND agent_id IS NOT NULL
+       ORDER BY agent_id, updated_at DESC`,
+      [scope.workspaceId],
+    )).rows;
+
+    /**
+     * X-07：排队中（queued）与执行中（running）分开取——派单不立即执行时线程落在 queued，
+     * 此前与 running 混在同一查询里，前端无法区分"在跑"与"在排队"；建档写 agent_id 后即可归属。
+     */
+    const queued = (await client.query<{ agent_id: string; id: string; title: string }>(
+      `SELECT DISTINCT ON (agent_id) agent_id, id, title FROM threads
+       WHERE workspace_id=$1 AND status='queued' AND agent_id IS NOT NULL
        ORDER BY agent_id, updated_at DESC`,
       [scope.workspaceId],
     )).rows;
@@ -190,6 +205,7 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
     await client.query("COMMIT");
 
     const runningBy = new Map(running.map((r) => [r.agent_id, r]));
+    const queuedBy = new Map(queued.map((r) => [r.agent_id, r]));
     // asking/blocked/celebrating 的 actor 是 preset_key（五元 who.id）
     const askingBy = new Map<string, typeof asking[number]>();
     for (const r of asking) if (!askingBy.has(r.actor)) askingBy.set(r.actor, r);
@@ -210,21 +226,52 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
         return;
       }
       const ask = askingBy.get(a.preset_key);
-      if (ask) {
-        out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "asking", stationId: station?.id ?? null, currentThread: null, pendingTier: ask.tier, approvalId: ask.approval_id, statusLine: `请示待裁：${ask.action}` });
-        return;
-      }
+      const celebrating = celebSet.has(a.preset_key) || celebAgentIds.has(a.id);
+      /**
+       * 优先级（第四/五轮定稿）：blocked > celebrating > asking > working > queued > idle。
+       *  - blocked 对 celebrating 保持优先（suite V-06 既有纪律：出事就先显示遇阻，不报喜）；
+       *  - celebrating 对 asking 优先（X-05：队列堆积不得压掉刚完成的正反馈，气泡里保留请示与直达号）。
+       */
       if (blockedSet.has(a.preset_key)) {
         out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "blocked", stationId: station?.id ?? null, currentThread: null, pendingTier: null, approvalId: null, statusLine: `遇阻：${last}` });
         return;
       }
-      if (celebSet.has(a.preset_key) || celebAgentIds.has(a.id)) {
-        out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "celebrating", stationId: station?.id ?? null, currentThread: null, pendingTier: null, approvalId: null, statusLine: `刚完成：${last}` });
+      /**
+       * X-05（2026-09-28 实测）：庆祝态被"请示待裁"永久压制——CEO 岗位一旦挂着 pending 审批，
+       * asking 恒真，刚完成的任务在楼层上永远看不到正反馈（队列越积越"全员请示无人庆祝"）。
+       * 口径改为**共存**：刚完成（近 10 分钟）优先渲染庆祝，同时在气泡里保留请示信息与审批单号，
+       * 点击仍能直达审批（不丢信息，也不压正反馈）。
+       */
+      /**
+       * X-05：刚完成（近 10 分钟）与请示共存时**不再互相压制**——
+       * 状态仍为 asking（审批必须显眼、可直达、可被门禁断言），另带 celebrating 标志与"刚完成"气泡，
+       * 前端据此同时渲染庆祝与举手（既不让队列堆积吃掉正反馈，也不让庆祝淹没待审）。
+       */
+      if (ask) {
+        out.push({
+          id: a.id, presetKey: a.preset_key, name: a.name, state: "asking", stationId: station?.id ?? null,
+          currentThread: null, pendingTier: ask.tier, approvalId: ask.approval_id,
+          ...(celebrating ? { celebrating: true } : {}),
+          statusLine: celebrating ? `请示待裁：${ask.action} · 刚完成：${last}` : `请示待裁：${ask.action}`,
+        });
+        return;
+      }
+      if (celebrating) {
+        out.push({
+          id: a.id, presetKey: a.preset_key, name: a.name, state: "celebrating", stationId: station?.id ?? null,
+          currentThread: null, pendingTier: null, approvalId: null, celebrating: true,
+          statusLine: `刚完成：${last}`,
+        });
         return;
       }
       const run = runningBy.get(a.id);
       if (run) {
         out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "working", stationId: station?.id ?? null, currentThread: { id: run.id, title: run.title }, pendingTier: null, approvalId: null, statusLine: run.title });
+        return;
+      }
+      const waiting = queuedBy.get(a.id);
+      if (waiting) {
+        out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "queued", stationId: station?.id ?? null, currentThread: { id: waiting.id, title: waiting.title }, pendingTier: null, approvalId: null, statusLine: `排队中：${waiting.title}` });
         return;
       }
       out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "idle", stationId: station?.id ?? null, currentThread: null, pendingTier: null, approvalId: null, statusLine: last ? `最近：${last}` : "待命" });
