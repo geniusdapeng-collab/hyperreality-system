@@ -267,6 +267,30 @@ export async function decide(
         [`mem-reject-${gesture.reasonEnum}`, gres.eventId, scope.workspaceId],
       );
     }
+
+    /**
+     * GR-10：驳回 = 线程终态联动（此前只改审批状态，线程永远停在 pending_review → 僵尸化）。
+     *
+     * 口径：步骤级审批（事件带 step_id + session_id）被驳回 → 所属线程转 `cancelled`；
+     * 事件/审批/线程状态同一事务（D16），并把 thread_id 写进手势事件 after 便于前端与复盘直达。
+     * 非步骤级审批（如围栏规则提案、HR 汰换）保持原语义：不动线程。
+     */
+    if (gesture.type === "reject") {
+      const owner = await c.query<{ session_id: string | null; step_id: string | null }>(
+        `SELECT session_id, payload->'decision'->>'step_id' AS step_id
+           FROM biz_events WHERE event_id=$1 AND workspace_id=$2`,
+        [row.event_id, scope.workspaceId],
+      );
+      const owner_row = owner.rows[0];
+      const ownerThread = owner_row?.session_id ?? null;
+      if (ownerThread && owner_row?.step_id) {
+        await c.query(
+          `UPDATE threads SET status='cancelled', error=$3, updated_at=now()
+            WHERE id=$1 AND workspace_id=$2 AND status <> 'completed'`,
+          [ownerThread, scope.workspaceId, `步骤被驳回：${gesture.reasonEnum ?? "未注明"}`],
+        );
+      }
+    }
     return { kind: "decided" as const, row, status, gestureEventId: gres.eventId };
   });
 

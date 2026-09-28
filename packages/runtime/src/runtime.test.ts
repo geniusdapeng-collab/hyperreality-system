@@ -63,7 +63,7 @@ describe("计划模板（演示剧本）", async () => {
       { name: "report.write", access: "write", desc: "生成复盘报告" },
       { name: "metrics.read", access: "read", desc: "读取运行指标" },
     ],
-    essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "team-lead", version: "v1", prompt: null,
+    essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "team-lead", version: "v1", highRisk: false, prompt: null,
   };
   it("仅按当前 preset 工具声明拆解，且先读后写", () => {
     const steps = planQuest("生成本周复盘", fakePreset);
@@ -79,7 +79,7 @@ describe("LLM 任务规划（B9 planQuestSmart）", async () => {
       { name: "metrics.read", access: "read", desc: "读取运行指标" },
       { name: "report.write", access: "write", desc: "生成复盘报告" },
     ],
-    essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "team-lead", version: "v1", prompt: null,
+    essentials: { archive: {}, stage: "stable", goal: "g" }, agentId: "a", presetKey: "team-lead", version: "v1", highRisk: false, prompt: null,
   };
 
   it("合法规划被采用，白名单完全来自当前 preset", async () => {

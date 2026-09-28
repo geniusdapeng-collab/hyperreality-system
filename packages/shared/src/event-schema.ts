@@ -60,6 +60,10 @@ export const ReceiptSchema = z.object({
   synced: z.boolean().optional(),
   snapshot_uri: z.string().optional(),
   verified_at: z.iso.datetime({ offset: true }).optional(),
+  /** GR-15：回执来源模式（simulated=演示档案本地模拟；real=真实连接器）；假回执不得外观同真回执 */
+  mode: z.enum(["simulated", "real"]).optional(),
+  /** GR-17：执行器异常摘要（kind=execute 且 outcome=error 时写入） */
+  error: z.string().optional(),
 });
 export type Receipt = z.infer<typeof ReceiptSchema>;
 

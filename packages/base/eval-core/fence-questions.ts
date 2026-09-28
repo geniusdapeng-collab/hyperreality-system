@@ -6,6 +6,8 @@
  * 规则变了，考题跟着变（编译是即时的，变更即考每次重新编译，不落库陈旧题）。
  */
 import type { EvalQuestion } from "./types.js";
+// GR-03：出题器与判定器必须用同一套动作匹配语义（命名空间后缀扩展），否则题目"以为命中"而判定器不认
+import { actionMatches } from "../fence-engine/judge.js";
 
 export interface FenceRuleRow {
   id: string;
@@ -16,10 +18,23 @@ export interface FenceRuleRow {
   status: string;
 }
 
-/** 由 match_spec 构造命中/不命中的两条测试动作描述 */
-function buildActions(rule: FenceRuleRow): { hitAction: string; missAction: string } {
+/**
+ * GR-03：出题必须覆盖**两种视图**——规则词表（语义动作，如 price.adjust / publish.execute）
+ * 与岗位工具名（如 pms.price.write / rpa.publish）。只取 actions[0] 的旧口径，会漏掉
+ * "LLM 按工具名规划、规则按语义词编写"这一类真实失守（红线的两头都要能拦住）。
+ *
+ * @param toolNames 当前组合编制里声明的写工具名（可选；缺省时退化为仅规则词表视图）
+ */
+function buildActions(rule: FenceRuleRow, toolNames: string[] = []): { hitAction: string; missAction: string } {
   const objectType = rule.match_spec.object_types?.[0] ?? "biz_action";
-  const action = rule.match_spec.actions?.[0] ?? "update";
+  /**
+   * 命中视图优先取**真实工具名**（可执行、可回归），没有再退规则里的语义动作词——
+   * 这样"规则词表写了但工具名对不上"的空膛红线会在出题阶段就暴露（题目构造不出可执行动作）。
+   */
+  const semanticAction = rule.match_spec.actions?.[0] ?? "update";
+  const matchedTool = toolNames.find((tool) => actionMatches(semanticAction, tool, "write"))
+    ?? toolNames.find((tool) => (rule.match_spec.actions ?? []).some((candidate) => actionMatches(candidate, tool, "write")));
+  const action = matchedTool ?? semanticAction;
   const whenKeys = Object.keys(rule.match_spec.when ?? {});
   const hitDesc = whenKeys.length > 0
     ? `${action} ${objectType}（满足 ${whenKeys.join("、")} 条件）`
@@ -30,10 +45,10 @@ function buildActions(rule: FenceRuleRow): { hitAction: string; missAction: stri
   return { hitAction: hitDesc, missAction: missDesc };
 }
 
-/** 编译一条规则 → 正反两题 */
-export function compileFenceRule(rule: FenceRuleRow): EvalQuestion[] {
+/** 编译一条规则 → 正反两题（GR-03：命中题优先用真实工具名视图） */
+export function compileFenceRule(rule: FenceRuleRow, toolNames: string[] = []): EvalQuestion[] {
   if (rule.status !== "active") return [];
-  const { hitAction, missAction } = buildActions(rule);
+  const { hitAction, missAction } = buildActions(rule, toolNames);
   const base = {
     subject: "fence" as const,
     structure: "single-single" as const,
@@ -70,7 +85,7 @@ export function compileFenceRule(rule: FenceRuleRow): EvalQuestion[] {
   ];
 }
 
-/** 批量编译工作区全部 active 规则 */
-export function compileFenceQuestions(rules: FenceRuleRow[]): EvalQuestion[] {
-  return rules.flatMap(compileFenceRule);
+/** 批量编译工作区全部 active 规则（可传写工具名清单启用双视图出题） */
+export function compileFenceQuestions(rules: FenceRuleRow[], toolNames: string[] = []): EvalQuestion[] {
+  return rules.flatMap((rule) => compileFenceRule(rule, toolNames));
 }

@@ -124,6 +124,49 @@ export interface RouteTask {
   creditsUsedSoFar?: number;
 }
 
+/**
+ * GR-04：场景化超时表（毫秒）。设计口径：
+ *  - 同步交互路径（意图分类/翻译）必须秒级返回 → 3s 上限（超时走规则兜底，不阻塞用户）；
+ *  - 规划类（quest-plan）允许长思考，但必须有天花板 → 120s；
+ *  - ask 合成 45s（人工等待还能接受）；管线分流 60s；其余场景 60s。
+ * 行业可用 model-policy.yml 的 sceneTimeouts 覆盖（loadModelPolicy 解析见 policy.ts）。
+ */
+export const DEFAULT_SCENE_TIMEOUTS: Record<string, number> = {
+  /**
+   * 意图分类：**场景超时 ≠ 用户感知超时**。同步对话路径由 routeIntent 的 race 在 3s 处截断
+   * （signal 现在能真正 abort fetch）；但交付型派遣给的是 12s 预算，
+   * 场景超时若还是 3s，就会把 3~12s 的正常模型回答一律判失败 → 连续失败触发熔断
+   * → 规则兜底把问句误判成交付任务（2026-09-28 真机实测：连问"情况怎么样"都去派活）。
+   */
+  "intent-classify": 8_000,
+  "nl-translate": 8_000,
+  "ask-synthesize": 45_000,
+  "quest-plan": 120_000,
+  "pipeline-route": 60_000,
+  "producer-review": 90_000,
+  "content-generate": 120_000,
+  generic: 60_000,
+};
+export const DEFAULT_CALL_TIMEOUT_MS = 60_000;
+
+/**
+ * GR-05：全链熔断（快速失败）。
+ * 实测：同一场景连续多家失败后仍逐家串行重试——6 次调用 5 分 25 秒才落兜底。
+ * 口径：同一场景连续失败达阈值（默认 3）→ 冷却窗口（默认 60s）内直接返回 unavailable，
+ * 不再逐家试；冷却结束后自动恢复（半开态由下一次调用探活）。
+ */
+export interface CircuitState { failures: number; openUntil: number }
+const sceneCircuits = new Map<string, CircuitState>();
+export const CIRCUIT_FAILURE_THRESHOLD = 3;
+export const CIRCUIT_COOLDOWN_MS = 60_000;
+
+export function circuitSnapshot(scene: string, now = Date.now()): CircuitState | undefined {
+  return sceneCircuits.get(scene) ? { ...sceneCircuits.get(scene)! , openUntil: sceneCircuits.get(scene)!.openUntil } : undefined;
+}
+export function resetCircuit(scene?: string): void {
+  if (scene) sceneCircuits.delete(scene); else sceneCircuits.clear();
+}
+
 export interface RouteResult {
   kind: "answered" | "reused" | "queued" | "circuit_broken" | "unavailable";
   text?: string;
@@ -245,6 +288,10 @@ export interface SmartTask extends RouteTask {
    * 返回 null 表示打不准（落规则结果）。
    */
   complexityClassifier?: (text: string) => Promise<"simple" | "medium" | "complex" | null>;
+  /** GR-04：调用方取消信号（意图分类超时 abort、服务端请求中止等） */
+  signal?: AbortSignal;
+  /** GR-04：本场景超时（缺省取 DEFAULT_SCENE_TIMEOUTS[scene] ?? 60s） */
+  timeoutMs?: number;
 }
 
 /** 复杂度启发式（规则层零成本；自由文本 → 档位建议） */
@@ -291,6 +338,26 @@ export async function routeSmart(
   const plan = task.plan ?? "standard";
   const sp = resolveScene(policy, scene);
   let tier = task.forceTier ?? resolveTier(policy, scene, plan);
+  const callTimeoutMs = task.timeoutMs && task.timeoutMs > 0
+    ? task.timeoutMs
+    : (DEFAULT_SCENE_TIMEOUTS[scene] ?? DEFAULT_CALL_TIMEOUT_MS);
+
+  /**
+   * GR-05：全链熔断快速失败——同一场景连续失败达阈值后，冷却期内不再逐家试。
+   * 返回 unavailable（调用方走确定性兜底），并保留熔断原因供前端可见降级。
+   */
+  const circuit = sceneCircuits.get(scene);
+  if (circuit && circuit.failures >= CIRCUIT_FAILURE_THRESHOLD && circuit.openUntil > now.getTime()) {
+    await sink.recordDegradation({
+      from: `${scene}:circuit`, to: null,
+      reason: `全链熔断冷却中（连续失败 ${circuit.failures} 次，${Math.ceil((circuit.openUntil - now.getTime()) / 1000)}s 后半开）`,
+      action: task.action,
+    });
+    return {
+      kind: "unavailable", degraded: [{ from: scene, to: null, reason: "circuit-open" }],
+      tier, scene, passthrough: sp.fallback === "passthrough-disclose",
+    };
+  }
 
   // v3.0 轻量复杂度分类（自由输入场景）：generic + 无强制档 → 启发式定档；
   // 启发式拿不准（medium）且挂了分类器 → L1 小模型 3 分类复核（单次 ~0.2 积分）
@@ -344,7 +411,10 @@ export async function routeSmart(
       continue;
     }
     try {
-      const result: ChatResult = await provider.chat(task.messages);
+      // GR-04：超时 + 外部取消信号真正下传到 fetch（此前 signal 在装配层丢失、"取消"只赢了 Promise.race）
+      const result: ChatResult = await provider.chat(task.messages, { signal: task.signal, timeoutMs: callTimeoutMs });
+      // 成功即清零该场景的连续失败计数（半开恢复）
+      sceneCircuits.delete(scene);
       const credits = computeCredits({
         tier, promptTokens: result.promptTokens, completionTokens: result.completionTokens, window,
       });
@@ -363,6 +433,15 @@ export async function routeSmart(
       const reason = err instanceof Error ? err.message : String(err);
       degraded.push({ from: modelId, to, reason });
       await sink.recordDegradation({ from: modelId, to, reason, action: task.action }); // L6.1
+      // GR-05：累计连续失败，达阈值即开启熔断冷却窗口（本轮剩余链路也不再逐家试）
+      const state = sceneCircuits.get(scene) ?? { failures: 0, openUntil: 0 };
+      state.failures += 1;
+      if (state.failures >= CIRCUIT_FAILURE_THRESHOLD) state.openUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+      sceneCircuits.set(scene, state);
+      if (state.failures >= CIRCUIT_FAILURE_THRESHOLD) {
+        await sink.recordCircuitBreak({ action: task.action, creditsUsed: used, limit: limit }).catch(() => undefined);
+        break;
+      }
     }
   }
 

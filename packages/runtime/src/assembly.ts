@@ -15,6 +15,11 @@ export interface AssembledPreset {
   agentId: string;
   presetKey: string;
   version: string;
+  /**
+   * Y-01（第六轮实测，安全级）：岗位级高危标记——审批快照据此派生 `high_risk`，
+   * 否则批量审批的高危守卫读的是一个**生产代码从未写过**的字段（只有测试里写过），守卫等于空转。
+   */
+  highRisk: boolean;
   fenceBindings: string[];
   tools: Array<{ name: string; access: string; desc: string }>;
   prompt: unknown;
@@ -46,7 +51,7 @@ export async function assemblePreset(
 
     const ag = await client.query<{
       id: string; preset_key: string; version: string; fence_bindings: string[];
-      meta: { tools?: AssembledPreset["tools"]; prompt?: unknown }; status: string;
+      meta: { tools?: AssembledPreset["tools"]; prompt?: unknown; high_risk?: boolean }; status: string;
     }>(
       `SELECT id, preset_key, version, fence_bindings, meta, status
        FROM agents WHERE workspace_id=$1 AND preset_key=$2`,
@@ -87,6 +92,7 @@ export async function assemblePreset(
       agentId: agent.id,
       presetKey: agent.preset_key,
       version: agent.version,
+      highRisk: agent.meta.high_risk === true,
       fenceBindings: [...bindingsUnion].sort(),
       tools: agent.meta.tools ?? [],
       prompt: agent.meta.prompt ?? null,
