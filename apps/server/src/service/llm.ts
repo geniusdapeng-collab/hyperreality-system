@@ -13,7 +13,7 @@ import {
 import { bundlesRoot } from "@workloom/base/bundles";
 import { join } from "node:path";
 
-export type LlmCall = (prompt: string) => Promise<string>;
+export type LlmCall = (prompt: string, signal?: AbortSignal) => Promise<string>;
 
 /* ---------- 模型池与策略缓存（进程级；env/落地向导写盘后由调用方 resetLlmAssembly 复位） ---------- */
 
@@ -62,13 +62,15 @@ export function routedLlmCall(deps: {
   if ((process.env.LLM_PROVIDER ?? "mock") === "mock") return undefined;
   try {
     const sink = new GatewayEventSink(deps.gateway, deps.scope);
-    return async (prompt: string) => {
+    return async (prompt: string, signal?: AbortSignal) => {
       const industry = deps.industryResolver ? await deps.industryResolver() : deps.industry;
       const policy = modelPolicyFor(industry);
       const r = await routeSmart(
         {
           action: deps.scene, scene: deps.scene, plan: deps.plan,
           messages: [{ role: "user", content: prompt }],
+          // GR-04：signal 下传 + 场景化超时（intent-classify 3s / quest-plan 120s / ask 45s…）
+          ...(signal ? { signal } : {}),
         },
         pool(), sink, { policy },
       );
@@ -96,11 +98,11 @@ export function llmCall(scene = "generic"): LlmCall | undefined {
     // 旧路径仍可用但已标注：新代码一律用 routedLlmCall(scene)（计量/路由纪律）
     const providers = pool();
     cachedScene = scene;
-    cached = async (prompt: string) => {
+    cached = async (prompt: string, signal?: AbortSignal) => {
       const { routeSmart: rs } = await import("@workloom/base/model-router");
       const traces: unknown[] = [];
       const r = await rs(
-        { action: scene, scene, messages: [{ role: "user", content: prompt }] },
+        { action: scene, scene, messages: [{ role: "user", content: prompt }], ...(signal ? { signal } : {}) },
         providers,
         {
           recordModelTrace: async (t) => { traces.push(t); },
