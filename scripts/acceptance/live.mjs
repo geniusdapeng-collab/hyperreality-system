@@ -294,12 +294,43 @@ async function runTask(task) {
         ? { ...task, expectAll: [...(task.expectAll ?? []), fixtureToken] }
         : task;
       if (chain === "dsh-harness") {
+        /**
+         * 围栏规则源装配（2026-09-24 修复）：dsh 插件需要真实生效规则；本仓此前指向不存在的
+         * `fence.activeRules` → 插件把 404 错误体当数组 → 工具层整体不可用（LLM-M1 实测）。
+         * 现在：用成员令牌拉一次 `fence.activeRules`（本仓已补该端点）写成本地规则文件，
+         * 插件走 `rulesFile`（无网/无鉴权依赖，且规则内容可留档到产物目录）。
+         */
+        let fenceRulesFile = null;
+        if (!(SELFTEST && stub)) {
+          try {
+            const token = await loginAsMember({
+              apiUrl: environment.urls.api,
+              workspaceSlug: profile.identity?.workspaceSlug,
+              memberNo: profile.identity?.human ?? "MEM-001",
+            });
+            const r = await fetch(`${environment.urls.api}/trpc/fence.activeRules`, {
+              headers: { authorization: `Bearer ${token}` },
+            });
+            const body = await r.json().catch(() => null);
+            const rules = body?.result?.data;
+            if (Array.isArray(rules) && rules.length > 0) {
+              fenceRulesFile = join(OUT_DIR, `fence-rules-${task.id}.json`);
+              writeFileSync(fenceRulesFile, JSON.stringify(rules, null, 1));
+              console.log(`[acceptance:live] 围栏规则源就绪：${rules.length} 条 → ${fenceRulesFile}`);
+            } else {
+              console.log(`[acceptance:live] ⚠ 围栏规则源为空/不可用（HTTP ${r.status}）：工具调用将按 fail-closed 拒绝`);
+            }
+          } catch (error) {
+            console.log(`[acceptance:live] ⚠ 围栏规则源拉取失败：${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
         out = await runDshTask({
           repoRoot: REPO_ROOT,
           workDir: OUT_DIR,
           model: resolved?.model ?? "deepseek-flash",
           prompt: task.prompt,
           rulesUrl: SELFTEST && stub ? `${stub.baseUrl}/rules` : `${environment.urls.api}/trpc/fence.activeRules`,
+          rulesFile: fenceRulesFile,
           env: {
             DEEPSEEK_API_KEY: runnerEnv.DEEPSEEK_API_KEY ?? runnerEnv.LLM_API_KEY ?? "",
             /**
@@ -315,7 +346,16 @@ async function runTask(task) {
         });
       } else {
         const image = task.imageFixture ? readImageFixture(resolve(REPO_ROOT, task.imageFixture)) : null;
-        out = await runChatTask({ resolved, prompt: task.prompt, timeoutMs: TASK_TIMEOUT_MS, image, env: runnerEnv });
+        /**
+         * model-gateway 走 OpenAI 兼容 `/chat/completions`：
+         *   `DEEPSEEK_BASE_URL` 可能被 dsh 链路指到 Anthropic 兼容根（`…/anthropic`），
+         *   直接复用会 404（2026-09-20 实测）。这里优先用 `LLM_BASE_URL`，并剥掉 `/anthropic` 后缀。
+         */
+        const gatewayResolved = {
+          ...resolved,
+          baseUrl: String(runnerEnv.LLM_BASE_URL || resolved.baseUrl || "").replace(/\/anthropic\/?$/u, ""),
+        };
+        out = await runChatTask({ resolved: gatewayResolved, prompt: task.prompt, timeoutMs: TASK_TIMEOUT_MS, image, env: runnerEnv });
       }
       budget.commit({ taskId: task.id, kind: "llm", tokens: out.tokens ?? 0, detail: chain });
       const verified = verifyExpectations(effectiveTask, out);

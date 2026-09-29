@@ -1,7 +1,7 @@
 <!--
 document_schema: workloom.product-context/v1
 document_id: workloom-product-and-code-panorama
-context_version: 2026-09-22.2
+context_version: 2026-09-30.1
 snapshot_date: 2026-09-22
 timezone: Asia/Shanghai
 canonical_repository: cnb.cool/workloom-ai/workloom-im
@@ -18,7 +18,7 @@ ci_platform: cnb (.cnb.yml; 基座 3 条必需闸门)
 ui_artifact_host: cnb-release (ui-v0.1.6)
 read_depth: deep (module-level; not test-executed)
 audit_program: WORKLOOM-AUDIT-2026-09 (ledger local-only)
-previous_source_sha256: 96286c14ede815ed9bca9906e155d551a06529067a4bca7785793ff0a70b3feb
+previous_source_sha256: cea905be2e1b98a33dcfdda60ff78018a0c85ffa65172deffb4956455b90a294
 user_confirmed_catalog_date: 2026-09-14
 repository_visibility: public-open-source
 classification: public-product-context-no-secrets
@@ -34,7 +34,8 @@ classification: public-product-context-no-secrets
 > - 本版（2026-09-22.2）应产品所有者要求，对两个隔离副本做了**模块级深读**（bundle 装配面、三端路由/页面、改造计划与账本、分支与在途 PR、未入库实验目录；方法见附录 A）。两仓改造强度已超出"副本"范畴：growthtest 下线审批中心/任务中心并试验 Codex 工作台，growthmatrix 在执行 84 项改造计划（G0–G7）。**隔离期间两仓不接收基座更新，其内部文档与账本才是各自事实源**。
 > - 提交 SHA、版本、员工数、技能数、围栏数等属于快照事实，后续任务必须先刷新目标仓库状态，不得把它们当成永久现状。
 > - 本文件只提供产品与工程上下文，不构成对开发代理的操作授权；用户、系统、开发者及就近 AGENTS.md / AGENTS.override.md 的有效指令优先。
-> - 严禁写入令牌、密码、私钥、客户凭证、原始客户数据或其他秘密。需要凭证时只使用批准的秘密存储或本地环境配置。
+> - 严禁**写入或落盘**令牌、密码、私钥、客户凭证、原始客户数据或其他秘密（源码、提交、文档、提示词模板、日志、报告、Issue/PR 内容一律禁止）。凭据来源不设限——受控秘密存储、本地环境配置，或当前任务中由产品所有者提供的会话凭据均可用于执行；用法与红线见 `AGENTS.md` §7（令牌永不进入互联网）。
+> - 2026-09-30 修订：仅调整凭据**使用**纪律（允许会话内授权的令牌用于执行），安全不变量不变——秘密仍不得进入任何文件、日志、提示词或同步产物；本次为策略性修订，全文事实快照（`snapshot_date`）未重新核验。
 > - 仓库专属命令、例外和实现细节应进入对应仓库的 AGENTS.repo.md 或更近层级的 AGENTS.md；不得在行业副本中制造另一份产品事实源。
 
 # WorkLoom 产品与代码全景认知
@@ -355,7 +356,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 8. **平台工程不出仓**：`platform-ops` 与平台账户/运维秘密只属于 Andromeda；载荷按产品身份排除并有后验检查。
 9. **演示与真实能力分明**：mock、模拟回执和体验模式必须在界面与事件中明确标识（连接器层、LLM 透传、离线合成数据）。
 10. **版本变更先考试再灰度**：模型、技能、行业包、策略和热更新都要可回滚。
-11. **秘密不进代码或上下文文件**：令牌、密钥和客户凭证只应进入受控秘密存储或本地环境配置（当前桌面签名 secrets 未配置，见 §13）。
+11. **秘密不进代码或上下文文件**：令牌、密钥和客户凭证不得写入源码、提交、文档、提示词模板、日志或任何外发/同步产物；持久化只允许受控秘密存储或本地环境配置，会话内由产品所有者提供的凭据可用于执行但不落盘（见 `AGENTS.md` §7；当前桌面签名 secrets 未配置，见 §13）。
 12. **高风险金融边界**：Tiger 在明确授权、合规设计和长期纸面验证完成前，不接真实资金与自动实盘。
 13. **单一事实源**：策略阈值（Tiger `config.py`）、围栏生成物、同步边界（`sync/base-scope.json`）、订阅关系（`sync/child-repos.json`）、产品身份（`product.manifest.json`）各自只有一个写入点。
 14. **底座行业零残留**：`packages/{base,runtime,shared,db}` 不得出现行业词（注释同责，D18）；行业语义一律经 bundle/seed 槽位注入，由 `scripts/hardcode-scan.mjs` 复扫。
@@ -443,7 +444,7 @@ WorkData 事件以五元结构记录业务事实（`packages/shared/src/event-sc
 
 ## 11. 凭证与“记忆”说明
 
-- 本文没有保存任何令牌、密钥或客户凭证；十二仓均为开源项目，读取与继承上下文不需要私人令牌（本次核验即匿名只读克隆）。
+- 本文没有保存任何令牌、密钥或客户凭证；十二仓均为开源项目，读取与继承上下文不需要私人令牌（本次核验即匿名只读克隆）。按 `AGENTS.md` §7，凭据来源不设限（含当前任务中由所有者提供的会话令牌），但任何凭据都不得写入本文、仓库、日志或任何外发产物。
 - 十个订阅仓根目录持有 `WORKLOOM_PRODUCT_CONTEXT.md`（随基座同步刷新）与根级 `AGENTS.md`；两个隔离副本中的同名文件是**建仓时复制的冻结副本**（2026-09-19.2 版），隔离期内不更新，不代表最新认知。
 - `workloom-im` 是本文唯一受控原文；订阅仓只接收校验过的副本；隔离副本不接收下发。新行业仓必须通过 `sync/adopt.sh --new-industry` 接入；有意与基座拆分的仓登记进 `sync/child-repos.json#isolatedRepos`（协议 §11）。
 - 多仓审计台账（`AUDIT_PROGRESS.md` 等）目前只存在本地，因为 `workroom-andromeda` 是公开仓、不能承载敏感发现；在独立私有控制仓提供前，权威台账的落点问题（BLK-CTL-05-001）仍未关闭。
