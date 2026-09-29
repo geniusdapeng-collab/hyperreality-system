@@ -12,6 +12,7 @@ import {
   generateDocument,
   highestVersion,
   isOutdated,
+  normalizeRepoIdentityForCompare,
   probeVersions,
   renderMarkdown,
 } from "./oss-inventory.mjs";
@@ -189,4 +190,27 @@ test("版本工具：最高版本选择与滞后判定", () => {
   assert.equal(isOutdated("8.2.2", "8.3.0"), true);
   assert.equal(isOutdated("8.3.0", "8.3.0"), false);
   assert.equal(isOutdated("（未锁定）", "8.3.0"), false);
+});
+
+test("仓库标识行：克隆 URL 大小写不同不算清单漂移", () => {
+  const lower = [
+    "# 清单",
+    "",
+    "> 仓库：workloom-ai/workloom-growthmatrix ｜ 最近一次上游扫描：2026-09-28T17:13:25.000Z",
+    "> 统计：登记组件 98 个",
+    "",
+  ].join("\n");
+  const upper = lower.replace("workloom-growthmatrix", "workloom-Growthmatrix");
+  assert.equal(
+    normalizeRepoIdentityForCompare(lower),
+    normalizeRepoIdentityForCompare(upper),
+    "同一仓的不同大小写写法不得判为漂移（回归：growthmatrix main static-gate 红灯）",
+  );
+  const moved = lower.replace("workloom-growthmatrix", "workloom-growthtest");
+  assert.notEqual(
+    normalizeRepoIdentityForCompare(lower),
+    normalizeRepoIdentityForCompare(moved),
+    "换仓造成的真实漂移必须仍然判出",
+  );
+  assert.equal(normalizeRepoIdentityForCompare(null), "");
 });
