@@ -12,13 +12,14 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import pg from "pg";
-import { routeIntent, ruleBasedRoute, LlmIntentClassifier, type IntentClassifier, type QuestPlanner } from "@workloom/runtime";
+import { routeIntent, ruleBasedRoute, LlmIntentClassifier, registerAskKbSearch, runAsk, type IntentClassifier, type QuestPlanner } from "@workloom/runtime";
 import { runQuest } from "@workloom/runtime";
 import {
   gatewayAppend, gatewayAppendIdempotent, checkPermission, isWriteAction,
   maskText, maskDeep, canonicalJson, eventHash, GENESIS_HASH,
   searchEvents, MockNlTranslator, nlSearchEvents, type NlTranslatorLexicon,
   upsertMemory, searchMemories, getMemorySources, transitionMemory, recordMemoryUsage, MockEmbedder,
+  insertWithReadableId, THREAD_ID_SOURCE,
 } from "@workloom/base/workdata";
 import { judge, evalCondition, type RuntimeRule } from "@workloom/base/fence-engine";
 import { parseCharter, transition, routeTier, buildMemo, runBriefingBeat, runQueueBeat, runBreakerBeat, loadCharter, effectiveAutonomy, buildScorecard, runOutcomeReviewBeat, runHrReviewBeat, runBoardPackBeat, runOrgScanBeat, scanOrgHealth, proposeHiring } from "@workloom/base/captain";
@@ -3594,6 +3595,137 @@ h2("融合·LLM 降级链：死端配置被拒 → mock 兜底应答不断链", 
 await assertGovernanceFixtureReady().catch(async (err) => {
   await Promise.allSettled([app.end(), gw.end()]);
   throw err;
+});
+
+/* ================= Z 域 · 二次修复不变量（号源 / 知识库优先级 / 高危判据） =================
+ *
+ * 来源：WorkLoom-growth 第三方独立验收 4 项未闭环（2026-09-29 二次修复）。
+ * 这组用例守的是**不变量**而不是实现细节——上一版修复之所以"改完仍在"，正是因为
+ * 测试只断言了各自写的那条路径（号源测试没调号源函数、高危守卫只造了自己会打标的快照）。
+ * 改写前请先读 growth《验收新发现问题报告》W-01..W-04 与 review-console/approvals.ts#isHighRiskApproval 注释。
+ */
+const z = C("Z");
+
+z("号源：并发取号不重号，且撞手写号段时同事务换号不失败", async () => {
+  const { makeReadableId } = await import("@workloom/shared");
+  /** 本用例会造"手写高位 id"这类脏数据，结束后自己清干净（可重复跑） */
+  const created: string[] = [];
+  try {
+    /**
+     * ① 号源函数必须是**纯序列**：并发调用不得返回同一个值。
+     * 0050 的 `GREATEST(nextval, max)` 在"序列落后于现存号段"时会集体返回同一个 max——
+     * 高水位取"现存最大 + 500"（相对量），断言效果相同且即便清理失败也不会写坏号段。
+     */
+    const highBase = await qApp<{ m: string }>(
+      `SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '[^0-9]', '', 'g'), '')::bigint), 100) AS m
+         FROM threads WHERE id ~ '^T-[0-9]+$'`);
+    const highId = `T-${Number(highBase.rows[0]!.m) + 500}`;
+    await qApp(
+      `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
+       VALUES ($1,$2,$3,'号源高水位（套件造）','quest','completed','MEM-001')`,
+      [highId, scope.tenantId, scope.workspaceId],
+    );
+    created.push(highId);
+    const probes = await Promise.all(Array.from({ length: 12 }, () =>
+      qApp<{ n: string }>(`SELECT public.threads_max_t_no() AS n`)));
+    eq(new Set(probes.map((p) => String(p.rows[0]!.n))).size, 12, "12 路并发取号互不重号（纯序列）");
+
+    /**
+     * ② 撞号重试必须发生在**可用的事务**里：先手写"序列下一个号"，再走生产口径取号落库——
+     * 必须自动换号成功，且同一事务还能继续写（旧实现重试写在已中止事务内，
+     * 只会再抛 `current transaction is aborted`，正是 12 路并发那 1 个 500 的成因）。
+     */
+    const cur = await qApp<{ last_value: string }>(`SELECT last_value FROM public.thread_no_seq`);
+    const takenId = makeReadableId("T", Number(cur.rows[0]!.last_value) + 1);
+    await qApp(
+      `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
+       VALUES ($1,$2,$3,'号源占位（套件造）','quest','completed','MEM-001')`,
+      [takenId, scope.tenantId, scope.workspaceId],
+    );
+    created.push(takenId);
+    const client = await app.connect();
+    let allocated = "";
+    let continuedAfterRetry = false;
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+      allocated = (await insertWithReadableId(client, THREAD_ID_SOURCE, async (id) => {
+        await client.query(
+          `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
+           VALUES ($1,$2,$3,'撞号重试验证','quest','queued','MEM-001')`,
+          [id, scope.tenantId, scope.workspaceId],
+        );
+        return id;
+      })).id;
+      created.push(allocated);
+      const continuedId = `T-${Number(cur.rows[0]!.last_value) + 1000}`;
+      await client.query(
+        `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
+         VALUES ($1,$2,$3,'换号后同事务续写','quest','queued','MEM-001')`,
+        [continuedId, scope.tenantId, scope.workspaceId],
+      );
+      created.push(continuedId);
+      continuedAfterRetry = true;
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+    assert(allocated !== takenId, `撞号必须换号（占用 ${takenId}，实得 ${allocated}）`);
+    assert(continuedAfterRetry, "换号后同一事务仍可继续写入（未被中止）");
+  } finally {
+    if (created.length > 0) await qApp(`DELETE FROM threads WHERE id = ANY($1::text[])`, [created]);
+  }
+});
+
+z("知识库事实：ask 答案必须含知识内容，不被通用统计挤掉", async () => {
+  const docId = `doc-suite-${SFX}`;
+  registerAskKbSearch(async () => [
+    { content: "国庆期间全线房源 7.5 折，券后价不低于保底价。", heading: "券后折扣", documentTitle: "国庆促销政策", documentId: docId },
+    { content: "客户报暗号「星火」可再减 30 元。", heading: "暗号", documentTitle: "国庆促销政策", documentId: docId },
+  ]);
+  try {
+    const tid = await mkThread();
+    const r = await runAsk(app, gw, scope, {
+      threadId: tid, goal: "国庆活动的券后折扣和暗号是什么？", presetKey: "pricing-agent",
+    });
+    // X-04 × GR-09 联动：知识命中必须整体可见（追加在末尾 + 整文硬截 ⇒ 永远被吃掉）
+    assert(r.answer.includes("7.5 折"), `答案须含知识库折扣内容（实际：${r.answer}）`);
+    assert(r.answer.includes("星火"), `答案须含知识库暗号内容（实际：${r.answer}）`);
+    assert(r.answer.includes("知识库·"), "知识命中须标注来源为知识库");
+  } finally {
+    registerAskKbSearch(undefined);
+  }
+});
+
+z("高危批量守卫：l4_chairman 审批（快照无 high_risk）也必须逐条", async () => {
+  /**
+   * 与"快照打标"用例的区别：这里走的是**非 loop.ts 的审批来源**（种子/CEO 队列/技能下发同构），
+   * 快照里没有 high_risk 字段、只有权威列 tier —— 旧守卫只看快照，于是这类审批被一键放行。
+   */
+  const eventId = await mkEvent("suite.l4.reviewable");
+  const l4 = `apr-l4-${SFX}`;
+  await qApp(
+    `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot)
+     VALUES ($1,$2,$3,$4,'inapp','pending','l4_chairman',$5)`,
+    [l4, scope.tenantId, scope.workspaceId, eventId, JSON.stringify({ after: { v: 1 } })],
+  );
+  const batch = await batchApprove(app, gw, scope, boss, [l4]);
+  eq(batch.approved.length, 0, "L4 审批不得批量放行");
+  eq(batch.skipped.length, 1, "L4 审批被跳过");
+  assert((batch.skipped[0]?.reason ?? "").includes("高危"), "跳过原因=高危项须逐条");
+  // 超时扫描同口径（L5.4：高危不自动放行）——两处守卫必须共用同一判据
+  await qApp(`UPDATE approvals SET snapshot = snapshot || $2::jsonb WHERE approval_id=$1`,
+    [l4, JSON.stringify({ expires_at: new Date(Date.now() - 7200e3).toISOString() })]);
+  const sweep = await expireSweep(app, gw, scope);
+  assert(sweep.keptHighRisk.includes(l4), "L4 过期不得自动 expired（保留提醒）");
+  // 反向：普通项仍可批量（守卫不得误伤常规通道）
+  const ok = await mkApproval();
+  const batch2 = await batchApprove(app, gw, scope, boss, [ok.approvalId]);
+  eq(batch2.approved.length, 1, "普通项照批");
 });
 
 const svcPassed = await runCases(cases, "服务层用例");

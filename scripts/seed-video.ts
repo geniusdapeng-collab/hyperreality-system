@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { safeParseBusinessEvent } from "@workloom/shared";
 // 哈希链统一生产口径（events.ts 的 canonicalJson/eventHash），与 seed.ts 同一纪律
 import { eventHash } from "@workloom/base/workdata";
+import { alignReadableIdSequences } from "@workloom/base/workdata";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -774,6 +775,11 @@ async function main() {
   );
   console.log("✓ AI 服务前台运行态（星芒好物）：用户/售后政策知识库/会话/工单×2/时间线/通知");
 
+    // GR-02（2026-09-29 第二次修复，基座 T-2026-0929-0003）：手写号段写入方收尾对齐号源。
+  // 取号函数只做 nextval（0050 把 max() 读回取号函数导致并发撞号且不收敛）；
+  // "序列落后于手写 id"的问题必须在**写入方**解决——只抬不降、幂等，可重复执行。
+  const seqFloor = await alignReadableIdSequences(owner, { threads: true, videoProjects: true });
+  console.log(`✓ 可读号源对齐：threads→${seqFloor.threads}，video_projects→${seqFloor.videoProjects}`);
   await owner.end();
   console.log("\n视频经理演示种子完成。下一步：pnpm dev 后在工作台查看（ws-video 工作区）。");
 }

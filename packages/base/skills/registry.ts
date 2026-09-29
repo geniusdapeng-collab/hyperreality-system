@@ -266,7 +266,11 @@ export async function installSkill(
             // #28 修复：approval_id 由事件 ID 确定性派生（同 loop.ts 口径 apr-e-<n>），
             // 原 makeReadableId("AP", Date.now()%100000) 同毫秒两审批即主键碰撞
             `apr-${evId.toLowerCase()}`, scope.tenantId, scope.workspaceId, evId,
-            JSON.stringify({ kind: "skill_fence_conflict", skillId: skill.id, missingBindings: missing }),
+            /**
+             * W-04 举一反三：技能与围栏冲突属"围栏面变化"，与围栏放宽同层，
+             * 必须逐条人审——不写 high_risk 会从批量采纳入口被一键放行（E8.1 的"不静默放行"形同虚设）。
+             */
+            JSON.stringify({ kind: "skill_fence_conflict", skillId: skill.id, missingBindings: missing, high_risk: true }),
           ],
         );
       } catch (err) {

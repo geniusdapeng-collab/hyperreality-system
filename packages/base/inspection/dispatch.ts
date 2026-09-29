@@ -6,7 +6,7 @@
  */
 import type pg from "pg";
 import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
-import { makeReadableId } from "@workloom/shared";
+import { insertWithReadableId, THREAD_ID_SOURCE } from "../workdata/readable-id.js";
 import type { Severity } from "./checks.js";
 
 interface Scope { tenantId: string; workspaceId: string }
@@ -180,16 +180,16 @@ export async function dispatchFromAnomaly(
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-    // 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS，跨工作区不撞号）
-    const max = await client.query<{ n: number }>(
-      `SELECT public.threads_max_t_no() AS n`,
-    );
-    threadId = makeReadableId("T", Number(max.rows[0]?.n ?? 100) + 1);
-    await client.query(
-      `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id)
-       VALUES ($1,$2,$3,$4,'quest','queued',$5,$6)`,
-      [threadId, scope.tenantId, scope.workspaceId, title, input.by, input.presetKey],
-    );
+    // 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS，跨工作区不撞号）；
+    // GR-02（2026-09-29 第二次修复）：与 tRPC 派遣同口径走 insertWithReadableId（纯 nextval + SAVEPOINT 换号）
+    threadId = (await insertWithReadableId(client, THREAD_ID_SOURCE, async (id) => {
+      await client.query(
+        `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id)
+         VALUES ($1,$2,$3,$4,'quest','queued',$5,$6)`,
+        [id, scope.tenantId, scope.workspaceId, title, input.by, input.presetKey],
+      );
+      return id;
+    })).id;
     eventId = await emitInTx(client, scope, input.by, "human", {
       action: "inspect.dispatch",
       after: { threadId, anomalyEventId: input.anomalyEventId, presetKey: input.presetKey, severity: anomaly.severity },

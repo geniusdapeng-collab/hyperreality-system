@@ -20,7 +20,7 @@ import {
   signDemoToken,
   type Identity,
 } from "@workloom/base/tenancy";
-import { gatewayAppend, gatewayAppendOnClient, MockEmbedder, upsertMemoryInTx } from "@workloom/base/workdata";
+import { gatewayAppend, gatewayAppendOnClient, insertWithReadableId, MockEmbedder, THREAD_ID_SOURCE, upsertMemoryInTx } from "@workloom/base/workdata";
 import { INTENT_ROUTE_TIMEOUT_DISPATCH_MS, makeReadableId } from "@workloom/shared";
 import { registerAskKbSearch } from "@workloom/runtime";
 
@@ -1043,32 +1043,21 @@ const threadsRouter = router({
         /**
          * 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS——主键全库唯一，按本区分配必撞他区；
          * 历史教训：第二次派遣即 duplicate key，ASK/QUEST 主链路故障）。
-         * GR-02 第②条：取号 + 插入必须容忍极端撞号（唯一键冲突 PG 23505）——
-         * 序列化号源已消除常规并发撞号，但手写 id/历史数据仍可能占用号段；
-         * 撞一次就重取号源重试一次，仍失败才如实抛出（不静默改号）。
+         *
+         * GR-02（2026-09-29 第二次修复，基座 T-2026-0929-0003）：取号 + 建档统一走
+         * `insertWithReadableId`——纯 nextval 原子取号、返回值直接可用（不再 +1）、
+         * 撞号用 SAVEPOINT 换号重试。旧实现把重试写在**已被中止的事务**里
+         * （PG：`current transaction is aborted`），从诞生起就不可能成功。
          */
-        let inserted = false;
-        let lastError: unknown;
-        threadId = "";
-        for (let attempt = 0; attempt < 2 && !inserted; attempt += 1) {
-          const max = await client.query<{ n: number }>(
-            `SELECT public.threads_max_t_no() AS n`,
+        const allocated = await insertWithReadableId(client, THREAD_ID_SOURCE, async (id) => {
+          await client.query(
+            `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id)
+             VALUES ($1,$2,$3,$4,$5,'queued',$6,$7)`,
+            [id, scope.tenantId, scope.workspaceId, input.title, intent.mode, ctx.identity.memberNo, ownerAgentId],
           );
-          threadId = makeReadableId("T", Number(max.rows[0]?.n ?? 100) + 1); // bigint 驱动返回 string，必须 Number() 防拼接（D29 教训）
-          try {
-            await client.query(
-              `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id)
-               VALUES ($1,$2,$3,$4,$5,'queued',$6,$7)`,
-              [threadId, scope.tenantId, scope.workspaceId, input.title, intent.mode, ctx.identity.memberNo, ownerAgentId],
-            );
-            inserted = true;
-          } catch (err) {
-            lastError = err;
-            if ((err as { code?: string }).code !== "23505") throw err;
-            console.warn(`[dispatch] 号源撞号 ${threadId}，重取一次（GR-02）`);
-          }
-        }
-        if (!inserted) throw lastError ?? new Error("线程建档失败：号源重试后仍冲突");
+          return id;
+        });
+        threadId = allocated.id;
         // D16（#1/A）：建线程与派遣事件同一事务（G8 留痕不再独立于状态）
         await gatewayAppendOnClient(client, {
           ...scope,
