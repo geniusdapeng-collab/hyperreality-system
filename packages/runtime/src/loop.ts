@@ -11,7 +11,7 @@
  *  - E3.7：工具执行无回执（receipt.synced≠true）→ 标「未核实」，线程不得转 completed
  */
 import type pg from "pg";
-import { judge, judgeViews, type JudgeInput, type RuntimeRule } from "@workloom/base/fence-engine";
+import { judge, judgeViews, type JudgeView, type RuntimeRule } from "@workloom/base/fence-engine";
 import { gatewayAppend, gatewayAppendOnClient, registerWriteActions } from "@workloom/base/workdata";
 
 /** D16（#1/A）：步骤内「事件 + 线程状态」单事务封装（双 GUC 齐备） */
@@ -350,17 +350,66 @@ export async function runQuest(
     //           LLM 规划的动作名不能掩盖真正的执行工具（反之亦然）。
     const toolAccess: "read" | "write" =
       preset.tools.find((tool) => tool.name === step.tool)?.access === "read" ? "read" : "write";
-    const views: JudgeInput[] = [{
+    const views: JudgeView[] = [{
       object: { type: step.objectType, id: step.objectId }, action: step.action, effect: toolAccess,
       params: step.params, before: step.before, after: step.after, context: step.context,
     }];
     if (step.tool && step.tool !== step.action) {
+      /**
+       * 执行真相视图（第二视图）：**真实工具 × 步骤声明的对象**，标 `failClosed: true`。
+       * 它承担红队复核要求的那条保证：真正执行的工具没有被任何规则覆盖时，不能被语义视图的
+       * auto 命中冲淡（T-113：action=publish_article 命中 auto，真实工具 ai_task.emit 无规则）。
+       *
+       * 对象类型沿用 `step.objectType` 而不是派生类型——判定器的 `actionMatches` 本来就支持
+       * 命名空间后缀扩展（规则 `price.adjust` 命中真实工具 `pms.price.write`，实测确认），
+       * 因此"声明对象 + 真实工具动作"才是能与规则词表对齐的真相视图。
+       */
       views.push({
         object: { type: step.objectType, id: step.objectId }, action: step.tool, effect: toolAccess,
         params: step.params, before: step.before, after: step.after, context: step.context,
+        failClosed: true,
       });
+      /**
+       * 第三视图：按**工具名前缀**派生对象视图（与默认规划器 `safeObjectType(tool.name)` 同口径）。
+       * 2026-09-24 修复（P 域实测）：LLM 规划器会自造对象标识（如 geo_article），而围栏规则按
+       * 声明对象（content / geo_content…）与动词族编写 → 语义视图与工具视图都用自造对象类型时必然全不命中，
+       * 写步骤一律落 default review（实测 T-104..T-107 全挂）。补上派生视图后，已声明工具（如 content.*）
+       * 能被对应规则正常命中；未命中任何视图时仍按 default fail-closed。
+       *
+       * 视图角色（2026-09-29 修口）：派生对象类型是**启发式标签**（`pms.price.write` → `price`），
+       * 只能做加严——命中规则就参与取最严，**未命中不回落 default**。否则只要工具名的命名空间与
+       * 步骤声明对象不同名，就会把已声明工具的正常步骤一律推成 review（本轮实测：hotel 调价步骤
+       * `room_price × pms.price.write` 命中 R1 auto，却被派生视图 `price` 未命中拖成 pending_review，
+       * `packages/runtime/src/runtime.test.ts` 的 3 步自动执行用例直接红）。
+       * 真正兜底的 fail-closed 由上面第二视图承担，语义不变。
+       */
+      const toolObjectType = safeObjectType(step.tool);
+      if (toolObjectType && toolObjectType !== step.objectType) {
+        views.push({
+          object: { type: toolObjectType, id: step.objectId }, action: step.tool, effect: toolAccess,
+          params: step.params, before: step.before, after: step.after, context: step.context,
+        });
+      }
     }
-    const verdict = views.length === 1 ? judge(views[0]!, rules, defaultLevel) : judgeViews(views, rules, defaultLevel);
+    const rawVerdict = views.length === 1 ? judge(views[0]!, rules, defaultLevel) : judgeViews(views, rules, defaultLevel);
+
+    /**
+     * W-01（2026-09-29 二次修复，来源：WorkLoom-growth 第三方独立验收；基座 T-2026-0929-0005）：
+     * 写步骤若**全部 block 都来自求值异常**（典型：缺 before/after 撞上 `abs(after.price-before.price)/before.price`
+     * 这类算术型 when），说明缺的是**数据**、不是违了围栏——按 D27「宁可挂起，不误放」降级为强制人审，
+     * 不再把"档案缺字段"误报成"围栏熔断 + 任务已暂停"（客户在 UI 上看到红条"求值异常→block"，且连人审入口都没有）。
+     *
+     * 边界（红线不动）：只要有任意一条规则是**真判 block**（impacts 里的 blocked 多于求值异常数），
+     * 熔断语义原样保留；求值异常本身仍进 rule_impact 留痕，不做静默降级。
+     */
+    const blockedImpacts = rawVerdict.impacts.filter((impact) => impact.result === "blocked").length;
+    const fenceUnevaluable = toolAccess === "write"
+      && rawVerdict.level === "block"
+      && rawVerdict.evalErrors.length > 0
+      && blockedImpacts === rawVerdict.evalErrors.length;
+    const verdict = fenceUnevaluable
+      ? { ...rawVerdict, level: "review" as const, triggeredBy: [] as string[] }
+      : rawVerdict;
 
     await updateThread(app, scope, threadId, { current_action: step.label });
 
@@ -377,7 +426,7 @@ export async function runQuest(
           context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
           object: { type: step.objectType, id: step.objectId },
           decision: {
-            action: step.action, step_id: step.stepId, effect: effectOf(step.tool), params: step.params,
+            action: step.action, tool: step.tool, step_id: step.stepId, effect: effectOf(step.tool), params: step.params,
             basis: [`熔断：${verdict.triggeredBy.join("、")}`],
             ...(prefUsageRecorded ? {} : { memory_refs: preferenceMemoryRefs(prefs) }),
           },
@@ -416,8 +465,15 @@ export async function runQuest(
           context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
           object: { type: step.objectType, id: step.objectId },
           decision: {
-            action: step.action, step_id: step.stepId, effect: effectOf(step.tool), params: step.params,
-            basis: [`越围栏挂起：${verdict.triggeredBy.join("、")}`],
+            action: step.action, tool: step.tool, step_id: step.stepId, effect: effectOf(step.tool), params: step.params,
+            basis: [
+              // W-01：求值异常降级过来的挂起要说清"为什么"，不能让客户以为是越了围栏
+              fenceUnevaluable
+                ? `围栏无法求值（缺参数）→ 一律人工裁决：${verdict.evalErrors.slice(0, 3).join("；")}`
+                : (verdict.triggeredBy.length
+                  ? `越围栏挂起：${verdict.triggeredBy.join("、")}`
+                  : "越围栏挂起：写类动作无规则命中 → default_level=review"),
+            ],
             ...(prefUsageRecorded ? {} : { memory_refs: preferenceMemoryRefs(prefs) }),
           },
           rule_impact: verdict.impacts,
@@ -433,10 +489,21 @@ export async function runQuest(
         const rangeValue = Number(step.context?.autonomy_range_value);
         const capKey = typeof step.context?.autonomy_cap_key === "string" ? step.context.autonomy_cap_key : undefined;
         const amount = Number(step.context?.autonomy_amount);
+        // 价格类步骤：把 before（基准价）与 params（调价后价）交给路由，越带自动上浮董事长
+        const stepBefore = (typeof step.before === "object" && step.before !== null ? step.before : {}) as Record<string, unknown>;
+        const stepAfter = (typeof step.after === "object" && step.after !== null ? step.after : {}) as Record<string, unknown>;
+        const afterPrice = Number.isFinite(Number(stepAfter.price)) ? Number(stepAfter.price) : Number(step.params.price);
+        const basePrice = Number.isFinite(Number(stepBefore.price))
+          ? Number(stepBefore.price)
+          : Number((step.params as Record<string, unknown>).base_price);
+        const priceCtx = Number.isFinite(afterPrice) && Number.isFinite(basePrice)
+          ? { afterPrice, basePrice, ...(typeof step.context?.autonomy_band_key === "string" ? { bandKey: step.context.autonomy_band_key } : {}) }
+          : undefined;
         const tier: ApprovalTier = routeTier(charter, {
           action: step.action, params: step.params,
           rangeCtx: { key: rangeKey, value: Number.isFinite(rangeValue) ? rangeValue : undefined },
           amountCtx: { amount: Number.isFinite(amount) ? amount : undefined, capKey },
+          ...(priceCtx ? { priceCtx } : {}),
         });
         await c.query(
           `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
@@ -444,6 +511,16 @@ export async function runQuest(
            ON CONFLICT (event_id, channel) DO NOTHING`,
           [aprId, scope.tenantId, scope.workspaceId, ev.eventId,
             JSON.stringify({
+              /**
+               * 关卡事实（2026-09-24 补）：UI/巡检要按"这是不是步骤级人审关卡"筛选，
+               * 而不能按 LLM 自造的动作名猜——实测 `publish_article` 这种自造名不在任何
+               * 命名白名单里，任务页会把**真实待放行**的关卡卡过滤掉（人看不到、放不了行）。
+               * 这里显式落 gate/tool/rule_ids/step_id，前端按 gate=true 判定。
+               */
+              gate: true,
+              tool: step.tool,
+              step_id: step.stepId,
+              rule_ids: verdict.impacts.map((i) => i.rule_id),
               before: step.before ?? null,
               after: step.params,
               action: step.action,
@@ -452,8 +529,20 @@ export async function runQuest(
               autonomy_range_value: Number.isFinite(rangeValue) ? rangeValue : undefined,
               autonomy_cap_key: capKey,
               autonomy_amount: Number.isFinite(amount) ? amount : undefined,
+              // CEO 队列据此还原价格上下文（无则按"无判据"保守上浮，不猜价格）
+              ...(priceCtx ? { autonomy_band_key: priceCtx.bandKey, base_price: priceCtx.basePrice } : {}),
               irreversible: step.context?.irreversible === true,
               affected_domains: Array.isArray(step.context?.affected_domains) ? step.context.affected_domains : [],
+              /**
+               * W-01：求值异常降级来的挂起必须在审批卡上写明"缺参数"，否则客户只看到一张
+               * "越围栏"卡却不知道缺什么（P2 审批卡渲染 snapshot.warning / params_incomplete）。
+               */
+              ...(fenceUnevaluable
+                ? {
+                  params_incomplete: true,
+                  warning: `围栏无法求值（缺参数，已按人工裁决而非熔断处理）：${verdict.evalErrors.slice(0, 3).join("；")}。请补齐参数或驳回。`,
+                }
+                : {}),
               expires_at: new Date(Date.now() + 24 * 3600e3).toISOString(),
             }),
             tier],
@@ -483,13 +572,24 @@ export async function runQuest(
         context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
         object: { type: step.objectType, id: step.objectId },
         decision: {
-          action: step.action, step_id: step.stepId, effect: effectOf(step.tool), params: step.params, before: step.before,
+          /**
+           * `tool`：真正执行的工具名（2026-09-24 红队复核补）。LLM 规划的动作名（action）可以是
+           * 自造词（实测 T-113：action=publish_article 而实际工具是内部的 ai_task.emit），
+           * 只留 action 会让审计误读成"对外发布被自动放行"；工具名入账后判定链可复核。
+           */
+          action: step.action, tool: step.tool, step_id: step.stepId, effect: effectOf(step.tool), params: step.params, before: step.before,
           after: { ...(typeof step.after === "object" && step.after !== null ? step.after as Record<string, unknown> : {}), result: out.result },
           basis: approvalRef ? [`经审批 ${approvalRef} 批准执行（E3.3 恢复闭环）`] : undefined,
           ...(prefUsageRecorded ? {} : { memory_refs: preferenceMemoryRefs(prefs) }),
         },
         rule_impact: verdict.impacts,
-        receipt: verified ? out.receipt : undefined, // 无回执=未核实（E3.7），不写 receipt 位
+        /**
+         * E3.7「无回执=未核实」要**写 receipt 位并标 synced:false**，不能整个字段省略：
+         * 省略会让下游无法区分「字段缺失（数据缺陷）」与「如实标注未核实」，真机验收的
+         * 五元完整性检查正是把 3 条 creative.reedit 判成缺字段（2026-09-19 复盘）。
+         * 语义不变：synced 只在真回执到位时为 true，未核实一律 false。
+         */
+        receipt: { ...out.receipt, synced: verified },
         model_trace: { model_id: input.modelId ?? (simulated ? "simulated-runtime" : "runtime-adapter"), tier: "standard", window: undefined, credits: 1 },
       });
       if (!prefUsageRecorded) {
