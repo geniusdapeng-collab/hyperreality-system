@@ -156,14 +156,33 @@ export function judgeSubCall(input: JudgeInput, rules: RuntimeRule[], defaultLev
 }
 
 /**
- * 多视图判定（HP-02）：同一次执行可能同时有「语义动作名」（如 price.adjust）与
- * 「工具名」（如 pms.price.write）两个标识，规则词表可能命中其一。对每个视图分别判定，
- * 取**最严**结论（block > review > auto）并合并留痕——避免 LLM 规划出的动作名绕开按工具名
- * 编写的规则，也避免规则按语义动词编写时工具名视图漏判。
+ * 多视图判定（HP-02）：同一次执行可能同时有「语义动作名」（LLM 规划，如 price.adjust / publish_article）
+ * 与「工具名」（真正执行，如 pms.price.write / ai_task.emit）多个标识，规则词表可能命中其一。
+ * 对每个视图分别判定，取**最严**结论（block > review > auto）并合并留痕——避免 LLM 规划出的动作名
+ * 绕开按工具名编写的规则，也避免规则按语义动词编写时工具名视图漏判。
+ *
+ * 视图按角色分两类（2026-09-24 红队复核收敛，取代"命中任一视图即忽略其余 default"的粗口径）：
+ *  · **执行真相视图**（`failClosed: true`：工具名 / 由工具名派生的对象类型）：未命中任何规则时
+ *    **保留** default_level 的 fail-closed 语义。真正执行的工具没有被任何规则覆盖时，
+ *    不能被语义视图的 auto 命中冲淡——否则"未声明工具 + 已声明动作名"会被静默放行。
+ *  · **标签视图**（未标注：LLM 自造的动作名/对象）：**只做加严**——命中规则才参与取最严，
+ *    未命中不回落 default。否则"动作名由 LLM 自造"这一件事就足以把已声明工具的正常内部步骤
+ *    一律推成 review（P 域实测 T-104..T-107 全挂：`写类动作无规则命中 → default_level=review`）。
+ *  · 一个 failClosed 视图都没有时退化为"全部视图取最严"（等价单视图 judge 的 default 口径）。
  */
-export function judgeViews(inputs: JudgeInput[], rules: RuntimeRule[], defaultLevel: FenceLevel): JudgeVerdict {
-  const verdicts = inputs.map((input) => judge(input, rules, defaultLevel));
-  const level = verdicts.reduce<FenceLevel>(
+export interface JudgeView extends JudgeInput {
+  /** 该视图是"执行真相"（工具名/工具前缀派生对象）：未命中规则时保留 fail-closed 的 default_level */
+  failClosed?: boolean;
+}
+
+export function judgeViews(inputs: JudgeView[], rules: RuntimeRule[], defaultLevel: FenceLevel): JudgeVerdict {
+  const rows = inputs.map((input) => ({ input, verdict: judge(input, rules, defaultLevel) }));
+  const verdicts = rows.map((r) => r.verdict);
+  const decisive = rows
+    .filter((r) => r.verdict.impacts.length > 0 || r.verdict.evalErrors.length > 0 || r.input.failClosed)
+    .map((r) => r.verdict);
+  const pool = decisive.length > 0 ? decisive : verdicts;
+  const level = pool.reduce<FenceLevel>(
     (acc, v) => (LEVEL_RANK[v.level] > LEVEL_RANK[acc] ? v.level : acc), "auto");
   const seen = new Set<string>();
   const impacts: RuleImpact[] = [];

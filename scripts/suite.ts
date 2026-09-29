@@ -3782,6 +3782,76 @@ z("知识库事实：ask 答案必须含知识内容，不被通用统计挤掉"
   assert(answer.length <= ASK_ANSWER_MAX_CHARS, `GR-09 硬闸仍须守住（实际 ${answer.length} 字）`);
 });
 
+z("缺参写步骤：围栏求值异常必须降级人工裁决，不得假熔断", async () => {
+  /**
+   * 与 geo 工作区同构：写步骤缺 before/after（行业规划器在档案无价带时"宁可不给数"），
+   * 命中**算术型 when** → 旧口径按 E2.1「宁可错杀」判 block → 客户在 UI 上看到的是
+   * "围栏熔断 + 任务已暂停"，且没有人工裁决入口（第三方实拍实证 W-01）。
+   *
+   * 跨仓可移植性（2026-09-29 二次修正）：不依赖任何仓的 bundle 内容/岗位命名——
+   * 探针规则由用例**自注入**（owner 连接写 fence_rules，用完即删），岗位取本仓工作区真实存在的 preset_key，
+   * 工具由规划器从该 preset 的已装配工具里挑。panda 实测：本仓无 pricing-agent，旧写法直接红。
+   */
+  /**
+   * 岗位必须是**真有写工具**的那个：本用例断言的是"写步骤缺参 → 降级人审"，
+   * 若挑到全是只读工具的岗位（实测 panda 的首个岗位 competitor-agent 就是），
+   * 判据按设计不生效（读步骤不强制人审），用例会以假红收场。
+   */
+  const { assemblePreset } = await import("@workloom/runtime");
+  const zPresetKeys = (await zQuery<{ preset_key: string }>(
+    `SELECT DISTINCT preset_key FROM agents WHERE workspace_id=$1 AND preset_key IS NOT NULL ORDER BY preset_key`,
+    [zScope.workspaceId])).rows.map((row) => row.preset_key);
+  assert(zPresetKeys.length > 0, "本仓工作区应至少有一个已装配岗位（种子未跑？）");
+  let zPreset: string | undefined;
+  for (const key of zPresetKeys) {
+    try {
+      const preset = await assemblePreset(app, zScope, { workspaceId: zScope.workspaceId, presetKey: key, goal: "调价" });
+      if (preset.tools.some((tool) => tool.access !== "read")) { zPreset = key; break; }
+    } catch {
+      /* 该岗位在本仓装不出来：跳过 */
+    }
+  }
+  assert(zPreset, "本仓应至少有一个含写工具的岗位（否则 W-01 判据无从验证）");
+  const probeRuleId = `Z-PROBE-ARITH-${SFX}`;
+  const probeObject = "z_probe_room_price";
+  const probeAction = "z_probe_write";
+  const ownerUrl = process.env.DATABASE_URL;
+  assert(ownerUrl, "Z 域需要 DATABASE_URL（owner 连接）注入探针规则");
+  const owner = new pg.Client({ connectionString: ownerUrl });
+  await owner.connect();
+  let tid = "";
+  try {
+    await owner.query(
+      `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
+       VALUES ($1,$2,'v1',$3,'Z 域探针：算术型 when（缺参求值异常）','auto',
+               jsonb_build_object('object_types', jsonb_build_array($4::text), 'actions', jsonb_build_array($5::text),
+                                  'when', 'abs(after.price - before.price) / before.price <= 0.08'),
+               '{}'::jsonb, false, 'active', 'suite')`,
+      [probeRuleId, probeRuleId, zScope.workspaceId, probeObject, probeAction],
+    );
+    tid = await zThread();
+    const planMissingData: QuestPlanner = (_goal, preset) => {
+      const writeTool = preset.tools.find((tool) => tool.access !== "read") ?? preset.tools[0]!;
+      return [{
+        stepId: "s1", action: probeAction, objectType: probeObject, tool: writeTool.name,
+        params: { price: 520 }, label: "缺基准价写步骤（无 before/after）",
+      }];
+    };
+    const r = await runQuest(app, gw, zScope, {
+      threadId: tid, goal: "把主打房型调价到 520 元", presetKey: zPreset!, fallbackPlanner: planMissingData,
+    });
+    eq(r.status, "pending_review", "求值异常不得按熔断处理（必须挂起人审，而不是 paused）");
+    const snap = await zQuery<{ snapshot: { params_incomplete?: boolean; warning?: string } }>(
+      `SELECT snapshot FROM approvals WHERE approval_id=$1`, [r.pendingApprovalId!]);
+    eq(snap.rows[0]?.snapshot.params_incomplete, true, "审批卡须带参数不完整警示");
+    assert((snap.rows[0]?.snapshot.warning ?? "").includes("无法求值"), "警示须说明是缺参数导致围栏算不出来");
+  } finally {
+    await owner.query(`DELETE FROM fence_rules WHERE rule_id=$1 AND workspace_id=$2`, [probeRuleId, zScope.workspaceId]).catch(() => undefined);
+    if (tid) await zQuery(`DELETE FROM threads WHERE id=$1`, [tid]).catch(() => undefined);
+    await owner.end();
+  }
+});
+
 z("高危批量守卫：l4_chairman 审批（快照无 high_risk）也必须逐条", async () => {
   /**
    * 与"快照打标"用例的区别：这里走的是**非 loop.ts 的审批来源**（种子/CEO 队列/技能下发同构），
