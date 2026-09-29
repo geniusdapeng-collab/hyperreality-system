@@ -27,6 +27,7 @@ import YAML from "yaml";
 // 种子 100 条事件用生产验证器重算全部不符（链上两种算法混杂）
 // P0-3 续：种子 ID 走 E-SEED- 前缀，zod 经 safeParseReplayAwareEvent 占位缝校验
 import { eventHash, safeParseReplayAwareEvent } from "@workloom/base/workdata";
+import { alignReadableIdSequences } from "@workloom/base/workdata";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -717,6 +718,11 @@ async function main(): Promise<void> {
   // —— 事件写入：切 gateway 角色（F1.2 唯一可 INSERT biz_events）
   // L2：GUC 一律 is_local=true 且包在显式事务内（事务提交即失效，不留会话级残留）；
   // 后续 approvals/night_runs/org_memory/C 端运行态等 gateway 段写入同在此事务内。
+    // GR-02（2026-09-29 第二次修复，基座 T-2026-0929-0003）：手写号段写入方收尾对齐号源。
+  // 取号函数只做 nextval（0050 把 max() 读回取号函数导致并发撞号且不收敛）；
+  // "序列落后于手写 id"的问题必须在**写入方**解决——只抬不降、幂等，可重复执行。
+  const seqFloor = await alignReadableIdSequences(owner);
+  console.log(`✓ 可读号源对齐：threads→${seqFloor.threads}`);
   await owner.end();
   const gw = new pg.Client({ connectionString: GATEWAY_URL });
   await gw.connect();
