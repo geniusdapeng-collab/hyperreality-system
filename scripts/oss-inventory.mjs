@@ -809,6 +809,22 @@ function gitRemoteSlug(root) {
   }
 }
 
+/**
+ * 仓库标识行的大小写归一（**仅用于比较**，不写回文档）。
+ *
+ * 清单头「> 仓库：<slug>」取自本地克隆 `origin` 的字面大小写；而 CNB 的仓库路径
+ * **大小写不敏感**（`workloom-growthmatrix` 与 `workloom-Growthmatrix` 指向同一个仓）。
+ * 于是同一份代码，用非规范大小写的 URL 克隆后生成的清单，会与 CI（按规范路径检出）
+ * 复算的清单只差这一行大小写，被判成"漂移"而红灯（回归：2026-09-29 growthmatrix
+ * main static-gate）。这里只吸收大小写差异；换仓/改名的真实漂移仍会被抓出。
+ */
+export function normalizeRepoIdentityForCompare(text) {
+  return String(text ?? "").replace(
+    /^(> 仓库：)(\S+)/mu,
+    (_match, prefix, slug) => `${prefix}${slug.toLowerCase()}`,
+  );
+}
+
 export function generateDocument(root) {
   const registry = loadRegistry(root);
   const state = loadState(root);
@@ -865,7 +881,9 @@ function main() {
       console.error(`✗ 缺少清单文档 ${DOC_FILE}：请运行 node scripts/oss-inventory.mjs --write`);
       process.exit(1);
     }
-    if (existing !== generated.content) {
+    if (
+      normalizeRepoIdentityForCompare(existing) !== normalizeRepoIdentityForCompare(generated.content)
+    ) {
       console.error(
         `✗ 开源组件清单与仓库事实不一致（${DOC_FILE}）：\n  依赖/登记表已变化，请运行 pnpm oss:watch（或 node scripts/oss-inventory.mjs --write）后一并提交。`,
       );
