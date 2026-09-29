@@ -1,15 +1,15 @@
 {
   "baseRepo": "workloom-ai/workloom-im",
   "lastSyncedBaseSha": "7735969ca5b17d8787233ed40bac941cb00c8ce3",
-  "lastSyncAt": "2026-09-29T01:04:42.261Z",
-  "filesTouched": 2,
-  "lastRequiredAssetsBaseSha": "7735969ca5b17d8787233ed40bac941cb00c8ce3",
-  "lastSyncMode": "full",
+  "lastSyncAt": "2026-09-29T11:02:28.323Z",
+  "filesTouched": 9,
+  "lastRequiredAssetsBaseSha": "64f4ecfb6bb12d1d0dafc31decaacd83f3acb9af",
+  "lastSyncMode": "required-only",
   "pathPrefix": ".",
   "requiredRootAssetsSha256": {
     "WORKLOOM_PRODUCT_CONTEXT.md": "cea905be2e1b98a33dcfdda60ff78018a0c85ffa65172deffb4956455b90a294",
     "AI-AUTONOMOUS-OPERATIONS.md": "7217ea891d3d71e57e667f9848ea248f67d86f52abf744ad028e1fc6d882aa59",
-    "docs/DEVELOPMENT-PROTOCOL.md": "9d9f11926f8dec06e42d9368bbf04e6aab04a030cbeb21b99369cf8b556efede",
+    "docs/DEVELOPMENT-PROTOCOL.md": "79d163e368a755014fe10a85ca60923154e9d0e1122c36b2563cf0dfcffa7de5",
     "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md": "4c495d8b4c82ad8ef0694e376246b883f1c76313b10433c8ef5135aceb1d82db",
     "docs/acceptance/checklist.v1.json": "339841bd57f881ab58f3a1b7d2c969a83e62f95e477fd252b97703c4dd15707a",
     "docs/acceptance/checklist.v2.json": "3a1993d3b539daf78ce1fa1f8af214c633d74795f64ef6d00d0134ee3cbfcbcf",
@@ -18,6 +18,10 @@
     "docs/acceptance/report-template.md": "3ee38bf4e8c3082db11cc47ef0385f31f0ec24470311a807fa5f246f9600a6d3",
     "docs/acceptance/profile.example.json": "488f7e472106dab75005251c4f9206e81f34409cdd0cefbd34eb3a3e77b054ed",
     "docs/acceptance/outcome-suite.example.yaml": "9110d0b7092130c2cf067221e37f7d66bd4e4271ceff2ada7299205197fa9060",
+    "docs/MINE-CLEAR-DELIVERY-SPEC.md": "8b6bb3696edaa70772cdfd52498492ab5bc20a25a878bfd02b34175eac196deb",
+    "docs/mine-clear/ledger.schema.json": "42757cfb258e87436ea4144372ec29bd4cd55dfe86af81fc2397df7fa6cfe33f",
+    "docs/mine-clear/report-template.md": "ca499540e0f4238e5d131ed4569bad7b3aaadb3801bfbd994fa9ba2a55405218",
+    "docs/mine-clear/prompt-pack.md": "f77f317a000fb33658df7ee5f6b63f3f451746a91700e946c772c5965b3f2e3f",
     "scripts/acceptance/README.md": "6c1f0641d9537097aec3bb01d376fdde79b5bb76ff748eed2ee24d1a448ba2aa",
     "scripts/acceptance/matrix.mts": "4bdc80241c0f662566fac294dbe23f51d4fad761a19fb623da8cd166ce934212",
     "scripts/acceptance/ui-probe.mjs": "7bffff82e5c219ff465d44f383d5186293c397a9ec6399034bcddcd50ab74e03",
@@ -40,7 +44,10 @@
     "scripts/acceptance/lib/live/providers.mjs": "de318cc6992f583caf819ca9e2b1f29954afd843ed3b6ea212ad63440b9653f1",
     "scripts/acceptance/lib/live/stub-provider.mjs": "c06a794b557e22aa45f7012efed587e21991370b61586f5cdeeb5137a4f003e8",
     "scripts/acceptance/live.mjs": "f7a33446efe4f97a10077173c5a6a73a8fbb391327f0775a1a6f3a36cb6b922d",
+    "scripts/delivery/README.md": "a51d9df5c65cada635981782d89138ebce3f1cbbde9f0615fdbc68bc110695bd",
+    "scripts/delivery/mine-clear.mjs": "c314bfdb9c3310ed1f14976e46e9ddbf612bfde9f0938fabfcdb9b164fa43c7f",
+    "scripts/delivery/mine-clear.test.mjs": "4b138b29aac10e0c49725f6b1184a0e29e7e6174a61db0d01d5081733036be04",
     ".github/workflows/base-sync-heartbeat.yml": "584bd0345fa6b55ed75100d03b5ad07a28d66a1aa7e7bc088ae594084ecd77a2",
-    "AGENTS.md#managed-section": "e44bef55f5b3b5ae2e0217575e3b950d46ff782fb47e7389eab5e713b958d970"
+    "AGENTS.md#managed-section": "fadab7fc02b6bb819dee0114f671c4d7f29b1ea2024a476e6d8e2ca731885428"
   }
 }

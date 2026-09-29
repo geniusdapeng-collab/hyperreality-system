@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workloom.mine-clear/ledger@1",
+  "title": "WorkLoom 排雷式交付台账（MCD v1.0）",
+  "description": "问题卡 + 修复卡 + 断言 + 证据的唯一机器可读事实源。执行器 scripts/delivery/mine-clear.mjs 的 gate/handoff 以此为硬闸；规范正文见 docs/MINE-CLEAR-DELIVERY-SPEC.md。",
+  "type": "object",
+  "required": ["schema", "task_id", "repo", "created_at", "baseline", "invariants", "cards"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "workloom.mine-clear/ledger@1" },
+    "task_id": {
+      "type": "string",
+      "pattern": "^T-\\d{4}-\\d{4}-\\d{4}$",
+      "description": "CNB 任务卡号（docs/DEVELOPMENT-PROTOCOL.md §5）"
+    },
+    "repo": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "issue": {
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "description": "如 workloom-ai/workloom-im" },
+        "number": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "baseline": {
+      "type": "object",
+      "description": "三基线：审计 / 修复 / 验收。任何阶段开始前显式对齐（规范 §1.2）",
+      "properties": {
+        "audit": { "$ref": "#/$defs/baselineStamp" },
+        "repair": { "$ref": "#/$defs/baselineStamp" },
+        "acceptance": { "$ref": "#/$defs/baselineStamp" }
+      },
+      "additionalProperties": true
+    },
+    "environment": {
+      "type": "object",
+      "description": "环境档位；local-preview 不得写成生产实测（RDAS v3.1 §0）",
+      "properties": {
+        "kind": { "enum": ["local-preview", "client-runtime", "deployed", "sandbox", "unknown"] },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "invariants": {
+      "type": "array",
+      "description": "本次排雷要守的系统不变量（AGENTS.md §4 十二条 / WORKLOOM_PRODUCT_CONTEXT.md §8）",
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string", "minLength": 4 },
+          "source": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "cards": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/card" }
+    },
+    "gates": {
+      "type": "array",
+      "description": "门禁与证据脚本的实际执行记录",
+      "items": {
+        "type": "object",
+        "required": ["name", "command", "result"],
+        "properties": {
+          "name": { "type": "string" },
+          "command": { "type": "string" },
+          "result": { "enum": ["pass", "fail", "not-run"] },
+          "evidence": { "type": "string" },
+          "ran_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "handoff": {
+      "type": "object",
+      "properties": {
+        "generated_at": { "type": ["string", "null"], "format": "date-time" },
+        "acceptance_command": { "type": ["string", "null"] },
+        "open_problem_ids": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "baselineStamp": {
+      "type": "object",
+      "properties": {
+        "commit": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "remote": { "type": ["string", "null"] },
+        "fetched_at": { "type": ["string", "null"] },
+        "is_descendant_of_repair": { "type": ["boolean", "null"] },
+        "reverified_problem_ids": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["type", "ref"],
+      "properties": {
+        "type": { "enum": ["code", "log", "db", "http", "ui", "script", "receipt", "doc"] },
+        "ref": {
+          "type": "string",
+          "minLength": 3,
+          "description": "code 类必须带 @<commit>（如 apps/server/src/service/x.ts:42@abc1234）；其余为路径 / 查询 / 响应原文位置"
+        },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "assertion": {
+      "type": "object",
+      "required": ["kind", "given", "expect", "command"],
+      "properties": {
+        "kind": { "enum": ["sample", "property"] },
+        "given": { "type": "string", "minLength": 1, "description": "输入 / 前置条件" },
+        "expect": { "type": "string", "minLength": 1, "description": "可判定的预期（禁止『优化/提升/加强』类不可验收措辞）" },
+        "command": { "type": "string", "minLength": 3, "description": "可运行的通过/失败信号" },
+        "last_result": { "enum": ["pass", "fail", "not-run"] },
+        "evidence": { "type": "string", "description": "断言输出原文路径（outputs/mine-clear/<任务号>/evidence/...）" }
+      },
+      "additionalProperties": true
+    },
+    "card": {
+      "type": "object",
+      "required": ["id", "kind", "title", "state", "evidence", "assertions"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^MC-\\d{3,}$" },
+        "kind": { "enum": ["problem", "fix"] },
+        "level": { "enum": ["L1", "L2", "L3", "L4"], "description": "§1 四层问题模型" },
+        "severity": { "enum": ["P0", "P1", "P2"], "description": "P0=突破核心不变量/安全；P1=功能错误；P2=体验/健壮性" },
+        "batch": {
+          "enum": [0, 1, 2, 3],
+          "description": "修复批次：0 止血 / 1 地基 / 2 正确性 / 3 体验"
+        },
+        "title": { "type": "string", "minLength": 4 },
+        "state": {
+          "enum": ["open", "fixed", "verified", "unfixed", "covered", "wontfix"],
+          "description": "open=已上账未修；fixed=已修待验证；verified=独立验证通过；unfixed=确认未修复；covered=已被其他提交覆盖；wontfix=明确不做（须写理由）"
+        },
+        "covers": { "type": "array", "items": { "type": "string" }, "description": "修复卡覆盖的问题卡 ID" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" }, "minItems": 1 },
+        "root_cause": {
+          "type": "object",
+          "required": ["file"],
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer", "minimum": 1 },
+            "commit": { "type": "string" },
+            "symbol": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "trigger_path": { "type": "string", "description": "触发路径：什么输入/时序能走到这个坑" },
+        "fix_plan": { "type": "string", "description": "代码级修法（指明改哪个文件哪一段）" },
+        "blast_radius": { "type": "string", "description": "联动地雷推演：此改动改变谁的行为 / 谁依赖被改的文案·字段·顺序" },
+        "conflict_paths": { "type": "array", "items": { "type": "string" }, "description": "冲突面：同文件的其他卡需串行或合并" },
+        "assertions": { "type": "array", "items": { "$ref": "#/$defs/assertion" }, "minItems": 1 },
+        "regression": {
+          "type": "object",
+          "required": ["command"],
+          "properties": {
+            "command": { "type": "string" },
+            "evidence": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "rollback": { "type": "string" },
+        "fixed_by": { "type": ["string", "null"], "description": "执行修复的会话/角色标识" },
+        "verified_by": { "type": ["string", "null"], "description": "独立验证者标识，必须不同于 fixed_by（规范纪律 7）" },
+        "verified_at": { "type": ["string", "null"], "format": "date-time" },
+        "verification_evidence": { "type": "string", "description": "独立验证的断言输出路径" },
+        "waiver": {
+          "type": ["object", "null"],
+          "description": "豁免：仅在无法做到角色分离时使用，必须写明理由与批准来源",
+          "properties": {
+            "reason": { "type": "string" },
+            "approved_by": { "type": "string" }
+          },
+          "required": ["reason"],
+          "additionalProperties": true
+        },
+        "covered_by": { "type": ["string", "null"], "description": "state=covered 时的覆盖提交（含 commit）" },
+        "notes": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "problem" } }, "required": ["kind"] },
+          "then": {
+            "required": ["level", "severity", "root_cause", "trigger_path"],
+            "properties": {
+              "root_cause": {
+                "required": ["file", "commit"],
+                "properties": { "commit": { "type": "string", "minLength": 7 } }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "fix" } }, "required": ["kind"] },
+          "then": {
+            "required": ["covers", "fix_plan", "rollback", "batch", "conflict_paths", "blast_radius"]
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "verified" } }, "required": ["state"] },
+          "then": { "required": ["verified_by", "verified_at", "verification_evidence"] }
+        },
+        {
+          "if": { "properties": { "state": { "const": "covered" } }, "required": ["state"] },
+          "then": { "required": ["covered_by"] }
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}
