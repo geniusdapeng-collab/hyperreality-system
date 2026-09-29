@@ -192,6 +192,14 @@ serve({ fetch: app.fetch, port, hostname: host }, (info) => {
       if (industries.length > 0) console.log(`行业 ask 事实面已装载：${industries.join("、")}`);
     })
     .catch((err) => console.error("[ask-facts] 装载失败（不阻塞启动）", err instanceof Error ? err.message : String(err)));
+  /**
+   * 注：X-04（客户知识库接进 ask 事实面）与行业规划器注册都不在这里——
+   * 它们要 import 行业仓保留资产（`service/kb.ts` / `industry/**`），而本文件属于
+   * **基座公共分发面**（sync/base-scope.json 的 include），公共面到行业资产之间
+   * 不允许新增跨域相对依赖（base-sync 依赖闭包门禁会 fail）。
+   * 两类接线改由行业仓保留的 `apps/server/src/trpc/router.ts` 在模块加载时注入，
+   * 见该文件底部的「启动期接线」段。
+   */
 });
 
 // 技能保鲜环 · 夜班窗口自动同步（机制即自动，客户零操作）：

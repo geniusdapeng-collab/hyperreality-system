@@ -38,7 +38,6 @@ export function registerIndustryQuestPlanner(factory: IndustryQuestPlannerFactor
   industryPlannerFactory = factory;
 }
 
-
 /** 指挥层兜底岗位（Bundle 清单不可用/未命中时） */
 const DISPATCH_PRESET_FALLBACKS = ["company-ceo", "group-ceo", "growth-lead", "director"] as const;
 
