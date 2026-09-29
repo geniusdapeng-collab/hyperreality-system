@@ -3630,10 +3630,43 @@ const zScope = await (async () => {
   }
 })();
 
+/**
+ * 本仓工作区下的查询/写入：RLS 上下文必须跟随 zScope——
+ * 沿用 suite 的 scope 会在"本仓没有该工作区"的仓里被 RLS 拒（panda 实测：row-level security policy for table "threads"）。
+ */
+async function zQuery<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<pg.QueryResult<T>> {
+  const c = await app.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.workspace_id', $1, true)", [zScope.workspaceId]);
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [zScope.tenantId]);
+    const r = await c.query<T>(sql, params);
+    await c.query("COMMIT");
+    return r;
+  } catch (err) {
+    await c.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    c.release();
+  }
+}
+
+/** 本仓工作区下的事件（不复用 mkEvent：它用 suite 的 scope 写事件） */
+async function zEvent(action: string): Promise<string> {
+  const r = await gatewayAppend(gw, { ...zScope, actor: { id: "pricing-agent", type: "agent", fenceBindings: ["R1"] } }, {
+    who: { type: "agent", id: "pricing-agent", version: "v2.3" },
+    context: { tenant_id: zScope.tenantId, workspace_id: zScope.workspaceId, time: new Date().toISOString() },
+    object: { type: "suite", id: `suite-z-${SFX}-${Math.random().toString(36).slice(2, 8)}` },
+    decision: { action },
+    rule_impact: [],
+  });
+  return r.eventId;
+}
+
 /** 本仓工作区内的临时线程（不复用 suite 的 mkThread：它钉死 ws-yunqi，panda 等仓无此工作区） */
 async function zThread(): Promise<string> {
   const id = `T-z-${SFX}-${Math.random().toString(36).slice(2, 8)}`;
-  await qApp(
+  await zQuery(
     `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
      VALUES ($1,$2,$3,$4,'quest','queued','MEM-001')`,
     [id, zScope.tenantId, zScope.workspaceId, `Z 域线程 ${id}`],
@@ -3655,7 +3688,7 @@ z("号源：并发取号不重号，且撞手写号段时同事务换号不失�
       `SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '[^0-9]', '', 'g'), '')::bigint), 100) AS m
          FROM threads WHERE id ~ '^T-[0-9]+$'`);
     const highId = `T-${Number(highBase.rows[0]!.m) + 500}`;
-    await qApp(
+    await zQuery(
       `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
        VALUES ($1,$2,$3,'号源高水位（套件造）','quest','completed','MEM-001')`,
       [highId, zScope.tenantId, zScope.workspaceId],
@@ -3672,7 +3705,7 @@ z("号源：并发取号不重号，且撞手写号段时同事务换号不失�
      */
     const cur = await qApp<{ last_value: string }>(`SELECT last_value FROM public.thread_no_seq`);
     const takenId = makeReadableId("T", Number(cur.rows[0]!.last_value) + 1);
-    await qApp(
+    await zQuery(
       `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
        VALUES ($1,$2,$3,'号源占位（套件造）','quest','completed','MEM-001')`,
       [takenId, zScope.tenantId, zScope.workspaceId],
@@ -3712,28 +3745,41 @@ z("号源：并发取号不重号，且撞手写号段时同事务换号不失�
     assert(allocated !== takenId, `撞号必须换号（占用 ${takenId}，实得 ${allocated}）`);
     assert(continuedAfterRetry, "换号后同一事务仍可继续写入（未被中止）");
   } finally {
-    if (created.length > 0) await qApp(`DELETE FROM threads WHERE id = ANY($1::text[])`, [created]);
+    if (created.length > 0) await zQuery(`DELETE FROM threads WHERE id = ANY($1::text[])`, [created]);
   }
 });
 
 z("知识库事实：ask 答案必须含知识内容，不被通用统计挤掉", async () => {
+  /**
+   * 纯函数口径（不落库）：X-04 × GR-09 是**组合后**才成立的不变量——
+   * 知识命中必须排在通用统计之前，且 120 字硬闸不能把知识内容吃掉、也不能误报"已截断"。
+   * 不跑真机 ask 是刻意的：各仓工作区与 suite 默认 scope 不同，真机路径会先撞 RLS/FK 而看不到这条不变量
+   * （panda 实测：threads_workspace_id_fkey）。真机端到端由 growth 的 O-05 用例覆盖。
+   */
+  const { mergeKbFacts, composeAskAnswer, ASK_ANSWER_MAX_CHARS } = await import("@workloom/runtime");
   const docId = `doc-suite-${SFX}`;
-  registerAskKbSearch(async () => [
+  // 通用统计刻意造得足够长：旧口径下它们会占满 120 字预算，把知识命中挤掉
+  const baseFacts = {
+    facts: [
+      { label: "近 7 天内容发布", value: "12 次（近 30 天 12 次）" },
+      { label: "近 7 天内容改写", value: "6 次" },
+      { label: "内容排期待执行", value: "0 条" },
+      { label: "近 7 天能见度采集", value: "6 轮" },
+      { label: "近 7 天账号表现", value: "播放量 1.2 万" },
+    ],
+    sources: ["biz_events"],
+  };
+  const merged = mergeKbFacts(baseFacts, [
     { content: "国庆期间全线房源 7.5 折，券后价不低于保底价。", heading: "券后折扣", documentTitle: "国庆促销政策", documentId: docId },
     { content: "客户报暗号「星火」可再减 30 元。", heading: "暗号", documentTitle: "国庆促销政策", documentId: docId },
   ]);
-  try {
-    const tid = await mkThread();
-    const r = await runAsk(app, gw, scope, {
-      threadId: tid, goal: "国庆活动的券后折扣和暗号是什么？", presetKey: "pricing-agent",
-    });
-    // X-04 × GR-09 联动：知识命中必须整体可见（追加在末尾 + 整文硬截 ⇒ 永远被吃掉）
-    assert(r.answer.includes("7.5 折"), `答案须含知识库折扣内容（实际：${r.answer}）`);
-    assert(r.answer.includes("星火"), `答案须含知识库暗号内容（实际：${r.answer}）`);
-    assert(r.answer.includes("知识库·"), "知识命中须标注来源为知识库");
-  } finally {
-    registerAskKbSearch(undefined);
-  }
+  eq(merged.sources[0], `kb:${docId}`, "知识来源必须排在最前（顺序即优先级）");
+  assert(merged.facts[0]!.label.includes("知识库·"), "知识命中必须前置，而不是追加在末尾");
+  const answer = composeAskAnswer("国庆活动的券后折扣和暗号是什么？", merged.facts);
+  assert(answer.includes("7.5 折"), `答案须含知识库折扣内容（实际：${answer}）`);
+  assert(answer.includes("星火"), `答案须含知识库暗号内容（实际：${answer}）`);
+  assert(!answer.includes("已截断"), `知识内容完整时不得标"已截断"（实际：${answer}）`);
+  assert(answer.length <= ASK_ANSWER_MAX_CHARS, `GR-09 硬闸仍须守住（实际 ${answer.length} 字）`);
 });
 
 z("高危批量守卫：l4_chairman 审批（快照无 high_risk）也必须逐条", async () => {
@@ -3741,25 +3787,31 @@ z("高危批量守卫：l4_chairman 审批（快照无 high_risk）也必须逐�
    * 与"快照打标"用例的区别：这里走的是**非 loop.ts 的审批来源**（种子/CEO 队列/技能下发同构），
    * 快照里没有 high_risk 字段、只有权威列 tier —— 旧守卫只看快照，于是这类审批被一键放行。
    */
-  const eventId = await mkEvent("suite.l4.reviewable");
+  const eventId = await zEvent("suite.l4.reviewable");
   const l4 = `apr-l4-${SFX}`;
-  await qApp(
+  await zQuery(
     `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot)
      VALUES ($1,$2,$3,$4,'inapp','pending','l4_chairman',$5)`,
     [l4, zScope.tenantId, zScope.workspaceId, eventId, JSON.stringify({ after: { v: 1 } })],
   );
-  const batch = await batchApprove(app, gw, scope, boss, [l4]);
+  const batch = await batchApprove(app, gw, zScope, boss, [l4]);
   eq(batch.approved.length, 0, "L4 审批不得批量放行");
   eq(batch.skipped.length, 1, "L4 审批被跳过");
   assert((batch.skipped[0]?.reason ?? "").includes("高危"), "跳过原因=高危项须逐条");
   // 超时扫描同口径（L5.4：高危不自动放行）——两处守卫必须共用同一判据
-  await qApp(`UPDATE approvals SET snapshot = snapshot || $2::jsonb WHERE approval_id=$1`,
+  await zQuery(`UPDATE approvals SET snapshot = snapshot || $2::jsonb WHERE approval_id=$1`,
     [l4, JSON.stringify({ expires_at: new Date(Date.now() - 7200e3).toISOString() })]);
-  const sweep = await expireSweep(app, gw, scope);
+  const sweep = await expireSweep(app, gw, zScope);
   assert(sweep.keptHighRisk.includes(l4), "L4 过期不得自动 expired（保留提醒）");
   // 反向：普通项仍可批量（守卫不得误伤常规通道）
-  const ok = await mkApproval();
-  const batch2 = await batchApprove(app, gw, scope, boss, [ok.approvalId]);
+  const okEvent = await zEvent("suite.z.ordinary");
+  const okId = `apr-z-ok-${SFX}`;
+  await zQuery(
+    `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot)
+     VALUES ($1,$2,$3,$4,'inapp','pending',$5)`,
+    [okId, zScope.tenantId, zScope.workspaceId, okEvent, JSON.stringify({ after: { v: 2 } })],
+  );
+  const batch2 = await batchApprove(app, gw, zScope, boss, [okId]);
   eq(batch2.approved.length, 1, "普通项照批");
 });
 
