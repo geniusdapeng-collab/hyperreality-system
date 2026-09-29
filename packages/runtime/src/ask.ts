@@ -268,8 +268,14 @@ export async function webSearchFacts(question: string): Promise<AskFactResult> {
 /** GR-09：回答长度硬闸（超长截断并标注，避免一次性糊屏） */
 export const ASK_ANSWER_MAX_CHARS = 120;
 
-/** mock 口径的确定性合成（数字全真，文案模板） */
-function composeAnswer(question: string, facts: AskFact[]): string {
+/**
+ * mock 口径的确定性合成（数字全真，文案模板）。
+ *
+ * 导出是刻意的（2026-09-29 第二次修复）：GR-09 的 120 字硬闸与"知识命中优先级"是**组合后**才成立的
+ * 不变量，必须能被各仓的套件直接断言（否则只能靠真机跑 ask，跨仓不可移植——panda 等仓的工作区
+ * 与 suite 默认 scope 不同，跑真机 ask 会先撞 RLS/FK 而看不到这条不变量）。
+ */
+export function composeAskAnswer(question: string, facts: AskFact[]): string {
   const lines = facts.map((f) => `· ${f.label}：${f.value}`);
   /**
    * 标题里的问题**必须截断**：GR-09 是 120 字硬闸，标题若跟着用户原话膨胀，
@@ -424,13 +430,13 @@ ${input.goal}
 </question>`;
     try {
       const text = (await input.llmCall(prompt)).trim();
-      if (text) { answer = text; via = "llm"; } else { answer = composeAnswer(input.goal, facts); }
+      if (text) { answer = text; via = "llm"; } else { answer = composeAskAnswer(input.goal, facts); }
     } catch {
-      answer = composeAnswer(input.goal, facts); // 模型异常 → 确定性兜底（不静默：via=rule）
+      answer = composeAskAnswer(input.goal, facts); // 模型异常 → 确定性兜底（不静默：via=rule）
       modelDegraded = true;
     }
   } else {
-    answer = composeAnswer(input.goal, facts);
+    answer = composeAskAnswer(input.goal, facts);
   }
 
   /* ---------- GR-09：三层输出闸门（硬约束 → 事实软校验 → 合成标识） ---------- */
