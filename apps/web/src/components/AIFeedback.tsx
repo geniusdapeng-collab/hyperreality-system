@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { trpc } from "../lib/trpc";
 import { Icon, clientChineseText } from "@workloom/ui";
+import { clientNaturalText } from "../lib/clientText";
 
 const TIER_TEXT: Record<string, string> = {
   L1: "基础能力档",
@@ -67,7 +68,7 @@ export function AIFeedback({ scene, action, prompt, originalText, fromTier = "L2
           ...r,
           text: r.text === null
             ? null
-            : clientChineseText(r.text, "升级回答内容暂时无法显示。"),
+            : clientNaturalText(r.text, "升级回答内容暂时无法显示。"),
         });
         setVoted("down");
       }
@@ -116,7 +117,7 @@ export function AIFeedback({ scene, action, prompt, originalText, fromTier = "L2
               : <span className="rounded bg-amber-500/15 px-1.5 text-amber-300">按倍率实扣</span>}
           </div>
           {upgraded.text ? (
-            <div className="whitespace-pre-wrap text-body text-ink">{clientChineseText(upgraded.text, "升级回答内容暂时无法显示。")}</div>
+            <div className="whitespace-pre-wrap text-body text-ink">{clientNaturalText(upgraded.text, "升级回答内容暂时无法显示。")}</div>
           ) : (
             <div className="text-body text-ink3">
               {upgraded.suggestHuman
@@ -126,7 +127,7 @@ export function AIFeedback({ scene, action, prompt, originalText, fromTier = "L2
           )}
           <details className="mt-1 text-body text-ink3">
             <summary className="cursor-pointer">查看原回答（{tierText(fromTier)}）</summary>
-            <div className="mt-1 whitespace-pre-wrap opacity-70">{clientChineseText(originalText, "原回答内容暂时无法显示。")}</div>
+            <div className="mt-1 whitespace-pre-wrap opacity-70">{clientNaturalText(originalText, "原回答内容暂时无法显示。")}</div>
           </details>
         </div>
       )}

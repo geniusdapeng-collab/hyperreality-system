@@ -30,6 +30,7 @@ import {
   type ReceiptState,
 } from "../../components/hud";
 import { Icon, clientChineseText } from "@workloom/ui";
+import { clientNaturalText } from "../../lib/clientText";
 
 interface ThreadRow {
   id: string; title: string; mode: string; status: string;
@@ -41,15 +42,24 @@ interface Ev {
   who: { type: "human" | "agent" | "system"; id: string; version?: string };
   context: { time: string };
   object: { type: string; id?: string };
-  decision: { action: string; effect?: "read" | "write"; before?: unknown; after?: unknown; basis?: string[] };
+  decision: { action: string; effect?: "read" | "write"; before?: unknown; after?: unknown; basis?: string[]; kind?: string; outcome?: string };
   rule_impact: Array<{ rule_id: string; version: string; result: string }>;
-  receipt?: { synced?: boolean; snapshot_uri?: string };
+  /** GR-15/N-16：receipt.mode 区分「模拟回执」与「真实连接器回执」（假回执不得外观同真回执） */
+  receipt?: { synced?: boolean; snapshot_uri?: string; mode?: "simulated" | "real" };
   model_trace?: { model_id: string; tier?: string; window?: string; credits?: number };
   links?: string[];
 }
 interface ApprovalRow {
   approval_id: string; event_id: string; status: string;
-  snapshot: { summary?: string; before?: unknown; after?: unknown; rule_version?: string };
+  snapshot: {
+    summary?: string; before?: unknown; after?: unknown; rule_version?: string;
+    /** GR-07：确定性兜底计划参数不完整 → 审批卡黄色警示条 */
+    warning?: string;
+    params_incomplete?: boolean;
+    /** GR-01：审批绑定的步骤指纹（replay 比对，防漂移消费） */
+    step_fingerprint?: string;
+    tool?: string;
+  };
 }
 
 /** 回执三态映射（L3.6/E3.7：无回执=未核实，不得宣称完成） */
@@ -64,6 +74,8 @@ export default function P2() {
   const { threadId = "" } = useParams();
   const [params] = useSearchParams();
   const demo = params.get("demo");
+  /** X-02：来自对话框卡片的审批锚点（?apr=）——高亮并滚动到该审批卡 */
+  const anchorApprovalId = params.get("apr");
 
   const [ready, setReady] = useState(false);
   const [offline, setOffline] = useState(false); // 断线重连中（F3.4 不伪造进度）
@@ -313,7 +325,7 @@ export default function P2() {
                 }
                 if (ev.decision.action === "ask.answer") {
                   // ask 问询应答（B8）：正文上屏（§9.1 动作码不直接上屏同口径）
-                  const ans = clientChineseText(
+                  const ans = clientNaturalText(
                     (ev.decision.after as { text?: string } | undefined)?.text,
                     "应答内容暂时无法显示，请稍后再试。",
                   );
@@ -349,7 +361,21 @@ export default function P2() {
 
               {/* 内联审批卡（ApprovalCardMsg 语义：diff + 命中规则版本 + 三手势/已决态） */}
               {approvals.map((a) => (
-                <div key={a.approval_id} className={`rounded-msg border p-4 ${a.status === "pending" ? "border-warn/40 bg-warn/4" : "border-line bg-card"}`}>
+                <div
+                  key={a.approval_id}
+                  id={`apr-${a.approval_id}`}
+                  ref={(el) => {
+                    // X-02：从对话框「去审批」进入时，滚动并高亮对应审批卡
+                    if (el && anchorApprovalId && a.approval_id === anchorApprovalId && a.status === "pending") {
+                      requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "center" }));
+                    }
+                  }}
+                  className={`rounded-msg border p-4 ${
+                    anchorApprovalId && a.approval_id === anchorApprovalId && a.status === "pending"
+                      ? "border-amber-400 bg-amber-500/10 ring-2 ring-amber-400/60"
+                      : a.status === "pending" ? "border-warn/40 bg-warn/4" : "border-line bg-card"
+                  }`}
+                >
                   <div className="mb-2 flex items-center gap-2">
                     <span className={`inline-flex items-center gap-1 text-h2 font-bold ${a.status === "pending" ? "text-warn" : "text-ink2"}`}>
                       <Icon name="approval" size={15} />待我审批 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
@@ -357,6 +383,13 @@ export default function P2() {
                     <span className="font-mono text-body text-ink3">{shortId(a.approval_id)}</span>
                     {a.snapshot.rule_version && <span className="text-body text-holo">命中关联安全规则</span>}
                   </div>
+                  {/* GR-07：兜底计划的参数不完整必须先说清楚，再让人决定放不放行（不盲批） */}
+                  {(a.snapshot.warning || a.snapshot.params_incomplete) && (
+                    <div className="mb-3 flex items-center gap-1 rounded border border-warn/50 bg-warn/10 p-2 text-body text-warn">
+                      <Icon name="warning" size={13} label="提示" />
+                      {a.snapshot.warning ?? "该步骤由确定性兜底计划生成，参数不完整，请人工补齐或驳回。"}
+                    </div>
+                  )}
                   {(a.snapshot.before !== undefined || a.snapshot.after !== undefined) && (
                     <div className="mb-3 grid grid-cols-1 gap-2 text-body sm:grid-cols-2">
                       <div className="rounded border border-line bg-bg800/60 p-2 text-ink3">调整前：{payloadText(a.snapshot.before, 220) || "暂无"}</div>
@@ -375,6 +408,17 @@ export default function P2() {
               {isDone && (
                 <div className="rounded-msg border border-go/40 bg-go/5 p-4">
                   <div className="mb-1.5 flex items-center gap-1.5 text-h2 font-black text-go"><Icon name="check" size={17} />交付完成 · 变更报告</div>
+                  {/* N-16：模拟回执必须一眼可辨——"演示完成的交付"与"真实完成的交付"不得同外观 */}
+                  {events.some((ev) => ev.decision?.kind === "execute" && ev.receipt?.mode === "simulated") && (
+                    <div className="mb-1.5 inline-flex items-center gap-1 rounded border border-warn/50 bg-warn/10 px-2 py-0.5 text-body text-warn">
+                      <Icon name="warning" size={13} />演示模式执行（模拟回执，非真实交付）
+                    </div>
+                  )}
+                  {events.some((ev) => ev.decision?.kind === "execute" && ev.receipt?.mode === "real" && ev.receipt?.synced === true) && (
+                    <div className="mb-1.5 inline-flex items-center gap-1 rounded border border-go/50 bg-go/10 px-2 py-0.5 text-body text-go">
+                      <Icon name="check" size={13} />真实连接器回执（可核验）
+                    </div>
+                  )}
                   {!hasWrite && <div className="mb-1.5 flex items-center gap-1.5 text-body text-warn"><Icon name="warning" size={14} />本任务没有产生对外变更，仅完成了只读分析。</div>}
                   <div className="text-body text-ink2">决策链路时间轴（共 {events.length} 条账本事件）：</div>
                   <div className="mt-1.5 space-y-1">

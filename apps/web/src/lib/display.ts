@@ -175,6 +175,7 @@ export const COMMON_STATUS_TEXT: Record<string, string> = {
   running: "进行中",
   completed: "已完成",
   failed: "已失败",
+  cancelled: "已驳回终止",
   draft: "草稿",
   submitted: "已提交",
   scheduled: "已排期",

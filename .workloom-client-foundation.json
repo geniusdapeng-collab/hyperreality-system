@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.14",
-  "sourceRef": "refs/tags/ui-v0.1.14",
-  "sourceCommit": "775809e91981caea07a50beb55fd2d6e1c1cf261",
+  "version": "0.1.16",
+  "sourceRef": "refs/tags/ui-v0.1.16",
+  "sourceCommit": "dcc651e9aafccd0efb0fda60f48d0793546cfe21",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "cc306291786a1e3ab9238d0bb8a61d2a6b568c178aa6e063cc54783f32b3827e",
+      "sha256": "79d2827525a14d9f41d6804c74250081ffd4b27898117fe2b709f5b88965420e",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -295,7 +295,7 @@
       "mode": 420
     },
     "apps/web/src/components/AIFeedback.tsx": {
-      "sha256": "decc92d2332c2c9c58316a37c5458205b3e3470c7aa28060f9866250b431d1de",
+      "sha256": "7d91a6899e812b0c02175d7ef9a20329005c3824ff7b0f4e4b96e39c911f7731",
       "mode": 420
     },
     "apps/web/src/components/AudioSettings.tsx": {
@@ -495,7 +495,7 @@
       "mode": 420
     },
     "apps/web/src/components/star-ring/StarRing.tsx": {
-      "sha256": "a3cc20c319b0c9adfef7c2f2804bcfaea5b45f5a4807229ebf0c6cc4a22b3838",
+      "sha256": "08c7b91c784b166a2843547e89a3028264969ed50ef3f03f02d0c3e800eb8c18",
       "mode": 420
     },
     "apps/web/src/components/UrlQrCode.test.ts": {
@@ -522,12 +522,20 @@
       "sha256": "f69e8884e29234bc3a7017f9c0966a96ff83cfcb5a9b4b021283be24764d8d8f",
       "mode": 420
     },
+    "apps/web/src/lib/clientText.test.ts": {
+      "sha256": "5d2097dc6ee3671675ddbe0a6b466dbc00882ae608cbb593dfaec00d4ec3f573",
+      "mode": 420
+    },
+    "apps/web/src/lib/clientText.ts": {
+      "sha256": "1a58d3d07188219def4130c2a642aad97676ff56f92dd7a1858444174a8b42c4",
+      "mode": 420
+    },
     "apps/web/src/lib/display.test.ts": {
       "sha256": "1fe9f60678c52469c73aeeb96297b0b4fc5d6a3fe3558212d55eec22d137612d",
       "mode": 420
     },
     "apps/web/src/lib/display.ts": {
-      "sha256": "4383560d81bf02745d1c342e5a22df2ac9f4420825b9bb387130c832ff903337",
+      "sha256": "c7059af3d73f7d868cd957c5c1ac73ccdef520d01eced2dd557f1ced1d8dc54f",
       "mode": 420
     },
     "apps/web/src/lib/naming.test.ts": {
@@ -643,11 +651,11 @@
       "mode": 420
     },
     "apps/web/src/pages/p2/P2.tsx": {
-      "sha256": "d886610ddca825a7c493d6c067ff5f719b48402a5e4abc540f566c82d362fa79",
+      "sha256": "6e88605374bdc651f90a0d51c6fbe136aa42e332fff0a26e151f3fa07420250e",
       "mode": 420
     },
     "apps/web/src/pages/p21/P21.tsx": {
-      "sha256": "96455d652c37be3f53d92c6db8968753240ffde6b3ec94c316d6d02d786c3d9c",
+      "sha256": "cea43cd942cec90ea96cdc3ed2c6a3a4bb65888afeee064caebb897aa2046a9c",
       "mode": 420
     },
     "apps/web/src/pages/p22/P22.tsx": {
@@ -831,7 +839,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "898a6e32d817fb43fe0aaee585f3859f5a8a20bd5c20a8fbf34583c1b8f1a25b",
+      "sha256": "aec4b22449b67e52099817ccfa191460be4306dfa6fe545a7b24db540c92d52e",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -895,7 +903,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "e058183c01cebe6f2920a05e2bbdd56ea2ee05d4f7526ec9db8afd0214a46fd0",
+      "sha256": "b84ca01e9c4a491d5e96715ddf07a2882231f190fe29baafb15b3de11ebec306",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {
@@ -995,7 +1003,7 @@
       "mode": 420
     },
     "apps/webc/src/styles/tokens.css": {
-      "sha256": "b621ef3227d7f00aa7676e844b68bc93b986953b014ecbc0118bf9f3e9cd3c59",
+      "sha256": "de2640c74725db4323c735131b7dd9a733e69adcc676c3ceb205dbbde2e53e03",
       "mode": 420
     },
     "apps/webc/tsconfig.json": {
