@@ -3606,6 +3606,41 @@ await assertGovernanceFixtureReady().catch(async (err) => {
  */
 const z = C("Z");
 
+/**
+ * 工作区口径：各行业仓的演示工作区不同（hotel=ws-yunqi / panda=panda-group / …），
+ * 这套不变量用例必须**运行时解析本仓真实工作区**，不能钉死某一个 slug——
+ * 否则换仓即因外键失败，用例就成了"只在基座成立"的假绿（panda 实测：threads_workspace_id_fkey）。
+ */
+const zScope = await (async () => {
+  const ownerUrl = process.env.DATABASE_URL;
+  if (!ownerUrl) return scope;
+  const client = new pg.Client({ connectionString: ownerUrl });
+  await client.connect();
+  try {
+    // 必须用 owner 连接：RLS 下 suite 自己的 scope（多为 ws-yunqi）在本仓可能根本不存在
+    const prefer = await client.query<{ id: string; tenant_id: string }>(
+      `SELECT id, tenant_id FROM workspaces WHERE id=$1`, [scope.workspaceId]);
+    if (prefer.rows[0]) return { tenantId: prefer.rows[0].tenant_id, workspaceId: prefer.rows[0].id };
+    const any = await client.query<{ id: string; tenant_id: string }>(
+      `SELECT id, tenant_id FROM workspaces ORDER BY id LIMIT 1`);
+    assert(any.rows[0], "本仓至少应有一个工作区（种子未跑？）");
+    return { tenantId: any.rows[0]!.tenant_id, workspaceId: any.rows[0]!.id };
+  } finally {
+    await client.end();
+  }
+})();
+
+/** 本仓工作区内的临时线程（不复用 suite 的 mkThread：它钉死 ws-yunqi，panda 等仓无此工作区） */
+async function zThread(): Promise<string> {
+  const id = `T-z-${SFX}-${Math.random().toString(36).slice(2, 8)}`;
+  await qApp(
+    `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
+     VALUES ($1,$2,$3,$4,'quest','queued','MEM-001')`,
+    [id, zScope.tenantId, zScope.workspaceId, `Z 域线程 ${id}`],
+  );
+  return id;
+}
+
 z("号源：并发取号不重号，且撞手写号段时同事务换号不失败", async () => {
   const { makeReadableId } = await import("@workloom/shared");
   /** 本用例会造"手写高位 id"这类脏数据，结束后自己清干净（可重复跑） */
@@ -3623,7 +3658,7 @@ z("号源：并发取号不重号，且撞手写号段时同事务换号不失�
     await qApp(
       `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
        VALUES ($1,$2,$3,'号源高水位（套件造）','quest','completed','MEM-001')`,
-      [highId, scope.tenantId, scope.workspaceId],
+      [highId, zScope.tenantId, zScope.workspaceId],
     );
     created.push(highId);
     const probes = await Promise.all(Array.from({ length: 12 }, () =>
@@ -3640,7 +3675,7 @@ z("号源：并发取号不重号，且撞手写号段时同事务换号不失�
     await qApp(
       `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
        VALUES ($1,$2,$3,'号源占位（套件造）','quest','completed','MEM-001')`,
-      [takenId, scope.tenantId, scope.workspaceId],
+      [takenId, zScope.tenantId, zScope.workspaceId],
     );
     created.push(takenId);
     const client = await app.connect();
@@ -3648,13 +3683,13 @@ z("号源：并发取号不重号，且撞手写号段时同事务换号不失�
     let continuedAfterRetry = false;
     try {
       await client.query("BEGIN");
-      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [zScope.workspaceId]);
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [zScope.tenantId]);
       allocated = (await insertWithReadableId(client, THREAD_ID_SOURCE, async (id) => {
         await client.query(
           `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
            VALUES ($1,$2,$3,'撞号重试验证','quest','queued','MEM-001')`,
-          [id, scope.tenantId, scope.workspaceId],
+          [id, zScope.tenantId, zScope.workspaceId],
         );
         return id;
       })).id;
@@ -3663,7 +3698,7 @@ z("号源：并发取号不重号，且撞手写号段时同事务换号不失�
       await client.query(
         `INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by)
          VALUES ($1,$2,$3,'换号后同事务续写','quest','queued','MEM-001')`,
-        [continuedId, scope.tenantId, scope.workspaceId],
+        [continuedId, zScope.tenantId, zScope.workspaceId],
       );
       created.push(continuedId);
       continuedAfterRetry = true;
@@ -3711,7 +3746,7 @@ z("高危批量守卫：l4_chairman 审批（快照无 high_risk）也必须逐�
   await qApp(
     `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot)
      VALUES ($1,$2,$3,$4,'inapp','pending','l4_chairman',$5)`,
-    [l4, scope.tenantId, scope.workspaceId, eventId, JSON.stringify({ after: { v: 1 } })],
+    [l4, zScope.tenantId, zScope.workspaceId, eventId, JSON.stringify({ after: { v: 1 } })],
   );
   const batch = await batchApprove(app, gw, scope, boss, [l4]);
   eq(batch.approved.length, 0, "L4 审批不得批量放行");
