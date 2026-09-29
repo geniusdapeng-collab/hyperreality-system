@@ -171,6 +171,43 @@ export async function scan(workspaceId: string, memberNo: string): Promise<{ add
   void approvals;
 
   // ② 开发任务待裁决 / ③ 转人工（开发场域）
+  /**
+   * ① 业务任务域（X-03，第四轮实测）：quest/agent/ask 的挂起/失败/完成此前**完全没有推送源**——
+   * scan 的六个源全在开发场域/发布/考试/晨报/提醒上，客户在对话框派的任务挂起后小织一个字都不说。
+   * 三级：待审（high，尊重勿扰）、失败/熔断（red，红线不受勿扰压制）、完成（mid）。
+   */
+  const threadPending = await svcQuery<{ id: string; title: string }>(workspaceId,
+    `SELECT id, title FROM threads WHERE workspace_id=$1 AND status='pending_review'
+      ORDER BY updated_at DESC LIMIT 5`, [workspaceId]).catch(() => [] as never[]);
+  for (const t of threadPending) {
+    await push({
+      sourceKey: `thread-pend-${t.id}`, kind: "judge", level: "high",
+      title: "有任务等您拍板", body: `「${t.title}」卡在业务关卡上啦，您点头我就接着干。`,
+      actions: [{ label: "去审批", link: `/tasks/${t.id}` }], link: `/tasks/${t.id}`,
+    });
+  }
+  const threadFailed = await svcQuery<{ id: string; title: string; error: string | null }>(workspaceId,
+    `SELECT id, title, error FROM threads WHERE workspace_id=$1 AND status IN ('failed','paused')
+      AND updated_at > now() - interval '24 hours' ORDER BY updated_at DESC LIMIT 5`, [workspaceId]).catch(() => [] as never[]);
+  for (const t of threadFailed) {
+    await push({
+      sourceKey: `thread-fail-${t.id}`, kind: "alert", level: "red",
+      title: "任务出事啦（红线）", body: `「${t.title}」：${(t.error ?? "被围栏拦下或执行失败，原因待查").slice(0, 120)}`,
+      actions: [{ label: "去看看", link: `/tasks/${t.id}` }], link: `/tasks/${t.id}`,
+    });
+  }
+  const threadDone = await svcQuery<{ id: string; title: string }>(workspaceId,
+    `SELECT id, title FROM threads WHERE workspace_id=$1 AND status='completed'
+      AND closed_at > now() - interval '24 hours' ORDER BY closed_at DESC LIMIT 5`, [workspaceId]).catch(() => [] as never[]);
+  for (const t of threadDone) {
+    await push({
+      sourceKey: `thread-done-${t.id}`, kind: "done", level: "mid",
+      title: "任务完成啦", body: `「${t.title}」已经交付，成品在任务页可以直接取。`,
+      actions: [{ label: "看成品", link: `/tasks/${t.id}` }], link: `/tasks/${t.id}`,
+    });
+  }
+
+  // ② 开发任务待裁决 / ③ 转人工（开发场域）
   const devPend = await svcQuery<{ id: string; title: string }>(workspaceId,
     `SELECT id, title FROM dev_tasks WHERE status='pending_approval' ORDER BY updated_at DESC LIMIT 5`).catch(() => [] as never[]);
   for (const t of devPend) {
@@ -332,7 +369,11 @@ const CN_NUM: Record<string, number> = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4,
 
 /** 解析"明早八点/今晚9点/明天下午三点/14:30" → ISO 时间（解析不出返回 null） */
 export function parseDueAt(text: string, now = new Date()): string | null {
-  const m = /(今天|今晚|明早|明天|明晚|今早|上午|下午|晚上|今早)?\s*(\d{1,2}|[一二两三四五六七八九十]+)[点：:]\s*(\d{1,2}|半)?/.exec(text);
+  /**
+   * X-10（第五轮实测）：小时数字与「点/：」之间必须容忍空白——中文输入习惯「今晚 23 点」极常见，
+   * 原正则在此处不容空白，直接判「没听懂是几点」。
+   */
+  const m = /(今天|今晚|明早|明天|明晚|今早|上午|下午|晚上|今早)?\s*(\d{1,2}|[一二两三四五六七八九十]+)\s*[点：:]\s*(\d{1,2}|半)?/.exec(text);
   if (!m) return null;
   const [, when, hRaw, minRaw] = m;
   let hour = CN_NUM[hRaw!] ?? Number(hRaw);
@@ -374,7 +415,34 @@ export async function chat(workspaceId: string, memberNo: string, text: string, 
     return { reply: `想提醒您，可是没听懂是几点呀……再说一次时间好不好，比如「明早八点提醒我过审批」～` };
   }
 
-  // ③ 查任务状态："开发任务咋样了"
+  /**
+   * ③ 查任务状态：**业务任务优先**（X-09，第五轮实测，P0）。
+   * 原实现在命中「任务/状态/进度」后一律查 dev_tasks（开发场域表）——客户在对话框派的任务
+   * （quest/agent/ask 线程）完全不在查询面，于是"我的任务进展怎么样了"答成
+   * 「现在还没有开发任务哦，要不要去开发场域派一个？」：既是错误信息，又把客户误导到不相干场域。
+   * 现在：默认查 threads；只有明确问到「开发/发布」时才落开发场域分支。
+   */
+  if (/任务|进度|状态/.test(t) && /怎么样|状态|进度|如何|完事|好了吗/.test(t) && !/开发|发布/.test(t)) {
+    const threads = await svcQuery<{ id: string; title: string; status: string; mode: string }>(workspaceId,
+      `SELECT id, title, status, mode FROM threads WHERE workspace_id=$1
+        ORDER BY (status IN ('queued','running','pending_review','paused')) DESC, updated_at DESC LIMIT 5`,
+      [workspaceId]).catch(() => [] as never[]);
+    if (threads.length === 0) return { reply: `现在还没有任务哦，${dn}在右边对话框说一句要办的事，我马上安排～` };
+    // 状态口径与任务卡/线程状态机同源（queued/running/pending_review/paused/completed/failed/cancelled）
+    const THREAD_STATUS_TEXT: Record<string, string> = {
+      queued: "排队中", running: "正在干", pending_review: "等您拍板", paused: "被围栏拦下了",
+      completed: "已完成", failed: "没跑成", cancelled: "已驳回终止",
+    };
+    const lines = threads.map((x) => `「${x.title}」${THREAD_STATUS_TEXT[x.status] ?? x.status}`).join("；");
+    const needYou = threads.filter((x) => x.status === "pending_review").length;
+    return {
+      reply: `${lines}。${needYou > 0 ? `有 ${needYou} 个在等您拍板呢，点卡片上的「去审批」就好～` : "都在正常推进，您放心呀。"}`,
+      action: "status",
+      data: threads,
+    };
+  }
+
+  // ③' 开发任务状态（仅当明确问"开发/发布"）
   if (/任务|开发|发布/.test(t) && /怎么样|状态|进度|如何|完事|好了吗/.test(t)) {
     const tasks = await svcQuery<{ title: string; status: string }>(workspaceId,
       `SELECT title, status FROM dev_tasks ORDER BY updated_at DESC LIMIT 3`).catch(() => [] as never[]);

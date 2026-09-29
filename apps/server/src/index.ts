@@ -19,6 +19,10 @@ import { getOwnerPool, getAppPool, getGatewayPool } from "@workloom/db";
 import { bundlesRoot } from "@workloom/base/bundles";
 import { registerFeedbackEnumsFromDisk } from "@workloom/base/evolve";
 import { startSkillDistAutoSync, buildManifest, receiveReflux, type RefluxPayload } from "@workloom/base/skill-ops";
+import { createHash } from "node:crypto";
+import { startThreadScheduler } from "./runtime/scheduler.js";
+import { gatewayAppend } from "@workloom/base/workdata";
+import { registerBundleAskFacts } from "./runtime/ask-facts-loader.js";
 import { readVoiceFile, synthesizeVoice, voiceStationConfig } from "./voice/station.js";
 
 const app = new Hono();
@@ -83,6 +87,43 @@ app.all("/trpc/*", async (c) => {
     req: c.req.raw,
     router: appRouter,
     createContext: () => createContext(c.req.raw),
+    /**
+     * GR-12（2026-09-28 压测）：tRPC 默认把错误交回客户端就完事——实测 12 路并发派遣
+     * 打出 10 个 500，服务端日志 0 条记录（客户报障时无从查起）。
+     * 这里统一落日志（path/code/消息摘要 + 请求指纹前 8 位，不记 PII），
+     * 5xx（INTERNAL_SERVER_ERROR）额外经安全网关写系统域事件（append-only 可审计）。
+     * onError 内任何失败都必须吞掉：错误处理路径再抛错会把正常响应也带崩。
+     */
+    onError: ({ path, error, type, ctx }) => {
+      const ref = createHash("sha256")
+        .update(`${path ?? "-"}|${error.code}|${error.message}`)
+        .digest("hex")
+        .slice(0, 8);
+      console.error(`[trpc] ${type ?? "unknown"} ${path ?? "-"} → ${error.code}: ${error.message}（ref=${ref}）`);
+      if (error.code !== "INTERNAL_SERVER_ERROR") return;
+      const identity = ctx?.identity;
+      if (!identity) return;
+      void gatewayAppend(getGatewayPool(), {
+        tenantId: identity.tenantId,
+        workspaceId: identity.workspaceId,
+        actor: { id: "system", type: "system" },
+      }, {
+        who: { type: "system", id: "system" },
+        context: {
+          tenant_id: identity.tenantId, workspace_id: identity.workspaceId,
+          time: new Date().toISOString(), channel: "server",
+        },
+        object: { type: "server_request", id: ref },
+        decision: {
+          action: "system.error",
+          after: { path: path ?? null, code: error.code, ref, message: error.message.slice(0, 200) },
+          basis: ["服务端 5xx 统一留痕（GR-12）：错误可见、可审计、可复现"],
+        },
+        rule_impact: [],
+      }).catch((err: unknown) => {
+        console.error("[trpc] 5xx 事件留痕失败（不二次抛出）", err instanceof Error ? err.message : String(err));
+      });
+    },
   });
   return res;
 });
@@ -137,6 +178,20 @@ if (existsSync(webcDist)) {
 const host = process.env.SERVER_HOST ?? "127.0.0.1";
 serve({ fetch: app.fetch, port, hostname: host }, (info) => {
   console.log(`WorkLoom IM 底座 server 已启动：http://${host}:${info.port}（tRPC: /trpc/*，C 端网关: /c/*）`);
+  /**
+   * GR-16：本机调度器——没有它，`queued` 线程（agent 模式、任务页派活、非"立即执行"的 quest）
+   * 永远不会被执行。启动时顺带把崩溃遗留的 running 线程转 paused（可续跑）。
+   */
+  startThreadScheduler();
+  /**
+   * GR-19：装载各行业 ask 事实面——不装的话，右侧对话框问领域问题只会得到
+   * 底座通用事实（实测"问什么都是没有相关记录"）。失败不阻塞启动（回落通用事实面）。
+   */
+  void registerBundleAskFacts()
+    .then((industries) => {
+      if (industries.length > 0) console.log(`行业 ask 事实面已装载：${industries.join("、")}`);
+    })
+    .catch((err) => console.error("[ask-facts] 装载失败（不阻塞启动）", err instanceof Error ? err.message : String(err)));
 });
 
 // 技能保鲜环 · 夜班窗口自动同步（机制即自动，客户零操作）：
