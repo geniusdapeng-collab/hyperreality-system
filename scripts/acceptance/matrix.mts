@@ -340,8 +340,16 @@ async function loadRuntime() {
     }
     if (!WORKSPACE_ID) return { ...empty(), error: "未指定工作区（--workspace / profile.workspaceId / profile.identity.workspaceSlug 三选一）" };
     const agents = await client.query<DbAgent>(
+      /**
+       * 同名多行取「优先 ready 的权威实例」（2026-09-24 B-47 复核）：
+       * ip-curator 等下沉岗位历史上会留下 disabled 的退场行，`ORDER BY preset_key` 下
+       * 后者覆盖前者 → B1_roster 误判"岗位不在编"（与账本 H-15 工具探针同类假失败）。
+       * 注意：下面是 `new Map(rows.map(...))`（后写覆盖先写），所以 ready 必须排在**最后**——
+       * 用 `(status='ready') ASC` 让退场行先出、在编行后出，Map 里留下的才是在编实例。
+       */
       `SELECT id, preset_key, name, version, kind, readonly, status, invalid_reason, fence_bindings, skills, meta
-       FROM agents WHERE workspace_id=$1 ORDER BY preset_key`, [WORKSPACE_ID]);
+       FROM agents WHERE workspace_id=$1
+       ORDER BY preset_key, (status='ready') ASC, created_at ASC`, [WORKSPACE_ID]);
     const skills = await client.query<DbSkill>(
       `SELECT s.id, s.level, s.bundle, s.name, s.version, s.description, s.fence_bindings
        FROM skills s JOIN skill_installs si ON si.skill_id = s.id

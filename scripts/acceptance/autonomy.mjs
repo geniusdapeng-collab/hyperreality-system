@@ -97,8 +97,16 @@ try {
     SINCE ? [wsRow.id, SINCE] : [wsRow.id],
   );
   const receiptQ = await client.query(
+    /**
+     * 回执线索口径（2026-09-24 修复）：五元事件格式里 receipt 是**顶层可选字段**
+     * （payload.receipt.synced，见 runtime/loop.ts 的执行事件与 E3.7「无回执=未核实」）。
+     * 旧实现只查 rule_impact.receipt 与 decision.after.synced —— 两条路径在本仓事件里不存在，
+     * 实测把 132 条真实回执全漏掉，产出"回执覆盖率 0% / 完成但无回执 21"的**假发现**。
+     * 现以顶层 receipt 为准，旧路径保留作兼容兜底。
+     */
     `SELECT session_id,
-            count(*) FILTER (WHERE payload->'rule_impact'->>'receipt' IS NOT NULL
+            count(*) FILTER (WHERE payload->'receipt'->>'synced' IN ('true','false')
+               OR payload->'rule_impact'->>'receipt' IS NOT NULL
                OR payload->'decision'->'after'->>'synced' IN ('true','false'))::int AS receipt_events
        FROM biz_events
       WHERE workspace_id = $1 ${SINCE ? "AND created_at >= $2" : ""}

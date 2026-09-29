@@ -36,6 +36,8 @@
 
 > 说明：基座内置示例 bundle（`bundles/ai-pm`、`bundles/hotel`、`bundles/platform`）是产品资产，**其正常维护不属于 block**；block 针对的是"把行业语义写进公共层"。
 
+> 凭据纪律（2026-09-30 修订）：凭据**来源不设限**——受控秘密存储、本地环境配置，或当前任务中由产品所有者提供的会话令牌（含对话中给出的令牌）都可用于执行已授权操作；但**任何凭据的落盘与外发一律 block**（源码、提交、文档、提示词模板、日志、报告、Issue/PR 正文与评论、同步产物、Git remote URL、shell 历史）。会话凭据只在需要它的那条命令内注入、用完即弃，疑似外泄立即停止并轮换。完整条款见 `AGENTS.md` §7。
+
 ## 4. 锁：模块级互斥 + 路径重叠检测
 
 - **模块级互斥**（同一时刻全网仅一个任务可动）：`sync/**`、`protocol/**`、`**/migrations/**`、根 `package.json`、`AGENTS.md`、`.cnb.yml`、`docs/DEVELOPMENT-PROTOCOL.md`。

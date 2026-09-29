@@ -32,6 +32,23 @@ export const DSH_DEEPSEEK_DEFAULTS = {
   fallbackBaseEnvs: ["LLM_BASE_URL", "DEEPSEEK_BASE_URL"],
 };
 
+/**
+ * OpenAI 兼容根的环境变量优先级。
+ * 背景（2026-09-29 growthmatrix 隔离副本 P 域实测）：封存凭据里两个端点变量是**两种方言**——
+ * `DEEPSEEK_BASE_URL` 是 Anthropic 兼容根（`<root>/anthropic`，Messages 协议，dsh-harness 走它），
+ * `LLM_BASE_URL` 才是 OpenAI 兼容根。把 Anthropic 根交给 `<root>/chat/completions` 只会得到 404
+ * （实测：POST https://api.deepseek.com/anthropic/chat/completions → 404 空体；同一 key 打
+ * https://api.deepseek.com/chat/completions → 200）。
+ */
+export const OPENAI_COMPATIBLE_BASE_ENVS = ["LLM_BASE_URL", "OPENAI_BASE_URL", "OPENAI_API_BASE", "DEEPSEEK_BASE_URL"];
+
+/** Anthropic 兼容面去后缀：`<root>/anthropic` 的 OpenAI 兼容面在 `<root>`（仓库既有口径：scripts/tools/explainer-run.mts） */
+export function normalizeOpenAiCompatibleBaseUrl(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return text.replace(/\/+$/u, "").replace(/\/anthropic$/u, "");
+}
+
 export function pickEnv(keys, env = process.env) {
   for (const key of keys) {
     const value = env[key];
@@ -53,13 +70,33 @@ export function resolveLiveModels(models = [], env = process.env) {
     const resolved = { id: m.id, kind, adapter, model: m.model ?? null, baseUrl: null, credentialEnv: null };
     if (adapter === "dsh-harness" || adapter === "model-gateway") {
       const key = pickEnv([...(m.apiKeyEnv ? [m.apiKeyEnv] : []), DSH_DEEPSEEK_DEFAULTS.apiKeyEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackApiKeyEnvs], env);
-      const base = pickEnv([...(m.baseUrlEnv ? [m.baseUrlEnv] : []), ...DSH_DEEPSEEK_DEFAULTS.fallbackBaseEnvs], env);
+      /**
+       * 端点按链路方言分流（2026-09-29 修复，失败现象 = LLM-G1 `HTTP 404`）：
+       *   · dsh-harness     → Anthropic 兼容根（Messages 协议）：`baseUrlEnv` → `fallbackBaseEnvs`；
+       *   · model-gateway   → OpenAI 兼容根（`/chat/completions`）：`openAiBaseUrlEnv` → `OPENAI_COMPATIBLE_BASE_ENVS`
+       *                       → 声明值 → `fallbackBaseEnvs`，并统一做 `…/anthropic` 归一。
+       * 修复前两条链路共用同一套解析，封存文件里 `DEEPSEEK_BASE_URL=…/anthropic` 一旦命中，
+       * model-gateway 就必然 404——且该断言在任何仓库、任何凭据下都永远无法通过。
+       */
+      const declaredBase = pickEnv([...(m.baseUrlEnv ? [m.baseUrlEnv] : []), ...DSH_DEEPSEEK_DEFAULTS.fallbackBaseEnvs], env);
+      const openAiBase = pickEnv([
+        ...(m.openAiBaseUrlEnv ? [m.openAiBaseUrlEnv] : []),
+        ...OPENAI_COMPATIBLE_BASE_ENVS,
+        ...(m.baseUrlEnv ? [m.baseUrlEnv] : []),
+        ...DSH_DEEPSEEK_DEFAULTS.fallbackBaseEnvs,
+      ], env);
       resolved.credentialEnv = key.key;
-      resolved.baseUrl = base.value ?? DSH_DEEPSEEK_DEFAULTS.baseURL;
+      resolved.baseUrl = adapter === "model-gateway"
+        ? normalizeOpenAiCompatibleBaseUrl(openAiBase.value ?? DSH_DEEPSEEK_DEFAULTS.baseURL)
+        : declaredBase.value ?? DSH_DEEPSEEK_DEFAULTS.baseURL;
+      resolved.baseUrlDialect = adapter === "model-gateway" ? "openai" : "anthropic";
       resolved.model = m.model ?? resolveModelFromBaseUrl(resolved.baseUrl) ?? DSH_DEEPSEEK_DEFAULTS.model;
       if (!key.value) missing.push(`凭据未配置（可用环境变量：${unique([m.apiKeyEnv, DSH_DEEPSEEK_DEFAULTS.apiKeyEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackApiKeyEnvs]).join(" / ")}）`);
-      // 端点缺失不是阻断项：dsh 的 deepseek 适配器有内置默认端点（可用环境变量覆盖）
-      if (!base.value) warnings.push(`端点未显式配置，使用内置默认 ${DSH_DEEPSEEK_DEFAULTS.baseURL}（可用 ${unique([m.baseUrlEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackBaseEnvs]).join(" / ")} 覆盖）`);
+      // 端点缺失不是阻断项：两个适配器都有内置默认端点（可用环境变量覆盖）
+      if (!declaredBase.value) warnings.push(`端点未显式配置，使用内置默认 ${DSH_DEEPSEEK_DEFAULTS.baseURL}（可用 ${unique([m.baseUrlEnv, ...DSH_DEEPSEEK_DEFAULTS.fallbackBaseEnvs]).join(" / ")} 覆盖）`);
+      if (adapter === "model-gateway" && String(openAiBase.value ?? "") && String(openAiBase.value) !== resolved.baseUrl) {
+        warnings.push(`model-gateway 端点按 OpenAI 兼容根归一：${openAiBase.value} → ${resolved.baseUrl}（Anthropic 兼容根不接受 /chat/completions）`);
+      }
       if (!m.model) resolved.modelNote = `model 未显式声明，按端点推导/内置默认 ${resolved.model}（dsh 内置目录：deepseek-flash 支持文本+图像）`;
     } else if (adapter === "gen-http" || adapter === "arkcli") {
       const key = pickEnv([...(m.apiKeyEnv ? [m.apiKeyEnv] : []), kind === "image" ? "SEEDREAM_API_KEY" : "SEEDANCE_API_KEY", "VOLCENGINE_ARK_API_KEY", "ARK_API_KEY"], env);
@@ -98,8 +135,15 @@ function dshPaths(repoRoot) {
   };
 }
 
-/** 生成真实 provider 的 cordis patch（不使用 dsh-gate 的 mock settings） */
-function renderLivePatch({ repoRoot, auditFile, rulesUrl, model, provider = "deepseek-official" }) {
+/**
+ * 生成真实 provider 的 cordis patch（不使用 dsh-gate 的 mock settings）。
+ * 围栏规则源两种装配（2026-09-24 修复）：`rulesFile`（离线/无鉴权，优先）或 `rulesUrl`（+可选 bearer）。
+ * 修复前只支持 rulesUrl 且插件对非数组响应会抛错 → 工具层整体不可用（P 域 LLM-M1 实测）。
+ */
+function renderLivePatch({ repoRoot, auditFile, rulesUrl, rulesFile, rulesToken, model, provider = "deepseek-official" }) {
+  const fenceConfig = rulesFile
+    ? [`        rulesFile: '${rulesFile}'`]
+    : [`        rulesUrl: '${rulesUrl}'`, ...(rulesToken ? [`        rulesToken: '${rulesToken}'`] : [])];
   return [
     "# RDAS v3.1 · 生产实测 dsh patch（真实 provider；mock 仅供 selftest）",
     "- name: '@deepseek-ai/dsh-llm-deepseek'",
@@ -115,7 +159,7 @@ function renderLivePatch({ repoRoot, auditFile, rulesUrl, model, provider = "dee
     "    - id: workloom-fence",
     `      name: '${join(repoRoot, "packages", "runtime", "plugins", "workloom-fence.plugin.js")}'`,
     "      config:",
-    `        rulesUrl: '${rulesUrl}'`,
+    ...fenceConfig,
     "    - id: workloom-audit",
     `      name: '${join(repoRoot, "packages", "runtime", "plugins", "workloom-audit.plugin.js")}'`,
     "      config:",
@@ -134,6 +178,8 @@ export async function runDshTask({
   model,
   prompt,
   rulesUrl,
+  rulesFile = null,
+  rulesToken = null,
   env = {},
   timeoutMs = 8 * 60_000,
   home = null,
@@ -167,6 +213,7 @@ export async function runDshTask({
   writeFileSync(join(dshHome, "profiles", "headless", "cordis.patch.yml"), renderLivePatch({
     repoRoot, auditFile,
     rulesUrl: rulesUrl ?? "http://127.0.0.1:8787/trpc/fence.activeRules",
+    rulesFile, rulesToken,
     model,
   }));
   // ③ settings.yaml 留空 providers 段（凭据经 apiKeyEnv 由 dsh credential seam 解析，不落盘）
@@ -189,10 +236,6 @@ export async function runDshTask({
     : 0;
   const answer = extractDshAnswer(out);
   const ok = res.code === 0 && Boolean(answer);
-  /** 失败时保留最后一条可读错误（dsh 的 HTTP_4xx/网络错误都在 stdout/stderr 尾部） */
-  const failureLine = ok
-    ? null
-    : (out.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("[workloom-")).slice(-2).join(" ") || `dsh 退出码 ${res.code}`);
   // 账本链验证（与 E6 门禁同一验证器）：链断 = 生产链路证据无效，必须在任务结果里暴露
   let chain = null;
   if (auditLines > 0) {
@@ -204,7 +247,6 @@ export async function runDshTask({
   return {
     status: ok ? "ok" : "failed",
     answer,
-    reason: ok ? undefined : failureLine.slice(0, 240),
     exitCode: res.code,
     ms,
     model,
@@ -230,18 +272,9 @@ function extractDshAnswer(out) {
     .filter((l) => !l.startsWith("[") && !l.startsWith("▸") && !l.startsWith("✅") && !l.startsWith("❌"));
   const completeAt = lines.findIndex((l) => l.includes("TASK_COMPLETE"));
   if (completeAt >= 0) {
-    /**
-     * 最终答案可能跨很多行（结论 + 依据 + 风险 + TASK_COMPLETE 收尾）。
-     * 只取最后几行会把实质内容截掉，导致判定“缺少期望”假失败（2026-09-20 实测）——
-     * 因此按字符数回溯取足够长的尾部（默认 2000 字符）。
-     */
-    let chars = 0;
-    const picked = [];
-    for (let i = completeAt; i >= 0 && chars < 2000; i -= 1) {
-      picked.unshift(lines[i]);
-      chars += lines[i].length + 1;
-    }
-    return picked.join("\n");
+    // 最终答案可能跨多行（结论 + 依据 + TASK_COMPLETE 结尾）：回溯取到上一个段落边界
+    const tail = lines.slice(Math.max(0, completeAt - 4), completeAt + 1).join("\n");
+    return tail.slice(-800);
   }
   const tail = lines.slice(-5).join("\n");
   return tail.length > 8 ? tail.slice(-800) : null;
@@ -268,7 +301,8 @@ function runProcess(cmd, args, { cwd, env, timeoutMs }) {
 export async function runChatTask({ resolved, prompt, timeoutMs = 180_000, env = process.env, image = null }) {
   if (!resolved.ready) return { status: "blocked", reason: resolved.missing.join("；") };
   const apiKey = pickEnv([resolved.credentialEnv, DSH_DEEPSEEK_DEFAULTS.apiKeyEnv, "LLM_API_KEY"], env).value;
-  const base = String(resolved.baseUrl).replace(/\/$/, "");
+  /** 兜底再归一一次：即使 profile 直接把 Anthropic 根声明给 model-gateway，也不至于打出 /anthropic/chat/completions（404） */
+  const base = normalizeOpenAiCompatibleBaseUrl(resolved.baseUrl);
   const url = `${base}/chat/completions`;
   const content = image
     ? [
@@ -318,6 +352,22 @@ export async function runChatTask({ resolved, prompt, timeoutMs = 180_000, env =
 /* 通道三：gen-http（火山方舟 Ark：Seedream 生图 / Seedance 生视频）        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * 组图能力矩阵（官方文档查证 2026-09-24 · 火山方舟「图片生成 API」）：
+ *  - Doubao Seedream 5.0 pro / 5.0 flash：**不支持** `sequential_image_generation`，
+ *    能力口径是"生成单图、暂不支持组图生成"；
+ *  - Seedream 5.0 lite / 4.5 / 4.0：支持 `sequential_image_generation: auto` 组图（最多 15 张）。
+ * 拿不准的模型名一律按"不支持"处理：宁可按单图逐张调用（结果等价、配额口径不变），
+ * 也不要把不支持的参数发给生产端点——实测 IMG-01 因该参数被 Ark 直接 400 InvalidParameter。
+ */
+function supportsSequentialImageGeneration(model) {
+  const m = String(model ?? "").toLowerCase();
+  if (/5[.\-]0[.\-]?(pro|flash)/.test(m)) return false; // 5.0 pro / 5.0 flash：只出单图
+  if (/5[.\-]0[.\-]?lite/.test(m)) return true;
+  if (/4[.\-]?5|4[.\-]?0/.test(m)) return true;
+  return false;
+}
+
 /** 生图（同步 API）：POST {base}/images/generations → data[].url */
 export async function runImageTask({ resolved, task, timeoutMs = 300_000, env = process.env, artifactsDir }) {
   if (!resolved.ready) return { status: "blocked", reason: resolved.missing.join("；") };
@@ -325,36 +375,50 @@ export async function runImageTask({ resolved, task, timeoutMs = 300_000, env = 
   const base = String(resolved.baseUrl).replace(/\/$/, "");
   const count = Number(task.images ?? 1);
   const started = Date.now();
-  let res;
-  try {
-    res = await fetch(`${base}/images/generations`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: resolved.model,
-        prompt: task.prompt,
-        size: task.size ?? "1024x1024",
-        response_format: "url",
-        watermark: task.watermark ?? false,
-        /**
-         * 多张图口径（2026-09-20 实测）：seedream-5.0-pro **不支持** `sequential_image_generation`
-         * （Ark 返回 InvalidParameter: not supported by the current model），但支持 `n`（HTTP 200、返回 2 张）。
-         * 因此统一用 `n`；需要“连续图”语义的模型请在 profile 里显式传 params。
-         */
-        n: count,
-        ...(task.params ?? {}),
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (err) {
-    return { status: "failed", reason: `生图调用失败：${String(err?.message ?? err).slice(0, 200)}`, ms: Date.now() - started };
+  const groupable = count > 1 && supportsSequentialImageGeneration(resolved.model);
+  /** 一次调用：组图模型一轮出 N 张；不支持组图的模型（如 5.0 pro）逐张调用 N 轮 */
+  async function callOnce(sequential) {
+    let res;
+    try {
+      res = await fetch(`${base}/images/generations`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: resolved.model,
+          prompt: task.prompt,
+          size: task.size ?? "1024x1024",
+          response_format: "url",
+          watermark: task.watermark ?? false,
+          ...(sequential ? { sequential_image_generation: "auto", sequential_image_generation_options: { max_images: count } } : {}),
+          ...(task.params ?? {}),
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      return { error: `生图调用失败：${String(err?.message ?? err).slice(0, 200)}` };
+    }
+    const text = await res.text().catch(() => "");
+    let json = null;
+    try { json = JSON.parse(text); } catch { /* 非 JSON */ }
+    if (!res.ok) return { error: `HTTP ${res.status}：${text.slice(0, 300)}` };
+    const urls = (json?.data ?? []).map((d) => d?.url).filter(Boolean);
+    if (!urls.length) return { error: `生图未返回图片 URL：${text.slice(0, 200)}` };
+    return { urls, json };
   }
-  const text = await res.text().catch(() => "");
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* 非 JSON */ }
-  if (!res.ok) return { status: "failed", reason: `HTTP ${res.status}：${text.slice(0, 300)}`, ms: Date.now() - started, model: resolved.model };
-  const urls = (json?.data ?? []).map((d) => d?.url).filter(Boolean);
-  if (!urls.length) return { status: "failed", reason: `生图未返回图片 URL：${text.slice(0, 200)}`, ms: Date.now() - started, model: resolved.model };
+
+  const rounds = groupable ? 1 : Math.max(1, count);
+  const urls = [];
+  let lastJson = null;
+  for (let round = 0; round < rounds; round += 1) {
+    const r = await callOnce(groupable);
+    if (r.error) {
+      // 逐张调用中途失败：保留已落盘产物作证据，状态如实 failed（不伪造数量）
+      return { status: "failed", reason: r.error, ms: Date.now() - started, model: resolved.model, urls, calls: round + 1 };
+    }
+    urls.push(...r.urls);
+    lastJson = r.json;
+    if (!groupable && urls.length >= count) break;
+  }
   const saved = [];
   for (const [i, url] of urls.entries()) {
     const savedPath = await downloadArtifact(url, artifactsDir, `${task.id}-${i + 1}.png`);
@@ -369,8 +433,11 @@ export async function runImageTask({ resolved, task, timeoutMs = 300_000, env = 
       kind: "gen-http.image",
       model: resolved.model,
       endpoint: `${base}/images/generations`,
-      created: json?.created ?? null,
+      created: lastJson?.created ?? null,
       urls,
+      calls: rounds,
+      requested: count,
+      produced: urls.length,
       synced: urls.length > 0,
       verified_at: new Date().toISOString(),
     },

@@ -102,7 +102,12 @@ for (const file of files) {
       const trial = { suite: file.replace(REPO_ROOT, "."), taskId: task.id, title: task.title, criticality: task.criticality ?? "P1", trial: t, interventions: [], asserts: [], pass: false, clarify: false, falseSuccess: false, status: null, threadId: null, ms: 0 };
       try {
         const preset = task.presetKey ?? suite.agentPreset;
-        const dispatchInput = { title: task.input ?? task.title };
+        /**
+         * 受控测量要立即执行（2026-09-24 修复）：threads.dispatch 默认只建档并把线程留 'queued'
+         * （生产由调度器拉取）；O 域测量若不带 runImmediately，所有 trial 都会停在 queued 上，
+         * 断言必然失败（实测 GEO-T01..ADR-T02 全 queued）。这里显式要求立即执行，仍走真实入口。
+         */
+        const dispatchInput = { title: task.input ?? task.title, runImmediately: true };
         if (preset) dispatchInput.presetKey = preset;
         const dispatch = await trpcPost("threads.dispatch", dispatchInput);
         const d = dispatch.json?.result?.data ?? {};
@@ -117,21 +122,46 @@ for (const file of files) {
           }
         } else trial.threadId = d.threadId ?? null;
 
+        /**
+         * 受控测量的人工介入（2026-09-24 修复）：
+         * Quest 会在**每一个**越围栏的步骤上挂起等放行，一次手势远远不够——旧实现只批准一条
+         * 就 break，线程停在下一道关卡上（实测 T-104..T-107 全 pending_review）。现在逐轮推进：
+         *   ① 先用 B-70 的 `approvals.batchRelease` 放行低风险关卡（L4/高危留待，配额与抽检生效）；
+         *   ② 再按 task.intervention 对**本 trial 线程**的关卡做一次显式手势（H1 批准 / H2 编辑 / H3 驳回）；
+         *   ③ 直到线程终态或总体时限（默认 ≥5 分钟），全程把每次介入记进 trial.interventions 供审计。
+         *
+         * 2026-09-24 二次修复（ADR-T02 实测 T-153）：手势后的**续跑是异步的**（服务端 fire-and-forget，
+         * 含一次 LLM 规划，实测 20–60s）；旧实现 10 轮 × ~1.5s 就退出，第二道关卡还没出现，
+         * 线程停在 pending_review 被记成失败。现在把"放行/手势"和"等终态"合成一个**受时限的推进循环**：
+         * 每次醒来先看线程状态，未终态就继续放行可达的关卡；只有到时限或终态才退出。
+         * 另外：优先放行**本线程**的关卡（approvals.event_id ∈ 本线程事件链），避免误放别的线程/夹具的关卡。
+         */
         if (trial.threadId && task.intervention && task.intervention !== "none") {
           const gesture = task.intervention === "edit" ? "edit" : task.intervention === "reject" ? "reject" : "approve";
-          const deadline = Date.now() + 20_000;
-          while (Date.now() < deadline) {
+          const deadline = Date.now() + Math.max(TIMEOUT_S, 300) * 1000;
+          let rounds = 0;
+          while (Date.now() < deadline && rounds < 60) {
+            rounds += 1;
+            const cur = await trpcGet("threads.get", { threadId: trial.threadId });
+            trial.status = cur.json?.result?.data?.status ?? trial.status;
+            if (["completed", "failed", "paused"].includes(trial.status)) break;
+            const batch = await trpcPost("approvals.batchRelease", {});
+            const releasedIds = batch.json?.result?.data?.released ?? [];
+            for (const id of releasedIds) trial.interventions.push({ class: "H1-batch", approvalId: id, ok: batch.status === 200 });
+            const ev = await trpcGet("threads.events", { threadId: trial.threadId });
+            const ownEvents = new Set((ev.json?.result?.data ?? []).map((e) => e.event_id));
             const queue = await trpcGet("approvals.list", { status: "pending" });
-            const first = queue.json?.result?.data?.[0];
+            const rows = queue.json?.result?.data ?? [];
+            const first = rows.find((r) => ownEvents.has(r.event_id)) ?? rows[0];
             if (first) {
               const body = { approvalId: first.approval_id, gesture };
               if (gesture === "edit") { body.editedAfter = task.editAfter ?? { note: "acceptance-edit" }; body.editKind = "correction"; }
               if (gesture === "reject") { body.reasonEnum = "other"; body.reasonText = "acceptance-reject"; }
               const decided = await trpcPost("approvals.decide", body);
               trial.interventions.push({ class: gesture === "approve" ? "H1" : gesture === "edit" ? "H2" : "H3", approvalId: first.approval_id, ok: decided.status === 200 });
-              break;
             }
-            await sleep(1000);
+            // 续跑是异步的：给 LLM/执行留出时间再醒来（有关卡刚放行时等短一点）
+            await sleep(first || releasedIds.length > 0 ? 4000 : 5000);
           }
         }
 
