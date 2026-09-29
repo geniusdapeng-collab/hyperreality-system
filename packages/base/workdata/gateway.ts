@@ -216,6 +216,17 @@ export async function checkHighRiskAuthorization(
   if (actor.type !== "agent" || !actor.highRisk) return;
   // 同段①口径：显式写（含装配期登记的行业工具）才要求逐次授权
   if (!isWriteAction(event.decision.action)) return;
+  /**
+   * 适用面收口（T-2026-0929-0003 联动修复）：逐次授权约束的是**动作执行**，
+   * 不是"围绕该动作的围栏判定留痕"。loop.ts 的 `kind` 取值只有三种：
+   *   - `execute`：真的执行了写动作 → 必须持有逐次授权（本段主体，原语义不变）；
+   *   - `review` ：高危岗位就写动作**请示**（挂起等人审）→ 要求"请示本身"先有授权是死锁，
+   *              实测把 highRisk 接入 actor 后，高危岗位连审批单都建不出来（P0 回归）；
+   *   - `block`  ：围栏熔断的判定留痕，未执行任何动作。
+   * 只豁免这两种**明确的判定记录**；未声明 kind 的调用方（外部集成、压力脚本）
+   * 一律按"要执行写动作"处理，照旧验真 + 一次性消费 —— 不放宽任何执行路径。
+   */
+  if (event.decision.kind === "review" || event.decision.kind === "block") return;
   if (!approvalRef) {
     throw new GatewayReject(
       "authorization",
@@ -265,6 +276,23 @@ export async function checkHighRiskAuthorization(
     throw new GatewayReject(
       "authorization",
       `审批「${approvalRef}」绑定动作 ${snap.action} 与当前 ${event.decision.action} 不符（P1-8），拒绝`,
+    );
+  }
+  /**
+   * B-02 修复（L3.5 逐次授权）：验真通过即原子消费——同一 approvalRef 不得驱动第二次写动作。
+   * 此前本函数只 SELECT 不写入，一张 approved 审批就是永久通行证（复用实锤见排雷台账 B-02）。
+   * 消费与事件落库在同一事务（gatewayAppend/OnClient 口径）：事件回滚则消费回滚，不产生"票用了事没成"。
+   * 语义：一张审批只放行一次高危写落库；重试/重放须重新审批。
+   */
+  const consumed = await db.query(
+    `UPDATE approvals SET consumed_at = now()
+      WHERE approval_id = $1 AND tenant_id = $2 AND workspace_id = $3 AND consumed_at IS NULL`,
+    [approvalRef, scope.tenantId, scope.workspaceId],
+  );
+  if ((consumed.rowCount ?? 0) === 0) {
+    throw new GatewayReject(
+      "authorization",
+      `审批「${approvalRef}」已被消费（一次性授权，L3.5），同一审批不得驱动第二次写动作，须重新审批`,
     );
   }
 }
