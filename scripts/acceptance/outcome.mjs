@@ -92,6 +92,41 @@ const trpcGet = async (path, input) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** 高危判据与 packages/base/review-console#isHighRiskApproval 同口径（tier / high_risk / irreversible） */
+const isHighRiskRow = (row) =>
+  row?.tier === "l4_chairman" || row?.snapshot?.high_risk === true || row?.snapshot?.irreversible === true;
+
+/**
+ * 低风险关卡批量放行（MC-105）：
+ *  - 只批「本 trial 线程事件链上的 pending 关卡」（approvals.event_id ∈ 本线程事件集合）；
+ *  - 高危/不可逆关卡预筛排除，留待下面按 task.intervention 的显式手势逐条裁决
+ *    （服务端 approvals.batchApprove 内仍会二次拒绝，属纵深防御）；
+ *  - 实际放行 id 与跳过原因逐条写进 trial.interventions 供审计。
+ * 历史缺陷：旧实现调用 `approvals.batchRelease`——该过程从未在服务端实现（实测
+ * 404 "No procedure found"），所有需要介入的 trial 都卡在 pending_review 被记成失败。
+ */
+const releaseLowRiskApprovals = async (ownEvents, trial) => {
+  const queue = await trpcGet("approvals.list", { status: "pending" });
+  const rows = Array.isArray(queue.json?.result?.data) ? queue.json.result.data : [];
+  const ownRows = rows.filter((r) => ownEvents.has(r.event_id));
+  for (const r of ownRows.filter(isHighRiskRow)) {
+    trial.interventions.push({ class: "H1-batch-skip", approvalId: r.approval_id, ok: true, reason: "高危/不可逆关卡不预批（留待显式手势）" });
+  }
+  const batchable = ownRows.filter((r) => !isHighRiskRow(r));
+  if (!batchable.length) return [];
+  const batch = await trpcPost("approvals.batchApprove", { approvalIds: batchable.map((r) => r.approval_id) });
+  const data = batch.json?.result?.data ?? {};
+  const released = Array.isArray(data.approved) ? data.approved : [];
+  for (const id of released) trial.interventions.push({ class: "H1-batch", approvalId: id, ok: batch.status === 200 });
+  for (const skip of Array.isArray(data.skipped) ? data.skipped : []) {
+    trial.interventions.push({ class: "H1-batch-skip", approvalId: skip?.id, ok: true, reason: skip?.reason ?? "服务端跳过" });
+  }
+  if (batch.status !== 200 && !released.length) {
+    trial.interventions.push({ class: "H1-batch", ok: false, reason: `approvals.batchApprove HTTP ${batch.status}` });
+  }
+  return released;
+};
+
 const trials = [];
 for (const file of files) {
   const suite = YAML.parse(readFileSync(file, "utf-8"));
@@ -145,14 +180,20 @@ for (const file of files) {
             const cur = await trpcGet("threads.get", { threadId: trial.threadId });
             trial.status = cur.json?.result?.data?.status ?? trial.status;
             if (["completed", "failed", "paused"].includes(trial.status)) break;
-            const batch = await trpcPost("approvals.batchRelease", {});
-            const releasedIds = batch.json?.result?.data?.released ?? [];
-            for (const id of releasedIds) trial.interventions.push({ class: "H1-batch", approvalId: id, ok: batch.status === 200 });
-            const ev = await trpcGet("threads.events", { threadId: trial.threadId });
+            const ev = await trpcGet("threads.events", { threadId: trial.threadId, limit: 200 });
             const ownEvents = new Set((ev.json?.result?.data ?? []).map((e) => e.event_id));
+            const releasedIds = await releaseLowRiskApprovals(ownEvents, trial);
             const queue = await trpcGet("approvals.list", { status: "pending" });
             const rows = queue.json?.result?.data ?? [];
-            const first = rows.find((r) => ownEvents.has(r.event_id)) ?? rows[0];
+            /**
+             * M6-N2：只对本 trial 线程链上的关卡落手势。旧实现 `?? rows[0]` 会回退到任意待批行
+             * （实测点到无关的 L4/遗留夹具行）——既改变了他方状态，又让 O 域 pass@1 随库内遗留波动。
+             * 本线程暂无待批关卡时只等待下一轮（推进循环本身受时限约束），并在干预记录里留一次说明。
+             */
+            const first = rows.find((r) => ownEvents.has(r.event_id));
+            if (!first && !trial.interventions.some((i) => i.class === "H1-idle")) {
+              trial.interventions.push({ class: "H1-idle", ok: true, reason: "本线程暂无待批关卡（不对无关待批行落手势，等待下一轮）" });
+            }
             if (first) {
               const body = { approvalId: first.approval_id, gesture };
               if (gesture === "edit") { body.editedAfter = task.editAfter ?? { note: "acceptance-edit" }; body.editKind = "correction"; }
