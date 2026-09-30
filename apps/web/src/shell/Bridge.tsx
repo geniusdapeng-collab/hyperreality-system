@@ -8,12 +8,87 @@
  */
 import { Icon, Overlay, TopContextBar } from "@workloom/ui";
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { EmergencyBrake, NightStatusPill } from "../components/hud";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { EmergencyBrake, NightStatusPill, type NightPillState } from "../components/hud";
 import { SimBanner } from "../components/SimBanner";
 import { SkillDistBanner } from "../components/SkillDistBanner";
 import { COMMON_STATUS_TEXT, dictText, shortId } from "../lib/display";
+import { ensureDemoLogin, isGuest, trpc } from "../lib/trpc";
+import { operationFailure } from "../lib/ui-state";
+import { useNavigationAccess } from "./NavigationAccess";
 import { PlanSwitcher } from "./PlanSwitcher";
+
+interface NightRunLite { id: string; status: string }
+
+/**
+ * R2-F6：顶栏夜班控制（状态胶囊 + 紧急制动）接线。
+ *
+ * 缺陷回放：顶栏此前渲染 `<EmergencyBrake />`（无 onConfirm）→ `unavailable = !onConfirm`
+ * 使其**恒禁用**，而全端唯一可执行的制动在夜班中心且要求班次 running；演示工作区又没有
+ * 运行中的班次，于是「紧急制动」在产品里没有任何可执行路径。
+ *
+ * 语义边界（对齐设计规范 §5.9「永远可见可用」与 F4.3 的 pauseAll）：
+ *  - 制动对象 = 运行中的夜班班次（暂停全部夜间数字员工）；没有运行班次时没有可制动对象，
+ *    按钮保持禁用但如实说明原因，并把状态胶囊接成夜班中心入口（隐藏非置灰的反面：可解释的禁用）；
+ *  - 有运行班次且成员具备 night.manage 时，顶栏就地二次确认 → 调 nightShift.pause（G5 计时留痕）。
+ */
+function useNightControl(enabled: boolean) {
+  const [night, setNight] = useState<{ configured: boolean; run: NightRunLite | null } | null>(null);
+  const [brakeBusy, setBrakeBusy] = useState(false);
+  const [brakeNote, setBrakeNote] = useState<{ level: "ok" | "alert"; text: string } | null>(null);
+  const load = useCallback(async () => {
+    if (!enabled) return;
+    // 游客会话没有 night.manage：不发必然被拒的轮询，直接落到「未配置 + 可解释禁用」态
+    if (isGuest()) { setNight({ configured: false, run: null }); return; }
+    try {
+      await ensureDemoLogin();
+      const cur = await trpc.nightShift.current.query() as { configured: boolean; run?: NightRunLite };
+      setNight({ configured: cur?.configured === true, run: cur?.run ?? null });
+    } catch {
+      // 顶栏状态失败不阻塞页面；保留上一次已知状态（不把「读不到」伪装成「已就绪」）
+      setNight((prev) => prev ?? { configured: false, run: null });
+    }
+  }, [enabled]);
+  useEffect(() => {
+    if (!enabled) return;
+    void load();
+    const timer = setInterval(() => void load(), 5000); // D6/F3.4 夜班 5s 轮询
+    return () => clearInterval(timer);
+  }, [enabled, load]);
+  useEffect(() => {
+    if (!brakeNote) return;
+    const timer = setTimeout(() => setBrakeNote(null), 8000);
+    return () => clearTimeout(timer);
+  }, [brakeNote]);
+
+  const runningRunId = night?.run?.status === "running" ? night.run.id : null;
+  const brake = useCallback(async () => {
+    if (!runningRunId || brakeBusy) return;
+    setBrakeBusy(true);
+    setBrakeNote(null);
+    try {
+      const r = await trpc.nightShift.pause.mutate({ runId: runningRunId }) as { elapsedMs: number; withinSla: boolean; pausedThreads: number };
+      setBrakeNote(r.withinSla
+        ? { level: "ok", text: `已制动：${r.pausedThreads} 个运行任务挂起（用时 ${r.elapsedMs} 毫秒）` }
+        : { level: "alert", text: `已制动但用时 ${r.elapsedMs} 毫秒，超出目标，请复核 ${r.pausedThreads} 个任务的挂起状态` });
+      await load();
+    } catch (error) {
+      setBrakeNote({ level: "alert", text: operationFailure(error, "紧急制动") });
+      await load();
+    } finally {
+      setBrakeBusy(false);
+    }
+  }, [runningRunId, brakeBusy, load]);
+
+  const status: NightPillState = !night || !night.configured
+    ? "unconfigured"
+    : night.run?.status === "running" ? "cruising"
+      : night.run?.status === "paused" ? "paused"
+        : night.run?.status === "package_generated" ? "completed"
+          : "ready";
+  return { night, status, runningRunId, brakeBusy, brakeNote, brake, reload: load };
+}
 
 /** 星野背景（氛围层；永不遮挡信息、不影响 G10 首屏口径——§7 动效纪律） */
 function StarField() {
@@ -78,6 +153,8 @@ export function Bridge({
 }) {
   // 当前版本（F7.2）：社区版隐藏夜班胶囊与制动杆（隐藏非置灰 E2.6；F12 权限态演示）
   const [plan, setPlan] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { canAction } = useNavigationAccess();
   const [leftVisible, setLeftVisible] = useState(true);
   const [rightVisible, setRightVisible] = useState(true);
   const [leftWidth, setLeftWidth] = useState(() => Number(localStorage.getItem("workloom.pc.panel.left-width")) || 236);
@@ -88,6 +165,8 @@ export function Bridge({
   const [drawer, setDrawer] = useState<"left" | "right" | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const community = plan === "community";
+  const canManageNight = canAction("night.manage");
+  const { status: nightStatus, runningRunId, brakeBusy, brakeNote, brake } = useNightControl(!community);
   const workspaceLabel = typeof document === "undefined"
     ? "当前工作区"
     : (document.title.split("·").slice(1).join("·").trim() || "当前工作区");
@@ -216,8 +295,20 @@ export function Bridge({
                   <Icon name="workspace" size={15} />上下文
                 </button>
                 <PlanSwitcher onPlan={setPlan} />
-                {!community && <NightStatusPill />}
-                {!community && <EmergencyBrake />}
+                {!community && <NightStatusPill state={nightStatus} onClick={() => navigate("/night")} />}
+                {!community && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <EmergencyBrake
+                      onConfirm={canManageNight && runningRunId ? () => void brake() : undefined}
+                      busy={brakeBusy}
+                      disabled={!canManageNight}
+                      hint={canManageNight
+                        ? "当前没有运行中的夜班：到夜班中心出征后可在此就地制动"
+                        : "当前身份无夜班管理权限"}
+                    />
+                    {brakeNote && <span role="status" className={`text-body ${brakeNote.level === "ok" ? "text-go" : "text-alert"}`}>{brakeNote.text}</span>}
+                  </span>
+                )}
               </>
             )}
           />

@@ -286,10 +286,10 @@ export default function P22() {
   const doApprove = useCallback(async (d: PendingDoc) => {
     setBusy(`apr-${d.id}`);
     try {
-      const r = await trpc.service.kb.approveDocument.mutate({ documentId: d.id }) as { ok: boolean; eventId: string };
+      const r = await trpc.service.kb.approveDocument.mutate({ documentId: d.id }) as { ok: boolean; eventId: string; approvalId?: string };
       setBanner({
         level: "info",
-        text: `「${d.title}」第 ${d.version} 版已批准生效，审批中心与事件账本已同步。事件编号：${shortId(r.eventId)}。`,
+        text: `「${d.title}」第 ${d.version} 版已批准生效（逐条人审留痕），审批中心与事件账本已同步。事件编号：${shortId(r.eventId)}${r.approvalId ? `，审批单：${shortId(r.approvalId)}` : ""}。`,
       });
       await load(true);
       await loadDocs(activeCol);
@@ -970,7 +970,10 @@ export default function P22() {
               )}
             </div>
             {docDrawer.status === "pending_review" && (
-              <div className="mt-2 text-body text-warn">提示：待审文档建议到「待审区」批准生效，审批记录会同步进入审批中心和事件账本。</div>
+              <div className="mt-2 text-body text-warn">
+                提示：待审文档建议到「待审区」批准生效——审批记录（含决策人）会同步进入审批中心和事件账本；
+                生效后如需撤回，请在本文档「停用」（同样写入事件账本，客户问答即刻不再引用）。
+              </div>
             )}
         </Overlay>
       )}

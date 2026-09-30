@@ -10,6 +10,8 @@ import { AsyncState, Icon, clientValueText } from "@workloom/ui";
 interface Group {
   workspaceId: string; slug: string; workspaceName: string; tenantName: string;
   role: string; industry: string; pendingApprovals: number;
+  /** MC-113：未办结工单（created/assigned/processing）——与 P22 工单台同一口径 */
+  pendingTickets: number;
 }
 
 export default function P28() {
@@ -35,6 +37,7 @@ export default function P28() {
   }, []);
 
   const total = groups.reduce((s, g) => s + g.pendingApprovals, 0);
+  const totalTickets = groups.reduce((s, g) => s + (g.pendingTickets ?? 0), 0);
 
   if (loading) return <AsyncState status="loading" title="正在汇总统一待办" description="正在按您可访问的工作区核对审批事项。" />;
 
@@ -42,7 +45,7 @@ export default function P28() {
     <div className="mx-auto max-w-3xl px-6 py-8">
       <h1 className="text-xl font-bold">统一待办</h1>
       <p className="mt-1 text-sm text-neutral-400">
-        您在 {groups.length} 家店有 {total} 项待审批——点任意一家进入处理
+        您在 {groups.length} 家店有 {total} 项待审批、{totalTickets} 项未办结工单——点任意一家进入处理
       </p>
       {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
       <div className="mt-6 space-y-3">
@@ -65,6 +68,9 @@ export default function P28() {
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-body text-emerald-500">无待办 <Icon name="check" size={14} /></span>
+              )}
+              {(g.pendingTickets ?? 0) > 0 && (
+                <div className="mt-1 text-body text-holo">{g.pendingTickets} 未办结工单</div>
               )}
             </div>
           </button>

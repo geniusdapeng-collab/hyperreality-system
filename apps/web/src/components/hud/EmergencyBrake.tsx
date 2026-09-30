@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Icon } from "@workloom/ui";
 
-export function EmergencyBrake({ onConfirm, busy = false, disabled = false }: { onConfirm?: () => void; busy?: boolean; disabled?: boolean }) {
+export function EmergencyBrake({ onConfirm, busy = false, disabled = false, hint }: { onConfirm?: () => void; busy?: boolean; disabled?: boolean; hint?: string }) {
   const [arming, setArming] = useState(false);
   const unavailable = disabled || !onConfirm;
   if (arming) {
@@ -40,7 +40,7 @@ export function EmergencyBrake({ onConfirm, busy = false, disabled = false }: { 
       disabled={busy || unavailable}
       onClick={() => setArming(true)}
       className="cursor-pointer rounded-lg border border-alert/55 bg-alert/7 px-3.5 py-1.5 text-body font-extrabold tracking-wider text-alert transition-colors hover:bg-alert/15 disabled:cursor-wait disabled:opacity-50"
-      title={onConfirm ? "紧急制动：暂停全部夜间数字员工" : "请进入夜班中心执行紧急制动"}
+      title={onConfirm ? "紧急制动：暂停全部夜间数字员工" : (hint ?? "请进入夜班中心执行紧急制动")}
     >
       <Icon name="brake" size={16} /> 紧急制动
     </button>

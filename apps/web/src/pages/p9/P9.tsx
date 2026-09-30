@@ -111,6 +111,8 @@ export default function P9() {
     : run?.status === "running" ? "cruising" : run?.status === "paused" ? "paused" : run?.status === "package_generated" ? "completed" : "ready";
   const readonly = loadState !== "ready" || !canAction("night.manage");
   const canDispatch = loadState === "ready" && canAction("task.dispatch");
+  /** 出征条件（R2-F6）：没有运行中的班次时才需要出征；已制动班次走「恢复」。 */
+  const canSetOut = !run || run.status === "ready" || run.status === "package_generated";
 
   const meter = useMemo(() => {
     const credits = events.reduce((s, e) => s + (e.model_trace?.credits ?? 0), 0);
@@ -154,6 +156,31 @@ export default function P9() {
       setBusy(null);
     }
   }, [run, busy, load]);
+
+  /* 出征（R2-F6：nightShift.start 此前没有 UI 入口 → 「无运行班次 ⇒ 制动无任何可执行路径」闭环缺一环） */
+  const doStart = useCallback(async () => {
+    if (busy) return;
+    setBusy("start");
+    setActionError("");
+    try {
+      const candidates = await trpc.nightShift.candidates.query() as Array<{ id?: string }>;
+      const candidateIds = (candidates ?? [])
+        .map((candidate) => candidate?.id)
+        .filter((id): id is string => typeof id === "string");
+      const runDate = new Date().toLocaleDateString("sv-SE"); // 本地时区 YYYY-MM-DD
+      const r = await trpc.nightShift.start.mutate({ runDate, candidateIds }) as { runId: string; status: string };
+      setBanner({
+        level: "info",
+        text: `夜班已出征（班次 ${shortId(r.runId)}，候选 ${candidateIds.length} 项）：顶栏与页内「紧急制动」现在可用。`,
+      });
+      await load(true);
+    } catch (error) {
+      console.warn("夜班出征失败", error);
+      setActionError(operationFailure(error, "夜班出征"));
+    } finally {
+      setBusy(null);
+    }
+  }, [busy, load]);
 
   const sendNote = useCallback(async () => {
     if (!note.trim() || busy) return;
@@ -264,6 +291,18 @@ export default function P9() {
           <h2 className="text-h1 font-black tracking-wider">夜班中心频道</h2>
           <span className="text-body tracking-[.2em] text-ink3">夜班班组</span>
           <span className="flex-1" />
+          {!readonly && canSetOut && (
+            <button
+              type="button"
+              disabled={Boolean(busy)}
+              aria-busy={busy === "start" || undefined}
+              onClick={() => void doStart()}
+              className="cursor-pointer rounded-lg border border-holo/50 bg-holo/10 px-3.5 py-1.5 text-body font-extrabold text-holo disabled:cursor-wait disabled:opacity-50"
+              title="人类命令开启今晚夜班：就绪后全员上线，可随时紧急制动"
+            >
+              {busy === "start" ? "正在出征…" : <><Icon name="play" size={14} className="inline" /> 出征（开启夜班）</>}
+            </button>
+          )}
           {!readonly && configured && run?.status === "running" && <EmergencyBrake busy={busy === "pause"} disabled={Boolean(busy && busy !== "pause")} onConfirm={() => void doPause()} />}
           {!readonly && configured && run?.status === "paused" && (
             <button
@@ -297,7 +336,7 @@ export default function P9() {
               onRetry={loadState === "error" ? () => void load() : undefined}
             />
           ) : !configured ? (
-            <EmptyState icon={<Icon name="night" size={24} />} title="夜班未配置" hint="请前往规则与权限页面完成夜班配置。" actionLabel="去配置 →" onAction={() => navigate("/guardrails")} />
+            <EmptyState icon={<Icon name="night" size={24} />} title="夜班未配置" hint="可以直接用上方「出征（开启夜班）」开启今晚班次，或前往规则与权限页面配置夜班参数。" actionLabel="去配置 →" onAction={() => navigate("/guardrails")} />
           ) : (
             <>
               <SystemDivider time="22:00" summary={`夜班开始 · 当班安全规则${versionText(run?.fenceSnapshot)} · 候选清单 ${run?.candidateCount ?? 0} 项已确认`} />

@@ -368,7 +368,7 @@ export default function P23() {
             </button>
             <span className="text-ink3">（生产由夜班窗口自动运行；统计闸：样本不足只观察不提炼）</span>
             {canRecall && <><span className="mx-1 text-line">|</span>
-              <select value={recallMember} disabled={Boolean(busy)} onChange={(e) => setRecallMember(e.target.value)} className="w-56 max-w-full min-w-0 rounded border border-line bg-bg950 px-2 py-1.5 text-ink outline-none focus:border-gold/60">
+              <select aria-label="选择需要清算的来源成员" value={recallMember} disabled={Boolean(busy)} onChange={(e) => setRecallMember(e.target.value)} className="w-56 max-w-full min-w-0 rounded border border-line bg-bg950 px-2 py-1.5 text-ink outline-none focus:border-gold/60">
                 <option value="">选择需要清算的来源成员</option>
                 {members.map((member) => <option key={member.memberNo} value={member.memberNo}>{member.name}</option>)}
               </select>

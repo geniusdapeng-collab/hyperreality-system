@@ -17,6 +17,10 @@ export interface FloorAgent {
   currentThread: { id: string; title: string } | null;
   pendingTier: string | null;
   approvalId: string | null;
+  /** blocked 与 asking 共存（MC-114）：遇阻主态下仍有待裁请示，点击直达审批卡 */
+  asking?: boolean;
+  /** 该员工 pending 审批总数（>1 时气泡显式提示「共 N 项待裁」） */
+  pendingCount?: number;
   statusLine: string;
 }
 export interface FloorScene {
@@ -236,13 +240,16 @@ export function FloorView({
         roundRect(ctx, sx - lw / 2, sy + 6, lw, 12, 6); ctx.stroke();
         ctx.fillStyle = "#33262b"; ctx.fillText(label, sx, sy + 15);
         if (a.state === "asking") {
-          bubble(ctx, sx, sy - 46, a.pendingTier === "l4_chairman" ? "请您定（老板级）" : "请您定", "#e8890c");
+          const label = a.pendingTier === "l4_chairman" ? "请您定（老板级）" : "请您定";
+          bubble(ctx, sx, sy - 46, (a.pendingCount ?? 1) > 1 ? `${label} · 共 ${a.pendingCount} 项` : label, "#e8890c");
           // 聚光灯
           const sp = ctx.createRadialGradient(sx, sy, 2, sx, sy, 30);
           sp.addColorStop(0, "rgba(255,190,106,.28)"); sp.addColorStop(1, "rgba(255,190,106,0)");
           ctx.fillStyle = sp; ctx.beginPath(); ctx.ellipse(sx, sy, 30, 14, 0, 0, Math.PI * 2); ctx.fill();
         } else if (a.state === "blocked") {
-          bubble(ctx, sx, sy - 46, "!", "#e8890c");
+          // MC-114：遇阻但仍有待裁请示时，气泡必须把两件事都说出来（信息不丢，点击直达审批）
+          const label = a.pendingTier === "l4_chairman" ? "遇阻 · 请您定（老板级）" : "遇阻 · 请您定";
+          bubble(ctx, sx, sy - 46, a.approvalId ? ((a.pendingCount ?? 1) > 1 ? `${label} · 共 ${a.pendingCount} 项` : label) : "!", "#e8890c");
         } else if (a.state === "working" && a.currentThread) {
           ctx.fillStyle = "#6adf8a"; ctx.font = "8px sans-serif";
           const dots = "▮".repeat(1 + (Math.floor(now * 2 + rt.phase) % 3));
@@ -265,7 +272,8 @@ export function FloorView({
       if ((mx - h.sx) ** 2 + (my - h.sy) ** 2 < h.r ** 2 * 2.2) {
         const agent = floorRef.current.agents.find((a) => a.id === h.id);
         if (!agent) return;
-        if (agent.state === "asking" && agent.approvalId) onPickApproval(agent);
+        // asking 直达审批；blocked 且带待裁请示（MC-114：asking 标志）同样直达，不再被遇阻态吃掉入口
+        if (agent.approvalId && (agent.state === "asking" || agent.asking)) onPickApproval(agent);
         else onPickAgent(agent);
         return;
       }
