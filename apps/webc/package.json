@@ -11,7 +11,7 @@
     "test": "../../node_modules/.bin/vitest run"
   },
   "dependencies": {
-    "@workloom/ui": "0.1.16",
+    "@workloom/ui": "0.1.17",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

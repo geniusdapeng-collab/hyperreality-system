@@ -13,7 +13,7 @@
   "dependencies": {
     "@trpc/client": "11.19.0",
     "@workloom/server": "workspace:*",
-    "@workloom/ui": "0.1.16",
+    "@workloom/ui": "0.1.17",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
