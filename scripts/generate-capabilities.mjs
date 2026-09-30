@@ -199,7 +199,8 @@ outs.push(["README.md", newReadme]);
 // 校验模式下归一化易变字段（生成时间），避免跨时间误报漂移
 const normalize = (s) => s
   .replaceAll(data.generatedAt, "<TS>")
-  .replaceAll(data.generatedAt.slice(0, 10), "<DATE>")
+  // 生成日跨天变化不代表能力内容漂移；README/导览中的生成日期一并归一。
+  .replace(/(自动生成(?:\*\*)?（)\d{4}-\d{2}-\d{2}(）)/g, "$1<DATE>$2")
   .replace(/"generatedAt": "[^"]*"/, '"generatedAt": "<TS>"')
   .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z/g, "<TS>");
 

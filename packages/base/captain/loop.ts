@@ -142,6 +142,9 @@ export async function runQueueBeat(
     }>(
       `SELECT a.approval_id, a.event_id, a.snapshot
        FROM approvals a WHERE a.workspace_id=$1 AND a.status='pending' AND a.tier='l2_captain'
+         -- B-03 修复（端口 growth 排雷 T-2026-0929-0003）：AI 裁决节拍不得批准已过期审批
+         -- （与 review-console.decide() 的过期检查同口径）
+         AND (a.snapshot->>'expires_at' IS NULL OR (a.snapshot->>'expires_at')::timestamptz > now())
        ORDER BY a.approval_id LIMIT 20`,
       [scope.workspaceId],
     );
@@ -446,7 +449,7 @@ export async function runHrReviewBeat(
           `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
            VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l4_chairman') ON CONFLICT (event_id, channel) DO NOTHING`,
           [`apr-${evId.toLowerCase()}`, scope.tenantId, scope.workspaceId, evId,
-           JSON.stringify({ kind: "hr.replacement", agent_id: card.agentId, design: replacement, title: `汰换 ${card.agentId} → ${replacement.newPreset.name}` })],
+           JSON.stringify({ kind: "hr.replacement", agent_id: card.agentId, design: replacement, title: `汰换 ${card.agentId} → ${replacement.newPreset.name}`, high_risk: true })],
         );
       }
     });
@@ -546,7 +549,7 @@ export async function runOrgScanBeat(
         `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
          VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l4_chairman') ON CONFLICT (event_id, channel) DO NOTHING`,
         [`apr-${evId.toLowerCase()}`, scope.tenantId, scope.workspaceId, evId,
-         JSON.stringify({ kind: "org.hiring", role: proposal.role, jd: proposal.jd, title: `招聘提案：${proposal.role}` })],
+         JSON.stringify({ kind: "org.hiring", role: proposal.role, jd: proposal.jd, title: `招聘提案：${proposal.role}`, high_risk: true })],
       );
     }
   });

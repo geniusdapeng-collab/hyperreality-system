@@ -35,7 +35,8 @@ describe("C 端发布事实", () => {
 
   it("多站点必须让公开地址的站点标识精确命中同一工作区", () => {
     const env = {
-      NODE_ENV: "production",
+      // 演示档（开发）——本用例验证的是多站点路由精度，不是生产档开关语义
+      NODE_ENV: "development",
       SERVICE_C_DEMO_AUTH: "true",
       SERVICE_C_PUBLIC_URL_MAP: JSON.stringify({
         "ws-a": { url: "https://a.example.com/", workspaceKey: "site-a" },
@@ -65,7 +66,8 @@ describe("C 端发布事实", () => {
     const result = resolveServiceFrontPublication({
       workspaceId: "ws-a",
       env: {
-        NODE_ENV: "production",
+        // 演示身份只能在开发/本机预览档成立；生产档由下面的 MC-207 用例锁定为忽略
+        NODE_ENV: "development",
         SERVICE_C_PUBLIC_URL: "https://service.example.com/entry",
         SERVICE_C_WORKSPACE_ID: "ws-a",
         SERVICE_C_DEMO_AUTH: "true",
@@ -76,6 +78,22 @@ describe("C 端发布事实", () => {
     expect(result).toMatchObject({ overall: "preview", qrAvailable: true });
     expect(result.channels.find((channel) => channel.key === "wechat-mini")?.status).toBe("partial");
     expect(result.channels.every((channel) => channel.status !== "ready")).toBe(true);
+  });
+
+  it("生产档忽略出厂演示开关：地址与路由齐备也不标成演示可登录（MC-207）", () => {
+    const result = resolveServiceFrontPublication({
+      workspaceId: "ws-a",
+      env: {
+        NODE_ENV: "production",
+        SERVICE_C_PUBLIC_URL: "https://service.example.com/entry",
+        SERVICE_C_WORKSPACE_ID: "ws-a",
+        // 出厂 .env.example 历史值与客户升级遗留值：生产档必须忽略
+        SERVICE_C_DEMO_AUTH: "true",
+      },
+    });
+    expect(result).toMatchObject({ publicReachable: true, workspaceRoutingReady: true, overall: "blocked", qrAvailable: false });
+    expect(result.channels.find((channel) => channel.key === "h5")?.status).toBe("blocked");
+    expect(result.channels.find((channel) => channel.key === "h5")?.detail).toMatch(/可信入口签名尚未配置/);
   });
 
   it("正式身份链路缺失时即使地址公开也不生成可用服务二维码", () => {

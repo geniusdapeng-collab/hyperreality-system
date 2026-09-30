@@ -19,7 +19,10 @@ import {
   registerReadActions, registerWriteActions,
 } from "../workdata/gateway.js";
 import type { EventDraft } from "../workdata/events.js";
-import { activateRuleVersion, confirmDryRun, createDryRun, loadActiveRulesInTx } from "./lifecycle.js";
+import {
+  activateRuleVersion, confirmDryRun, createDryRun, fenceRuleRowId, loadActiveRulesInTx, nextRuleRowIdentity,
+  type RuleRowIdentity,
+} from "./lifecycle.js";
 import { gatewayAppendOnClient } from "../workdata/gateway.js";
 
 const BUNDLES = join(dirname(fileURLToPath(import.meta.url)), "../../../bundles");
@@ -196,7 +199,8 @@ describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本�
   let appPool: import("pg").Pool;
   let ownerPool: import("pg").Pool;
 
-  const rowId = (ruleId: string) => `fr-${ruleId.toLowerCase()}-vnext-${scope.workspaceId}`;
+  // 与提案路径同口径：候选行 ID 由 rule 版本派生（MC-102）；测试夹具固定用 "v-next" 占位
+  const rowId = (ruleId: string) => fenceRuleRowId(ruleId, scope.workspaceId, "v-next");
 
   async function withAppTx<T>(fn: (client: import("pg").PoolClient) => Promise<T>): Promise<T> {
     const client = await appPool.connect();
@@ -329,5 +333,97 @@ describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本�
     expect(rows.rows.filter((r) => r.status === "active")).toHaveLength(1);
     expect(rows.rows.find((r) => r.status === "active")?.version).toBe(version);
     expect(rows.rows.find((r) => r.status === "active")?.approved_event_id).toBe(gestureEventId);
+  });
+
+  it("MC-102/109 真库：同一 rule_id 连续两次加严都生效，且平台基线锚点不丢", async () => {
+    const mcRule = `R${Math.floor(Math.random() * 800) + 100}`;
+    const baselineRowId = fenceRuleRowId(mcRule, scope.workspaceId, "v1");
+    const defaultWhen = "params.guarantee_anomaly != true";
+    const insertProposalRow = async (row: RuleRowIdentity, level: "auto" | "review" | "block", when: string) => {
+      await withAppTx((client) => client.query(
+        `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,'pending_approval','MEM-001')`,
+        [row.rowId, mcRule, row.version, scope.workspaceId, `MC 覆盖 ${mcRule}`,
+         level, JSON.stringify({ object_types: ["order"], actions: ["order.reconcile"], when }),
+         JSON.stringify({ result: level === "auto" ? "pass" : level === "review" ? "review" : "blocked" })],
+      ));
+    };
+    const activate = async (
+      row: RuleRowIdentity,
+      level: "auto" | "review" | "block",
+      opts: { when?: string; allowWhenChange?: boolean } = {},
+    ) => {
+      const dr = await createDryRun(appPool, scope, {
+        ruleId: mcRule, ruleVersion: row.version, rules: hotelPackRules,
+        defaultLevel: hotelPackDefaultLevel, createdBy: "MEM-001",
+      });
+      await confirmDryRun(appPool, scope, dr.dryRunId);
+      await insertProposalRow(row, level, opts.when ?? defaultWhen);
+      const gestureEventId = await buildApprovalChain(mcRule, dr.dryRunId);
+      return activateRuleVersion(appPool, scope, {
+        ruleRowId: row.rowId, dryRunId: dr.dryRunId, approvalEventId: gestureEventId,
+        allowWhenChange: opts.allowWhenChange,
+      });
+    };
+    const rowStatus = async () => withAppTx((client) => client.query<{
+      id: string; version: string; level: string; is_baseline: boolean; status: string;
+    }>(
+      `SELECT id, version, level, is_baseline, status FROM fence_rules
+        WHERE workspace_id=$1 AND rule_id=$2 ORDER BY created_at, id`,
+      [scope.workspaceId, mcRule],
+    ));
+    try {
+      // 平台基线锚点（模拟出厂包行）：level=auto，is_baseline=true，active
+      await withAppTx((client) => client.query(
+        `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
+         VALUES ($1,$2,'hotel-baseline/v1',$3,$4,'auto',$5,$6,true,'active','system:seed')`,
+        [baselineRowId, mcRule, scope.workspaceId, `MC 基线 ${mcRule}`,
+         JSON.stringify({ object_types: ["order"], actions: ["order.reconcile"], when: "params.guarantee_anomaly != true" }),
+         JSON.stringify({ result: "pass" })],
+      ));
+
+      // 第 1 次加严：auto（基线）→ review（覆盖行）
+      const first = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(first.version).toBe("v2");
+      expect(first.inheritedBaseline).toBe(true);
+      const firstActivated = await activate(first, "review");
+      expect(firstActivated.version).toBe("v2");
+
+      // 第 2 次加严：review → block。修复前这里会撞主键（固定 vnext 行 ID）而静默不生效
+      const second = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(second.version).toBe("v3");
+      expect(second.rowId).not.toBe(first.rowId);
+      const secondActivated = await activate(second, "block");
+      expect(secondActivated.version).toBe("v3");
+
+      const rows = (await rowStatus()).rows;
+      const baselineRow = rows.find((r) => r.id === baselineRowId);
+      expect(baselineRow).toMatchObject({ is_baseline: true, status: "active" }); // MC-109：锚点行不被回滚
+      expect(rows.find((r) => r.id === first.rowId)).toMatchObject({ status: "rolled_back", version: "v2" });
+      expect(rows.find((r) => r.id === second.rowId)).toMatchObject({ status: "active", level: "block", version: "v3" });
+      expect(rows.filter((r) => r.status === "active")).toHaveLength(2); // 基线 + 当前覆盖行
+
+      // 第 3 次放宽：block → auto，基线锚点不丢 → 激活期被拒
+      const third = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(third.version).toBe("v4");
+      await expect(activate(third, "auto")).rejects.toThrowError(/只可加严/);
+      expect((await rowStatus()).rows.find((r) => r.id === third.rowId)?.status).toBe("pending_approval");
+
+      // MC-103：基线 when 改写默认被拒（无显式放行位）
+      const whenBlocked = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(whenBlocked.version).toBe("v5");
+      await expect(activate(whenBlocked, "block", { when: "params.amount > 0" })).rejects.toThrowError(/when/);
+
+      // MC-103：dry-run 回放 + 人工确认后显式 allowWhenChange=true → 激活期放行（提案事件已留痕）
+      const whenAllowed = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(whenAllowed.version).toBe("v6");
+      const appliedWhen = await activate(whenAllowed, "block", { when: "params.amount > 0", allowWhenChange: true });
+      expect(appliedWhen.version).toBe("v6");
+      const finalRows = (await rowStatus()).rows;
+      expect(finalRows.find((r) => r.id === whenAllowed.rowId)).toMatchObject({ status: "active", version: "v6" });
+      expect(finalRows.find((r) => r.id === baselineRowId)).toMatchObject({ is_baseline: true, status: "active" });
+    } finally {
+      await ownerPool.query(`DELETE FROM fence_rules WHERE workspace_id=$1 AND rule_id=$2`, [scope.workspaceId, mcRule]);
+    }
   });
 });

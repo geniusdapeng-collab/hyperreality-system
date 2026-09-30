@@ -16,6 +16,7 @@ vi.mock("../service/access-authority.js", async (importOriginal) => {
 
 import {
   actionProcedure,
+  bundleActionWriteProcedure,
   capabilityProcedure,
   createContext,
   navigationPermissionProcedure,
@@ -177,5 +178,26 @@ describe("会话域隔离", () => {
       readDevelopment: navigationPermissionProcedure("ai-pm.development.read").query(() => "已授权"),
     });
     await expect(testRouter.createCaller(context).readDevelopment()).resolves.toBe("已授权");
+  });
+
+  it("行业 execute 须独立动作授权，导航 read 与公共写权限不能代替", async () => {
+    const identity: Identity = {
+      kind: "member", memberId: "mem-owner", memberNo: "MEM-001", name: "负责人",
+      role: "owner", tenantId: "tenant-1", workspaceId: "ws-1", plan: "pro",
+    };
+    currentMemberAuthorityMock.mockResolvedValue({ identity, permissions: {} });
+    const context = { session: identity, identity, partnerIdentity: null, headers: new Headers() };
+    const testRouter = router({
+      executeFastScan: bundleActionWriteProcedure("hotel.fast-scan.execute").mutation(() => "已执行"),
+    });
+    resolveAuthoritativeClientAccessMock.mockResolvedValueOnce({
+      navigationPermissions: ["hotel.fast-scan.read"], actionPermissions: ["workspace.write"],
+    });
+    await expect(testRouter.createCaller(context).executeFastScan()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    resolveAuthoritativeClientAccessMock.mockResolvedValueOnce({
+      navigationPermissions: ["hotel.fast-scan.read"],
+      actionPermissions: ["workspace.write", "hotel.fast-scan.execute"],
+    });
+    await expect(testRouter.createCaller(context).executeFastScan()).resolves.toBe("已执行");
   });
 });

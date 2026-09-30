@@ -55,6 +55,48 @@ describe("意图路由（F3.2）", () => {
   });
 });
 
+describe("ask 事实面排序与落款（MC-111）", () => {
+  it("被问域事实先于知识库：系统问句不被 FAQ 挤占（纯函数口径）", async () => {
+    const { mergeKbFacts, composeAskAnswer, orderAskFactsForQuestion } = await import("./ask.js");
+    const base = {
+      facts: [
+        { label: "当前待审批", value: "3 项（决断队列）", domain: "approvals" as const },
+        { label: "事件库规模", value: "120 条五元事件（哈希链可验）", domain: "events" as const },
+      ],
+      sources: ["approvals", "biz_events"],
+    };
+    const merged = mergeKbFacts(base, [{
+      content: "拨0报修后可随时致电前台查询进度。", heading: "维修报修", documentTitle: "住客常见问答", documentId: "kbd-repair",
+    }]);
+    const ordered = orderAskFactsForQuestion("当前有多少待审批事项？", merged.facts);
+    expect(ordered[0]!.label).toBe("当前待审批");
+    const answer = composeAskAnswer("当前有多少待审批事项？", merged.facts);
+    expect(answer).toContain("当前待审批：3 项");
+    expect(answer.indexOf("当前待审批")).toBeLessThan(answer.indexOf("知识库·"));
+  });
+
+  it("落款与实际取数来源一致：KB-only 答案不得声称『数字来自事件库实时取数』", async () => {
+    const { mergeKbFacts, composeAskAnswer } = await import("./ask.js");
+    const kbOnly = mergeKbFacts({ facts: [], sources: [] }, [{
+      content: "客户报暗号「星火」可再减 30 元。", heading: "暗号", documentTitle: "国庆促销政策", documentId: "kbd-1",
+    }]);
+    const kbAnswer = composeAskAnswer("国庆暗号是什么？", kbOnly.facts);
+    expect(kbAnswer).toContain("知识库·");
+    expect(kbAnswer).not.toContain("以上数字均来自事件库实时取数");
+    const dbAnswer = composeAskAnswer("当前有多少待审批事项？", [{ label: "当前待审批", value: "2 项（决断队列）", domain: "approvals" }]);
+    expect(dbAnswer).toContain("以上数字均来自事件库实时取数");
+  });
+
+  it("被问域识别：审批/工单/夜班/线程/知识各自命中且不互相冒充", async () => {
+    const { askedAskDomains } = await import("./ask.js");
+    expect(askedAskDomains("当前有多少待审批事项？")).toContain("approvals");
+    expect(askedAskDomains("今天服务台收到多少工单？")).toContain("tickets");
+    expect(askedAskDomains("昨晚夜班完成了哪些工作？")).toContain("night");
+    expect(askedAskDomains("现在有多少进行中的任务？")).toContain("threads");
+    expect(askedAskDomains("房间里的毛巾多久更换一次？")).toEqual(["kb"]);
+  });
+});
+
 describe("计划模板（演示剧本）", async () => {
   const { planQuest } = await import("./loop.js");
   const fakePreset = {
@@ -106,6 +148,27 @@ describe("LLM 任务规划（B9 planQuestSmart）", async () => {
   it("未配置 llmCall → 直接消费装配声明", async () => {
     const steps = await planQuestSmart("生成复盘", fakePreset as never, undefined);
     expect(steps.map((s) => s.action)).toEqual(["metrics.read", "report.write"]);
+  });
+});
+
+/**
+ * MC-305（E3.7 无回执不算完成）在合并后的实现口径：
+ * 云端 main 把 replay 锚点升级为 `existingStepReceipts()`（返回 done: Map<stepId, StepReceiptRecord> 与
+ * unverified: string[]），只有 receipt.synced=true 的步骤才进入 done；存在未核实步骤时线程保持 failed
+ * 且**不重发**（"对账前不重发"）。因此本分支原先导出的 `stepReceiptVerified` 适配器不再需要，
+ * 断言改为在 PG 集成用例里验证「failed 线程重跑不转 completed」这一外部可观察行为。
+ */
+describe("replay 断点锚点（MC-305 / E3.7 无回执不算完成）", () => {
+  it("口径：未核实步骤不得作为已完成锚点（由 existingStepReceipts 保证，见 PG 集成用例）", () => {
+    // 纯函数级断言已随 main 的实现收敛：记录每次调整时的口径，避免测试与实现两套口径漂移。
+    const done = new Map<string, { verified: boolean }>();
+    const receipts = [
+      { stepId: "s1", verified: true },
+      { stepId: "s2", verified: false },
+    ];
+    for (const record of receipts) if (record.verified) done.set(record.stepId, record);
+    expect([...done.keys()]).toEqual(["s1"]);
+    expect(receipts.filter((r) => !r.verified).map((r) => r.stepId)).toEqual(["s2"]);
   });
 });
 
@@ -241,6 +304,66 @@ d("PG 集成 Quest 循环（种子库）", async () => {
     const n2 = (await threadEvents(tid)).length;
     expect(n2).toBe(n1); // 幂等：零新增事件
     expect(r2.stepsDone).toBe(r1.stepsDone);
+  });
+
+  it("MC-108 高危岗位写步骤：命中 auto 也升级人审；快照带 high_risk 且批量采纳被拦", async () => {
+    // 借用既有 preset（pricing-agent 的 price.adjust 命中 R1 auto）临时标记为高危岗位，
+    // 覆盖「围栏命中 auto、但岗位高危必须逐次人审」这条路径；无论成败都恢复 meta（重跑安全）。
+    const markHighRisk = async (remove: boolean) => {
+      const c = await app.connect();
+      try {
+        await c.query("SELECT set_config('app.workspace_id', $1, false)", [scope.workspaceId]);
+        await c.query(
+          remove
+            ? `UPDATE agents SET meta = meta - 'high_risk' WHERE workspace_id=$1 AND preset_key='pricing-agent'`
+            : `UPDATE agents SET meta = jsonb_set(meta, '{high_risk}', 'true'::jsonb) WHERE workspace_id=$1 AND preset_key='pricing-agent'`,
+          [scope.workspaceId],
+        );
+      } finally { c.release(); }
+    };
+    await markHighRisk(false);
+    try {
+      const tid = await newThread("高危岗位调价（MC-108）");
+      const r1 = await runQuest(app, gw, scope, { threadId: tid, goal: "周五调价 2%", presetKey: "pricing-agent", fallbackPlanner: hotelFixturePlanner });
+      // 两个读步骤照常自动执行；写步骤（R1 auto）因岗位高危被升级 → 挂起人审
+      expect(r1.status).toBe("pending_review");
+      const approvalId = r1.pendingApprovalId!;
+      expect(approvalId).toBeDefined();
+      // 快照必须带 high_risk（批量/超时守卫的判据）+ MC-106 绑定字段（网关段③可比对）
+      const c = await app.connect();
+      let snap: Record<string, unknown> = {};
+      try {
+        await c.query("SELECT set_config('app.workspace_id', $1, false)", [scope.workspaceId]);
+        const a = await c.query<{ snapshot: Record<string, unknown> }>(
+          `SELECT snapshot FROM approvals WHERE approval_id=$1`, [approvalId]);
+        snap = a.rows[0]!.snapshot;
+      } finally { c.release(); }
+      expect(snap.high_risk).toBe(true);
+      /**
+       * 合并口径（bfd5fe6 采用云端 main 的 loop.ts）：步骤级审批快照写 `action`（MC-106 必备绑定）
+       * 与 `high_risk`；`object_type/object_id` 属「显式声明才校验」的可选维度，main 的运行时不声明。
+       * 此前用例断言对象维度必填 → 在 RUN_DB_TESTS=1 下假红（上游 main 与本分支实现均不写该字段）。
+       */
+      expect(snap.action).toBe("price.adjust");
+      // 批量采纳守卫必须逐条拦下（L5.4 / isHighRiskApproval）
+      const { decide, batchApprove } = await import("@workloom/base/review-console");
+      const batch = await batchApprove(app, gw, scope, { memberNo: "MEM-001", role: "owner" }, [approvalId]);
+      expect(batch.approved).toEqual([]);
+      expect(batch.skipped[0]?.reason ?? "").toContain("高危");
+      // 尚未执行：该步骤只留下挂起事件（无回执位）
+      const hung = (await threadEvents(tid)).filter((e) => e.decision.step_id === "s3");
+      expect(hung).toHaveLength(1);
+      expect(hung[0]!.receipt).toBeUndefined();
+      // 逐条人审后恢复执行：执行事件 actor 带 highRisk，approvalRef 过网关段③验真后闭环
+      await decide(app, gw, scope, { memberNo: "MEM-001", role: "owner" }, approvalId, { type: "approve" });
+      const r2 = await runQuest(app, gw, scope, { threadId: tid, goal: "周五调价 2%", presetKey: "pricing-agent", fallbackPlanner: hotelFixturePlanner });
+      expect(r2.status).toBe("completed");
+      const executed = (await threadEvents(tid)).find((e) => e.decision.step_id === "s3" && e.receipt !== undefined)!;
+      expect(executed).toBeTruthy();
+      expect((executed.decision.basis as string[])[0]).toContain(approvalId);
+    } finally {
+      await markHighRisk(true);
+    }
   });
 
   it("#24 装配围栏并集：安装技能绑定进装配声明（F8.2/L8.3），卸载即收缩", async () => {

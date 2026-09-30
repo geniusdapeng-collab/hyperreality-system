@@ -167,6 +167,7 @@ export function memberAccessGrants(input: {
   guest: boolean;
   permissions?: Record<string, unknown>;
   verifiedBundlePermissions?: readonly string[];
+  verifiedBundleActionPermissions?: readonly string[];
 }): { navigationPermissions: string[]; actionPermissions: string[] } {
   const navigation = new Set<string>(SAFE_MEMBER_READS);
   const actions = new Set<string>();
@@ -189,18 +190,28 @@ export function memberAccessGrants(input: {
   }
 
   const bundleUniverse = new Set(input.verifiedBundlePermissions ?? []);
+  // 行业执行键只来自已验证的活动 Bundle。与导航权限分开，避免把
+  // 「能打开只读页面」误作「可以执行页面内动作」。
+  const bundleActions = new Set(input.verifiedBundleActionPermissions ?? []);
   const overrides = memberPermissionOverrides(input.permissions ?? {});
   if (!input.guest) {
     if (input.role === "owner" || input.role === "manager") {
       for (const permission of bundleUniverse) navigation.add(permission);
+      if (actions.has("workspace.write")) {
+        for (const permission of bundleActions) actions.add(permission);
+      }
     }
     for (const permission of overrides.allow) {
       if (bundleUniverse.has(permission) && !NON_DELEGABLE_BASE.has(permission)) navigation.add(permission);
+      if (actions.has("workspace.write") && bundleActions.has(permission)) actions.add(permission);
     }
   }
   for (const denied of overrides.deny) {
     navigation.delete(denied);
     actions.delete(denied);
+  }
+  if (!actions.has("workspace.write")) {
+    for (const permission of bundleActions) actions.delete(permission);
   }
 
   // 套餐降级实时生效：旧 JWT 或前端缓存不能保留夜班入口/动作。
@@ -418,12 +429,18 @@ export async function resolveAuthoritativeClientAccess(
       // 仅兼容尚未携带组合来源元数据的旧单 Bundle 投影。
       : bundle.projection.ui.permissions
     : [];
+  const verifiedBundleActionPermissions = bundle.state === "ready" && bundle.projection
+    && (bundle.projection.primaryBundleId === undefined && bundle.projection.sources === undefined
+      || Array.isArray(bundle.projection.navigationPermissionUniverse))
+    ? bundle.projection.ui.permissions.filter((permission) => permission.endsWith(".execute"))
+    : [];
   const grants = memberAccessGrants({
     role: current.identity.role,
     plan: current.identity.plan,
     guest: current.identity.memberNo === "GUEST",
     permissions: current.permissions,
     verifiedBundlePermissions,
+    verifiedBundleActionPermissions,
   });
   return {
     schemaVersion: ACCESS_SCHEMA_VERSION,

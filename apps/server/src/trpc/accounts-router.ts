@@ -555,24 +555,40 @@ export const accountsRouter = router({
   }),
 
   inbox: router({
-    /** 统一待办：跨 membership 聚合（审批/告警/工单占位——按店分组返回工作区清单与各自待办计数） */
+    /**
+     * 统一待办：跨 membership 聚合（按店分组返回工作区清单与各自待办计数）。
+     *
+     * MC-113（M3 联动实测）：此前只统计 approvals，且账号链路依赖 `members.account_id`——
+     * 出厂演示种子只建 members 不建 accounts，`accountIdOf` 恒 undefined，页面永远「暂无工作区成员关系」。
+     * 现在：①种子侧为演示成员建账号并回填 account_id（见 scripts/seed*.ts）；
+     * ②本端点按账号聚合的既有口径不变；③新增未办结工单计数（c_tickets：created/assigned/processing），
+     * 与 P22 工单台口径一致；告警仍由行业包数据面补充（结构先行）。
+     */
     unified: protectedProcedure.query(async ({ ctx }) => {
       const accId = await accountIdOf(ctx.identity!);
       if (!accId) return { groups: [] };
       const ships = await listMemberships(ownerQuery, accId);
       const groups = [];
       for (const m of ships) {
-        // 各工作区待办计数（审批卡 pending；告警/工单由行业包数据面补充，结构先行）
+        // 各工作区待办计数（审批卡 pending + 未办结工单；告警由行业包数据面补充）
         const approvals = await withWorkspace(getAppPool(), {
           tenantId: m.tenant_id as string,
           workspaceId: m.workspace_id as string,
         }, async (_db, client) => client.query(
           `SELECT count(*)::int AS c FROM approvals WHERE workspace_id=$1 AND status='pending'`,
           [m.workspace_id])).catch(() => ({ rows: [{ c: 0 }] }));
+        const tickets = await withWorkspace(getAppPool(), {
+          tenantId: m.tenant_id as string,
+          workspaceId: m.workspace_id as string,
+        }, async (_db, client) => client.query(
+          `SELECT count(*)::int AS c FROM c_tickets
+            WHERE workspace_id=$1 AND status IN ('created','assigned','processing')`,
+          [m.workspace_id])).catch(() => ({ rows: [{ c: 0 }] }));
         groups.push({
           workspaceId: m.workspace_id, slug: m.slug, workspaceName: m.workspace_name,
           tenantName: m.tenant_name, role: m.role, industry: m.industry,
           pendingApprovals: (approvals.rows[0] as { c: number }).c,
+          pendingTickets: (tickets.rows[0] as { c: number }).c,
         });
       }
       return { groups };

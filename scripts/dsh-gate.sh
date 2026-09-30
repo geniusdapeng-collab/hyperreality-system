@@ -4,6 +4,8 @@
 #      （workloom-fence 挂 tools/pre-execute）→ session/event 经事件桥落哈希链审计（workloom-audit）
 #      → 验链 → kill -9 崩溃现场 → 链完整可验 + 重放零重复事件（H-5）
 # 用法：bash scripts/dsh-gate.sh（失败即非零退出，纳入回归套件；E5 打 tag 前必跑）
+#       DSH_GATE_MOCK_PORT=<端口> 可覆盖 Mock LLM/围栏规则源端口（默认 8799）；
+#       并行会话下 8799 常被本机其他服务占用（实测：deepseek-proxy），此时必须显式指定空闲端口
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$(pwd)"
@@ -11,7 +13,7 @@ GATE="$REPO/packages/runtime/dsh-gate"
 export DSH_HOME="$REPO/.dsh-home"
 export WORKLOOM_MOCK_KEY="gate-mock-key"   # Mock provider 不校验，凭据引用口径（L7.3）
 AUDIT="$GATE/out/audit.jsonl"
-MOCK_PORT=8799
+MOCK_PORT="${DSH_GATE_MOCK_PORT:-8799}"
 
 step() { printf "\n▸ %s\n" "$1"; }
 fail() { printf "❌ %s\n" "$1" >&2; exit 1; }
@@ -33,9 +35,9 @@ step "1. 初始化 headless profile + 写入 Mock provider 设置"
 # 首次 boot 自动从模板初始化 profile（dsh 官方行为）；--dump-config 不启动会话，仅用于触发初始化
 [ -f "$DSH_HOME/profiles/headless/package.json" ] || DSH_HOME="$DSH_HOME" "$DSH" --profile headless --dump-config >/dev/null 2>&1 || true
 [ -f "$DSH_HOME/profiles/headless/package.json" ] || fail "headless profile 初始化失败"
-sed -e "s|__REPO_ROOT__|$REPO|g" -e "s|__AUDIT_FILE__|$AUDIT|g" \
+sed -e "s|__REPO_ROOT__|$REPO|g" -e "s|__AUDIT_FILE__|$AUDIT|g" -e "s|__MOCK_PORT__|$MOCK_PORT|g" \
   "$GATE/profile.cordis.patch.yml" > "$DSH_HOME/profiles/headless/cordis.patch.yml"
-cp "$GATE/settings.yaml" "$DSH_HOME/settings.yaml"
+sed -e "s|__MOCK_PORT__|$MOCK_PORT|g" "$GATE/settings.yaml" > "$DSH_HOME/settings.yaml"
 echo "✅ profile patch 与 settings.yaml 落位（provider=workloom-mock → 127.0.0.1:${MOCK_PORT}）"
 
 step "2. 起 Mock LLM（OpenAI 兼容 + 围栏规则源）"
@@ -63,7 +65,7 @@ echo "✅ 事件落账 + 哈希链验证通过（G8 同构：模型可见即已�
 step "4. 用例二（H-5）：kill -9 崩溃现场 → 链完整 + 重放零重复"
 AUDIT2="$GATE/out/audit-kill.jsonl"
 rm -f "$AUDIT2"
-sed -e "s|__REPO_ROOT__|$REPO|g" -e "s|__AUDIT_FILE__|$AUDIT2|g" \
+sed -e "s|__REPO_ROOT__|$REPO|g" -e "s|__AUDIT_FILE__|$AUDIT2|g" -e "s|__MOCK_PORT__|$MOCK_PORT|g" \
   "$GATE/profile.cordis.patch.yml" > "$DSH_HOME/profiles/headless/cordis.patch.yml"
 kill $MOCK_PID 2>/dev/null || true; sleep 0.5   # 换慢速 Mock（同端口，先释放）
 DSH_SLOW_MS=1500 MOCK_LLM_PORT=$MOCK_PORT node "$GATE/mock-openai.mjs" > "$GATE/out/mock2.log" 2>&1 &

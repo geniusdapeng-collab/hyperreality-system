@@ -12,6 +12,7 @@ import {
   listTickets,
   slaScan,
   ticketTimeline,
+  TicketIdempotencyConflictError,
   type Ticket,
 } from "./tickets.js";
 import { assertTicketTransition, nextStatusOf, TicketTransitionError } from "./state.js";
@@ -40,6 +41,12 @@ function wireTicketDb(db: FakeDb, now: () => Date): FakeDb {
   });
   db.on(/^SELECT \* FROM c_tickets WHERE workspace_id=\$1 AND idempotency_key=\$2/, (p, d) => ({
     rows: d.table("c_tickets").filter((r) => r["workspace_id"] === p[0] && r["idempotency_key"] === p[1]),
+  }));
+  db.on(/^SELECT actor_type, actor_id, detail FROM c_ticket_events/, (p, d) => ({
+    rows: d.table("c_ticket_events")
+      .filter((r) => r["workspace_id"] === p[0] && r["ticket_id"] === p[1] && ["create", "created"].includes(String(r["action"])))
+      .sort((a, b) => Number(a["id"]) - Number(b["id"]))
+      .slice(0, 1),
   }));
   db.on(/^SELECT \* FROM c_tickets WHERE id=\$1 AND workspace_id=\$2 FOR UPDATE/, (p, d) => ({
     rows: d.table("c_tickets").filter((r) => r["id"] === p[0] && r["workspace_id"] === p[1]),
@@ -159,6 +166,58 @@ describe("createTicket 幂等 + 全生命周期留痕", () => {
     expect(db.table("c_tickets").length).toBe(1);
     expect(db.table("c_ticket_events").length).toBe(1); // 只落一次 created
     expect(r1.ticket.sla_due_at).toBe(new Date("2026-08-23T11:00:00+08:00").toISOString()); // delivery 默认 1h
+  });
+
+  it("同键跨 C 用户或无 C 用户时跨操作者均拒绝，错误不包含原单内容", async () => {
+    const { db } = setup(() => new Date("2026-08-23T10:00:00+08:00"));
+    const input = { kind: "delivery" as const, title: "仅原用户可见的标题", payload: { room: "8808" }, idempotencyKey: "shared-key", cUserId: "cu-1" };
+    await createTicket(db, CTX, input, { type: "c_user", id: "cu-1" });
+    const replay = createTicket(db, CTX, { ...input, cUserId: "cu-2" }, { type: "c_user", id: "cu-2" });
+    await expect(replay).rejects.toThrow(TicketIdempotencyConflictError);
+    await expect(createTicket(db, CTX, { ...input, cUserId: "cu-2" }, { type: "c_user", id: "cu-2" }))
+      .rejects.not.toThrow(/原用户|8808/);
+
+    await createTicket(db, CTX, { kind: "other", title: "系统单", idempotencyKey: "system-key" }, ACTOR);
+    await expect(createTicket(db, CTX, { kind: "other", title: "系统单", idempotencyKey: "system-key" }, { type: "human", id: "MEM-002" }))
+      .rejects.toThrow(TicketIdempotencyConflictError);
+    expect(db.table("c_tickets")).toHaveLength(2);
+    expect(db.table("c_ticket_events")).toHaveLength(2);
+  });
+
+  it("同用户同键异内容拒绝；对象键顺序变化或工单后续改写仍可重放原请求", async () => {
+    const { db } = setup(() => new Date("2026-08-23T10:00:00+08:00"));
+    const input = {
+      kind: "repair" as const, title: "修空调", payload: { room: "8808", detail: { a: 1, b: 2 } },
+      idempotencyKey: "request-key", cUserId: "cu-1",
+    };
+    const first = await createTicket(db, CTX, input, { type: "c_user", id: "cu-1" });
+    for (const changed of [
+      { ...input, title: "修水龙头" },
+      { ...input, payload: { room: "9909", detail: { a: 1, b: 2 } } },
+      { ...input, priority: "high" as const },
+    ]) {
+      await expect(createTicket(db, CTX, changed, { type: "c_user", id: "cu-1" }))
+        .rejects.toThrow(TicketIdempotencyConflictError);
+    }
+    const row = db.table("c_tickets")[0]!;
+    row["status"] = "done";
+    row["payload"] = { ...(row["payload"] as Record<string, unknown>), rating: { score: 5 } };
+    const replay = await createTicket(db, CTX, {
+      ...input, payload: { detail: { b: 2, a: 1 }, room: "8808" }, conversationId: "later-conversation",
+    }, { type: "c_user", id: "cu-1" });
+    expect(replay).toMatchObject({ deduped: true, ticket: { id: first.ticket.id, status: "done" } });
+    expect(db.table("c_tickets")).toHaveLength(1);
+    expect(db.table("c_ticket_events")).toHaveLength(1);
+  });
+
+  it("历史建单事件缺少请求摘要时拒绝不可信重放", async () => {
+    const { db } = setup(() => new Date("2026-08-23T10:00:00+08:00"));
+    const input = { kind: "other" as const, title: "历史单", idempotencyKey: "legacy-key", cUserId: "cu-1" };
+    await createTicket(db, CTX, input, { type: "c_user", id: "cu-1" });
+    const event = db.table("c_ticket_events")[0]!;
+    delete (event["detail"] as Record<string, unknown>)["requestFingerprint"];
+    await expect(createTicket(db, CTX, input, { type: "c_user", id: "cu-1" }))
+      .rejects.toThrow(TicketIdempotencyConflictError);
   });
 
   it("created→assigned→processing→done→closed 全链路 + 时间线回放 + 五元事件", async () => {

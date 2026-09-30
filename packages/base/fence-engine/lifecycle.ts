@@ -161,9 +161,58 @@ export async function createDryRun(
 
 /* ---------- 审批 → 激活联调接线（E1 · PF.5/F2.4） ---------- */
 
-/** 候选规则行 ID 的唯一生成口径（confirmDryRun 入库与审批激活接线共用，防漂移） */
-export function fenceRuleRowId(ruleId: string, workspaceId: string): string {
-  return `fr-${ruleId.toLowerCase()}-vnext-${workspaceId}`;
+/**
+ * 候选规则行 ID 的唯一生成口径（confirmDryRun 入库与审批激活接线共用，防漂移）。
+ *
+ * MC-102：必须带版本号。修复前固定 `vnext` 后缀，同一 rule_id 的第二次加严提案必然撞主键，
+ * 被 `ON CONFLICT (id) DO NOTHING` 静默丢弃——审批留痕 approved，但规则永不生效。
+ * 版本号口径与 seed 行一致（`fr-r7-v1-ws-yunqi`），同 rule_id 的多次提案各自落在独立行上。
+ */
+export function fenceRuleRowId(ruleId: string, workspaceId: string, version: string): string {
+  const normalized = version.trim().toLowerCase().replace(/^v/, "");
+  return `fr-${ruleId.toLowerCase()}-v${normalized}-${workspaceId}`;
+}
+
+/** 版本号行尾数字（hotel-baseline/v1 → 1；v2 → 2；v-next → null，不参与递增计算） */
+export function ruleVersionNumber(version: string): number | null {
+  const m = /(\d+)\s*$/.exec(version.trim());
+  return m ? Number(m[1]) : null;
+}
+
+export interface RuleRowIdentity {
+  rowId: string;
+  /** 提案行版本号（v<max+1>）：与行 ID 同源，激活时按此口径落库 */
+  version: string;
+  /**
+   * 同 rule_id 是否已存在基线行（平台/出厂基线锚点 F2.3）。
+   * 有锚点时提案行是「覆盖层」，守卫按最严 active 行比对；无锚点为纯自定义规则。
+   */
+  inheritedBaseline: boolean;
+}
+
+/**
+ * 事务内分配下一条规则行身份（MC-102 + MC-109）：
+ *  - version = 同 rule_id 现存所有行（含 rolled_back）的最大版本号 + 1，版本号永不复用；
+ *  - rowId 由 version 派生，保证同 rule_id 的第 N 次提案落在新行上（不再撞主键）；
+ *  - inheritedBaseline 记录该 rule_id 是否已有基线行（提案事件留痕用，见 MC-109 的锚点口径）。
+ */
+export async function nextRuleRowIdentity(
+  client: Pick<pg.PoolClient, "query">,
+  scope: { workspaceId: string },
+  ruleId: string,
+): Promise<RuleRowIdentity> {
+  const r = await client.query<{ version: string; is_baseline: boolean }>(
+    `SELECT version, is_baseline FROM fence_rules
+      WHERE (workspace_id=$1 OR workspace_id='*') AND lower(rule_id)=lower($2)`,
+    [scope.workspaceId, ruleId],
+  );
+  const maxVersion = r.rows.reduce((max, row) => Math.max(max, ruleVersionNumber(row.version) ?? 0), 0);
+  const version = `v${maxVersion + 1}`;
+  return {
+    rowId: fenceRuleRowId(ruleId, scope.workspaceId, version),
+    version,
+    inheritedBaseline: r.rows.some((row) => row.is_baseline),
+  };
 }
 
 /**
@@ -174,15 +223,47 @@ export function fenceRuleRowId(ruleId: string, workspaceId: string): string {
 export function fenceActivationFromProposal(
   payload: unknown,
   workspaceId: string,
-): { ruleRowId: string; dryRunId: string } | null {
+): { ruleRowId: string; dryRunId: string; allowWhenChange?: boolean } | null {
   const p = payload as
-    | { decision?: { action?: string; after?: { ruleId?: unknown; dryRunId?: unknown } } }
+    | {
+      decision?: {
+        action?: string;
+        after?: {
+          ruleId?: unknown; dryRunId?: unknown; ruleRowId?: unknown; version?: unknown; allowWhenChange?: unknown;
+        };
+      };
+    }
     | null
     | undefined;
   if (p?.decision?.action !== "fence.rule.propose") return null;
-  const { ruleId, dryRunId } = p.decision.after ?? {};
+  const { ruleId, dryRunId, ruleRowId, version, allowWhenChange } = p.decision.after ?? {};
   if (typeof ruleId !== "string" || typeof dryRunId !== "string" || !ruleId || !dryRunId) return null;
-  return { ruleRowId: fenceRuleRowId(ruleId, workspaceId), dryRunId };
+  // MC-102：提案事件必须携带本行 ID（带版本），激活据此回写对应行；旧事件（无 row id）退回版本号派生。
+  // MC-103：when 改写放行位必须随提案留痕带到激活期——否则提案期放行、激活期又被同一守卫拒绝，
+  // 审批手势返回 500 且规则停在 pending_approval（"已批准但未生效"）。
+  const extra = allowWhenChange === true ? { allowWhenChange: true as const } : {};
+  if (typeof ruleRowId === "string" && ruleRowId) return { ruleRowId, dryRunId, ...extra };
+  if (typeof version === "string" && version) {
+    return { ruleRowId: fenceRuleRowId(ruleId, workspaceId, version), dryRunId, ...extra };
+  }
+  return null;
+}
+
+/**
+ * 确认 dry-run 的事务内实现（pending→confirmed）。未确认不得激活（L2.4）。
+ * 抽成 client 版：提案行入库、提案事件、审批行与 dry-run 确认必须同一事务同一 COMMIT
+ * （confirmDryRun 走独立连接时，确认与入库之间的失败会留下"已确认但没有提案行"的半态）。
+ */
+export async function confirmDryRunOnTx(
+  client: Pick<pg.PoolClient, "query">,
+  scope: { workspaceId: string },
+  dryRunId: string,
+): Promise<void> {
+  const r = await client.query(
+    `UPDATE fence_dry_runs SET status='confirmed' WHERE id=$1 AND workspace_id=$2 AND status='pending'`,
+    [dryRunId, scope.workspaceId],
+  );
+  if (r.rowCount === 0) throw new Error(`dry-run ${dryRunId} 不存在或非 pending（幂等约束）`);
 }
 
 /** 确认 dry-run（人类看过报告；pending→confirmed）。未确认不得激活（L2.4） */
@@ -196,11 +277,7 @@ export async function confirmDryRun(
     // 事务级 RLS 上下文必须在显式事务内设置：autocommit 下 set_config(...,true) 语句结束即失效
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-    const r = await client.query(
-      `UPDATE fence_dry_runs SET status='confirmed' WHERE id=$1 AND workspace_id=$2 AND status='pending'`,
-      [dryRunId, scope.workspaceId],
-    );
-    if (r.rowCount === 0) throw new Error(`dry-run ${dryRunId} 不存在或非 pending（幂等约束）`);
+    await confirmDryRunOnTx(client, scope, dryRunId);
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -214,7 +291,13 @@ export async function confirmDryRun(
 export async function activateRuleVersion(
   app: pg.Pool,
   scope: { tenantId: string; workspaceId: string },
-  input: { ruleRowId: string; dryRunId: string; approvalEventId: string },
+  input: {
+    ruleRowId: string;
+    dryRunId: string;
+    approvalEventId: string;
+    /** MC-103：提案事件携带的 when 改写放行位（须 dry-run 回放 + 人工确认后才由调用方传入） */
+    allowWhenChange?: boolean;
+  },
 ): Promise<{ version: string }> {
   const client = await app.connect();
   try {
@@ -249,10 +332,10 @@ export async function activateRuleVersion(
     }
     // ② 候选行 + 基线单调守卫（HP-02：checkMonotonic 此前只在测试里被调用）
     const cand = await client.query<{
-      rule_id: string; name: string; level: RuntimeRule["level"]; is_baseline: boolean;
+      rule_id: string; version: string; name: string; level: RuntimeRule["level"]; is_baseline: boolean;
       match_spec: { object_types?: string[]; actions?: string[]; when?: string };
     }>(
-      `SELECT rule_id, name, level, is_baseline, match_spec FROM fence_rules
+      `SELECT rule_id, version, name, level, is_baseline, match_spec FROM fence_rules
         WHERE id=$1 AND workspace_id=$2 AND status IN ('draft','pending_approval')`,
       [input.ruleRowId, scope.workspaceId],
     );
@@ -268,24 +351,25 @@ export async function activateRuleVersion(
       objectTypes: row.match_spec.object_types ?? [],
       actions: row.match_spec.actions ?? [],
       when: row.match_spec.when ?? "",
-    });
+    }, { allowWhenChange: input.allowWhenChange === true });
     if (!verdict.ok) {
       throw new Error(`基线规则只可加严，本次变更被拒：${verdict.violations.map((v) => v.reason).join("；")}`);
     }
-    // ③ 版本可追溯（HP-02）：按该 rule_id 历史最大版本递增；同 rule_id 旧 active 行转 rolled_back，
-    //    保证"每个 rule_id 同一时刻只有一条 active"（修复前一律 v-next，且旧版永远留在 active 集合里）。
+    // ③ 版本可追溯（HP-02 + MC-102）：候选行在提案期已分配版本号（见 nextRuleRowIdentity），
+    //    激活时以候选行版本为准，历史最大版本**排除候选行本身**——否则每激活一次版本号都会 +1。
+    //    并发提案导致候选版本落后于已激活行时取较大值，保证不会撞 (rule_id, version, workspace_id) 唯一键。
     const hist = await client.query<{ version: string }>(
-      `SELECT version FROM fence_rules WHERE workspace_id=$1 AND rule_id=$2`,
-      [scope.workspaceId, row.rule_id],
+      `SELECT version FROM fence_rules WHERE workspace_id=$1 AND rule_id=$2 AND id<>$3`,
+      [scope.workspaceId, row.rule_id, input.ruleRowId],
     );
-    const maxVersion = hist.rows.reduce((max, r) => {
-      const m = /(\d+)\s*$/.exec(r.version);
-      return m ? Math.max(max, Number(m[1])) : max;
-    }, 0);
-    const version = `v${maxVersion + 1}`;
+    const maxVersion = hist.rows.reduce((max, r) => Math.max(max, ruleVersionNumber(r.version) ?? 0), 0);
+    const version = `v${Math.max(maxVersion + 1, ruleVersionNumber(row.version) ?? 0)}`;
+    // MC-109：只回滚同 rule_id 的旧租户覆盖行（is_baseline=false）；平台/出厂基线行保持 active。
+    // 修复前把基线行一起 rolled_back，首次自定义后该 rule_id 就再没有比较锚点，
+    // 守卫（checkCandidateAgainstBaseline）直接放行任何放宽提案。
     await client.query(
       `UPDATE fence_rules SET status='rolled_back'
-        WHERE workspace_id=$1 AND rule_id=$2 AND status='active' AND id<>$3`,
+        WHERE workspace_id=$1 AND rule_id=$2 AND status='active' AND is_baseline=false AND id<>$3`,
       [scope.workspaceId, row.rule_id, input.ruleRowId],
     );
     const r = await client.query(

@@ -146,6 +146,53 @@ fixtureDescribe("契约 · 工单（H1/H2/H6/L9/M9）", () => {
     expect(mine).toMatchObject({ status: "assigned", statusText: "已受理" });
   });
 
+  it("同工作区跨用户复用幂等键返回 409 且不泄露原单；原用户异内容也返回 409", async () => {
+    const owner = await makeSession(`${RUN}-key-owner`);
+    const other = await makeSession(`${RUN}-key-other`);
+    const request = {
+      kind: "repair", title: "原用户的私密工单标题", payload: { room: "8808" }, idempotencyKey: `${RUN}-shared-key`,
+    };
+    const firstResponse = await req("/tickets", { method: "POST", body: JSON.stringify(request) }, owner.token);
+    expect(firstResponse.status).toBe(200);
+    const first = (await firstResponse.json()) as { ticket: { id: string } };
+
+    for (const [token, changed] of [
+      [other.token, request],
+      [owner.token, { ...request, payload: { room: "9909" } }],
+      [owner.token, { ...request, title: "另一张工单" }],
+    ] as const) {
+      const conflict = await req("/tickets", { method: "POST", body: JSON.stringify(changed) }, token);
+      expect(conflict.status).toBe(409);
+      const body = (await conflict.json()) as Record<string, unknown>;
+      expect(typeof body.requestId).toBe("string");
+      expect(body).not.toHaveProperty("ticket");
+      expect(body).not.toHaveProperty("receipt");
+      expect(JSON.stringify(body)).not.toContain(first.ticket.id);
+      expect(JSON.stringify(body)).not.toContain("8808");
+      expect(JSON.stringify(body)).not.toContain("私密工单标题");
+    }
+
+    const replay = await req("/tickets", { method: "POST", body: JSON.stringify(request) }, owner.token);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ ticket: { id: first.ticket.id }, idempotentReplay: true });
+    const otherList = (await (await req("/tickets", {}, other.token)).json()) as { tickets: Array<{ id: string }> };
+    expect(otherList.tickets.some((ticket) => ticket.id === first.ticket.id)).toBe(false);
+  });
+
+  it("并发同键同请求只建一单，重试响应不重复发回执", async () => {
+    const { token } = await makeSession(`${RUN}-key-concurrent`);
+    const request = { kind: "delivery", title: "并发建单", payload: { room: "7707" }, idempotencyKey: `${RUN}-concurrent-key` };
+    const responses = await Promise.all(Array.from({ length: 2 }, () => req("/tickets", { method: "POST", body: JSON.stringify(request) }, token)));
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    const bodies = await Promise.all(responses.map(async (response) => response.json())) as Array<{
+      ticket: { id: string }; receipt: { idempotentReplay: boolean; eventId?: string; delivery?: unknown };
+    }>;
+    expect(bodies[0]!.ticket.id).toBe(bodies[1]!.ticket.id);
+    expect(bodies.filter((body) => body.receipt.idempotentReplay)).toHaveLength(1);
+    expect(bodies.filter((body) => body.receipt.eventId)).toHaveLength(1);
+    expect(bodies.filter((body) => body.receipt.delivery)).toHaveLength(1);
+  });
+
   it("非 done 工单评价 → 409；不存在工单详情 → 404 带 requestId", async () => {
     const { token } = await makeSession(`${RUN}-r`);
     const created = (await (await req("/tickets", {
@@ -213,6 +260,36 @@ fixtureDescribe("契约 · 身份绑定信任链", () => {
 });
 
 fixtureDescribe("契约 · chat（H5/H6/M9）", () => {
+  it("确认工单同键跨用户 409；同用户重试即使新建会话仍返回原单", async () => {
+    const owner = await makeSession(`${RUN}-chat-key-owner`);
+    const other = await makeSession(`${RUN}-chat-key-other`);
+    const request = {
+      text: "好的确认提交", confirmTicket: true, idempotencyKey: `${RUN}-chat-shared-key`,
+      ticketDraft: { kind: "delivery", title: "送两瓶水", payload: { room: "6606" } },
+    };
+    const firstResponse = await req("/chat", { method: "POST", body: JSON.stringify(request) }, owner.token);
+    expect(firstResponse.status).toBe(200);
+    const first = (await firstResponse.json()) as { ticket: { id: string }; deduped?: boolean };
+    expect(first.deduped).not.toBe(true);
+
+    const crossUser = await req("/chat", { method: "POST", body: JSON.stringify(request) }, other.token);
+    expect(crossUser.status).toBe(409);
+    const denied = (await crossUser.json()) as Record<string, unknown>;
+    expect(denied).not.toHaveProperty("ticket");
+    expect(JSON.stringify(denied)).not.toContain(first.ticket.id);
+
+    const changed = await req("/chat", {
+      method: "POST",
+      body: JSON.stringify({ ...request, ticketDraft: { ...request.ticketDraft, title: "另一项服务" } }),
+    }, owner.token);
+    expect(changed.status).toBe(409);
+    expect(await changed.json()).not.toHaveProperty("ticket");
+
+    const replay = await req("/chat", { method: "POST", body: JSON.stringify(request) }, owner.token);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ ticket: { id: first.ticket.id }, deduped: true });
+  });
+
   it("KB 高置信问答：citations 非空、cards 为 {kind,data} 契约", async () => {
     const { token } = await makeSession(`${RUN}-c`);
     const r = (await (await req("/chat", {

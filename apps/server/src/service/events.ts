@@ -52,13 +52,13 @@ export async function appendEventOn(
   client: pg.PoolClient,
   scope: ServiceScope,
   actor: ActorInfo,
-  draft: { objectType: string; objectId: string; action: string; after?: unknown; channel?: string },
+  draft: { objectType: string; objectId: string; action: string; after?: unknown; channel?: string; basis?: string[] },
 ): Promise<{ eventId: string }> {
   const ev = await gatewayAppendOnClient(client, { ...scope, actor }, {
     who: { type: actor.type, id: actor.id },
     context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: draft.channel ?? "inapp" },
     object: { type: draft.objectType, id: draft.objectId },
-    decision: { action: draft.action, after: draft.after },
+    decision: { action: draft.action, after: draft.after, ...(draft.basis?.length ? { basis: draft.basis } : {}) },
     rule_impact: [],
   });
   return { eventId: ev.eventId };

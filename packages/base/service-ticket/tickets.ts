@@ -1,7 +1,7 @@
 /**
  * service-ticket · 工单生命周期
  *
- *  - createTicket：幂等键 UNIQUE(workspace_id, idempotency_key)，冲突返回原单（deduped）；
+ *  - createTicket：幂等键 UNIQUE(workspace_id, idempotency_key)，仅同主体同请求返回原单；
  *  - assignTicket：部门路由表（可注入），created → assigned；
  *  - advanceTicket / completeTicket：状态机推进，非法跃迁拒绝；
  *  - 每次流转落 c_ticket_events + 五元事件（注入式 emitter，签名参照 workdata gatewayAppend）；
@@ -22,6 +22,7 @@ import {
   nextStatusOf,
   type TicketStatus,
 } from "./state.js";
+import { ticketRequestFingerprint } from "./request-fingerprint.js";
 
 export interface Ticket {
   id: string;
@@ -119,6 +120,16 @@ export interface CreateTicketInput {
   slaHours?: number;
 }
 
+/** 键被其他主体或不同建单请求占用；错误信息不包含原单内容。 */
+export class TicketIdempotencyConflictError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super("工单幂等键已被占用，请使用新键重试");
+    this.name = "TicketIdempotencyConflictError";
+  }
+}
+
 export async function createTicket(
   db: Queryable,
   ctx: Ctx,
@@ -129,6 +140,7 @@ export async function createTicket(
   if (!TICKET_KINDS.includes(input.kind)) throw new Error(`非法工单类型「${input.kind}」`);
   const id = newId("TK");
   const slaHours = input.slaHours ?? DEFAULT_SLA_HOURS[input.kind];
+  const requestFingerprint = ticketRequestFingerprint(input);
   const ins = await db.query<Ticket & Record<string, unknown>>(
     `INSERT INTO c_tickets
        (id, workspace_id, c_user_id, conversation_id, kind, title, payload, priority, sla_due_at, idempotency_key)
@@ -143,17 +155,30 @@ export async function createTicket(
   );
   let ticket = ins.rows[0] as Ticket | undefined;
   if (!ticket) {
-    // 幂等命中：返回原单，不再落流转事件（重复提交不重复建单）
+    // UNIQUE 键仅定位原单；先核对主体与不可变请求摘要，不能直接把原单交给调用者。
     const cur = await db.query<Ticket & Record<string, unknown>>(
       `SELECT * FROM c_tickets WHERE workspace_id=$1 AND idempotency_key=$2`,
       [ctx.workspaceId, input.idempotencyKey],
     );
     ticket = cur.rows[0] as Ticket | undefined;
     if (!ticket) throw new Error("幂等冲突但未查到原单（数据异常）");
+    if (ticket.c_user_id !== (input.cUserId ?? null)) throw new TicketIdempotencyConflictError();
+    const creation = await db.query<Pick<TicketEventRow, "actor_type" | "actor_id" | "detail"> & Record<string, unknown>>(
+      `SELECT actor_type, actor_id, detail FROM c_ticket_events
+       WHERE workspace_id=$1 AND ticket_id=$2 AND action IN ('create','created')
+       ORDER BY id ASC LIMIT 1`,
+      [ctx.workspaceId, ticket.id],
+    );
+    const original = creation.rows[0];
+    if (original?.actor_type !== actor.type || original.actor_id !== actor.id ||
+        original.detail?.requestFingerprint !== requestFingerprint) {
+      // 历史事件没有请求摘要时也拒绝重放：原始 payload 已可能被后续流转改写，无法安全比对。
+      throw new TicketIdempotencyConflictError();
+    }
     return { ticket, deduped: true };
   }
   await recordTransition(db, emit, ctx, ticket, "created", actor, {
-    title: input.title, kind: input.kind, priority: ticket.priority, slaHours,
+    title: input.title, kind: input.kind, priority: ticket.priority, slaHours, requestFingerprint,
   });
   return { ticket, deduped: false };
 }

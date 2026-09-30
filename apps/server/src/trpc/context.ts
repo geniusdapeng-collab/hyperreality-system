@@ -6,6 +6,7 @@
  *  - 越权查询返回空而非 403（L7.1）：RLS + 过程内强制 identity scope
  */
 import { initTRPC, TRPCError } from "@trpc/server";
+import { createHash } from "node:crypto";
 import {
   capabilityDisplayName,
   hasCapability,
@@ -43,7 +44,30 @@ export async function createContext(req: Request): Promise<TrpcContext> {
     : { session, identity: session, partnerIdentity: null, headers: req.headers };
 }
 
-const t = initTRPC.context<TrpcContext>().create();
+/**
+ * 错误指纹（MC-206）：客户端拿到的 `ref` 与服务端日志 / system.error 事件使用同一算法，
+ * 报障时可凭 ref 在服务端定位原文；算法变更必须与 apps/server/src/index.ts#onError 同步。
+ */
+export function trpcErrorRef(path: string | undefined, code: string, message: string): string {
+  return createHash("sha256").update(`${path ?? "-"}|${code}|${message}`).digest("hex").slice(0, 8);
+}
+
+const t = initTRPC.context<TrpcContext>().create({
+  /**
+   * MC-206（M4 交付面）：4xx 是面向用户的契约文案（校验/权限/审批原因），保持原样；
+   * 5xx 一律收敛为通用文案 + ref —— 表名/约束名/权限原文/堆栈只留在服务端日志与账本，
+   * 不再随响应体回传客户端（生产档 tRPC 默认也不带 stack，但开发档会带，这里显式抹除）。
+   */
+  errorFormatter({ shape, error }) {
+    if (shape.data.httpStatus < 500) return shape;
+    const ref = trpcErrorRef(shape.data.path, error.code, error.message);
+    return {
+      ...shape,
+      message: `服务内部错误（已记录，ref=${ref}）`,
+      data: { ...shape.data, stack: undefined, ref },
+    };
+  },
+});
 
 const ACTION_PERMISSION_LABELS: Record<BaseActionPermission, string> = {
   "workspace.write": "工作区内容修改",
@@ -160,6 +184,19 @@ export const navigationPermissionWriteProcedure = (permission: string) =>
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "当前成员没有访问这项能力的权限。",
+      });
+    }
+    return next();
+  });
+
+/** 已验活动行业包声明的执行权限 + 实时成员授权 + 公共写权限。 */
+export const bundleActionWriteProcedure = (permission: string) =>
+  writeProcedure.use(async ({ ctx, next }) => {
+    const access = await resolveAuthoritativeClientAccess(ctx.identity);
+    if (!permission.endsWith(".execute") || !access.actionPermissions.includes(permission)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "当前成员没有执行这项行业能力的权限。",
       });
     }
     return next();
