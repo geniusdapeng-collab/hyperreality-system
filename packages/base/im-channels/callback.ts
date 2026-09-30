@@ -112,6 +112,8 @@ export async function handleGestureCallback(
   scope: { tenantId: string; workspaceId: string },
   cb: GestureCallback,
   driver?: ChannelDriver,
+  /** B-05：透传给 decide 的批准后副作用钩子（IM 手势批准同样触发 Quest 续跑等联动） */
+  opts?: { onApproved?: (approvalId: string, snapshot: unknown) => Promise<void> | void },
 ): Promise<GestureCallbackResult> {
   getChannel(cb.channel);
   // E5.2/F5.6：操作人必须是本工作区成员（openid 映射），外部联系人无权审批
@@ -136,6 +138,8 @@ export async function handleGestureCallback(
     { memberNo: member.memberNo, role: member.role as never },
     cb.approvalId,
     gesture,
+    undefined,
+    opts,
   );
   const result: GestureCallbackResult = {
     approvalId: r.approvalId,

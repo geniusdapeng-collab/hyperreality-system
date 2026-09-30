@@ -7,6 +7,6 @@ llm-pi-ai:
       apiKeyEnv: WORKLOOM_MOCK_KEY
       displayName: WorkLoom Mock（门禁专用）
       api: openai-completions
-      baseURL: http://127.0.0.1:8799/v1
+      baseURL: http://127.0.0.1:__MOCK_PORT__/v1
       models:
         - id: mock-flash

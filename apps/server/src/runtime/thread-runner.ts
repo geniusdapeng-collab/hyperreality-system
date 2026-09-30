@@ -14,7 +14,7 @@ import { TRPCError } from "@trpc/server";
 import YAML from "yaml";
 import { getAppPool, getGatewayPool } from "@workloom/db";
 import { bundlesRoot } from "@workloom/base/bundles";
-import { assemblePreset, runQuest, type QuestPlanner, type QuestRunResult } from "@workloom/runtime";
+import { assemblePreset, runQuest, type AssembledPreset, type QuestPlanner, type QuestRunResult } from "@workloom/runtime";
 import { llmCall } from "../service/llm.js";
 import { loadDeploymentToolExecutor, describeToolCoverage } from "./tool-executor.js";
 import { preferredDispatchPresets } from "./dispatch-routing.js";
@@ -36,6 +36,21 @@ let industryPlannerFactory: IndustryQuestPlannerFactory | null = null;
 /** 行业仓组合根调用：注册/清理行业规划器（传 null 取消注册）。 */
 export function registerIndustryQuestPlanner(factory: IndustryQuestPlannerFactory | null): void {
   industryPlannerFactory = factory;
+}
+
+/**
+ * 行业语义域判定（MC-304）：`「目标 + 岗位」是否属于本行业能力域`。
+ *
+ * 由行业模块在加载时声明（词表只住在 `apps/server/src/industry/**`，base-sync 之外；
+ * 基座不持有任何行业词，也不假设具体行业包形态）。
+ * 基座在通用路由表未命中时用它逐岗位试算，避免落到 preset_key 字母序第一个无关岗位。
+ * 未注册（基座形态/其它行业包未声明）时不做试算，保持原有兜底顺序不变。
+ */
+let industryGoalClaim: ((goal: string, preset: AssembledPreset) => boolean) | null = null;
+
+/** 行业模块调用：声明/清理本行业的语义域判定。 */
+export function registerIndustryGoalClaim(claim: ((goal: string, preset: AssembledPreset) => boolean) | null): void {
+  industryGoalClaim = claim;
 }
 
 /** 指挥层兜底岗位（Bundle 清单不可用/未命中时） */
@@ -75,13 +90,32 @@ async function workspaceContext(scope: Scope): Promise<WorkspaceContext> {
 }
 
 /**
- * 派遣默认执行 preset 解析：任务语义偏好（N-14）→ Bundle 清单里的 orchestrator →
- * 指挥层兜底 → 任意就绪员工；全无就绪员工即明确报错（不静默给错岗位）。
+ * 岗位来源标记（MC-304）：调用方据此把“兜底派遣”显式告知用户，而不是静默派给第一个岗位。
  */
-export async function resolveDispatchPresetKey(scope: Scope, goal = ""): Promise<string> {
+export type DispatchPresetSelection =
+  | "explicit" | "semantic" | "orchestrator" | "industry-default" | "command"
+  | "industry-plan" | "fallback";
+
+export interface DispatchPresetResolution {
+  presetKey: string;
+  selection: DispatchPresetSelection;
+}
+
+/**
+ * 派遣默认执行 preset 解析（MC-304 起返回来源）：任务语义偏好（N-14）→ Bundle 清单里的
+ * orchestrator → 指挥层兜底 → **行业能力试算**（行业包声明的规划器能否为该目标产出计划）
+ * → 任意就绪员工（最后兜底，调用方必须显式标注，不再当作“已理解目标”）；全无就绪员工即明确报错。
+ */
+export async function resolveDispatchPreset(scope: Scope, goal = ""): Promise<DispatchPresetResolution> {
   const { industry, ready } = await workspaceContext(scope);
 
-  const candidates: string[] = [...preferredDispatchPresets({ goal, industry })];
+  // 同一次语义匹配分两段取来源：industry=null 时只剩通用能力域规则，行业默认指挥岗单列
+  const semanticOnly = preferredDispatchPresets({ goal, industry: null });
+  const candidates: Array<{ key: string; selection: DispatchPresetSelection }> =
+    preferredDispatchPresets({ goal, industry }).map((key) => ({
+      key,
+      selection: semanticOnly.includes(key) ? "semantic" as const : "industry-default" as const,
+    }));
   // Bundle 声明顺序：bundles/<industry>/bundle.json → provides.presets → 文件内 kind: orchestrator
   try {
     const dir = join(bundlesRoot(), industry ?? "_default");
@@ -94,21 +128,66 @@ export async function resolveDispatchPresetKey(scope: Scope, goal = ""): Promise
         const p = join(dir, rel);
         if (!existsSync(p)) continue;
         const doc = YAML.parse(readFileSync(p, "utf-8")) as { preset_key?: unknown; kind?: unknown };
-        if (doc?.kind === "orchestrator" && typeof doc.preset_key === "string") candidates.push(doc.preset_key);
+        if (doc?.kind === "orchestrator" && typeof doc.preset_key === "string") {
+          candidates.push({ key: doc.preset_key, selection: "orchestrator" });
+        }
       }
     }
   } catch {
     /* Bundle 清单不合法/缺目录 → 走下方指挥层兜底（不阻塞派遣） */
   }
-  candidates.push(...DISPATCH_PRESET_FALLBACKS);
+  for (const key of DISPATCH_PRESET_FALLBACKS) candidates.push({ key, selection: "command" });
 
   const readySet = new Set(ready);
-  for (const key of candidates) if (readySet.has(key)) return key;
-  if (ready.length > 0) return ready[0]!;
+  for (const candidate of candidates) {
+    if (readySet.has(candidate.key)) return { presetKey: candidate.key, selection: candidate.selection };
+  }
+
+  const byPlan = await industryPlannerPresetFor(scope, goal, ready);
+  if (byPlan) return { presetKey: byPlan, selection: "industry-plan" };
+
+  if (ready.length > 0) {
+    // MC-304：最后的“任意就绪员工”兜底保留（派遣/并发/边界用例仍需要一个可执行岗位），
+    // 但必须留下可见痕迹——日志 + 响应 presetSelection=fallback，不允许静默冒充“已理解目标”。
+    console.warn(
+      `[dispatch] 目标未命中语义域（industry=${industry ?? "-"}）：按兜底岗位 ${ready[0]} 派遣`,
+    );
+    return { presetKey: ready[0]!, selection: "fallback" };
+  }
   throw new TRPCError({
     code: "PRECONDITION_FAILED",
     message: "工作区没有可装配的数字员工（agents 全部未就绪），无法派遣任务——请先在名册完成上岗",
   });
+}
+
+/** 兼容旧调用点：只取岗位键（需要来源标记时用 resolveDispatchPreset）。 */
+export async function resolveDispatchPresetKey(scope: Scope, goal = ""): Promise<string> {
+  return (await resolveDispatchPreset(scope, goal)).presetKey;
+}
+
+/**
+ * MC-304：行业能力试算——语义域词表不进基座，靠**行业包声明的 claimsGoal**回答“这个岗位认不认得这件事”。
+ *
+ * 背景（真机实证）：口语化目标未命中通用路由表时，旧实现落到 preset_key 字母序第一个就绪岗位，
+ * 用与该目标无关的工具把步骤标 completed（假交付）。
+ * 这里逐个试算就绪岗位：行业包声明「目标 + 岗位工具」语义相容即选中；都不相容才走显式兜底。
+ * 行业词/对象/参数只写在 apps/server/src/industry/**（base-sync 之外），基座只做能力试算。
+ */
+async function industryPlannerPresetFor(scope: Scope, goal: string, ready: string[]): Promise<string | undefined> {
+  const claimsGoal = industryGoalClaim;
+  if (!claimsGoal || !goal.trim() || ready.length === 0) return undefined;
+  for (const presetKey of ready) {
+    try {
+      const preset = await assemblePreset(getAppPool(), scope, { workspaceId: scope.workspaceId, presetKey, goal });
+      if (claimsGoal(goal, preset)) {
+        console.log(`[dispatch] 语义域未命中 → 行业能力试算命中 ${presetKey}（goal=${goal.slice(0, 40)}）`);
+        return presetKey;
+      }
+    } catch {
+      // 单个岗位装配失败（未安装/契约不符）不阻断路由，继续试下一个
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -175,6 +254,8 @@ export interface ThreadQuestInput {
   /** GR-01：显式重规划（缺省复用已持久化计划；replan 会失效本线程未决审批） */
   replan?: boolean;
   replanReason?: string;
+  /** A-03：调用方已完成原子认领（调度器单语句 UPDATE 认领）时置 true，跳过入口 CAS */
+  skipClaim?: boolean;
 }
 
 /**
@@ -236,6 +317,50 @@ export interface ThreadQuestOutcome extends QuestRunResult {
  * 线程执行唯一装配点：dispatch(runImmediately) / threads.run / 审批自动续跑 / 调度器都走这里。
  */
 export async function runQuestForThread(scope: Scope, input: ThreadQuestInput): Promise<ThreadQuestOutcome> {
+  /**
+   * A-03 修复（来源：WorkLoom-growth 排雷 T-2026-0929-0003）：执行前原子认领（queued/paused→running CAS）。
+   * 此前 SELECT 取线程到 runQuest 置 running 之间有装配+LLM 规划窗口（最长 120s），
+   * dispatch(runImmediately) / threads.run / 多实例调度器可并发重入同一线程——
+   * 写类工具重复执行＝重复扣费/重复发布。
+   * 调度器已用自己的单语句认领，必须传 skipClaim 跳过本 CAS（否则自相挡死）。
+   */
+  if (!input.skipClaim) {
+    const app0 = getAppPool();
+    const c = await app0.connect();
+    let blocked = false;
+    try {
+      /**
+       * 认领必须带**事务级 RLS 上下文**：threads 表对 app 角色启用 RLS
+       * （`workspace_id = current_setting('app.workspace_id', true)`），
+       * 无 GUC 时那条 UPDATE 匹配 0 行 → CAS 静默空转、并发重入照旧放行
+       * （2026-09-30 实测：线程置 running 后入口仍照常执行并写 3 条事件）。
+       */
+      await c.query("BEGIN");
+      await c.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      await c.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+      const claimed = await c.query(
+        `UPDATE threads SET status='running', updated_at=now()
+          WHERE id=$1 AND workspace_id=$2 AND status IN ('queued','paused') RETURNING id`,
+        [input.threadId, scope.workspaceId],
+      );
+      if ((claimed.rowCount ?? 0) === 0) {
+        const cur = await c.query<{ status: string }>(
+          `SELECT status FROM threads WHERE id=$1 AND workspace_id=$2`, [input.threadId, scope.workspaceId]);
+        blocked = (cur.rows[0]?.status ?? "unknown") === "running";
+      }
+      await c.query("COMMIT");
+    } catch (err) {
+      await c.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      c.release();
+    }
+    // 他方正在执行：幂等退出（不并发重入）；
+    // pending_review/completed/failed 等维持原语义（审批续跑/重放由 runQuest 按事件态处理）
+    if (blocked) {
+      return { threadId: input.threadId, status: "running", stepsDone: 0, stepsTotal: 0, unverified: [], presetKey: "" };
+    }
+  }
   const presetKey = await resolveThreadPresetKey(scope, input.presetRef, input.goal);
   const toolExecutor = await loadDeploymentToolExecutor(scope);
   const visualGoal = VISUAL_GOAL_PATTERN.test(input.goal);

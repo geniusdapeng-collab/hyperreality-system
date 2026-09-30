@@ -32,6 +32,16 @@ const DATABASE_URL =
 /** seq 连续空洞容忍阈值：超过即视为异常（ON CONFLICT 消耗的 nextval 空洞通常零星出现） */
 const SEQ_GAP_ANOMALY_THRESHOLD = 500; // ON CONFLICT nextval 消耗与测试烧号可达数百，>500 连续空洞才疑似恶意删段
 
+/**
+ * MC-210：摘要口径（`--summary` / `CHAIN_REPORT=summary`）——stdout 体积与账本规模解耦。
+ * 账本成批异常时（实测 10 万级事件 / 近 50 万处异常）逐条异常明细会把结构化报告撑到 160MB，
+ * 调用方（release-gate 的 execSync）会以 ENOBUFS 失败，把「链断了」伪装成工具故障。
+ * 摘要口径下：每段一行汇总，JSON 报告只带异常类型直方图与前 N 条样本；全量明细仍可
+ * 用 `pnpm db:verify-chain`（不带 --summary）在部署机复现。
+ */
+const SUMMARY_MODE = process.argv.includes("--summary") || process.env.CHAIN_REPORT === "summary";
+const ISSUE_SAMPLE_LIMIT = Math.max(0, Number(process.env.CHAIN_REPORT_SAMPLE ?? 20));
+
 const sha256 = (s: string) => createHash("sha256").update(s, "utf-8").digest("hex");
 
 /**
@@ -64,6 +74,10 @@ interface WsReport {
   tenant_id: string;
   events: number;
   chain_ok: boolean;
+  /** 本段异常总数（issues 可能是摘要样本，MC-210） */
+  issues_total: number;
+  /** 本段异常类型精确计数（摘要口径下 issues 只有样本，直方图仍全量） */
+  issue_kinds?: Array<{ kind: string; count: number }>;
   /** ON CONFLICT 消耗的 nextval 小空洞（容忍，仅计数） */
   tolerated_seq_gaps: number;
   legacy_event_ids: number;
@@ -111,6 +125,14 @@ async function main(): Promise<void> {
         [tenant_id, workspace_id],
       );
       const issues: Issue[] = [];
+      let issueTotal = 0;
+      const issueKinds = new Map<string, number>();
+      /** 摘要口径下 issues 只留样本，计数与直方图始终全量（MC-210） */
+      const pushIssue = (issue: Issue): void => {
+        issueTotal += 1;
+        issueKinds.set(issue.kind, (issueKinds.get(issue.kind) ?? 0) + 1);
+        if (!SUMMARY_MODE || issues.length < ISSUE_SAMPLE_LIMIT) issues.push(issue);
+      };
       let prevHash = "GENESIS";
       let prevSeq: bigint | null = null;
       let prevEidN: bigint | null = null;
@@ -124,12 +146,12 @@ async function main(): Promise<void> {
 
         // ① 哈希链接龙 + 独立实现重算（M4-⑤ 交叉验证）
         if (row.prev_hash !== prevHash) {
-          issues.push({ kind: "CHAIN_BREAK", event_id: row.event_id,
+          pushIssue({ kind: "CHAIN_BREAK", event_id: row.event_id,
             detail: `prev_hash 断链：期望 ${prevHash.slice(0, 12)}… 实存 ${row.prev_hash.slice(0, 12)}…` });
         }
         const expect = sha256(prevHash + canonicalJsonIndependent(row.payload));
         if (row.hash !== expect) {
-          issues.push({ kind: "HASH_MISMATCH", event_id: row.event_id,
+          pushIssue({ kind: "HASH_MISMATCH", event_id: row.event_id,
             detail: "hash 重算不符（payload 篡改或 canonicalJson 口径漂移）" });
         }
         prevHash = row.hash;
@@ -147,7 +169,7 @@ async function main(): Promise<void> {
               if (Number(elsewhere.rows[0]?.n ?? 0) >= Number(gap) * 0.5) {
                 toleratedGaps += Number(gap);
               } else {
-                issues.push({ kind: "SEQ_GAP_ANOMALY", event_id: row.event_id,
+                pushIssue({ kind: "SEQ_GAP_ANOMALY", event_id: row.event_id,
                   detail: `seq ${prevSeq} → ${seq} 连续空洞 ${gap} 条（>${SEQ_GAP_ANOMALY_THRESHOLD}，疑似恶意删段）` });
               }
             } else {
@@ -171,17 +193,17 @@ async function main(): Promise<void> {
             legacyCount += 1;
           } else {
             if (n > eidLast) {
-              issues.push({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
+              pushIssue({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
                 detail: `event_id 数字段 ${n} 超出全局序列已分配上界 ${eidLast}（P0-3：疑似绕过序列分配）` });
             }
             if (prevEidN !== null && prevEidN >= eidStart && n <= prevEidN) {
-              issues.push({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
+              pushIssue({ kind: "EVENT_ID_SEQ_MISMATCH", event_id: row.event_id,
                 detail: `event_id 数字段 ${n} 未随 seq 单调递增（前序 ${prevEidN}，分配序与链序不一致）` });
             }
           }
           prevEidN = n;
         } else if (!isReplayEventId(row.event_id)) {
-          issues.push({ kind: "EVENT_ID_NAMESPACE", event_id: row.event_id,
+          pushIssue({ kind: "EVENT_ID_NAMESPACE", event_id: row.event_id,
             detail: "event_id 既非 E-<digits> 序列形态，也不在 E-SEED-/E-RPL- 回放白名单内" });
         }
 
@@ -190,7 +212,7 @@ async function main(): Promise<void> {
           ? safeParseReplayAwareEvent(row.payload as never)
           : safeParseBusinessEvent(row.payload);
         if (!checked.success) {
-          issues.push({ kind: "PAYLOAD_SCHEMA", event_id: row.event_id,
+          pushIssue({ kind: "PAYLOAD_SCHEMA", event_id: row.event_id,
             detail: `附录 E 校验失败：${checked.error.issues[0]?.message ?? "unknown"}` });
         }
 
@@ -205,7 +227,7 @@ async function main(): Promise<void> {
           if (honestBackfill) {
             toleratedBackfills += 1;
           } else {
-            issues.push({ kind: "CREATED_AT_REGRESSION", event_id: row.event_id,
+            pushIssue({ kind: "CREATED_AT_REGRESSION", event_id: row.event_id,
               detail: `created_at 回退且非诚实补录：${prevCreatedAt.toISOString()} → ${createdAt.toISOString()}` });
           }
         }
@@ -216,17 +238,22 @@ async function main(): Promise<void> {
         workspace_id,
         tenant_id,
         events: r.rows.length,
-        chain_ok: issues.length === 0,
+        chain_ok: issueTotal === 0,
+        issues_total: issueTotal,
+        issue_kinds: [...issueKinds.entries()].sort((a, b) => b[1] - a[1]).map(([kind, count]) => ({ kind, count })),
         tolerated_seq_gaps: toleratedGaps,
         legacy_event_ids: legacyCount, // 全局序列上线前的旧分配方案存量（赦免，仅计数）
         tolerated_backfills: toleratedBackfills, // 种子/回放诚实历史补录（仅计数）
         issues,
       });
-      const mark = issues.length === 0 ? "✓" : "✗";
+      const mark = issueTotal === 0 ? "✓" : "✗";
       const gapNote = toleratedGaps > 0 ? ` · 容忍 seq 小空洞 ${toleratedGaps}（ON CONFLICT 消耗）` : "";
-      console.log(`${mark} [${tenant_id}/${workspace_id}] ${r.rows.length} 条${issues.length === 0 ? "，六项检查全过" : `（${issues.length} 处异常）`}${gapNote}`);
+      console.log(`${mark} [${tenant_id}/${workspace_id}] ${r.rows.length} 条${issueTotal === 0 ? "，六项检查全过" : `（${issueTotal} 处异常）`}${gapNote}`);
       for (const iss of issues) {
         console.error(`  ✗ ${iss.kind}${iss.event_id ? ` ${iss.event_id}` : ""}: ${iss.detail}`);
+      }
+      if (SUMMARY_MODE && issueTotal > issues.length) {
+        console.error(`  … 另有 ${issueTotal - issues.length} 处同类/他类异常未逐条展开（摘要口径；完整明细：pnpm db:verify-chain）`);
       }
     }
   } finally {
@@ -234,17 +261,52 @@ async function main(): Promise<void> {
   }
 
   // ⑥ 结构化报告（每 workspace 段：条数/链完整/异常明细）+ 汇总
+  //   摘要口径（MC-210）只输出直方图与样本，报告体积与异常条数解耦
   const totalEvents = report.reduce((n, w) => n + w.events, 0);
-  const totalIssues = report.reduce((n, w) => n + w.issues.length, 0);
-  const summary = {
-    ok: totalIssues === 0,
-    workspaces: report.length,
-    total_events: totalEvents,
-    total_issues: totalIssues,
-    segments: report,
-  };
+  const totalIssues = report.reduce((n, w) => n + w.issues_total, 0);
+  const kindTotals = new Map<string, number>();
+  for (const segment of report) {
+    // 直方图用分段精确计数（摘要口径下 issues 只是样本，不能拿样本当分布）
+    const perSegment = segment.issue_kinds?.length
+      ? segment.issue_kinds
+      : segment.issues.reduce<Array<{ kind: string; count: number }>>((acc, item) => {
+        const found = acc.find((entry) => entry.kind === item.kind);
+        if (found) found.count += 1;
+        else acc.push({ kind: item.kind, count: 1 });
+        return acc;
+      }, []);
+    for (const { kind, count } of perSegment) kindTotals.set(kind, (kindTotals.get(kind) ?? 0) + count);
+  }
+  const issueKinds = [...kindTotals.entries()].sort((a, b) => b[1] - a[1]).map(([kind, count]) => ({ kind, count }));
+  const summary = SUMMARY_MODE
+    ? {
+      ok: totalIssues === 0,
+      mode: "summary",
+      workspaces: report.length,
+      total_events: totalEvents,
+      total_issues: totalIssues,
+      issue_kinds: issueKinds,
+      segments: report.map((segment) => ({
+        workspace_id: segment.workspace_id,
+        tenant_id: segment.tenant_id,
+        events: segment.events,
+        chain_ok: segment.chain_ok,
+        issues_total: segment.issues_total,
+        issue_kinds: segment.issue_kinds,
+        issues_sample: segment.issues.slice(0, ISSUE_SAMPLE_LIMIT),
+      })),
+    }
+    : {
+      ok: totalIssues === 0,
+      workspaces: report.length,
+      total_events: totalEvents,
+      total_issues: totalIssues,
+      issue_kinds: issueKinds,
+      segments: report,
+    };
   console.log("\n===== 结构化验证报告（JSON） =====");
-  console.log(JSON.stringify(summary, null, 2));
+  // 摘要口径输出单行 JSON（便于调用方解析，且避免 pretty 放大体积）
+  console.log(SUMMARY_MODE ? JSON.stringify(summary) : JSON.stringify(summary, null, 2));
 
   if (totalIssues > 0) {
     console.error(`\n❌ 验证失败：共 ${totalIssues} 处异常（${report.length} 段 / ${totalEvents} 条事件）`);

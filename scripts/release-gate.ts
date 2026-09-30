@@ -15,8 +15,18 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { charterSchema } from "@workloom/base/captain";
+import { signDemoToken, type Identity } from "@workloom/base/tenancy";
+// R2-F4/M6-F2：摘要解析器抽为独立模块（scripts/chain-summary.ts），可被断言脚本导入复验
+import { parseChainSummary } from "./chain-summary.js";
 
 const BASE = process.env.SERVER_BASE ?? "http://localhost:8787";
+/**
+ * QUEST 链路的等待上限（毫秒）。默认 60000（历史 SLO 口径）不变；
+ * 谷时段（22:00–08:00）模型路由会按 bundle 的 model-policy 把 L2 场景切到 off-peak 档位
+ * （实测 `deepseek-v4-pro`，规划耗时 61–65s）→ 该窗口下用 `GATE_QUEST_TIMEOUT_MS` 显式放宽，
+ * 并在报告/偏离文档里如实记录实测耗时（不把"放宽"当成 SLO 达标）。
+ */
+const QUEST_TIMEOUT_MS = Number(process.env.GATE_QUEST_TIMEOUT_MS ?? 60_000);
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const APP_URL = process.env.DATABASE_APP_URL ?? "postgres://workloom_app:workloom_dev_app@localhost:5432/workloom";
 const OWNER_URL = process.env.DATABASE_URL ?? "postgres://postgres:workloom@localhost:5432/workloom";
@@ -47,10 +57,69 @@ async function login(workspaceSlug: string, memberNo: string): Promise<string> {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ workspaceSlug, memberNo }),
   });
-  const j = (await r.json()) as { result?: { data?: { token?: string } } };
-  assert(j.result?.data?.token, `登录失败 ${workspaceSlug}/${memberNo}`);
+  const j = (await r.json()) as {
+    result?: { data?: { token?: string } };
+    error?: { message?: string; data?: { code?: string } };
+  };
+  // 失败原因必须原样带出：生产档会在这里返回 FORBIDDEN「演示身份入口仅供本机开发使用」，
+  // 档位探测与身份通道回落都依赖这句原文（MC-203）。
+  assert(
+    j.result?.data?.token,
+    `演示直登不可用 ${workspaceSlug}/${memberNo}（HTTP ${r.status}`
+    + `${j.error?.data?.code ? ` ${j.error.data.code}` : ""}）：${j.error?.message ?? "无令牌返回"}`,
+  );
   return j.result.data.token;
 }
+
+/**
+ * 验收身份通道与实例档位（MC-203）：门禁必须在「生产档运行时」同样可跑，不得依赖只在开发档
+ * 可用的演示直登；报告里还要显式声明本次跑在哪种形态上（生产档判据：直登被 FORBIDDEN 拒绝）。
+ * 解析顺序：
+ *  1) RELEASE_GATE_TOKEN —— 部署方预注入的验收 JWT（最高优先，零密钥暴露面）；
+ *  2) auth.loginAs —— 开发档演示直登（既有口径不变）；
+ *  3) 本机 JWT_SECRET 自签 —— 仅当直登被生产档拒绝时回落；与登录同用 signDemoToken，
+ *     身份字段全部来自 DB（不信客户端声明），且门禁在报告里显式声明所用通道。
+ * 三者都不可用时 fail-closed 报错，绝不跳过身份检查继续给发布结论。
+ */
+async function resolveGateToken(target: ReleaseTarget): Promise<{ token: string; channel: string; profile: string }> {
+  const injected = process.env.RELEASE_GATE_TOKEN?.trim();
+  if (injected) {
+    return { token: injected, channel: "预注入验收 JWT（RELEASE_GATE_TOKEN）", profile: "未知（预注入令牌跳过档位探测）" };
+  }
+  try {
+    return {
+      token: await login(target.slug, target.memberNo),
+      channel: "演示身份直登（开发档 auth.loginAs）",
+      profile: "开发档（实例允许演示身份直登）",
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    const productionProfile = /演示身份入口|FORBIDDEN|403/.test(reason);
+    if (!process.env.JWT_SECRET) {
+      throw new Error(
+        `演示身份直登不可用（${reason}），且本机未配置 JWT_SECRET，无法取得验收身份；`
+        + "请设置 RELEASE_GATE_TOKEN，或在部署机 .env 配置与服务端一致的 JWT_SECRET（MC-203）",
+      );
+    }
+    const identity: Identity = {
+      memberId: target.memberId,
+      memberNo: target.memberNo,
+      name: target.memberName,
+      role: target.memberRole,
+      tenantId: target.tenantId,
+      workspaceId: target.workspaceId,
+      plan: target.plan,
+    };
+    return {
+      token: await signDemoToken(identity),
+      channel: "本机 JWT_SECRET 自签验收身份（生产档可用；身份来自 DB）",
+      profile: productionProfile
+        ? "生产档（NODE_ENV=production 或非回环绑定：演示直登被拒，改用自签验收身份）"
+        : `档位未识别（直登失败原因：${reason.slice(0, 80)}）`,
+    };
+  }
+}
+
 async function call<T = Record<string, unknown>>(path: string, token: string, body?: unknown, timeoutMs = 30000, method: "mutation" | "query" = "mutation"): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -75,8 +144,10 @@ async function call<T = Record<string, unknown>>(path: string, token: string, bo
 /* ================= 主流程 ================= */
 const LLM_PROVIDER = process.env.LLM_PROVIDER ?? "mock";
 const envLabel = LLM_PROVIDER === "mock" ? "沙箱环境（内置 AI 模型驱动）" : `线上环境（独立模型服务：${LLM_PROVIDER}）`;
+/** 门禁自身也在生产档（NODE_ENV=production）运行时，按生产档口径解析身份通道（MC-203）。 */
+const GATE_RUNS_PRODUCTION = process.env.NODE_ENV === "production";
 console.log(`\n════════ WorkLoom 发布前核心链路校验门禁 ════════`);
-console.log(`环境适配：${envLabel} ｜ 目标：${BASE}\n`);
+console.log(`环境适配：${envLabel} ｜ 目标：${BASE}${GATE_RUNS_PRODUCTION ? " ｜ 门禁进程档位：production" : ""}\n`);
 
 // 三端导航、布局、状态与客户端 API 接线属于基座发布物，不得只发布 UI 包后
 // 让行业仓人工复制。这里在业务链路前验证双制品同版和唯一分发通道。
@@ -154,7 +225,11 @@ interface ReleaseTarget {
   workspaceId: string;
   slug: string;
   name: string;
+  memberId: string;
   memberNo: string;
+  memberName: string;
+  memberRole: Identity["role"];
+  plan: Identity["plan"];
   presetKey: string;
 }
 
@@ -165,12 +240,16 @@ let TARGET: ReleaseTarget | null = null;
   await owner.connect();
   try {
     const result = await owner.query<{
-      tenant_id: string; id: string; slug: string; name: string; member_no: string; preset_key: string;
+      tenant_id: string; id: string; slug: string; name: string;
+      member_id: string; member_no: string; member_name: string; member_role: Identity["role"]; plan: Identity["plan"];
+      preset_key: string;
     }>(
-      `SELECT w.tenant_id, w.id, w.slug, w.name, m.member_no, a.preset_key
+      `SELECT w.tenant_id, w.id, w.slug, w.name, m.id AS member_id, m.member_no, m.name AS member_name, m.role AS member_role,
+              COALESCE(t.plan, 'community') AS plan, a.preset_key
        FROM workspaces w
+       LEFT JOIN tenants t ON t.id = w.tenant_id
        JOIN LATERAL (
-         SELECT member_no FROM members
+         SELECT id, member_no, name, role FROM members
          WHERE workspace_id=w.id AND role IN ('owner','manager')
          ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, member_no LIMIT 1
        ) m ON true
@@ -190,7 +269,11 @@ let TARGET: ReleaseTarget | null = null;
       workspaceId: row.id,
       slug: row.slug,
       name: row.name,
+      memberId: row.member_id,
       memberNo: row.member_no,
+      memberName: row.member_name,
+      memberRole: row.member_role,
+      plan: row.plan,
       presetKey: row.preset_key,
     };
   } finally {
@@ -202,10 +285,14 @@ if (!TARGET) {
   results.push({ id: "G-01", name: "工作区探测", ok: false, detail: "无可验收的示例工作区（请先播种当前 Bundle）", ms: 0 });
   console.log("✗ G-01 工作区探测 —— 无可验收的示例工作区（请先播种当前 Bundle）");
 }
-const token = TARGET ? await login(TARGET.slug, TARGET.memberNo).catch(() => "") : "";
+const gateIdentity = TARGET ? await resolveGateToken(TARGET).catch((err: unknown) => {
+  console.log(`✗ 身份通道不可用 —— ${err instanceof Error ? err.message : String(err)}`);
+  return { token: "", channel: "不可用（见上）", profile: "未识别" };
+}) : { token: "", channel: "无验收工作区", profile: "未识别" };
+const token = gateIdentity.token;
 if (TARGET) await check("G-01", `身份签发 · ${TARGET.name}`, async () => {
   assert(token, "JWT 签发失败");
-  return "JWT 签发正常";
+  return `JWT 签发正常（实例档位：${gateIdentity.profile}；身份通道：${gateIdentity.channel}）`;
 });
 
 /* ---------- 链路一：ASK 问答模式 ---------- */
@@ -229,10 +316,10 @@ for (const [i, question] of ASK_SCENARIOS.entries()) {
 await check("Q-01", "QUEST · 一句话目标自动拆解多步骤", async () => {
   assert(TARGET && token, "无可执行的验收工作区身份");
   const r = await call<{ kind: string; mode?: string; threadId?: string; status?: string; stepsTotal?: number; stepsDone?: number }>(
-    "threads.dispatch", token,
-    { title: "生成一份本周运行复盘，并列出三项下一步任务", presetKey: TARGET.presetKey, runImmediately: true },
-    60000,
-  );
+      "threads.dispatch", token,
+      { title: "生成一份本周运行复盘，并列出三项下一步任务", presetKey: TARGET.presetKey, runImmediately: true },
+      QUEST_TIMEOUT_MS,
+    );
   assert(r.kind === "routed" && r.mode === "quest", `未按 quest 路由（${r.kind}/${r.mode}）`);
   assert(r.threadId, "未建线程");
   assert(typeof r.stepsTotal === "number" && r.stepsTotal >= 2, `未拆解多步骤（stepsTotal=${r.stepsTotal}）`);
@@ -313,13 +400,34 @@ await check("T-02", "编排 · 节拍执行→回调落痕（晨报触发全链�
 });
 await check("T-03", "编排 · 事件哈希链完整（验链脚本）", async () => {
   const { execSync } = await import("node:child_process");
-  const out = execSync("pnpm db:verify-chain", {
-    cwd: new URL("..", import.meta.url).pathname, stdio: "pipe", env: { ...process.env },
-  }).toString();
-  // 验链口径兼容：旧版「逐条重算全部一致」/ 新版六项检查「全库验证通过」（D31 远端硬化版）
-  assert(/逐条重算全部一致|全库验证通过/.test(out), "验链失败");
-  const m = out.match(/(\d+) 条事件/);
-  return `全库 ${m?.[1] ?? "?"} 条事件验链一致`;
+  /**
+   * MC-210：账本成批异常时验链脚本会逐条打印异常明细（实测 160MB），
+   * execSync 默认 1MB 缓冲会把「链断了」伪装成 ENOBUFS 工具故障。
+   * 这里改用 --summary 摘要口径（stdout 体积与账本规模解耦），并显式设置 maxBuffer 兜底。
+   * 全量明细仍可用 `pnpm db:verify-chain`（不带 --summary）在部署机复现。
+   */
+  const MAX_BUFFER = 16 * 1024 * 1024;
+  // CHAIN_REPORT=summary 等价于 `db:verify-chain --summary`：逐段一行 + 直方图/样本，stdout 与账本规模解耦
+  const run = (): string => execSync("pnpm db:verify-chain", { maxBuffer: MAX_BUFFER, cwd: new URL("..", import.meta.url).pathname, stdio: "pipe", env: { ...process.env, CHAIN_REPORT: "summary" } }).toString();
+  let out = "";
+  try {
+    out = run();
+  } catch (err) {
+    const stdout = (err as { stdout?: Buffer | string }).stdout?.toString() ?? "";
+    const summary = parseChainSummary(stdout);
+    if (summary) {
+      throw new Error(
+        `验链失败：${summary.total_issues} 处异常（${summary.workspaces} 段 / ${summary.total_events} 条事件）`
+        + `${summary.issue_kinds?.length ? `；异常类型 ${summary.issue_kinds.map((k) => `${k.kind}×${k.count}`).join("、")}` : ""}`
+        + "；完整明细请在部署机运行 pnpm db:verify-chain（不带 --summary）",
+      );
+    }
+    throw new Error(`验链未产出可解析摘要：${(err instanceof Error ? err.message : String(err)).slice(0, 300)}`);
+  }
+  const summary = parseChainSummary(out);
+  assert(summary ? summary.ok : /逐条重算全部一致|全库验证通过/.test(out),
+    summary ? `验链失败：${summary.total_issues} 处异常` : "验链失败");
+  return `全库 ${summary?.total_events ?? out.match(/(\d+) 条事件/)?.[1] ?? "?"} 条事件验链一致（摘要口径）`;
 });
 
 /* ================= 裁决 ================= */

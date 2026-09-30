@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "workloom.agent-capabilities/v1",
+  "bundleId": "core",
+  "capabilities": [
+    {
+      "id": "core.workspace.profile",
+      "version": "1.0.0",
+      "title": "读取工作区档案",
+      "description": "读取当前成员有权访问的工作区档案。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "workspace.profile", "method": "query" },
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "id": "core.agents.list",
+      "version": "1.0.0",
+      "title": "读取数字员工",
+      "description": "读取当前工作区有权访问的数字员工列表。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "workspace.agents", "method": "query" },
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "id": "core.threads.list",
+      "version": "1.0.0",
+      "title": "读取任务列表",
+      "description": "读取当前工作区最近的任务线程。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "threads.list", "method": "query" },
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "id": "core.threads.get",
+      "version": "1.0.0",
+      "title": "读取任务详情",
+      "description": "按线程 ID 读取当前工作区的任务状态。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "threads.get", "method": "query" },
+      "inputSchema": {
+        "type": "object",
+        "properties": { "threadId": { "type": "string", "minLength": 1 } },
+        "required": ["threadId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "core.threads.events",
+      "version": "1.0.0",
+      "title": "读取任务事件",
+      "description": "按线程 ID 读取只增事件序列，供执行结果核对。",
+      "operation": "receipt",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "threads.events", "method": "query" },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": { "type": "string", "minLength": 1 },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+        },
+        "required": ["threadId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "core.approvals.list",
+      "version": "1.0.0",
+      "title": "读取待审队列",
+      "description": "读取当前工作区的审批事项，不代替人审裁决。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "approvals.list", "method": "query" },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "approved", "edited", "rejected", "expired"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "core.inspection.status",
+      "version": "1.0.0",
+      "title": "读取巡检状态",
+      "description": "读取巡检汇总与当前异常状态。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "inspection.status", "method": "query" },
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "id": "core.skills.list",
+      "version": "1.0.0",
+      "title": "读取技能目录",
+      "description": "读取工作区内可见的技能目录。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": { "kind": "trpc", "path": "skills.list", "method": "query" },
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    }
+  ]
+}

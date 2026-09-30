@@ -220,7 +220,7 @@ export async function syncDistribution(
             `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
              VALUES ($1,$2,$3,$4,'inapp','pending',$5,'l4_chairman')`,
             [approvalId, scope.tenantId, scope.workspaceId, evId,
-             JSON.stringify({ kind: "skill_dist_install", stagingId, skillId: pkg.skillId, version: pkg.version })]);
+             JSON.stringify({ kind: "skill_dist_install", stagingId, skillId: pkg.skillId, version: pkg.version, high_risk: true })]);
         } catch (err) {
           await client.query("ROLLBACK").catch(() => undefined);
           throw err;

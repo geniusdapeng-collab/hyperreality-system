@@ -32,6 +32,17 @@ export interface FloorAgent {
   currentThread: { id: string; title: string } | null;
   pendingTier: string | null;    // asking 时：l2_captain/l3_fleet/l4_chairman
   approvalId: string | null;     // asking 时：审批单号（原地三手势用）
+  /**
+   * 与 blocked 共存（MC-114）：该员工既有 30 分钟内的异常/驳回/熔断事件，又有 pending 请示。
+   * 状态仍按 V-06 纪律显示 blocked（出事优先），但 pendingTier/approvalId 一并下发，
+   * 前端据此同时渲染「遇阻」与「请您定」，且点击直达审批卡——不再让遇阻态吃掉待裁信息。
+   */
+  asking?: boolean;
+  /**
+   * 该员工当前 pending 审批总数（MC-114 补充）：楼层每员工只给一个直达号（最早一条，FIFO），
+   * 多项待裁时用计数把「还有几项」显式带出，避免其余审批在投影里被静默隐藏。
+   */
+  pendingCount?: number;
   /** 近 10 分钟内该员工刚完成过任务（与 asking 共存：请示仍为主态，庆祝作为附加信号） */
   celebrating?: boolean;
   statusLine: string;            // 头顶气泡一句话（最近动作中文摘要）
@@ -158,11 +169,13 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
     )).rows;
 
     // pending 请示：approvals.snapshot->>'actor' 或事件 who（五元 who.id = preset_key）
-    const asking = (await client.query<{ actor: string; tier: string; action: string; approval_id: string }>(
+    const asking = (await client.query<{ actor: string; tier: string; action: string; approval_id: string; pending_count: number }>(
       `SELECT e.payload->'who'->>'id' AS actor, a.tier,
-              e.payload->'decision'->>'action' AS action, a.approval_id
+              e.payload->'decision'->>'action' AS action, a.approval_id,
+              count(*) OVER (PARTITION BY e.payload->'who'->>'id')::int AS pending_count
        FROM approvals a JOIN biz_events e ON e.event_id=a.event_id AND e.workspace_id=a.workspace_id
-       WHERE a.workspace_id=$1 AND a.status='pending'`,
+       WHERE a.workspace_id=$1 AND a.status='pending'
+       ORDER BY a.created_at ASC`,
       [scope.workspaceId],
     )).rows;
 
@@ -233,7 +246,25 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
        *  - celebrating 对 asking 优先（X-05：队列堆积不得压掉刚完成的正反馈，气泡里保留请示与直达号）。
        */
       if (blockedSet.has(a.preset_key)) {
-        out.push({ id: a.id, presetKey: a.preset_key, name: a.name, state: "blocked", stationId: station?.id ?? null, currentThread: null, pendingTier: null, approvalId: null, statusLine: `遇阻：${last}` });
+        /**
+         * MC-114（M3 联动实测）：pricing-agent 既有近 30 分钟 blocked 事件、又有 pending 审批时，
+         * 旧口径只输出 `state=blocked` + pendingTier/approvalId=null —— 楼层上看不到「有单待裁」，
+         * 审批直达号也随之丢失（`pendingByTier` 里却有这条审批，面与面自相矛盾）。
+         * 现口径：blocked 主态保留（V-06：出事优先显示遇阻），同时并列 asking 信息（信息不丢）。
+         */
+        const askBlocked = askingBy.get(a.preset_key);
+        out.push({
+          id: a.id, presetKey: a.preset_key, name: a.name, state: "blocked", stationId: station?.id ?? null,
+          currentThread: null,
+          pendingTier: askBlocked?.tier ?? null,
+          approvalId: askBlocked?.approval_id ?? null,
+          ...(askBlocked ? { pendingCount: askBlocked.pending_count } : {}),
+          ...(askBlocked ? { asking: true } : {}),
+          ...(celebrating ? { celebrating: true } : {}),
+          statusLine: askBlocked
+            ? `遇阻：${last} · 请示待裁：${askBlocked.action}${askBlocked.pending_count > 1 ? `（共 ${askBlocked.pending_count} 项待裁）` : ""}`
+            : `遇阻：${last}`,
+        });
         return;
       }
       /**
@@ -251,8 +282,10 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
         out.push({
           id: a.id, presetKey: a.preset_key, name: a.name, state: "asking", stationId: station?.id ?? null,
           currentThread: null, pendingTier: ask.tier, approvalId: ask.approval_id,
+          pendingCount: ask.pending_count,
           ...(celebrating ? { celebrating: true } : {}),
-          statusLine: celebrating ? `请示待裁：${ask.action} · 刚完成：${last}` : `请示待裁：${ask.action}`,
+          statusLine: `${celebrating ? `请示待裁：${ask.action} · 刚完成：${last}` : `请示待裁：${ask.action}`}`
+            + (ask.pending_count > 1 ? `（共 ${ask.pending_count} 项待裁）` : ""),
         });
         return;
       }

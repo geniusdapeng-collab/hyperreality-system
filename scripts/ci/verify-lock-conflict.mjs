@@ -6,6 +6,7 @@
  *
  * 事件语义（2026-09-27 修订）：
  * - **PR 事件**：按 §4 先到先得拦截（后到者排队），命中即 fail；
+ *   事件 source/target SHA 必须与实时 PR/main、compare merge base 一致；缺令牌/API 失败也 fail。
  * - **push 事件（main 合并提交）**：合并已经发生，门禁拦不住任何东西，只降级为**提醒**
  *   （列出需要 rebase 的在途 PR），否则每次并发合并都会把 main 门禁打红——
  *   实测：growth PR #211 合入后，因在途 #206/#209 同改 bundle.json 被判红，而同一内容 PR 门禁全绿。
@@ -18,9 +19,11 @@
  *   LOCK_OVERLAP_MODE=warn node scripts/ci/verify-lock-conflict.mjs
  */
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { findFileOverlaps, findModuleConflicts, parseChangedPaths, resolveLockOverlapMode } from "./protocol-rules.mjs";
 
 const API = "https://api.cnb.cool";
+const SHA_RE = /^[0-9a-f]{40,64}$/i;
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -50,24 +53,96 @@ function changedFiles(base) {
 
 async function apiJson(url) {
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${process.env.CNB_TOKEN}`,
       Accept: "application/json",
     },
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`${response.status} ${text.slice(0, 200)}`);
-  return text ? JSON.parse(text) : null;
+  if (!response.ok) throw new Error(`CNB API HTTP ${response.status} (${new URL(url).pathname})`);
+  if (!text) throw new Error(`CNB API 返回空响应 (${new URL(url).pathname})`);
+  return JSON.parse(text);
 }
 
-/**
- * CNB 的 pulls/{n}/files 只返回基名（如 apps/web/package.json 会返回 "package.json"），
- * 完整路径要从 blob_url / raw_url 中解出，否则不同目录的同名文件会被误判为冲突。
- */
-function fullPathOf(entry) {
-  const url = String(entry?.blob_url ?? entry?.raw_url ?? "");
-  const match = /\/blob\/[0-9a-f]{7,40}\/(.+)$/.exec(url) ?? /\/raw\/[^/]+\/(.+)$/.exec(url);
-  return match ? decodeURIComponent(match[1]) : String(entry?.filename ?? "");
+export function isPrEvent(env = process.env) {
+  const event = String(env.CNB_EVENT ?? "");
+  return env.CNB_PULL_REQUEST === "true" || (event.startsWith("pull_request") && event !== "pull_request.merged");
+}
+
+/** PR 门禁只接受事件、平台实时状态和 compare 三方一致的最新 main 快照。 */
+export function validatePrSnapshot({ number, branch, eventSourceSha, eventTargetSha, pull, main, compare, finalPull, finalMain }) {
+  const errors = [];
+  const sha = (value) => String(value ?? "").trim();
+  const source = sha(eventSourceSha);
+  const target = sha(eventTargetSha);
+  const head = sha(pull?.head?.sha);
+  const base = sha(pull?.base?.sha);
+  const mainSha = sha(main?.commit?.sha);
+  const compareBase = sha(compare?.base_commit?.sha);
+  const compareHead = sha(compare?.head_commit?.sha);
+  const mergeBase = sha(compare?.merge_base_commit?.sha);
+  for (const [name, value] of [["事件 source", source], ["事件 target", target], ["实时 PR head", head], ["实时 PR base", base], ["实时 main", mainSha], ["compare base", compareBase], ["compare head", compareHead], ["compare merge base", mergeBase]]) {
+    if (!SHA_RE.test(value)) errors.push(`${name} SHA 缺失或无效`);
+  }
+  if (!Number.isSafeInteger(Number(number)) || Number(number) <= 0 || String(pull?.number ?? "") !== String(number)) errors.push("PR 编号与实时 PR 不一致");
+  if (pull?.state !== "open") errors.push("PR 已不处于 open 状态");
+  if (String(pull?.base?.ref ?? "").replace(/^refs\/heads\//, "") !== "main") errors.push("PR 目标分支不是 main");
+  if (branch && String(pull?.head?.ref ?? "").replace(/^refs\/heads\//, "") !== branch) errors.push("事件 source 分支与实时 PR 不一致");
+  if (source && head && source !== head) errors.push("事件 source 已过时，需重跑 PR 门禁");
+  if (target && mainSha && target !== mainSha) errors.push("事件 target 已过时，需在最新 main 上重跑 PR 门禁");
+  if (base && mainSha && base !== mainSha) errors.push("实时 PR base 与 main 不一致");
+  if (compareBase && mainSha && compareBase !== mainSha) errors.push("compare base 与 main 不一致");
+  if (compareHead && head && compareHead !== head) errors.push("compare head 与 PR head 不一致");
+  if (mergeBase && mainSha && mergeBase !== mainSha) errors.push("PR 分支未包含最新 main，需 rebase 后重跑门禁");
+  if (sha(finalPull?.head?.sha) !== head || sha(finalPull?.base?.sha) !== base
+    || finalPull?.head?.ref !== pull?.head?.ref || finalPull?.base?.ref !== pull?.base?.ref
+    || finalPull?.state !== "open" || String(finalPull?.number ?? "") !== String(number)) {
+    errors.push("查询期间 PR 状态发生变化，需重跑门禁");
+  }
+  if (sha(finalMain?.commit?.sha) !== mainSha) errors.push("查询期间 main 已变化，需重跑门禁");
+  if (!Array.isArray(compare?.files)) errors.push("compare 缺少文件列表");
+  const files = Array.isArray(compare?.files) ? compare.files.map((entry) => String(entry?.path ?? entry?.name ?? "").trim()) : [];
+  if (files.some((path) => !path)) errors.push("compare 文件列表含无效路径");
+  return { errors, files };
+}
+
+export async function verifyPrFreshness({ repoSlug, number, branch, eventSourceSha, eventTargetSha, request = apiJson }) {
+  if (!repoSlug || !number || !SHA_RE.test(String(eventSourceSha ?? "")) || !SHA_RE.test(String(eventTargetSha ?? ""))) {
+    throw new Error("PR 事件缺少仓库、编号或 source/target SHA，无法证明主干新鲜度");
+  }
+  const pullUrl = `${API}/${repoSlug}/-/pulls/${encodeURIComponent(number)}`;
+  const mainUrl = `${API}/${repoSlug}/-/git/branches/main`;
+  const pull = await request(pullUrl);
+  const main = await request(mainUrl);
+  const head = String(pull?.head?.sha ?? "");
+  const mainSha = String(main?.commit?.sha ?? "");
+  if (!SHA_RE.test(head) || !SHA_RE.test(mainSha)) throw new Error("实时 PR/main API 未返回有效 SHA");
+  const compare = await request(`${API}/${repoSlug}/-/git/compare/${encodeURIComponent(`${mainSha}...${head}`)}`);
+  const finalPull = await request(pullUrl);
+  const finalMain = await request(mainUrl);
+  const verdict = validatePrSnapshot({ number, branch, eventSourceSha, eventTargetSha, pull, main, compare, finalPull, finalMain });
+  if (verdict.errors.length) throw new Error(`PR 新鲜度门禁失败：${verdict.errors.join("；")}`);
+  return { ...verdict, headSha: head, mainSha };
+}
+
+/** CNB PR 列表按页读取；页重复、结构异常时拒绝给出不完整的无冲突结论。 */
+async function allOpenPulls(repoSlug, request = apiJson) {
+  const all = [];
+  const seen = new Set();
+  for (let page = 1; page <= 100; page += 1) {
+    const payload = await request(`${API}/${repoSlug}/-/pulls?state=open&page_size=100&page=${page}`);
+    const list = Array.isArray(payload) ? payload : payload?.data;
+    if (!Array.isArray(list)) throw new Error(`open PR 列表第 ${page} 页格式错误`);
+    for (const pull of list) {
+      const number = String(pull?.number ?? "");
+      if (!number || seen.has(number)) throw new Error(`open PR 列表第 ${page} 页编号缺失或重复`);
+      seen.add(number);
+      all.push(pull);
+    }
+    if (list.length < 100) return all;
+  }
+  throw new Error("open PR 列表超过 100 页，无法完成全量比对");
 }
 
 /**
@@ -81,6 +156,8 @@ function fullPathOf(entry) {
 export function isSelfPull({ number, headRef, headSha, selfNumber, selfBranch, selfHeadSha, ancestorOfHead = false }) {
   const short = (value) => String(value ?? "").slice(0, 12);
   if (number && selfNumber && String(number) === String(selfNumber)) return true;
+  // 编号已知时，祖先关系不能把其它（尤其是 stacked）PR 误排除。
+  if (number && selfNumber) return false;
   if (selfBranch && headRef && String(headRef).replace(/^refs\/heads\//, "") === String(selfBranch)) return true;
   if (selfHeadSha && headSha) {
     if (String(headSha) === String(selfHeadSha)) return true;
@@ -102,10 +179,9 @@ function isAncestorOfHead(sha) {
   }
 }
 
-async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
+export async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha, request = apiJson) {
   let resolvedSelfNumber = selfNumber && selfNumber !== "true" ? String(selfNumber) : null;
-  const pulls = await apiJson(`${API}/${repoSlug}/-/pulls?state=open`);
-  const list = Array.isArray(pulls) ? pulls : (pulls?.data ?? []);
+  const list = await allOpenPulls(repoSlug, request);
   const result = [];
   for (const pull of list) {
     const number = String(pull?.number ?? "");
@@ -119,18 +195,28 @@ async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha) {
       selfNumber,
       selfBranch,
       selfHeadSha,
-      ancestorOfHead: headSha !== selfHeadSha && isAncestorOfHead(headSha),
+      ancestorOfHead: !selfNumber && headSha !== selfHeadSha && isAncestorOfHead(headSha),
     });
     if (isSelf) {
       console.log(`- 跳过自身 PR #${number}（head=${headSha.slice(0, 12)} ref=${headRef}）`);
       if (selfHeadSha && headSha === selfHeadSha) resolvedSelfNumber = number;
       continue;
     }
-    const files = await apiJson(`${API}/${repoSlug}/-/pulls/${number}/files`);
-    const paths = (Array.isArray(files) ? files : (files?.data ?? []))
-      .map(fullPathOf)
-      .filter(Boolean);
+    const baseSha = String(pull?.base?.sha ?? "");
+    if (!SHA_RE.test(baseSha) || !SHA_RE.test(headSha)) throw new Error(`PR #${number} 缺少有效 base/head SHA`);
+    // pulls/{n}/files 的 filename 实测只给基名；compare.files.path 才是完整路径。
+    const compare = await request(`${API}/${repoSlug}/-/git/compare/${encodeURIComponent(`${baseSha}...${headSha}`)}`);
+    if (String(compare?.base_commit?.sha ?? "") !== baseSha || String(compare?.head_commit?.sha ?? "") !== headSha || !Array.isArray(compare?.files)) {
+      throw new Error(`PR #${number} compare 不完整或 SHA 已变化`);
+    }
+    const paths = compare.files.map((file) => String(file?.path ?? "").trim());
+    if (paths.some((path) => !path)) throw new Error(`PR #${number} compare 含无效路径`);
     result.push({ number, title: pull?.title ?? "", paths, headSha });
+  }
+  const latest = await allOpenPulls(repoSlug, request);
+  const snapshot = new Map(list.map((pull) => [String(pull.number), `${pull?.base?.sha ?? ""}:${pull?.head?.sha ?? ""}`]));
+  if (latest.length !== list.length || latest.some((pull) => snapshot.get(String(pull?.number ?? "")) !== `${pull?.base?.sha ?? ""}:${pull?.head?.sha ?? ""}`)) {
+    throw new Error("扫描期间 open PR 列表或分支 SHA 变化，需重跑门禁");
   }
   return { prs: result, selfNumber: resolvedSelfNumber };
 }
@@ -188,9 +274,11 @@ async function main() {
   const repoSlug = arg("--repo") ?? process.env.CNB_REPO_SLUG ?? null;
   // 注意：下面解析 open PR 时可能回填（自身编号来自 head 匹配），因此必须是 let——写成 const 会在
   // 任何「有 open PR」的流水线里抛 TypeError，被 catch 吞成「跳过冲突检测」，等于门禁静默失效。
-  let selfNumber = arg("--pr") ?? (process.env.CNB_PULL_REQUEST !== "true" ? process.env.CNB_PULL_REQUEST : null);
+  let selfNumber = arg("--pr") ?? process.env.CNB_PULL_REQUEST_IID
+    ?? (process.env.CNB_PULL_REQUEST !== "true" ? process.env.CNB_PULL_REQUEST : null);
   const strict = process.argv.includes("--strict");
   const event = process.env.CNB_EVENT ?? null;
+  const prEvent = isPrEvent();
   const overlapMode = resolveLockOverlapMode({ event, envMode: process.env.LOCK_OVERLAP_MODE, strict });
   const advisory = overlapMode !== "fail";
   const base = arg("--base");
@@ -209,15 +297,33 @@ async function main() {
   }
   let selfBranch = null;
   if (process.env.CNB_EVENT === "push") selfBranch = (process.env.CNB_BRANCH ?? "").trim() || null;
+  if (prEvent) selfBranch = (process.env.CNB_PULL_REQUEST_BRANCH ?? "").trim() || null;
   if (process.env.PROTOCOL_DEBUG === "1") {
     for (const key of ["CNB_EVENT", "CNB_BRANCH", "CNB_BRANCH_SHA", "CNB_PULL_REQUEST", "CNB_REPO_SLUG"]) {
       console.log(`  [debug] ${key}=${process.env[key] ?? "<unset>"}`);
     }
     console.log(`  [debug] resolved selfHeadSha=${selfHeadSha ?? "<none>"}`);
   }
-  const { files: mine, range } = changedFiles(base);
+  // PR 必须先验证实时源/目标/merge-base，再从 compare 取完整路径；不能因本地 diff 为空提前放行。
+  let mine;
+  let range;
+  if (prEvent) {
+    if (!repoSlug || !process.env.CNB_TOKEN) throw new Error("PR 事件缺少 CNB_REPO_SLUG 或 CNB_TOKEN，锁冲突门禁拒绝放行");
+    const snapshot = await verifyPrFreshness({
+      repoSlug,
+      number: selfNumber,
+      branch: selfBranch,
+      eventSourceSha: process.env.CNB_PULL_REQUEST_SHA,
+      eventTargetSha: process.env.CNB_PULL_REQUEST_TARGET_SHA,
+    });
+    mine = snapshot.files;
+    range = `${snapshot.mainSha.slice(0, 12)}...${snapshot.headSha.slice(0, 12)} (CNB compare)`;
+    selfHeadSha = snapshot.headSha;
+  } else {
+    ({ files: mine, range } = changedFiles(base));
+  }
   if (!mine.length) {
-    console.log("✓ 锁冲突检测：分支无改动文件，跳过");
+    console.log(`✓ 锁冲突检测：${prEvent ? "实时 PR compare" : "分支"} 无改动文件，跳过`);
     return;
   }
   console.log(`本分支改动 ${mine.length} 个文件（范围 ${range}）`);
@@ -227,10 +333,7 @@ async function main() {
 
   if (!repoSlug || !process.env.CNB_TOKEN) {
     const message = "缺少 CNB_REPO_SLUG 或 CNB_TOKEN，无法比对同仓 open PR";
-    if (strict) {
-      console.error(`✗ ${message}（--strict 模式下视为失败）`);
-      process.exit(1);
-    }
+    if (prEvent || strict) throw new Error(message);
     console.warn(`! ${message}；本次跳过（本地环境属预期，流水线内会拿到令牌）`);
     return;
   }
@@ -244,8 +347,8 @@ async function main() {
       console.log(`  自身 PR 编号：#${selfNumber}（先到先得判定依据）`);
     }
   } catch (error) {
+    if (prEvent || strict) throw new Error(`查询 open PR 失败：${error?.message ?? error}`);
     console.warn(`! 查询 open PR 失败，跳过冲突检测：${String(error).slice(0, 200)}`);
-    if (strict) process.exit(1);
     return;
   }
 
@@ -291,7 +394,9 @@ async function main() {
   console.log("✓ 锁冲突检测通过");
 }
 
-main().catch((error) => {
-  console.error(`锁冲突检测异常：${error?.message ?? error}`);
-  process.exit(1);
-});
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  main().catch((error) => {
+    console.error(`锁冲突检测异常：${error?.message ?? error}`);
+    process.exitCode = 1;
+  });
+}

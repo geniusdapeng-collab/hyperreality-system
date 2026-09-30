@@ -5,3 +5,4 @@
 export * from "./constants.js";
 export * from "./state.js";
 export * from "./tickets.js";
+export * from "./request-fingerprint.js";

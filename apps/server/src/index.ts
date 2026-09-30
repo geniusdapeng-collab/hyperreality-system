@@ -13,13 +13,12 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { appRouter } from "./trpc/router.js";
-import { createContext } from "./trpc/context.js";
+import { createContext, trpcErrorRef } from "./trpc/context.js";
 import { serviceGateway } from "./service/gateway.js";
 import { getOwnerPool, getAppPool, getGatewayPool } from "@workloom/db";
 import { bundlesRoot } from "@workloom/base/bundles";
 import { registerFeedbackEnumsFromDisk } from "@workloom/base/evolve";
 import { startSkillDistAutoSync, buildManifest, receiveReflux, type RefluxPayload } from "@workloom/base/skill-ops";
-import { createHash } from "node:crypto";
 import { startThreadScheduler } from "./runtime/scheduler.js";
 import { gatewayAppend } from "@workloom/base/workdata";
 import { registerBundleAskFacts } from "./runtime/ask-facts-loader.js";
@@ -42,8 +41,16 @@ app.use(
   }),
 );
 
-/** 裸健康检查（不进 tRPC，供 start.sh/编排探活） */
-app.get("/health", (c) => c.json({ ok: true, service: "workloom-im-server" }));
+/**
+ * 裸健康检查（不进 tRPC，供 start.sh/编排探活）。
+ * SERVER_INSTANCE_ID（可选）：把调用方注入的实例指纹原样回显——E2E/门禁据此校验
+ * 「应答者就是本次拉起的那个进程」，避免端口被占时对别人的实例断言（MC-204）。
+ */
+app.get("/health", (c) => c.json({
+  ok: true,
+  service: "workloom-im-server",
+  ...(process.env.SERVER_INSTANCE_ID ? { instanceId: process.env.SERVER_INSTANCE_ID } : {}),
+}));
 
 /**
  * 本机克隆音色（小织/织伴的默认音色）
@@ -95,10 +102,8 @@ app.all("/trpc/*", async (c) => {
      * onError 内任何失败都必须吞掉：错误处理路径再抛错会把正常响应也带崩。
      */
     onError: ({ path, error, type, ctx }) => {
-      const ref = createHash("sha256")
-        .update(`${path ?? "-"}|${error.code}|${error.message}`)
-        .digest("hex")
-        .slice(0, 8);
+      // ref 与 errorFormatter（trpc/context.ts）同算法：客户端只看到通用文案 + ref，原文留在这里
+      const ref = trpcErrorRef(path, error.code, error.message);
       console.error(`[trpc] ${type ?? "unknown"} ${path ?? "-"} → ${error.code}: ${error.message}（ref=${ref}）`);
       if (error.code !== "INTERNAL_SERVER_ERROR") return;
       const identity = ctx?.identity;
@@ -183,6 +188,21 @@ serve({ fetch: app.fetch, port, hostname: host }, (info) => {
    * 永远不会被执行。启动时顺带把崩溃遗留的 running 线程转 paused（可续跑）。
    */
   startThreadScheduler();
+  /**
+   * A-05 修复（端口 growth 排雷 T-2026-0929-0003）：启动恢复补扫——「步骤审批已 approved
+   * 但线程停 pending_review」的僵尸线程。此前审批通过的自动续跑是 setTimeout fire-and-forget，
+   * 进程在回调执行前重启即永丢（调度器只扫 queued，不接 pending_review）。
+   * 启动时统一补续跑，失败只记日志不阻塞启动。
+   */
+  void (async () => {
+    try {
+      const { resumeApprovedPendingThreads } = await import("./runtime/scheduler.js");
+      const n = await resumeApprovedPendingThreads();
+      if (n > 0) console.log(`[scheduler] 启动恢复：补续跑 ${n} 条「审批已通过但线程挂起」的僵尸线程`);
+    } catch (err) {
+      console.error("[scheduler] 启动恢复补扫失败（不阻塞启动）", err instanceof Error ? err.message : String(err));
+    }
+  })();
   /**
    * GR-19：装载各行业 ask 事实面——不装的话，右侧对话框问领域问题只会得到
    * 底座通用事实（实测"问什么都是没有相关记录"）。失败不阻塞启动（回落通用事实面）。

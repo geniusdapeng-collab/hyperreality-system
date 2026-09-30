@@ -44,13 +44,14 @@ export const NIGHT_STATUSES = [
 ] as const;
 export type NightStatus = (typeof NIGHT_STATUSES)[number];
 
-/** 审批状态（F5.x；expired 见 F5.7） */
+/** 审批状态（F5.x；expired 见 F5.7；superseded=重规划作废，DB CHECK 0047 已含，B-07 补齐共享枚举） */
 export const APPROVAL_STATUSES = [
   "pending",
   "approved",
   "edited",
   "rejected",
   "expired",
+  "superseded",
 ] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 

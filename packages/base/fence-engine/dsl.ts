@@ -194,7 +194,7 @@ export function checkMonotonic(
         rule_id: cur.rule_id,
         reason:
           `基线规则 ${cur.rule_id} when 被改写（${cur.when || "空"} → ${next.when || "空"}）：` +
-          "条件语义无法静态证明不放宽，须先 dry-run 回放 + 人工确认（L2.4）后以 allowWhenChange 显式放行",
+          "条件语义无法静态证明不放宽，须先 dry-run 回放 + 人工确认（L2.4）后，在 fence.confirmDryRun 显式传 allowWhenChange=true 放行",
       });
     }
   }
@@ -206,13 +206,27 @@ export function checkMonotonic(
  * checkMonotonic 是"整包 patch"口径，会把不在 patch 里的基线判为删除；
  * 而提案/激活一次只提交一条候选，因此这里只取同 rule_id 的基线做单条比对。
  * 候选行本身不是基线，比对时按"继承基线身份"处理，只校验 level / when / 覆盖集是否被放宽。
+ *
+ * MC-109：锚点取"同 rule_id 当前 active 中最严的一条"，不再只认 is_baseline 行。
+ * 覆盖层模型下同一 rule_id 可以同时有平台基线行与客户覆盖行（judge 取最严并集），
+ * 若只认 is_baseline 行，一旦基线行被 rolled_back（历史实现会把基线行一起回滚），
+ * 或客户先自定义一次再提第二次变更，守卫就找不到锚点而直接放行——"只可加严"失效。
  */
 export function checkCandidateAgainstBaseline(
   current: RuntimeRule[],
   candidate: RuntimeRule,
   opts: MonotonicOptions = {},
 ): MonotonicResult {
-  const baseline = current.find((r) => r.rule_id === candidate.rule_id && r.is_baseline);
-  if (!baseline) return { ok: true, violations: [] };
-  return checkMonotonic([baseline], [{ ...candidate, is_baseline: true }], opts);
+  const sameRule = current.filter((r) => r.rule_id === candidate.rule_id);
+  if (sameRule.length === 0) return { ok: true, violations: [] };
+  // 同严度时优先平台基线行（is_baseline=true）：其 when/覆盖集是出厂口径，比对更稳定
+  const anchor = sameRule.reduce((acc, row) => {
+    const delta = STRICTNESS[row.level] - STRICTNESS[acc.level];
+    if (delta > 0) return row;
+    if (delta < 0) return acc;
+    return row.is_baseline && !acc.is_baseline ? row : acc;
+  });
+  // 锚点统一按"基线身份"参与比对（覆盖行本身 is_baseline=false，但它是当前生效下界，
+  // checkMonotonic 只对 is_baseline 行做单调校验，故此处显式抬高锚点身份）。
+  return checkMonotonic([{ ...anchor, is_baseline: true }], [{ ...candidate, is_baseline: true }], opts);
 }

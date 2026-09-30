@@ -12,6 +12,19 @@ import { serviceTx, svcQuery } from "./events.js";
 export const CHANNELS = ["wechat-mini", "alipay", "h5"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
+/**
+ * S2/MC-207：演示直登（h5/openid 匿名会话）开关解析——网关与发布就绪度共用同一口径，
+ * 避免出现「发布页说演示中、网关却拒绝登录」的两种事实。
+ *  - 开发档：缺省开启（显式 SERVICE_C_DEMO_AUTH=false 可关闭）；
+ *  - 生产档（含桌面自包含运行时 NODE_ENV=production）：一律关闭——出厂/历史 .env 里的 `true`
+ *    不再能打开匿名直登（启动自检在 gateway.ts 打出显式告警）；正式 H5 只认
+ *    SERVICE_C_H5_ENTRY_SECRET + 身份网关签发的短期 entry_token。
+ */
+export function resolveDemoAuth(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.NODE_ENV === "production") return false;
+  return (env.SERVICE_C_DEMO_AUTH ?? "true") === "true";
+}
+
 export interface CUser {
   id: string;
   workspaceId: string;

@@ -21,7 +21,13 @@ import {
 
 interface Scope { tenantId: string; workspaceId: string }
 
-export interface AskFact { label: string; value: string }
+/**
+ * 事实域（MC-111）：用于「被问域优先」排序——问题命中哪个域，该域事实先于知识库与通用统计装行。
+ * 行业包注册的 provider 可省略（undefined = 通用/领域事实，排在知识库之后、被问域之后）。
+ */
+export type AskFactDomain = "events" | "approvals" | "threads" | "fence" | "memory" | "tickets" | "night" | "kb";
+
+export interface AskFact { label: string; value: string; domain?: AskFactDomain }
 
 export interface AskFactResult { facts: AskFact[]; sources: string[] }
 
@@ -78,7 +84,7 @@ export const defaultAskFactProvider: AskFactProvider = async (app, scope, questi
   const sources: string[] = [];
 
   const total = await queryCount(app, scope, `SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1`);
-  facts.push({ label: "事件库规模", value: `${total} 条五元事件（哈希链可验）` });
+  facts.push({ label: "事件库规模", value: `${total} 条五元事件（哈希链可验）`, domain: "events" });
   sources.push("biz_events");
 
   // 近窗动作分布（反映系统正在做什么）
@@ -94,7 +100,7 @@ export const defaultAskFactProvider: AskFactProvider = async (app, scope, questi
     );
     await client.query("COMMIT");
     if (r.rows.length) {
-      facts.push({ label: "近 7 天动作分布", value: r.rows.map((x) => `${x.action} ×${x.n}`).join(" · ") });
+      facts.push({ label: "近 7 天动作分布", value: r.rows.map((x) => `${x.action} ×${x.n}`).join(" · "), domain: "events" });
       sources.push("biz_events 近窗聚合");
     }
   } catch (err) {
@@ -106,24 +112,74 @@ export const defaultAskFactProvider: AskFactProvider = async (app, scope, questi
 
   if (/审批|待办|待审|决定|批/.test(question)) {
     const n = await queryCount(app, scope, `SELECT count(*)::text AS n FROM approvals WHERE workspace_id=$1 AND status='pending'`);
-    facts.push({ label: "当前待审批", value: `${n} 项（决断队列）` });
+    facts.push({ label: "当前待审批", value: `${n} 项（决断队列）`, domain: "approvals" });
     sources.push("approvals");
+  }
+
+  /**
+   * MC-111（M3 联动）：服务台工单与夜班此前不在 ask 事实面内——问「今天多少工单」只能拿知识库 FAQ 顶包。
+   * 两个只读计数（RLS 同库同上下文）；查询失败按 0 处理不阻塞回答（不劣化既有行为）。
+   */
+  const openTickets = await queryCount(
+    app, scope,
+    `SELECT count(*)::text AS n FROM c_tickets WHERE workspace_id=$1 AND status IN ('created','assigned','processing')`,
+  ).catch(() => 0);
+  const breached = await queryCount(
+    app, scope,
+    `SELECT count(*)::text AS n FROM c_tickets WHERE workspace_id=$1 AND status IN ('created','assigned','processing') AND sla_due_at < now()`,
+  ).catch(() => 0);
+  if (openTickets > 0 || /工单|报修|报障|派单|服务台|客诉/.test(question)) {
+    facts.push({
+      label: "服务台工单",
+      value: `${openTickets} 条未办结${breached > 0 ? `（SLA 超时 ${breached} 条）` : ""}`,
+      domain: "tickets",
+    });
+    sources.push("c_tickets");
   }
 
   // L3 修复：threads.status 枚举以 0001 CHECK 约束为准
   // （queued/running/pending_review/completed/failed/paused）——不存在 'active'；
   // 「进行中」= 全部非终态（queued/running/pending_review/paused）
   const active = await queryCount(app, scope, `SELECT count(*)::text AS n FROM threads WHERE workspace_id=$1 AND status IN ('queued','running','pending_review','paused')`);
-  facts.push({ label: "进行中线程", value: `${active} 条` });
+  facts.push({ label: "进行中线程", value: `${active} 条`, domain: "threads" });
   sources.push("threads");
 
   const fences = await queryCount(app, scope, `SELECT count(*)::text AS n FROM fence_rules WHERE workspace_id=$1 AND status='active'`);
-  facts.push({ label: "生效围栏规则", value: `${fences} 条（写类动作先过围栏）` });
+  facts.push({ label: "生效围栏规则", value: `${fences} 条（写类动作先过围栏）`, domain: "fence" });
   sources.push("fence_rules");
 
   const memories = await queryCount(app, scope, `SELECT count(*)::text AS n FROM org_memory WHERE workspace_id=$1`);
-  facts.push({ label: "组织记忆", value: `${memories} 条` });
+  facts.push({ label: "组织记忆", value: `${memories} 条`, domain: "memory" });
   sources.push("org_memory");
+
+  // 夜班事实面（MC-111）：最近一班的状态/日期/候选数——「昨晚夜班完成了什么」不再答成发票 FAQ
+  const nightClient = await app.connect();
+  try {
+    await nightClient.query("BEGIN");
+    await nightClient.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+    const r = await nightClient.query<{ run_date: string; status: string; candidate_count: number }>(
+      `SELECT run_date, status, candidate_count FROM night_runs
+        WHERE workspace_id=$1 ORDER BY run_date DESC LIMIT 1`,
+      [scope.workspaceId],
+    );
+    await nightClient.query("COMMIT");
+    const row = r.rows[0];
+    if (row) {
+      const STATUS_TEXT: Record<string, string> = {
+        ready: "待开工", running: "进行中", paused: "已暂停", package_generated: "已出决策包",
+      };
+      facts.push({
+        label: "最近夜班",
+        value: `${row.run_date} 班次${STATUS_TEXT[row.status] ?? row.status}（候选 ${row.candidate_count} 项）`,
+        domain: "night",
+      });
+      sources.push("night_runs");
+    }
+  } catch {
+    await nightClient.query("ROLLBACK").catch(() => undefined); // 事实面缺表/权限不足不阻塞问询
+  } finally {
+    nightClient.release();
+  }
 
   if (total === 0) {
     facts.length = 0;
@@ -178,6 +234,7 @@ export function mergeKbFacts(base: AskFactResult, hits: AskKbHit[]): AskFactResu
   const facts: AskFact[] = picked.map((hit) => ({
     label: `知识库·${(hit.documentTitle ?? "文档").slice(0, 24)}${hit.heading ? `（${hit.heading.slice(0, 16)}）` : ""}`,
     value: hit.content.replace(/\s+/g, " ").slice(0, 160),
+    domain: "kb" as const,
   }));
   const sources = picked.map((hit) => `kb:${hit.documentId}`);
   /**
@@ -269,6 +326,50 @@ export async function webSearchFacts(question: string): Promise<AskFactResult> {
 export const ASK_ANSWER_MAX_CHARS = 120;
 
 /**
+ * MC-111：问题 → 被问域（顺序即优先序）。
+ *
+ * 触发场景（M3 真机实测）：问「当前有多少待审批事项？」时知识库 2-gram 命中一条维修 FAQ，
+ * `mergeKbFacts` 的「知识库永远排最前」口径把 120 字预算全部吃满，approvals/threads 的事实
+ * 一条都没展示，答案落款却仍写着「以上数字均来自事件库实时取数」。
+ * 现在：问哪个域，先装哪个域的系统事实；知识库退到其后（对知识型提问仍排最前）。
+ */
+const ASK_DOMAIN_PATTERNS: ReadonlyArray<readonly [AskFactDomain, RegExp]> = [
+  ["approvals", /审批|待审|待办|裁决|批/],
+  ["tickets", /工单|报修|报障|派单|服务台|客诉/],
+  ["night", /夜班|晨报|班次|夜间|决策包/],
+  ["threads", /线程|任务|进行中|排队|调度|派活/],
+  ["kb", /知识库|政策|折扣|暗号|优惠|价格表|FAQ|怎么|如何|多久|是什么/],
+];
+
+/** 被问域识别（纯函数；导出供各仓套件直接断言） */
+export function askedAskDomains(question: string): AskFactDomain[] {
+  return ASK_DOMAIN_PATTERNS.filter(([, re]) => re.test(question)).map(([d]) => d);
+}
+
+/**
+ * MC-111：ask 事实面注入知识库时的相关性下限（调用方在注册 kbSearch 时传入 `searchKB({minScore})`）。
+ *
+ * 校准（2026-09-30，hotel 出厂知识库 385 问 + 真机五问）：问「当前有多少待审批事项？」时
+ * kbd-faq-repair 以 2-gram「待审/审批」命中 score=0.533；「现在有多少进行中的任务？」命中 0.550；
+ * 而真正问知识（「毛巾多久更换一次」）的相关条目在 0.64~0.69。取 0.65 作为注入下限：
+ * 系统问询不再被无关 FAQ 抢占，知识型提问仍能命中（低于下限时按「未命中」处理，不劣化回答）。
+ */
+export const ASK_KB_MIN_SCORE = 0.65;
+
+/** 按「被问域 > 知识库 > 其余」重排事实（稳定排序，同域内保持 provider 原始顺序） */
+export function orderAskFactsForQuestion(question: string, facts: AskFact[]): AskFact[] {
+  const asked = askedAskDomains(question);
+  const rank = (f: AskFact): number => {
+    const d = f.domain ?? (f.label.startsWith("知识库·") ? "kb" : undefined);
+    const idx = d ? asked.indexOf(d) : -1;
+    if (idx >= 0) return idx;              // 被问域：按问题命中顺序排（多域命中时不互相压制）
+    if (d === "kb") return asked.length;   // 知识库未被问到：退到被问域之后
+    return asked.length + 1;               // 其余通用统计最后
+  };
+  return facts.map((f, i) => ({ f, i, r: rank(f) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.f);
+}
+
+/**
  * mock 口径的确定性合成（数字全真，文案模板）。
  *
  * 导出是刻意的（2026-09-29 第二次修复）：GR-09 的 120 字硬闸与"知识命中优先级"是**组合后**才成立的
@@ -276,7 +377,8 @@ export const ASK_ANSWER_MAX_CHARS = 120;
  * 与 suite 默认 scope 不同，跑真机 ask 会先撞 RLS/FK 而看不到这条不变量）。
  */
 export function composeAskAnswer(question: string, facts: AskFact[]): string {
-  const lines = facts.map((f) => `· ${f.label}：${f.value}`);
+  const ordered = orderAskFactsForQuestion(question, facts);
+  const lines = ordered.map((f) => `· ${f.label}：${f.value}`);
   /**
    * 标题里的问题**必须截断**：GR-09 是 120 字硬闸，标题若跟着用户原话膨胀，
    * 光"关于「…」"就把预算吃光，事实一条都留不下（2026-09-29 实测：长问句下答案只剩标题+截断标记）。
@@ -287,7 +389,6 @@ export function composeAskAnswer(question: string, facts: AskFact[]): string {
    */
   const asked = question.length > 24 ? `${question.slice(0, 24)}…` : question;
   const header = `关于「${asked}」：`;
-  const footer = "以上数字均来自事件库实时取数，可下钻溯源。";
   /**
    * 预算内**按优先级装行**（facts 已按 知识库 > 领域/系统统计 排序）：
    * 装不下的次要事实直接不展示——那是"次要数据未展示"，不是"答案被截断"。
@@ -297,17 +398,35 @@ export function composeAskAnswer(question: string, facts: AskFact[]): string {
    */
   const kept: string[] = [];
   let used = header.length;
-  for (const line of lines) {
+  const keptFacts: AskFact[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
     if (used + 1 + line.length > ASK_ANSWER_MAX_CHARS) break;
     kept.push(line);
+    keptFacts.push(ordered[i]!);
     used += 1 + line.length;
   }
   if (kept.length === 0 && lines.length > 0) {
-    return `${header}\n${lines[0]!}\n${footer}`; // 超预算 → 由 enforceAnswerLimits 截断并标注
+    return `${header}\n${lines[0]!}\n${factFooter([ordered[0]!])}`; // 超预算 → 由 enforceAnswerLimits 截断并标注
   }
   const body = [header, ...kept].join("\n");
+  /**
+   * MC-111：落款必须与正文实际取数来源一致——正文里只有知识库内容时不得声称「数字来自事件库实时取数」
+   * （修复前实测：KB FAQ 冒充答案 + 事件库落款，客户会以为 FAQ 内容是实时经营数字）。
+   */
+  const footer = factFooter(keptFacts);
   // 页脚是样板句：装不下就整句不写，同样不触发"已截断"
   return used + 1 + footer.length <= ASK_ANSWER_MAX_CHARS ? `${body}\n${footer}` : body;
+}
+
+/** 按正文实际使用的事实类型生成落款（事件库 / 知识库 / 两者） */
+function factFooter(facts: AskFact[]): string {
+  const isKb = (f: AskFact) => f.domain === "kb" || f.label.startsWith("知识库·");
+  const usedKb = facts.some(isKb);
+  const usedDb = facts.some((f) => !isKb(f));
+  if (usedKb && usedDb) return "以上内容来自事件库与知识库实时取数，可下钻溯源。";
+  if (usedKb) return "以上内容来自知识库检索，可下钻溯源。";
+  return "以上数字均来自事件库实时取数，可下钻溯源。";
 }
 
 export interface AskResult {
@@ -344,8 +463,8 @@ function enforceAnswerLimits(text: string): string {
   return `${kept.join("\n").trimEnd()}…（已截断）`;
 }
 
-/** 读取本工作区生效围栏规则（ask 输出闸门用；读失败不阻塞回答，只是闸门退化为仅长度限制） */
-async function loadAskRules(app: pg.Pool, scope: Scope): Promise<RuntimeRule[]> {
+/** 读取本工作区生效围栏规则（ask 输出闸门用；返回 null=加载失败——A-06：与"无规则"区分，闸门失效必须留痕不得静默放行） */
+async function loadAskRules(app: pg.Pool, scope: Scope): Promise<RuntimeRule[] | null> {
   const client = await app.connect();
   try {
     await client.query("BEGIN");
@@ -368,7 +487,8 @@ async function loadAskRules(app: pg.Pool, scope: Scope): Promise<RuntimeRule[]> 
     }));
   } catch {
     await client.query("ROLLBACK").catch(() => undefined);
-    return [];
+    return null; // A-06（端口 growth 排雷 T-2026-0929-0003）：加载失败返回 null（闸门不可用），
+                 // 下游必须显式标注而非按空规则集静默放行（此前行业 ask.deliver 红线会静默失效且无留痕）
   } finally {
     client.release();
   }
@@ -399,6 +519,13 @@ export async function runAsk(
   scope: Scope,
   input: { threadId: string; goal: string; presetKey: string; llmCall?: (prompt: string) => Promise<string> },
 ): Promise<AskResult> {
+  // A-02 修复（端口 growth 排雷 T-2026-0929-0003）：ask 执行期间先认领线程（queued→running CAS）——
+  // 问询全程可能挂较长的 LLM 预算，此前线程一直挂 queued，调度器 7s 扫描会把它当 quest 重入执行
+  // （"今天经营怎么样"被当成真实派单）。失败/无 queued 行时不阻塞回答（幂等）。
+  await app.query(
+    `UPDATE threads SET status='running', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND status='queued'`,
+    [input.threadId, scope.workspaceId],
+  );
   const { facts, sources } = await gatherFacts(app, scope, input.goal);
   // 联网实时检索（ASK_WEB_SEARCH=1）：与库内事实合并，供模型合成
   if ((process.env.ASK_WEB_SEARCH ?? "") === "1") {
@@ -442,7 +569,12 @@ ${input.goal}
   /* ---------- GR-09：三层输出闸门（硬约束 → 事实软校验 → 合成标识） ---------- */
   answer = enforceAnswerLimits(answer);
   const askRules = await loadAskRules(app, scope);
-  const gate = judgeAnswer(askRules, answer);
+  // A-06 修复（端口 growth 排雷）：规则加载失败（DB 抖动等）此前按空规则集恒 auto 静默放行——
+  // 行业 ask.deliver 红线失效且无留痕。现在显式标注闸门不可用（保守口径：可见降级，不假装闸门生效）。
+  if (askRules === null) {
+    answer = `${answer}\n（输出闸门暂不可用，本回答未经行业规则校验，请人工核对关键事实）`;
+  }
+  const gate = judgeAnswer(askRules ?? [], answer);
   if (gate.level === "block") {
     // 行业事实红线：不投递原答案，改为安全回执（并把触发规则写进 basis 供复盘）
     answer = `该回答触发了行业事实红线（${gate.triggeredBy.join("、")}），已拦截。请核对账本事实后人工确认。`;

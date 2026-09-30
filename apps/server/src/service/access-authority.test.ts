@@ -99,6 +99,33 @@ describe("三端访问权威", () => {
     expect(grants.actionPermissions).toEqual([]);
   });
 
+  it("行业执行权限与导航分离，并受角色、显式授权和 deny 收紧", () => {
+    const permission = "hotel.fast-scan.execute";
+    const input = {
+      plan: "pro" as const,
+      guest: false,
+      verifiedBundlePermissions: ["hotel.fast-scan.read"],
+      verifiedBundleActionPermissions: [permission],
+    };
+    const owner = memberAccessGrants({ ...input, role: "owner" });
+    expect(owner.navigationPermissions).toContain("hotel.fast-scan.read");
+    expect(owner.navigationPermissions).not.toContain(permission);
+    expect(owner.actionPermissions).toContain(permission);
+    expect(memberAccessGrants({ ...input, role: "staff" }).actionPermissions).not.toContain(permission);
+    expect(memberAccessGrants({
+      ...input, role: "staff", permissions: { allow: [permission] },
+    }).actionPermissions).toContain(permission);
+    expect(memberAccessGrants({
+      ...input, role: "owner", permissions: { deny: [permission] },
+    }).actionPermissions).not.toContain(permission);
+    expect(memberAccessGrants({
+      ...input, role: "owner", permissions: { deny: ["workspace.write"] },
+    }).actionPermissions).not.toContain(permission);
+    expect(memberAccessGrants({
+      ...input, role: "readonly", permissions: { allow: [permission] },
+    }).actionPermissions).not.toContain(permission);
+  });
+
   it("游客即使借用 owner 成员主键也按只读体验范围失败关闭", async () => {
     const access = await resolveAuthoritativeClientAccess(
       { ...claim, memberNo: "GUEST", name: "游客", role: "readonly" },
@@ -201,7 +228,7 @@ describe("三端访问权威", () => {
           serviceFront: { enabled: false, identityPolicy: "disabled", tabs: [], services: [] },
           theme: { brand: {} },
           // 这个未被任何导航槽位使用的声明不能进入 navigationPermissions。
-          permissions: ["hotel.console.read", "ai-video.console.read", "geo-growth.internal.read"],
+          permissions: ["hotel.console.read", "ai-video.console.read", "geo-growth.internal.read", "hotel.fast-scan.execute"],
           experiments: [],
         },
       },
@@ -210,19 +237,22 @@ describe("三端访问权威", () => {
       member: {
         ...memberFacts,
         role: "staff",
-        permissions: { allow: ["hotel.console.read", "geo-growth.internal.read"] },
+        permissions: { allow: ["hotel.console.read", "geo-growth.internal.read", "hotel.fast-scan.execute"] },
       },
       bundle: composite,
     }));
     expect(access.navigationPermissions).toContain("hotel.console.read");
     expect(access.navigationPermissions).not.toContain("ai-video.console.read");
     expect(access.navigationPermissions).not.toContain("geo-growth.internal.read");
+    expect(access.navigationPermissions).not.toContain("hotel.fast-scan.execute");
+    expect(access.actionPermissions).toContain("hotel.fast-scan.execute");
+    expect(access.actionPermissions).not.toContain("geo-growth.internal.read");
 
     const incomplete = await resolveAuthoritativeClientAccess(claim, undefined, deps({
       member: {
         ...memberFacts,
         role: "staff",
-        permissions: { allow: ["hotel.console.read", "geo-growth.internal.read"] },
+        permissions: { allow: ["hotel.console.read", "geo-growth.internal.read", "hotel.fast-scan.execute"] },
       },
       bundle: {
         ...composite,
@@ -232,6 +262,7 @@ describe("三端访问权威", () => {
     expect(incomplete.navigationPermissions).not.toContain("hotel.console.read");
     expect(incomplete.navigationPermissions).not.toContain("ai-video.console.read");
     expect(incomplete.navigationPermissions).not.toContain("geo-growth.internal.read");
+    expect(incomplete.actionPermissions).not.toContain("hotel.fast-scan.execute");
   });
 
   it("伙伴只消费实时有效授权，不信任 JWT 内授权快照", async () => {

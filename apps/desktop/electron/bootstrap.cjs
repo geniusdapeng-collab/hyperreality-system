@@ -947,9 +947,16 @@ async function bootstrap(opts) {
   if (!envExisted) {
     const jwtValue = `wl-${crypto.randomBytes(24).toString("hex")}`;
     const piiValue = `pii-${crypto.randomBytes(24).toString("hex")}`;
+    // MC-208：C 端会话签名密钥必须与 JWT/PII 同一纪律随机化——否则所有安装共用出厂常量，
+    // 本机任意进程可伪造 c-token（服务虽只绑回环，但同类风险已在 M4 实测记录）。
+    const cSecretValue = `c-${crypto.randomBytes(24).toString("hex")}`;
     envText = upsertEnvValue(envText, "JWT_SECRET", jwtValue);
     envText = upsertEnvValue(envText, "PII_SALT", piiValue);
+    envText = upsertEnvValue(envText, "SERVICE_C_SECRET", cSecretValue);
   }
+  // MC-207：桌面自包含运行时按生产档（NODE_ENV=production）拉起 server，演示直登开关必须落盘为 false；
+  // 历史安装里遗留的 true 由服务端生产档强制忽略并自检告警，这里同时把配置纠正到位。
+  envText = upsertEnvValue(envText, "SERVICE_C_DEMO_AUTH", "false");
   const adminPassword = databaseState.credentials.owner;
   const appPassword = databaseState.credentials.app;
   const gatewayPassword = databaseState.credentials.gateway;
@@ -966,7 +973,7 @@ async function bootstrap(opts) {
   else {
     try { fs.chmodSync(envFile, 0o600); } catch { /* Windows 不保证 POSIX mode */ }
   }
-  if (!envExisted) say("→ 生成默认配置 .env（JWT 密钥与 PII 盐已随机化）");
+  if (!envExisted) say("→ 生成默认配置 .env（JWT / PII / C 端会话密钥已随机化，演示直登已关闭）");
   const desktopEnv = {
     ...process.env,
     ...desktopConfig.values,

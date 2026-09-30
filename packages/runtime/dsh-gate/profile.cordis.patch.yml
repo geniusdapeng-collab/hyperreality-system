@@ -10,7 +10,7 @@
     - id: workloom-fence
       name: '__REPO_ROOT__/packages/runtime/plugins/workloom-fence.plugin.js'
       config:
-        rulesUrl: 'http://127.0.0.1:8799/rules'
+        rulesUrl: 'http://127.0.0.1:__MOCK_PORT__/rules'
     - id: workloom-audit
       name: '__REPO_ROOT__/packages/runtime/plugins/workloom-audit.plugin.js'
       config:

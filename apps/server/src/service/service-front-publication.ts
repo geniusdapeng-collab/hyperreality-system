@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { selectServiceWorkspaceId } from "./workspace-routing.js";
+import { resolveDemoAuth } from "./channels.js";
 
 export type ChannelReadiness = "ready" | "preview" | "partial" | "blocked" | "unavailable";
 
@@ -99,7 +100,8 @@ export function resolveServiceFrontPublication(input: ServiceFrontPublicationInp
   const routeKey = mappedUrl ? mappedEntry?.workspaceKey : env.SERVICE_C_PUBLIC_WORKSPACE_KEY?.trim() || undefined;
   const routingReady = workspaceMapped(env, input.workspaceId, routeKey);
   const publicReachable = Boolean(url && !isLoopback(url));
-  const demoAuth = (env.SERVICE_C_DEMO_AUTH ?? (env.NODE_ENV === "production" ? "false" : "true")) === "true";
+  // MC-207：与网关同一口径——生产档忽略演示开关，发布页不能把生产实例标成「演示可登录」
+  const demoAuth = resolveDemoAuth(env);
   const h5EntrySigningReady = (env.SERVICE_C_H5_ENTRY_SECRET?.trim().length ?? 0) >= 32;
   const h5IdentityProviderReady = Boolean(
     env.SERVICE_C_H5_IDENTITY_PROVIDER?.trim()

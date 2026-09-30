@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   validateCommit,
   exclusiveModuleOf,
@@ -10,6 +12,7 @@ import {
   resolveLockOverlapMode,
   validateSubject,
 } from "./protocol-rules.mjs";
+import { isPrEvent, isSelfPull, openPrFiles, validatePrSnapshot, verifyPrFreshness } from "./verify-lock-conflict.mjs";
 
 describe("提交信息规则", () => {
   it("接受合法提交并拒绝缺任务号", () => {
@@ -98,5 +101,131 @@ describe("路径解析与误判防护", () => {
   it("根级 package.json 属于互斥模块，子目录 package.json 不属于", () => {
     assert.equal(exclusiveModuleOf("package.json"), "root:package.json");
     assert.equal(exclusiveModuleOf("apps/web/package.json"), null);
+  });
+});
+
+describe("PR 锁冲突门禁的新鲜度与失败闭合", () => {
+  const source = "a".repeat(40);
+  const main = "b".repeat(40);
+  const oldMain = "c".repeat(40);
+  const number = "178";
+  const branch = "task/T-2026-0927-0009";
+  const fixture = () => ({
+    number,
+    branch,
+    eventSourceSha: source,
+    eventTargetSha: main,
+    pull: { number, state: "open", head: { sha: source, ref: `refs/heads/${branch}` }, base: { sha: main, ref: "refs/heads/main" } },
+    main: { commit: { sha: main } },
+    compare: { base_commit: { sha: main }, head_commit: { sha: source }, merge_base_commit: { sha: main }, files: [{ path: "scripts/ci/verify-lock-conflict.mjs" }] },
+    finalPull: { number, state: "open", head: { sha: source, ref: `refs/heads/${branch}` }, base: { sha: main, ref: "refs/heads/main" } },
+    finalMain: { commit: { sha: main } },
+  });
+
+  it("识别 PR 事件，合并后的 push 不再误判为 PR", () => {
+    assert.equal(isPrEvent({ CNB_EVENT: "pull_request", CNB_PULL_REQUEST: "true" }), true);
+    assert.equal(isPrEvent({ CNB_EVENT: "pull_request.update" }), true);
+    assert.equal(isPrEvent({ CNB_EVENT: "push", CNB_PULL_REQUEST: "false" }), false);
+    assert.equal(isPrEvent({ CNB_EVENT: "pull_request.merged", CNB_PULL_REQUEST: "false" }), false);
+  });
+
+  it("实时 source/target/main/merge base 一致时通过并取完整路径", () => {
+    const result = validatePrSnapshot(fixture());
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.files, ["scripts/ci/verify-lock-conflict.mjs"]);
+  });
+
+  it("事件 target 旧、分支未包含最新 main、事件 source 旧均拒绝", () => {
+    const staleEvent = fixture();
+    staleEvent.eventTargetSha = oldMain;
+    assert.match(validatePrSnapshot(staleEvent).errors.join(";"), /事件 target 已过时/);
+    const staleBranch = fixture();
+    staleBranch.compare.merge_base_commit.sha = oldMain;
+    assert.match(validatePrSnapshot(staleBranch).errors.join(";"), /未包含最新 main/);
+    const staleSource = fixture();
+    staleSource.eventSourceSha = oldMain;
+    assert.match(validatePrSnapshot(staleSource).errors.join(";"), /事件 source 已过时/);
+  });
+
+  it("PR/main 查询期间变动或 compare 缺失字段时拒绝", () => {
+    const raced = fixture();
+    raced.finalMain.commit.sha = oldMain;
+    assert.match(validatePrSnapshot(raced).errors.join(";"), /main 已变化/);
+    const malformed = fixture();
+    malformed.compare.files = undefined;
+    malformed.compare.merge_base_commit = undefined;
+    assert.match(validatePrSnapshot(malformed).errors.join(";"), /merge base SHA 缺失或无效/);
+    assert.match(validatePrSnapshot(malformed).errors.join(";"), /缺少文件列表/);
+  });
+
+  it("API 快照交叉验证成功；API 失败不会吞异常", async () => {
+    const data = fixture();
+    let pullReads = 0;
+    const request = async (url) => {
+      if (url.endsWith(`/pulls/${number}`)) return ++pullReads === 1 ? data.pull : data.finalPull;
+      if (url.endsWith("/git/branches/main")) return data.main;
+      if (url.includes("/git/compare/")) {
+        assert.ok(url.endsWith(`${main}...${source}`));
+        return data.compare;
+      }
+      throw new Error(`意外 API ${url}`);
+    };
+    const result = await verifyPrFreshness({ repoSlug: "workloom-ai/workloom-im", number, branch, eventSourceSha: source, eventTargetSha: main, request });
+    assert.equal(result.headSha, source);
+    assert.equal(pullReads, 2);
+    await assert.rejects(verifyPrFreshness({ repoSlug: "workloom-ai/workloom-im", number, eventSourceSha: source, eventTargetSha: main, request: async () => { throw new Error("API unavailable"); } }), /API unavailable/);
+    await assert.rejects(verifyPrFreshness({ repoSlug: "workloom-ai/workloom-im", number, eventSourceSha: source, eventTargetSha: "", request }), /缺少仓库、编号或 source\/target SHA/);
+  });
+
+  it("已知 PR 编号不同，不能凭祖先关系把并发 PR 排除", () => {
+    assert.equal(isSelfPull({ number: "177", selfNumber: "178", headSha: oldMain, selfHeadSha: source, ancestorOfHead: true }), false);
+  });
+
+  it("open PR 全部分页扫描，并从 compare 读取完整路径", async () => {
+    const pulls = Array.from({ length: 101 }, (_, index) => ({
+      number: String(index + 1), title: `PR ${index + 1}`,
+      head: { sha: source, ref: `task/${index + 1}` }, base: { sha: main },
+    }));
+    let pages = 0;
+    const request = async (url) => {
+      if (url.includes("/pulls?")) {
+        pages += 1;
+        return url.endsWith("page=1") ? pulls.slice(0, 100) : pulls.slice(100);
+      }
+      if (url.includes("/git/compare/")) return {
+        base_commit: { sha: main }, head_commit: { sha: source }, files: [{ path: "apps/web/package.json" }],
+      };
+      throw new Error(`意外 API ${url}`);
+    };
+    const result = await openPrFiles("workloom-ai/workloom-im", "999", null, null, request);
+    assert.equal(pages, 4);
+    assert.equal(result.prs.length, 101);
+    assert.deepEqual(result.prs[0].paths, ["apps/web/package.json"]);
+  });
+
+  it("并发 PR 列表重复或 compare 丢字段时拒绝得出无冲突结论", async () => {
+    const pull = { number: "177", title: "test", head: { sha: source, ref: "task/x" }, base: { sha: main } };
+    await assert.rejects(openPrFiles("workloom-ai/workloom-im", "999", null, null, async (url) => {
+      if (url.includes("/pulls?")) return [pull, pull];
+      throw new Error("不应查询 compare");
+    }), /编号缺失或重复/);
+    await assert.rejects(openPrFiles("workloom-ai/workloom-im", "999", null, null, async (url) => {
+      if (url.includes("/pulls?")) return [pull];
+      return { files: [] };
+    }), /compare 不完整/);
+    let listReads = 0;
+    await assert.rejects(openPrFiles("workloom-ai/workloom-im", "999", null, null, async (url) => {
+      if (url.includes("/pulls?")) return ++listReads === 1 ? [pull] : [{ ...pull, head: { ...pull.head, sha: oldMain } }];
+      return { base_commit: { sha: main }, head_commit: { sha: source }, files: [{ path: "a.ts" }] };
+    }), /扫描期间 open PR 列表或分支 SHA 变化/);
+  });
+
+  it("PR 事件没有 CNB_TOKEN 时脚本退出非零，包括本地 diff 为空的情况", () => {
+    const env = { ...process.env, CNB_EVENT: "pull_request", CNB_PULL_REQUEST: "true", CNB_REPO_SLUG: "workloom-ai/workloom-im", CNB_PULL_REQUEST_IID: number, CNB_PULL_REQUEST_SHA: source, CNB_PULL_REQUEST_TARGET_SHA: main };
+    delete env.CNB_TOKEN;
+    const script = fileURLToPath(new URL("./verify-lock-conflict.mjs", import.meta.url));
+    const result = spawnSync(process.execPath, [script], { env, encoding: "utf8" });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /缺少 CNB_REPO_SLUG 或 CNB_TOKEN/);
   });
 });
