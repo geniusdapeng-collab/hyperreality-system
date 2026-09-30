@@ -1,9 +1,9 @@
 {
   "schemaVersion": "workloom.client-foundation-state/v1",
   "baseRepository": "workloom-ai/workloom-im",
-  "version": "0.1.17",
-  "sourceRef": "refs/tags/ui-v0.1.17",
-  "sourceCommit": "91610daf0962a6c24bc7b8cde6c802662eb8b2f7",
+  "version": "0.1.18",
+  "sourceRef": "refs/tags/ui-v0.1.18",
+  "sourceCommit": "01ff40870063f305fcd407e4a129192c313b8a45",
   "updatePolicy": "upgrade-pr-only",
   "clients": {
     "bPc": "apps/web",
@@ -27,7 +27,7 @@
       "mode": 420
     },
     "apps/web/package.json": {
-      "sha256": "915896a985d7b845de02ba43f3ebcc38bcae3276b673d85c5780ae4b131039b6",
+      "sha256": "50415eafa283cf2bd51a57f056c23b77ca2353c971cc982829f0be2f7e6130ed",
       "mode": 420
     },
     "apps/web/playwright.consumer.config.ts": {
@@ -351,7 +351,7 @@
       "mode": 420
     },
     "apps/web/src/components/hud/EmergencyBrake.tsx": {
-      "sha256": "a82c2d1f0c476c4292b4363f9d5c6346872e1a83c93bf1dfa35ac6988ee0917e",
+      "sha256": "b1c4c266dd0460b1005c9b2c93452b67767c81e2f9914527c1e56503e0ba76dd",
       "mode": 420
     },
     "apps/web/src/components/hud/EventIdChip.tsx": {
@@ -639,7 +639,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p0/Floor.tsx": {
-      "sha256": "c82ee1209c77e18d0006d2e41a6b90555c611536e17352359d106121942b0f36",
+      "sha256": "279ddf1995baba63bb8365f3c166b2fdf4e4ba64b85be80244d363b1699198b1",
       "mode": 420
     },
     "apps/web/src/pages/p0/P0.tsx": {
@@ -659,11 +659,11 @@
       "mode": 420
     },
     "apps/web/src/pages/p22/P22.tsx": {
-      "sha256": "30f6f9b2c81d4a36c6bdf7dfe4044e6fd09bc9ce7c5dad002b304ca719cac8af",
+      "sha256": "acb7f9215a1dcb17bede05ba7c011b675de70a63ec4716a306017b8c3c1d2063",
       "mode": 420
     },
     "apps/web/src/pages/p23/P23.tsx": {
-      "sha256": "9c697f1650537dd5e3b6ad837f57026876844a22f43e0df5cb65e5f380f8579b",
+      "sha256": "b307f3170a21df9aefac6e90b80beafdfb28cc7a980708e58d0aa69d1f016057",
       "mode": 420
     },
     "apps/web/src/pages/p23/systemText.test.ts": {
@@ -687,7 +687,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p28/P28.tsx": {
-      "sha256": "aafcf52ad9c4e06a9c9b5da36d26f9767a49dfa2dad394c274f1458f68daad5e",
+      "sha256": "cb9cd6265cb73b38a8aba5ff6d0709c229c01f5483f0605ad9fbf255ff8d1e5d",
       "mode": 420
     },
     "apps/web/src/pages/p29/P29.tsx": {
@@ -703,7 +703,7 @@
       "mode": 420
     },
     "apps/web/src/pages/p31/P31.tsx": {
-      "sha256": "c5f5a724fb2c27bfddf239167eabc4714d4a939be5019452fd997b3d43fa921b",
+      "sha256": "cdf1be034364e44bde1404b2f82c5eee3e133e970e8bccda98361cfb0b1b7437",
       "mode": 420
     },
     "apps/web/src/pages/p4/P4.tsx": {
@@ -727,11 +727,11 @@
       "mode": 420
     },
     "apps/web/src/pages/p9/P9.tsx": {
-      "sha256": "ee786e6a402632cdeea364c3448d81086fb6c8619b63152dfd788e31cb5ad321",
+      "sha256": "2a31e703fe4b00968ee47675b384dc8965a8820eae3d01cd15499916d5d8a54d",
       "mode": 420
     },
     "apps/web/src/shell/Bridge.tsx": {
-      "sha256": "7f8d670a2a559052defe61e37684bfda5182f1c8aac552ae7bc359004e4ee99c",
+      "sha256": "5dbc79edef4d488cfb826b5ced87029ce67febd1789d2f1b6ac175ca6ae8972e",
       "mode": 420
     },
     "apps/web/src/shell/IndustryRoutes.test.tsx": {
@@ -839,7 +839,7 @@
       "mode": 420
     },
     "apps/webb/package.json": {
-      "sha256": "8a9b72483cda0401dce6e5a82df6e594cf02de9a41b4e17735f62887476bd26e",
+      "sha256": "84437d3b06448e0504a87580bcc2664b1b7b9d1771a13cc35eb7dcd4dd6bfdca",
       "mode": 420
     },
     "apps/webb/public/manifest.webmanifest": {
@@ -903,7 +903,7 @@
       "mode": 420
     },
     "apps/webc/package.json": {
-      "sha256": "24b5189d761e32813d208735007ed1de3914ed6eeae3c381d6069e33dd835e7c",
+      "sha256": "d847069f87c5593e9d6e2a89de80797c889b7caed119b73dbdda91833df1bc5a",
       "mode": 420
     },
     "apps/webc/public/service-front.config.json": {
