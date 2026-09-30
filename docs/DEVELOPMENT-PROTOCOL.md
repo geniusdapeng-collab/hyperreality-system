@@ -140,7 +140,7 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 
 | 项 | 规则 |
 |---|---|
-| 生效范围 | 仅 `lane: experiment` 的仓；非实验车道（含 tiger 这类行业仓）保持严格 fail closed |
+| 生效范围 | 默认 `lane: experiment` 的仓；**产品分叉仓**可在 `sync/child-repos.json` 显式声明 `tolerateExtensionSnapshotOverlap: true` 获得同一容差（2026-09-30 起，T-2026-0930-0003「仓级扩展路径全链路」）；未声明者（含 tiger 这类行业仓）保持严格 fail closed |
 | 触发条件 | 稳定快照占用该仓声明的 `industryExtensionPaths`，或旧 state 已把这类路径登记为受管文件 |
 | 动作 | 这些路径**不覆盖、不删除**，从新 state 的 `managedFiles` 移除，并在 `state.retiredManagedForks` 留痕（路径 + 退管版本 + 原因） |
 | 代价（必须知情） | 退管路径**从此不再接收基座更新**，由该仓自持；要拿回基座版本需先删除声明并另开迁移任务卡 |
