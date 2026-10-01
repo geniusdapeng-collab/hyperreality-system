@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { test } from "node:test";
@@ -9,6 +10,21 @@ import {
 } from "./agent-capabilities.mjs";
 
 const root = resolve(import.meta.dirname, "..");
+/**
+ * 清单口径从本仓事实源推导（基座 ai-pm / 行业仓 geo-growth 等），
+ * 避免把"基座只有 8 条"写死——行业仓会把行业清单合并进来（T-2026-1001-0008）。
+ */
+const productManifest = JSON.parse(readFileSync(resolve(root, "product.manifest.json"), "utf8"));
+const bundleId = productManifest.defaultBundle;
+const coreCatalog = JSON.parse(readFileSync(resolve(root, "scripts/agent-capabilities.core.json"), "utf8"));
+const industryCatalogFile = resolve(root, "bundles", bundleId, "agent-capabilities.json");
+const industryItems = existsSync(industryCatalogFile)
+  ? JSON.parse(readFileSync(industryCatalogFile, "utf8")).capabilities ?? []
+  : [];
+const expectedTotal = coreCatalog.capabilities.length + industryItems.length;
+const expectedEnabled = [...coreCatalog.capabilities, ...industryItems].filter((item) => item.enabled !== false).length;
+const demoWorkspaceSlug = productManifest.demoWorkspaceSlug;
+const demoMemberNo = productManifest.demoMemberNo;
 
 async function testServer(handler) {
   const server = createServer(handler);
@@ -22,9 +38,9 @@ async function testServer(handler) {
 
 test("catalog only publishes reviewed common capabilities in the base repo", async () => {
   const catalog = await loadCatalog(root);
-  assert.equal(catalog.bundle, "ai-pm");
-  assert.equal(catalog.entries.size, 8);
-  assert.equal(mcpTools(catalog).length, 8);
+  assert.equal(catalog.bundle, bundleId);
+  assert.equal(catalog.entries.size, expectedTotal);
+  assert.equal(mcpTools(catalog).length, expectedEnabled);
   assert.equal(catalog.entries.get("core.workspace.profile").transport.path, "workspace.profile");
 });
 
@@ -39,7 +55,7 @@ test("CLI list accepts options without a positional capability ID", async () => 
   const [exitCode] = await once(child, "exit");
   assert.equal(exitCode, 0, stderr);
   const result = JSON.parse(stdout);
-  assert.equal(result.capabilities.length, 8);
+  assert.equal(result.capabilities.length, expectedTotal);
 });
 
 test("input validation rejects missing and unexpected fields", async () => {
@@ -77,7 +93,7 @@ test("loopback dev identity invokes the same tRPC procedure and returns structur
     assert.deepEqual(output.result, { workspace: "demo" });
     assert.equal(requests[0].method, "POST");
     assert.deepEqual(JSON.parse(requests[0].body), {
-      workspaceSlug: "ai-pm-demo", memberNo: "MEM-001",
+      workspaceSlug: demoWorkspaceSlug, memberNo: demoMemberNo,
     });
     assert.equal(requests[1].method, "GET");
     assert.equal(requests[1].auth, `Bearer ${localTestToken}`);
@@ -178,6 +194,6 @@ test("MCP stdio lists only enabled tools and keeps stdout as JSON-RPC", async ()
   const lines = stdout.trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(lines.length, 2);
   assert.equal(lines[0].result.protocolVersion, "2025-11-25");
-  assert.equal(lines[1].result.tools.length, 8);
+  assert.equal(lines[1].result.tools.length, expectedEnabled);
   assert.equal(lines[1].result.tools[0].annotations.readOnlyHint, true);
 });

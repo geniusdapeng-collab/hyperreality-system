@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "workloom.agent-capabilities/v1",
+  "bundleId": "ai-video",
+  "capabilities": [
+    {
+      "id": "ai_video.repo.status",
+      "version": "1.0.0",
+      "title": "读取本仓自述",
+      "description": "读取本仓 product.manifest 摘要与 bundles/docs/脚本计数；只读，不访问服务端。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": {
+        "kind": "local",
+        "module": "bundles/ai-video/capabilities/repo.mjs",
+        "export": "repoStatus"
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "ai_video.repo.docs",
+      "version": "1.0.0",
+      "title": "读取文档索引",
+      "description": "列出 docs/*.md 与一级标题（最多 60 条），供 Agent 找 runbook 与规范；只读。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": {
+        "kind": "local",
+        "module": "bundles/ai-video/capabilities/repo.mjs",
+        "export": "repoDocs"
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "ai_video.bundle.summary",
+      "version": "1.0.0",
+      "title": "读取行业包概览",
+      "description": "读取 bundles/ai-video 的 skills/fences/pipelines/presets/library 计数与围栏规则样例；只读。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": {
+        "kind": "local",
+        "module": "bundles/ai-video/capabilities/repo.mjs",
+        "export": "bundleSummary"
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "ai_video.repo.readiness",
+      "version": "1.0.0",
+      "title": "检查接入就绪度（不执行）",
+      "description": "检查 Node 版本、依赖、运行时资产、密钥文件、MCP 入口与内置 DSH 组件 pin；只读本地文件，不联网。",
+      "operation": "preview",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": {
+        "kind": "local",
+        "module": "bundles/ai-video/capabilities/repo.mjs",
+        "export": "repoReadiness"
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "ai_video.assets.inventory",
+      "version": "1.0.0",
+      "title": "读取素材库概览",
+      "description": "只读统计 bundles/ai-video/library/** 各分区文件数；目录不存在时如实说明。",
+      "operation": "read",
+      "risk": "low",
+      "dataMode": "unverified",
+      "transport": {
+        "kind": "local",
+        "module": "bundles/ai-video/capabilities/repo.mjs",
+        "export": "assetsInventory"
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ]
+}
