@@ -151,6 +151,46 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 ② `node sync/ui-upgrade-pr.mjs --rollout --wave <波次>`（默认按波次顺序，先到先得）；
 ③ 升级 PR 门禁全绿后合并；④ 确认 `state.retiredManagedForks` 与仓内文件一一对应。
 
+### 10.4 仓级扩展路径全链路（2026-09-30 新增，解除 workloom 波次暂停）
+
+**问题**：§10.3 的分叉容差只对 `lane: experiment` 生效。但 **产品分叉仓**（如 workloom：
+2026-09-29 按产品所有者指令把整树复刻为 `WorkLoom-growth@2edea37`，客户端成为"三端壳之上的产品层"）
+同样需要它——否则升级会 fail closed（workloom 实测 85 冲突：`MANAGED_FILE_MODIFIED` 19 /
+`MANAGED_FILE_DELETED` 6 / `UNTRACKED_MANAGED_FILE` 40 / `ILLEGAL_INDUSTRY_APP_PATH` 20），
+而"整包覆盖"又等于替换产品 UI。
+
+**决策（产品所有者指令：完成 loop/客户端收尾）**：把分叉容差从"实验车道专用"升级为
+**仓级显式声明**，即「仓级扩展路径全链路」。能力与代价与 §10.3 相同，差别在**适用面与登记要求**：
+
+| 项 | 规则 |
+|---|---|
+| 生效范围 | `lane: experiment`（§10.3）**或** 在 `sync/child-repos.json` 显式声明 `children[].tolerateExtensionSnapshotOverlap = true` 的产品分叉仓（T-2026-0930-0003 起） |
+| 登记要求 | 必须同时给出原因（`clientForkReason` 或 `rolloutResumeNote`，≥20 字，写明产品分叉的事实依据）与非空 `industryExtensionPaths`；该容差与 `uiRolloutWave: paused` 互斥（二选一） |
+| 采纳基座版 | 可选 `adoptBaseClientPaths`（同样只允许 `apps/` 前缀、不含 `..`，且不得与扩展路径重叠）：这些路径"既有指纹不可信但不是本仓定制"，升级时**按稳定快照覆盖/重建**——例如 `apps/*/package.json`（必须由基座通道写入 `@workloom/ui` 版本与 lock 完整性）与纯文案代差的页面 |
+| 退管留痕 | 与 §10.3 相同：路径从新 state 的 `managedFiles` 移除，记入 `state.retiredManagedForks`（含退管版本与原因），从此不接收基座更新 |
+| 单一事实源 | 仍然只认 `sync/child-repos.json`；仓内 `.workloom-client-extensions.json` 仅供本仓自包含门禁参考，不参与 rollout 判定（仓内私改会在下一次 rollout fail closed） |
+| 门禁 | `validateChildInventory` 逐条失败闭合（缺理由 / 空扩展路径 / paused 冲突 / 非法路径 / 未开容差却给 adopt 路径）；引擎 `planClientFoundation` 对"扩展路径与采纳路径重叠"抛错 |
+
+**两个实测坑（照抄清单时必看）**：
+1. `apps/*/package.json` **不能**放进 `industryExtensionPaths`：扩展路径会被从稳定快照里过滤掉，而
+   `materializeUiVersion` 必须读它来写 `@workloom/ui` 版本 → 直接报 `客户端基座缺少 package.json`（硬错）。
+2. 它也不能不声明：0.1.1 时代的旧 state 没登记过它，内容又与快照不同 → `UNTRACKED_MANAGED_FILE` 卡死。
+   **唯一正解**是上面第 3 行那类「采纳基座版」声明（覆盖它、同时保留 `setUiVersion` 通道）。
+   同理，宽口径如 `apps/webb/src/**` 会把必需入口 `apps/webb/src/main.tsx` 过滤掉（`稳定客户端基座缺少真实生产入口`），要用具体文件/子目录。
+
+**首发适用**：`workloom` 24 条扩展路径 + 2 条采纳基座版路径（三端 `package.json`、`apps/webb/src/Auth.tsx`）→
+`ready=true`（退管 71 条、更新 5 文件 + 新建 `styles/subtitle.css`）；`WorkLoom-growth` 39 条扩展路径 +
+1 条采纳基座版路径（三端 `package.json`）→ `ready=true`（退管 71 条、更新 4 文件 + 新建 `styles/subtitle.css`）。
+两仓的声明都可用 `work/tools/simulate-workloom-plan.mjs` 只读复现。
+恢复/回滚：删除 `tolerateExtensionSnapshotOverlap`/`adoptBaseClientPaths`（必要时保留 `industryExtensionPaths`）、
+`uiRolloutWave` 改回 `paused` 并补 `rolloutPauseNote`，即可回到"挂起"状态。
+
+**UI 消费契约在分叉仓的边界（2026-09-30 补，T-2026-0929-0001 follow-up）**：`UI_CONSUMER_CONTRACT_FAILED`
+（中文边界 / 动态值映射 / 文字出口 / 共享组件渲染等）只约束**基座受管面**。对已声明分叉容差的仓，
+这些发现降级为 `advisories`（保留在 preflight 报告里可查、可另立产品迁移任务卡），**不再阻断波次推进**——
+否则 `targetVersionApplied` 永远为 false，会把 W3B 之后的整条波次链永久卡死（workloom / growth 实测各 207 项）。
+非分叉仓不受影响，仍是硬门禁；回滚即删除该降级逻辑。
+
 ## 11. 隔离副本车道（isolated：双向不同步，2026-09-22 新增）
 
 **背景**：`workloom-growthtest`（AI超增长·实验版）与 `workloom-growthmatrix`（骇客帝国·实验版）是 2026-09-21 从
