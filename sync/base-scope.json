@@ -155,6 +155,7 @@
       "docs/mine-clear/evidence.schema.json",
       "scripts/acceptance/lib/evidence.mjs",
       "scripts/acceptance/lib/outcome-contract.mjs",
+      "scripts/acceptance/lib/outcome-fixture.mjs",
       "scripts/acceptance/lib/outcome-contract.test.mjs",
       "scripts/acceptance/lib/environment-safety.test.mjs",
       "scripts/acceptance/fleet-run.test.mjs",

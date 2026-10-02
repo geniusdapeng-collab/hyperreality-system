@@ -14,10 +14,10 @@ const source = fileURLToPath(new URL('../..', import.meta.url));
 const require = createRequire(process.env.WORKLOOM_TEST_DEPENDENCIES ?? import.meta.url);
 const yamlRoot = dirname(require.resolve('yaml/package.json'));
 
-function fixture(t, { suite = true, production = false, fault = null } = {}) {
+function fixture(t, { suite = true, production = false, fault = null, selftest = true, provider = 'mock' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'rdas-outcome-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  for (const path of ['scripts/acceptance/outcome.mjs', 'scripts/acceptance/lib/profile.mjs', 'scripts/acceptance/lib/target.mjs', 'scripts/acceptance/lib/outcome-contract.mjs', 'scripts/acceptance/lib/live/budget.mjs', 'scripts/delivery/evidence.mjs']) {
+  for (const path of ['scripts/acceptance/outcome.mjs', 'scripts/acceptance/lib/profile.mjs', 'scripts/acceptance/lib/target.mjs', 'scripts/acceptance/lib/outcome-contract.mjs', 'scripts/acceptance/lib/outcome-fixture.mjs', 'scripts/acceptance/lib/live/budget.mjs', 'scripts/delivery/evidence.mjs']) {
     mkdirSync(dirname(join(root, path)), { recursive: true }); copyFileSync(join(source, path), join(root, path));
   }
   for (const path of ['acceptance/outcomes', 'bundles/industry/presets', 'node_modules']) mkdirSync(join(root, path), { recursive: true });
@@ -48,17 +48,19 @@ function fixture(t, { suite = true, production = false, fault = null } = {}) {
     if (procedure === 'threads.events') { send(200, fault === 'empty-events' ? [] : [{ event_id: 'E-101', object: { id: input.threadId }, context: { workspace_id: 'ws-fixture' }, who: { id: 'industry-analyst' }, decision: { action: 'ask.answer', after: { text: fault === 'authorization-leak' ? 'Authorization: Basic '+['Q25iOn','ByaXZhdGUtZml4dHVyZQ=='].join('') : '需要处理一项行业待办，未完成项请负责人核对。' }, params: { via: 'rule' } }, model_trace: { model_id: 'mock-001' } }]); return; }
     send(404, null, 'NOT_FOUND');
   });
-  return { root, profile, server, requests, threads, fault };
+  return { root, profile, server, requests, threads, fault, selftest, provider };
 }
 
 async function run(t, f, args = []) {
   await new Promise((done) => f.server.listen(0, '127.0.0.1', done));
   t.after(() => new Promise((done) => f.server.close(done)));
   f.profile.environment.target.apiUrl = `http://127.0.0.1:${f.server.address().port}`;
+  if (f.configure) f.configure();
   writeFileSync(join(f.root, 'acceptance/profile.json'), JSON.stringify(f.profile));
   for (const gitArgs of [['init', '-qb', 'main'], ['config', 'user.name', 'Fixture'], ['config', 'user.email', 'fixture@example.test'], ['add', '.'], ['commit', '-qm', 'fixture source']]) execFileSync('git', gitArgs, { cwd: f.root, stdio: 'ignore' });
   const result = await new Promise((done, reject) => {
-    const child = spawn(process.execPath, ['scripts/acceptance/outcome.mjs', '--timeout-s', f.fault === 'running' ? '1' : '5', '--poll-ms', '10', ...args], { cwd: f.root, env: { ...process.env, ACCEPTANCE_ENV_KIND: '', ACCEPTANCE_ALLOW_PROD_WRITES: '', LLM_PROVIDER: 'mock', DATABASE_URL: '' } });
+    const fixtureArgs = f.selftest && !args.includes('--validate-only') ? ['--selftest', ...(f.fault ? ['--selftest-fault', f.fault] : [])] : [];
+    const child = spawn(process.execPath, ['scripts/acceptance/outcome.mjs', '--timeout-s', f.fault === 'running' ? '1' : '5', '--poll-ms', '10', ...fixtureArgs, ...args], { cwd: f.root, env: { ...process.env, ACCEPTANCE_ENV_KIND: '', ACCEPTANCE_ALLOW_PROD_WRITES: '', LLM_PROVIDER: f.provider, DATABASE_URL: '' } });
     let output = ''; child.stdout.on('data', (data) => output += data); child.stderr.on('data', (data) => output += data);
     child.on('error', reject); child.on('close', (code) => done({ code, output }));
   });
@@ -124,7 +126,8 @@ test('G14: actual HTTP matrix yields structure results while mock never claims p
   const f = fixture(t); const result = await run(t, f);
   assert.equal(result.code, 2, result.output); assert.equal(result.report.status, 'unverified'); assert.equal(result.report.stats.passed, 7);
   assert.equal(result.report.trials[0].receipt.threadId, 'T-1'); assert.deepEqual(result.report.trials[0].receipt.eventIds, ['E-101']);
-  assert.equal(f.threads.length, 5); assert.equal(f.requests.some((request) => request.procedure === 'threads.dispatch' && !request.auth), true);
+  assert.equal(result.report.fixtureObservation.threads.length, 5); assert.equal(result.report.fixtureObservation.requests.some((request) => request.procedure === 'threads.dispatch' && !request.auth), true);
+  assert.deepEqual(f.requests, []); assert.equal(result.report.fixtureObservation.closed, true); assert.equal(result.report.fixtureObservation.externalTargetUsed, false);
   assert.equal(JSON.stringify(result.report).includes('fixture-token-is-never-persisted'), false);
 });
 test('G14: authorization headers returned in task events are removed from the bound report', async (t) => {
@@ -139,5 +142,63 @@ for (const fault of ['empty-events', 'wrong-thread', 'running']) test(`G14: ${fa
   const f = fixture(t, { fault }); const result = await run(t, f);
   assert.equal(result.code, 1, result.output); assert.equal(result.report.status, 'fail'); assert.equal(result.report.trials[0].pass, false);
   if (fault !== 'running') { assert.equal(result.report.trials[0].falseSuccess, true); assert.equal(existsSync(join(f.root, 'outputs/acceptance/items/O2-07.json')), true); }
-  else { assert.equal(result.report.trials[0].status, 'running'); assert.equal(f.requests.some((request) => request.procedure === 'threads.events'), true); }
+  else { assert.equal(result.report.trials[0].status, 'running'); assert.equal(result.report.fixtureObservation.requests.some((request) => request.procedure === 'threads.events'), true); }
+});
+
+test('G02: O-domain simulated runtime cannot dispatch an opaque model task before budget authorization', async t => {
+  const f = fixture(t, { selftest: false }); const result = await run(t, f);
+  assert.equal(result.code, 2, result.output); assert.deepEqual(f.requests, []);
+  assert.equal(result.report.stats.trials, 0); assert.match(result.report.errors.join('\n'), /预算|逐请求|不透明/);
+  assert.equal(result.report.called, false); assert.equal(existsSync(join(f.root, 'outputs/acceptance/items/O2-01.json')), false);
+});
+
+for (const kind of ['local-preview', 'client-runtime', 'deployed']) test(`G02: ${kind} real-provider runtime cannot bypass the pre-request budget guard`, async t => {
+  const f = fixture(t, { selftest: false, provider: 'deepseek' });
+  f.profile.environment.kind = kind; f.profile.environment.allowWrites = true; f.profile.dataMode = 'real';
+  f.profile.outcome.maxModelCalls = 1;
+  const result = await run(t, f, ['--trials', '1', '--allow-prod-writes', '--allow-measurement-interventions']);
+  assert.equal(result.code, 2, result.output); assert.deepEqual(f.requests, []);
+  assert.equal(result.report.called, false); assert.equal(result.report.stats.trials, 0);
+  assert.equal(result.report.provider, 'deepseek'); assert.equal(result.report.verified, false);
+  assert.match(result.report.errors.join('\n'), /总输入.*输出.*重试.*上下文/);
+});
+
+test('G02: a production profile and explicit write flag cannot turn the selftest fixture into production evidence', async t => {
+  const f = fixture(t, { production: true }); f.profile.environment.allowWrites = true;
+  const result = await run(t, f, ['--allow-prod-writes']);
+  assert.equal(result.code, 2, result.output); assert.deepEqual(f.requests, []);
+  assert.equal(result.report.called, false); assert.equal(result.report.stats.trials, 0);
+  assert.equal(result.report.fixtureObservation, undefined);
+  assert.match(result.report.errors.join('\n'), /自有 selftest.*生产验收/);
+});
+
+for (const operation of ['sql', 'approval']) test(`G02: selftest ${operation} adapters remain blocked before creating a fixture or calling external services`, async t => {
+  const f = fixture(t); const path = join(f.root, 'acceptance/outcomes/industry.yaml');
+  const YAML = require('yaml'); const suite = YAML.parse(readFileSync(path, 'utf8'));
+  if (operation === 'sql') suite.tasks[0].state_asserts = [{ sql: 'SELECT count(*) AS n FROM threads', params: [], op: '>=', value: 0 }];
+  else suite.tasks[0].intervention = 'approval';
+  writeFileSync(path, YAML.stringify(suite));
+  const result = await run(t, f, ['--allow-measurement-interventions']);
+  assert.equal(result.code, 2, result.output); assert.deepEqual(f.requests, []);
+  assert.equal(result.report.called, false); assert.equal(result.report.stats.trials, 0);
+  assert.equal(result.report.fixtureObservation, undefined);
+  assert.match(result.report.errors.join('\n'), /外部数据库或审批服务/);
+});
+
+test('G02: an absolute HTTP assertion cannot redirect the selftest into the supplied external target', async t => {
+  const f = fixture(t);
+  f.configure = () => {
+    const YAML = require('yaml'); const path = join(f.root, 'acceptance/outcomes/industry.yaml');
+    const suite = YAML.parse(readFileSync(path, 'utf8'));
+    suite.tasks[0].http_asserts = [{ url: `${f.profile.environment.target.apiUrl}/outside-state`, status: 200, method: 'GET' }];
+    writeFileSync(path, YAML.stringify(suite));
+  };
+  const result = await run(t, f);
+  assert.equal(result.code, 1, result.output); assert.deepEqual(f.requests, []);
+  assert.equal(result.report.fixtureObservation.externalTargetUsed, false);
+  assert.equal(result.report.fixtureObservation.closed, true);
+  assert.equal(result.report.fixtureObservation.modelCalls, 0);
+  assert.equal(result.report.fixtureObservation.databaseConnections, 0);
+  assert.equal(result.report.trials[0].asserts.find(item => item.type === 'http').ok, false);
+  assert.match(result.report.trials[0].asserts.find(item => item.type === 'http').error, /同一目标/);
 });

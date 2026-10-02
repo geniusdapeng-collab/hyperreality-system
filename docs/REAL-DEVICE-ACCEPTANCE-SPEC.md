@@ -315,6 +315,7 @@
 4. **可复跑、可对账、可归因**：每个结果能回溯到任务、轨迹、工具调用、环境状态、回执、业务数据与归因分析。
 5. **统计严谨**：多次试验、样本量、置信区间、评分者一致性；不显著不宣称；口径不同不排名。
 6. **红线不可交易**：高风险人审、围栏、账本、AI 披露、客户数据边界不因“自主率”或“业务压力”而让步。
+7. **模型预算必须在任务路由之前成立**：真实 O 域入口的分类、重试和多步调用需要服务端逐请求硬上界与实际 usage；模拟数据、mock 字符串和试验次数不能代替预算。当前公开产品派单缺该契约，执行器在登录、派单、DB/模型调用前退出未验证。`--validate-only` 只校验题集；`--selftest` 使用执行器自建并关闭的 loopback HTTP 夹具，忽略外部目标，不能计为生产或业务已验证。
 
 ### 5.1 O0 · 交付契约（每个 AI 岗位先定义“交付什么、给谁、何时、什么标准”）
 
@@ -831,7 +832,7 @@
 
 | 档位 | 时长 | 内容 | 适用 |
 |---|---|---|---|
-| 冒烟 S | ~2–4h（T1 44 项；脚本自动 + 人工抽查） | L0/L1 + L3 路由 + L4 关键任务 + U P0 自动化 + O 红线扫描 + ADR 粗算 | 每次发布前 |
+| 冒烟 S | ~2–4h（v3.1 T1 52 项；脚本自动 + 人工抽查） | L0/L1 + L3 路由 + L4 关键任务 + U P0 自动化 + O 红线扫描 + ADR 粗算 | 每次发布前 |
 | 生产实测 P（v3.1） | ~30–60min（P 域 18 项） | 目标探测与指纹 + 内置模型真实任务（LLM 推理/多模态/工具循环 + 生图 ≤8 张 + 生视频 ≤3 段）+ 配额台账 + 覆盖率/报告 | 上线前 / 模型或客户端变更后 / 季度 |
 | 标准轮 R1/R2 | 1–2 人日 | T1 全量 + 变更相关 T2 + 红线相关项：L0–L16 机检 + U 自动化 + U 定性走查（≥5 用户/角色）+ O 结构 + ADR 基线 + 回归 | 里程碑/双周 |
 | 全量轮 F | 3–5 人日 | T1+T2 全量（必要时含 T3）：R1 + 完整 U 研究 + O 任务套件 ×N 试验 + 红队 + 真实设备矩阵 + 统计报告 | 上线前/季度 |
@@ -900,7 +901,7 @@
 | `pnpm acceptance:experience` | v2 走查（保留） | `outputs/acceptance/experience/*` |
 | `pnpm acceptance:ux` | U 域自动化（axe/键盘/缩放/几何/遥测） | `outputs/acceptance/ux/*` |
 | `pnpm acceptance:live` | P 域生产实测（真实模型 + 配额台账 + 回执；`--env client-runtime|deployed`；`--selftest` 仅自检） | `outputs/acceptance/live/*` |
-| `pnpm acceptance:outcome` | O 域任务套件（trial/状态断言/回执） | `outputs/acceptance/outcome/*` |
+| `pnpm acceptance:outcome` | O 域契约校验与自有夹具回归；公开产品派单在可信预算契约就绪前阻断 | `outputs/acceptance/outcome/*` |
 | `pnpm acceptance:autonomy` | ADR/HIR/HMPO + 反作弊 | `outputs/acceptance/autonomy/*` |
 | `pnpm acceptance:redteam` | OWASP/目标劫持/记忆投毒用例 | `outputs/acceptance/redteam/*` |
 | `pnpm acceptance:soak` | 24h/7d/28d 长跑采样 | `outputs/acceptance/soak/*` |
@@ -1150,9 +1151,9 @@ T-01 门禁误伤内部写路径；T-02 按钮存在但点不动；T-03 控制�
 
 ---
 
-## 15. 与外部标准/研究的映射（v3 核对，2026-09-19）
+## 15. 与外部标准/研究的映射（v3 历史映射；2026-10-03 局部复核）
 
-| 来源 | 关键点（已核对） | v3 落点 |
+| 来源 | 关键点（历史映射，核验边界见表后） | v3 落点 |
 |---|---|---|
 | ISO 9241-110:2020 | 七项交互原则：任务适合性、自描述性、符合期望、可学习、可控、容错、用户参与（用户参与为 2020 新增；个性化并入可控） | U2/U3/U4 的体验原则来源 |
 | ISO 9241-210:2019 | 以人为中心的交互系统设计生命周期（含可持续性与无障碍） | U0/U7 研究流程 |
@@ -1163,7 +1164,7 @@ T-01 门禁误伤内部写路径；T-02 按钮存在但点不动；T-03 控制�
 | HEART（Rodden/Hutchinson/Fu, CHI 2010, DOI 10.1145/1753326.1753687） | Happiness/Engagement/Adoption/Retention/Task success | U7-01 指标字典 |
 | Human-AI Interaction 18 guidelines（Amershi et al., CHI 2019, DOI 10.1145/3290605.3300233） | 初始/交互中/出错/随时间四组人机交互准则 | U3/U4 AI 交互条目 |
 | OWASP LLM Top 10 2025 | 提示注入、敏感信息泄露、供应链、投毒、输出处理、过度代理、系统提示泄露、向量弱点、误导信息、无界消耗 | O6-06/L10 |
-| OWASP Agentic Top 10（2026-12 发布） | ASI01 目标劫持、ASI02 工具滥用、ASI03 身份与权限滥用、ASI04 Agentic 供应链、ASI05 意外代码执行、ASI06 记忆与上下文投毒、ASI07 代理间通信不安全、ASI08 级联失败、ASI09 人机信任利用、ASI10 失控代理 | O6-06/ADR 反作弊/L10 |
+| [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/download/52117/?tmstv=1765059207)（Version 2026，2025-12 发布） | ASI01 目标劫持、ASI02 工具滥用、ASI03 身份与权限滥用、ASI04 Agentic 供应链、ASI05 意外代码执行、ASI06 记忆与上下文投毒、ASI07 代理间通信不安全、ASI08 级联失败、ASI09 人机信任利用、ASI10 失控代理 | O6-06/ADR 反作弊/L10 |
 | NIST AI RMF 1.0 + GenAI Profile（NIST AI 600-1，2024-07-26） | 治理/映射/度量/管理四功能 + 生成式 AI 风险清单；AI RMF 1.0 正修订中（2026-04 概念说明） | O7/O9/L14 |
 | ISO/IEC 42001:2023 | AI 管理体系（第一版 2023-12） | O8/O9/L14 治理对齐 |
 | EU AI Act 实施时间线（2026-08-31 更新） | 2026-08-02 其余条款生效；Annex III 高风险 2027-12-02；Annex I 高风险 2028-08-02；合成内容 Art.50(2) 存量 2026-12-02 | O9-01/L14 |
@@ -1179,7 +1180,7 @@ T-01 门禁误伤内部写路径；T-02 按钮存在但点不动；T-03 控制�
 | OpenTelemetry GenAI semconv 1.44.0 | agent spans / MCP / events / metrics | L12/T 证据类型 |
 | DORA 五项 / SLSA / SBOM | 交付绩效与供应链 | L7/L10/L12（v2 保留） |
 
-> 版本敏感项（OWASP 版本、EU AI Act 日期、OTel semconv、METR 口径）在每轮验收报告里注明确认时间；口径变化时先更新本节再执行。
+> 本轮局部复核只更正 OWASP Agentic 文档的版本与封面日期，并校正本仓检查单的 T1 数量；其它外部标准、法律时间线及研究数字保留为历史映射，未逐项联网复核，不构成本轮的现行合规或研究结论。使用版本敏感项（EU AI Act 日期、OTel semconv、METR 口径等）前，须在对应验收报告附官方来源与实际核验时间；未核验的结论标 D，口径变化先更新本节再执行。
 
 ---
 
@@ -1242,7 +1243,8 @@ pnpm acceptance:matrix    --out outputs/acceptance/matrix
 pnpm acceptance:ui        --out outputs/acceptance/ui
 pnpm acceptance:experience --out outputs/acceptance/experience
 pnpm acceptance:ux        --out outputs/acceptance/ux
-pnpm acceptance:outcome   --out outputs/acceptance/outcome --trials 5
+pnpm acceptance:outcome   --validate-only --out outputs/acceptance/outcome
+pnpm acceptance:outcome   --selftest --out outputs/acceptance/outcome --trials 5 # 自有夹具，业务未验证
 pnpm acceptance:autonomy  --out outputs/acceptance/autonomy --window 4w
 pnpm acceptance:redteam   --out outputs/acceptance/redteam
 pnpm acceptance:soak      --hours 24 --out outputs/acceptance/soak

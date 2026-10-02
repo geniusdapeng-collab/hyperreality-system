@@ -13,6 +13,8 @@ pnpm acceptance:ui                # L3 页面层：路由 + 岗位档案页 + �
 pnpm acceptance:experience        # L4/L5：角色 × 旅程走查 + 术语/对比度/打扰机检
 pnpm acceptance:live              # P 域入口；无法证明付费请求总量上界时 blocked，见下文
 pnpm acceptance:live:selftest     # P 域自检：本地替身跑通管道（非生产实测证据）
+pnpm acceptance:outcome --validate-only  # O 域只读契约与 P0 次数声明校验
+pnpm acceptance:outcome --selftest       # 执行器自建 HTTP 夹具，外部目标/DB/模型请求为零
 pnpm acceptance:report            # 汇总 → outputs/acceptance/REPORT.md（含四段硬性内容）
 ```
 
@@ -63,6 +65,8 @@ pnpm acceptance:live --env deployed --require-live
 未知实际用量保留预占并冻结后续所有模态的付费调用；无法证明请求上界时根本不发请求。输出 `maxTokens` 或人工 `expectedTokens` 不能证明输入、上下文、重试与工具循环的总上限。
 成本仍是估算值，真实账单需另行对账（P1-04）；本地 selftest 和替身测试不能证明供应商真实扣费受控。
 
+O 域同样受这条预算前提约束：默认 `acceptance:outcome` 在登录、派单、连接数据库前返回 `2`，因为公开产品路由缺少可信服务端逐请求预算接口。`dataMode=simulated`、`LLM_PROVIDER=mock`、低 trial 数或环境标签不能解除阻断。`--selftest` 只访问执行器自己创建并关闭的 loopback HTTP 夹具，忽略 profile 的外部目标；SQL/审批任务和生产环境不能用该模式执行。报告标为 `owned-fixture`、`runner-owned-mock`、业务能力未验证，保留 HTTP 拒绝、终态、回执与 P0 重复断言。真实 O 域业务实测须先接入受控服务端预算与授权适配器。
+
 凭据：只从环境变量/秘密存储解析（`DEEPSEEK_API_KEY`、`VOLCENGINE_ARK_API_KEY` / `SEEDREAM_API_KEY` / `SEEDANCE_API_KEY`），
 **禁止写进 profile、报告或仓库**；缺凭据时任务状态为 `blocked`，报告只能写“未验证”。
 
@@ -98,7 +102,7 @@ pnpm acceptance:live --env deployed --require-live
 
 ## 环境要求
 
-- Node ≥ 20（基座 package.json 已声明）；`pg`、`yaml`、`playwright` 来自本仓依赖（`pnpm install` 后可用）；
+- Node ≥ 24（与基座 `package.json#engines.node` 一致）；`pg`、`yaml`、`playwright` 来自本仓依赖（`pnpm install` 后可用）；
 - 数据库：`.env` 里的 `DATABASE_URL` 指向**本次验收用的库**（默认演示库）；矩阵 B 层与 UI 探针都要读它；
 - 三端端口：profile.startup.ports（默认 3000/3001/3002/8787）。
 - 生产入口：`acceptance/profile.json#live`（模型清单/任务矩阵/配额）+ 真实凭据 + 可访问目标 + 可证明的付费请求总量上界。当前没有该上界的链路保持 blocked；本次修复没有验证供应商实际模型或客户安装运行。

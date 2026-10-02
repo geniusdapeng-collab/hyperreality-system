@@ -71,6 +71,8 @@ test('successful lookup advances success time and records the precise source', a
   assert.equal(state(root).components.demo.status, 'ok');
   assert.ok(state(root).components.demo.last_success > 123);
   assert.match(state(root).components.demo.source, /api.github.com/);
+  assert.equal(result.summary.upstreamQueried, 1);
+  assert.equal(state(root).last_success, new Date(state(root).components.demo.last_success * 1000).toISOString());
 });
 
 test('npm failure keeps historical version unverified in document and out of upgrade plan; retry bypasses old TTL', async t => {
@@ -137,4 +139,72 @@ for (const invalid of ['missing', 'malformed', 'non-array', 'empty']) test(`requ
   await assert.rejects(runWatch({ root, all: true, exitZero: true, log: quiet }), /oss-components\.json|登记表/u);
   assert.equal(calls, 0);
   assert.deepEqual(paths.map(path => readFileSync(join(root, path))), bytes);
+});
+
+// A success clock records an upstream observation, never a legacy attempt or cache replay.
+const clockHistory = '2026-09-18T00:00:00.000Z';
+
+function clockFixture(t, componentState, channel = 'github') {
+  const root = mkdtempSync(join(tmpdir(), 'oss-query-clock-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture' }));
+  writeFileSync(join(root, 'oss-components.json'), JSON.stringify({ components: [{ name: 'demo', channel, package: channel === 'github' ? undefined : 'demo', repo: 'https://github.com/example/demo', cadence: 'monthly', current: '1.0.0', latest: '1.0.0' }] }));
+  writeFileSync(join(root, '.oss-watch-state.json'), JSON.stringify({ last_success: clockHistory, last_full_scan: clockHistory, components: { demo: componentState }, registry_cache: {} }));
+  return root;
+}
+
+for (const invalid of ['legacy-only', 'missing-status', 'malformed-success', 'future-success']) test(`G15: ${invalid} cannot postpone a real upstream lookup`, async t => {
+  const now = Math.floor(Date.now() / 1000);
+  const entry = { last_scan: now, latest_seen: '1.0.0' };
+  if (invalid !== 'legacy-only') entry.last_success = invalid === 'malformed-success' ? 'invalid' : invalid === 'future-success' ? now + 3600 : now;
+  if (invalid === 'malformed-success' || invalid === 'future-success') entry.status = 'ok';
+  const root = clockFixture(t, entry);
+  const previous = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return Response.json({ tag_name: 'v1.2.3' }); };
+  t.after(() => { globalThis.fetch = previous; });
+  const result = await runWatch({ root, log: () => {}, exitZero: true });
+  assert.equal(result.exitCode, 0);
+  assert.ok(calls > 0, 'An unverified success time must not postpone a new upstream lookup');
+  const state = JSON.parse(readFileSync(join(root, '.oss-watch-state.json'), 'utf8'));
+  assert.equal(state.components.demo.status, 'ok');
+  assert.ok(state.components.demo.last_success > 0);
+});
+
+test('G15: a successful no-query cycle cannot invent a new global upstream-success time', async t => {
+  const now = Math.floor(Date.now() / 1000);
+  const root = clockFixture(t, { last_scan: now, last_success: now, status: 'ok', latest_seen: '1.0.0' });
+  const previous = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async () => { calls += 1; throw new Error('No upstream query is due'); };
+  t.after(() => { globalThis.fetch = previous; });
+  const result = await runWatch({ root, log: () => {}, exitZero: true });
+  assert.equal(result.exitCode, 0);
+  assert.equal(calls, 0);
+  const state = JSON.parse(readFileSync(join(root, '.oss-watch-state.json'), 'utf8'));
+  assert.equal(state.last_success, clockHistory);
+  assert.equal(state.last_full_scan, clockHistory);
+  assert.notEqual(state.last_attempt, clockHistory);
+});
+
+for (const channel of ['npm', 'pypi']) test(`G15: ${channel} cache reuse retains the actual upstream observation time`, async t => {
+  const observed = Math.floor(Date.now() / 1000) - 3600;
+  const observedIso = new Date(observed * 1000).toISOString();
+  const root = clockFixture(t, { last_scan: 123, last_success: 123, status: 'ok', latest_seen: '1.0.0' }, channel);
+  const original = JSON.parse(readFileSync(join(root, '.oss-watch-state.json'), 'utf8'));
+  original.registry_cache.demo = { ecosystem: channel, latest: '1.2.3', checked_at: observed, last_success: observed, status: 'ok', source: `https://${channel === 'npm' ? 'registry.npmjs.org/demo/latest' : 'pypi.org/pypi/demo/json'}` };
+  writeFileSync(join(root, '.oss-watch-state.json'), JSON.stringify(original));
+  const previous = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async () => { calls += 1; throw new Error('A fresh upstream cache must not be queried again'); };
+  t.after(() => { globalThis.fetch = previous; });
+  const result = await runWatch({ root, log: () => {}, exitZero: true });
+  assert.equal(result.exitCode, 0);
+  assert.equal(calls, 0);
+  const state = JSON.parse(readFileSync(join(root, '.oss-watch-state.json'), 'utf8'));
+  assert.equal(state.components.demo.status, 'ok');
+  assert.equal(state.components.demo.last_success, observed);
+  assert.equal(state.components.demo.last_scan_iso, observedIso);
+  assert.equal(JSON.parse(readFileSync(join(root, 'oss-components.json'), 'utf8')).components[0].latest_checked_at, observedIso);
+  assert.equal(state.registry_cache.demo.last_success, observed);
+  assert.equal(state.last_success, clockHistory);
+  assert.equal(state.last_full_scan, clockHistory);
 });

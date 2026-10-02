@@ -4,7 +4,7 @@ import { spawnSync, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { after, test } from "node:test";
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, copyFileSync, existsSync, symlinkSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createBudget, normalizeBudgets } from "../acceptance/lib/live/budget.mjs";
@@ -216,6 +216,80 @@ test("G01 actual Node tests pass repair, independent acceptance and gate with bo
   const ledger = JSON.parse(readFileSync(f.ledgerPath)); const record = JSON.parse(readFileSync(join(f.root, ledger.cards[0].assertions[0].run.path)));
   assert.deepEqual(record.requested_exec, ledger.cards[0].assertions[0].exec); assert.notDeepEqual(record.exec, record.requested_exec); assert.equal(record.validation.testSummary.passed, 1); assert.equal(record.node_observer.summary.sha256.length, 64);
   for (const command of ["gate", "handoff"]) { const result = cli(mcd, f.dir, [command, "--ledger", f.ledgerPath, "--repo", f.dir]); assert.equal(result.status, 0, result.stderr); }
+});
+
+for (const mode of ["different-bytes", "identical-copy", "missing", "symlink", "wrong-summary-destination", "same-file-alias"]) test(`G01 Node observer binds real reporter and summary file identity: ${mode}`, () => {
+  const f = fixture(); const path = join(f.dir, "observer-assertion.test.mjs");
+  writeFileSync(path, "import {test} from 'node:test';import assert from 'node:assert/strict';test('actual observer assertion',()=>assert.equal(2+2,4));\n");
+  const trustedReporter = fileURLToPath(new URL("./node-test-reporter.mjs", import.meta.url));
+  const substitute = join(f.dir, "substitute-reporter.mjs");
+  if (mode === "identical-copy") copyFileSync(trustedReporter, substitute);
+  else if (mode === "symlink") symlinkSync(trustedReporter, substitute);
+  else writeFileSync(substitute, "export default async function* report(source){for await(const event of source){void event;}}\n");
+  git(f.dir, ["add", "."]); git(f.dir, ["commit", "-qm", "actual observer identity fixture"]);
+  const run = captureEvidenceRun({ repoRoot: f.dir, artifactRoot: f.root, runId: "actual-observer-identity", command: "node --test actual observer identity", actor: "verify-session", role: "acceptance", exec: { file: process.execPath, args: ["--test", path] } });
+  const options = { artifactRoot: f.root, repoRoot: f.dir, commit: run.commit };
+  assert.equal(run.exit_code, 0); assert.equal(run.validation.testSummary.passed, 1);
+  assert.equal(verifyRun(run.runRef, options).ok, true, "the actual canonical reporter is the legal control");
+  const recordPath = join(f.root, run.runRef.path); const body = JSON.parse(readFileSync(recordPath));
+  if (mode === "wrong-summary-destination") {
+    const old = body.node_observer.destination; const replacement = join(f.root, "other-summary.jsonl");
+    copyFileSync(old, replacement); body.node_observer.destination = replacement;
+    body.exec.args = body.exec.args.map((arg) => arg === `--test-reporter-destination=${old}` ? `--test-reporter-destination=${replacement}` : arg);
+  } else {
+    const old = body.node_observer.reporter_path;
+    const replacement = mode === "missing" ? join(f.dir, "missing-reporter.mjs") : mode === "same-file-alias" ? `${dirname(old)}/../delivery/node-test-reporter.mjs` : substitute;
+    body.node_observer.reporter_path = replacement;
+    body.exec.args = body.exec.args.map((arg) => arg === `--test-reporter=${old}` ? `--test-reporter=${replacement}` : arg);
+  }
+  json(recordPath, body); const rebound = { ...run.runRef, sha256: sha(readFileSync(recordPath)) };
+  const observed = verifyRun(rebound, options);
+  assert.equal(observed.ok, mode === "same-file-alias", JSON.stringify({ mode, errors: observed.errors }));
+});
+
+function executableFixture() {
+  const f = fixture(); const testPath = join(f.dir, "native-identity.test.mjs");
+  writeFileSync(testPath, "import {test} from 'node:test';import assert from 'node:assert/strict';test('native executable assertion',()=>assert.equal(2+2,4));\n");
+  const fake = join(f.dir, "node");
+  // This real ordinary process forges observer output but executes no Node tests.
+  writeFileSync(fake, `#!/bin/sh\ndestination=''\nmarker=''\nfor arg in "$@"; do\n case "$arg" in --test-reporter-destination=*) if [ -z "$destination" ]; then destination="\${arg#*=}"; fi;; --fixture-marker=*) marker="\${arg#*=}";; esac\ndone\nif [ -n "$marker" ]; then printf '%s\\n' 'ordinary script started' > "$marker"; fi\nprintf '%s\\n' '{"schema":"workloom.node-test-summary/v1","aggregate":true,"tests":1,"passed":1,"failed":0,"cancelled":0,"skipped":0,"todo":0,"files":1,"success":true}' > "$destination"\nprintf '%s\\n' 'forged summary; zero real Node tests'\n`, { mode: 0o755 });
+  const alias = join(f.dir, "native-node-alias"); symlinkSync(process.execPath, alias);
+  git(f.dir, ["add", "."]); git(f.dir, ["commit", "-qm", "actual executable identity controls"]);
+  return { ...f, testPath, fake, alias };
+}
+for (const mode of ["fake-basename", "PATH-shadow"]) test(`G01 Node executable rejects an ordinary script before capture: ${mode}`, () => {
+  const f = executableFixture(); const marker = join(f.root, "fake-started.txt"); const previousPath = process.env.PATH;
+  if (mode === "PATH-shadow") process.env.PATH = `${f.dir}:${previousPath ?? ""}`;
+  try {
+    assert.throws(() => captureEvidenceRun({ repoRoot: f.dir, artifactRoot: f.root, runId: "reject-fake-native", command: "ordinary script cannot supply real Node test evidence", actor: "verify-session", role: "acceptance", exec: { file: mode === "fake-basename" ? f.fake : "node", args: ["--test", `--fixture-marker=${marker}`] } }), /Node.*(?:执行器|可执行|executable)/u);
+    assert.equal(existsSync(marker), false, "untrusted executable must not start");
+    assert.equal(existsSync(join(f.root, "runs/reject-fake-native.json")), false);
+  } finally { if (previousPath === undefined) delete process.env.PATH; else process.env.PATH = previousPath; }
+});
+for (const mode of ["canonical-path-alias", "symlink-alias"]) test(`G01 Node executable preserves real native identity and TestsStream counts: ${mode}`, () => {
+  const f = executableFixture();
+  const canonicalAlias = `${dirname(process.execPath)}/../${basename(dirname(process.execPath))}/${basename(process.execPath)}`;
+  const run = captureEvidenceRun({ repoRoot: f.dir, artifactRoot: f.root, runId: "native-executable-alias", command: "actual native Node test alias", actor: "verify-session", role: "acceptance", exec: { file: mode === "symlink-alias" ? f.alias : canonicalAlias, args: ["--test", f.testPath] } });
+  assert.equal(run.exit_code, 0); assert.equal(run.validation.testSummary.passed, 1);
+  assert.match(run.node_executable?.sha256 ?? "", /^[0-9a-f]{64}$/u);
+  assert.equal(verifyRun(run.runRef, { artifactRoot: f.root, repoRoot: f.dir, commit: run.commit }).ok, true);
+});
+for (const mode of ["rebound-fake-executable", "rebound-fake-requested-executable", "forged-native-hash", "missing-native-binding"]) test(`G01 Node executable readback rejects source-bound forgery: ${mode}`, () => {
+  const f = executableFixture();
+  const run = captureEvidenceRun({ repoRoot: f.dir, artifactRoot: f.root, runId: "native-readback-control", command: "actual native Node test readback", actor: "verify-session", role: "acceptance", exec: { file: process.execPath, args: ["--test", f.testPath] } });
+  assert.equal(run.exit_code, 0); assert.equal(run.validation.testSummary.passed, 1);
+  assert.equal(verifyRun(run.runRef, { artifactRoot: f.root, repoRoot: f.dir, commit: run.commit }).ok, true);
+  const path = join(f.root, run.runRef.path); const body = JSON.parse(readFileSync(path));
+  if (mode === "rebound-fake-executable") {
+    body.requested_exec.file = f.fake; body.exec.file = f.fake;
+    // Even a claimed real native hash cannot hide the different actual executable path.
+    body.node_executable = { path: f.fake, sha256: sha(readFileSync(process.execPath)) };
+  } else if (mode === "rebound-fake-requested-executable") body.requested_exec.file = f.fake;
+  else if (mode === "forged-native-hash") body.node_executable = { path: process.execPath, sha256: "a".repeat(64) };
+  else delete body.node_executable;
+  json(path, body); const rebound = { ...run.runRef, sha256: sha(readFileSync(path)) };
+  const observed = verifyRun(rebound, { artifactRoot: f.root, repoRoot: f.dir, commit: run.commit });
+  assert.equal(observed.ok, false, JSON.stringify({ mode, errors: observed.errors }));
 });
 
 function fullAcceptance() {

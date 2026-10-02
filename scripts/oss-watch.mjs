@@ -169,10 +169,8 @@ export async function dockerLatest(image, { tagPattern = "^v?(\\d+\\.\\d+(?:\\.\
 
 function dueFor(component, state, now) {
   const entry = state.components?.[component.name];
-  if (entry?.status === "error" || entry?.status === "unverified") return true;
-  const last = entry?.last_success ?? entry?.last_scan ?? 0;
   const cadence = CADENCE_SECONDS[component.cadence] ?? CADENCE_SECONDS.monthly;
-  return now - last >= cadence;
+  return !upstreamObservation(entry, { now, ttlSeconds: cadence }).verified;
 }
 
 function cacheFresh(entry, now, ttl) {
@@ -207,10 +205,12 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     .sort();
 
   const failures = [];
+  let upstreamQueried = 0;
   if (!offline) {
     log(`→ npm 上游查询 ${npmTargets.length} 个…`);
     await mapLimit(npmTargets, CONCURRENCY, async (name) => {
       try {
+        upstreamQueried += 1;
         const info = await npmLatest(name, arg("--npm-registry", DEFAULT_REGISTRY));
         if (!info.latest) throw new Error("npm 未返回 version");
         state.registry_cache[name] = {
@@ -231,6 +231,7 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     log(`→ PyPI 上游查询 ${pypiTargets.length} 个…`);
     await mapLimit(pypiTargets, CONCURRENCY, async (name) => {
       try {
+        upstreamQueried += 1;
         const info = await pypiLatest(name, arg("--pypi", DEFAULT_PYPI));
         if (!info.latest) throw new Error("PyPI 未返回 version");
         state.registry_cache[name] = {
@@ -264,16 +265,24 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     state.components[component.name] = entry;
     try {
       let info;
-      if (component.channel === "github" && component.repo) info = await githubLatest(component.repo, { tagPrefix: component.tag_prefix ?? "" });
-      else if (component.channel === "docker") info = await dockerLatest(component.registryImage, { tagPattern: component.tag_pattern });
-      else if (["npm", "pypi"].includes(component.channel)) {
+      let observedAt = now;
+      if (component.channel === "github" && component.repo) {
+        upstreamQueried += 1;
+        info = await githubLatest(component.repo, { tagPrefix: component.tag_prefix ?? "" });
+      } else if (component.channel === "docker") {
+        upstreamQueried += 1;
+        info = await dockerLatest(component.registryImage, { tagPattern: component.tag_pattern });
+      } else if (["npm", "pypi"].includes(component.channel)) {
         info = state.registry_cache[component.registryPackage ?? component.package];
-        if (!info || info.status === "error" || !cacheFresh(info, now, CACHE_TTL_SECONDS)) throw new Error("没有本次或TTL内成功核实的上游缓存");
+        const observation = upstreamObservation(info, { now, ttlSeconds: CACHE_TTL_SECONDS });
+        if (!observation.verified) throw new Error("没有本次或TTL内成功核实的上游缓存");
+        observedAt = observation.success;
       } else throw new Error(`未实现的上游通道：${component.channel}`);
       if (!info.latest) throw new Error("上游未返回可用版本");
-      Object.assign(entry, { last_scan: now, last_scan_iso: iso, last_success: now, last_success_iso: iso, status: "ok", error: null, source: info.source, latest_seen: info.latest });
+      const observedIso = new Date(observedAt * 1000).toISOString();
+      Object.assign(entry, { last_scan: observedAt, last_scan_iso: observedIso, last_success: observedAt, last_success_iso: observedIso, status: "ok", error: null, source: info.source, latest_seen: info.latest });
       component.latest = info.latest;
-      component.latest_checked_at = iso;
+      component.latest_checked_at = observedIso;
       if (info.license && !component.license) component.license = info.license;
       if (info.repo && !component.repo) component.repo = info.repo;
     } catch (error) {
@@ -293,7 +302,7 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
 
   if (!offline) {
     state.last_attempt = iso;
-    if (!failures.length) { state.last_full_scan = iso; state.last_full_scan_epoch = now; state.last_success = iso; }
+    if (!failures.length && upstreamQueried > 0) { state.last_full_scan = iso; state.last_full_scan_epoch = now; state.last_success = iso; }
   }
   state.registry = { npm: DEFAULT_REGISTRY, pypi: DEFAULT_PYPI, github: "api.github.com" };
   if (!dryRun) writeFileSync(join(root, STATE_FILE), `${JSON.stringify(state, null, 1)}\n`);
@@ -310,6 +319,7 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     scannedAt: iso,
     npmQueried: npmTargets.length,
     pypiQueried: pypiTargets.length,
+    upstreamQueried,
     componentUpdates: plan.updates.length,
     dependencyUpdates: plan.dependencyUpdates.length,
     failures,

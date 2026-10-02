@@ -671,8 +671,15 @@ function latestCellFor(latest, current, entry, ttlSeconds) {
   return isOutdated(current, latest) ? `**${latest}** ⬆（已核实）` : `${latest}（已核实）`;
 }
 
+function recordedSuccessClock(state, now = Date.now()) {
+  const value = state?.last_success;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp > 0 && timestamp <= now + 60_000 ? value : null;
+}
+
 export function renderMarkdown({ root, repo, registry, inventory, state, planFile = PLAN_FILE }) {
-  const scannedAt = state?.last_success ?? state?.last_full_scan ?? "尚未成功扫描（运行 `pnpm oss:watch`）";
+  const scannedAt = recordedSuccessClock(state) ?? "尚未记录已核实成功（运行 `pnpm oss:watch`）";
   const hasNodeStack = existsSync(join(root, "package.json"));
   const cmd = (task) =>
     hasNodeStack
@@ -687,6 +694,7 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
   lines.push("");
   lines.push(`> 生成器：\`scripts/oss-inventory.mjs\`（离线事实）＋ \`scripts/oss-watch.sh\`（上游最新版本）`);
   lines.push(`> 仓库：${repo.slug ?? repo.name} ｜ 最近一次成功扫描：${scannedAt} ｜ 最近尝试：${state?.last_attempt ?? '未记录'}`);
+  if (state?.last_full_scan !== undefined) lines.push(`> 历史全量扫描/尝试（未核实）：${cell(state.last_full_scan)}`);
   lines.push('> 每项上游版本按成功时间、查询状态和 TTL 单独判定；历史缓存与失败查询不作本次最新版本结论。');
   lines.push(
     `> 统计：登记组件 ${registry.components.length} 个 ｜ npm 直接依赖 ${inventory.npm.packages.length} 个 ｜ Python 依赖 ${inventory.python.length} 个 ｜ 容器镜像 ${inventory.containers.length} 个`,

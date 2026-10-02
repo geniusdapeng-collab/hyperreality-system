@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { bundleDirOf, cliArgs, findRepoRoot, loadProfile } from './lib/profile.mjs';
 import { loadEnvFile } from './lib/target.mjs';
 import { validateSuite, evaluateThread, evaluateDenial, assertReadOnlySql, outcomeStats, evaluateP0Repetition } from './lib/outcome-contract.mjs';
+import { createOutcomeFixture } from './lib/outcome-fixture.mjs';
 import { recordEvidenceRun, revisionOf, writeAcceptanceItems } from '../delivery/evidence.mjs';
 
 const startedAt = new Date().toISOString();
@@ -22,7 +23,7 @@ const repoRoot = findRepoRoot();
 const executorRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 let outDir = join(repoRoot, 'outputs/acceptance/outcome');
 let artifactRoot = join(repoRoot, 'outputs/acceptance');
-let token = null; let sqlClient = null;
+let token = null; let sqlClient = null; let fixture = null;
 const secretValues = Object.entries({ ...loadEnvFile(join(repoRoot, '.env')), ...process.env }).filter(([key, text]) => /TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|DATABASE.*URL/i.test(key) && text?.length >= 4).map(([, text]) => text.replace(/^['"]|['"]$/g, ''));
 const redact = (input) => {
   let text = String(input ?? '');
@@ -31,7 +32,7 @@ const redact = (input) => {
 };
 const safeObject = (object) => JSON.parse(redact(JSON.stringify(object)));
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
-const report = { schema: 'workloom.outcome-report/v2', spec: 'docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1', startedAt, configured: false, mode: has('--validate-only') ? 'contract-validation' : 'runtime', status: 'unverified', verified: false, environmentKind: null, dataMode: null, provider: 'unknown', suites: [], errors: [], warnings: [], trials: [], checks: [] };
+const report = { schema: 'workloom.outcome-report/v2', spec: 'docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1', startedAt, configured: false, mode: has('--validate-only') ? 'contract-validation' : has('--selftest') ? 'owned-fixture' : 'runtime', status: 'unverified', verified: false, called: false, environmentKind: null, dataMode: null, provider: 'unknown', suites: [], errors: [], warnings: [], trials: [], checks: [] };
 
 function writeReport() {
   report.finishedAt = new Date().toISOString(); report.stats = outcomeStats(report.trials);
@@ -98,14 +99,28 @@ async function main() {
     report.warnings.push('本次只读校验契约、岗位引用和正常/失败/权限场景；未连接服务、数据库或模型，业务能力仍未验证');
     return 0;
   }
+  // Public product dispatch may classify and retry internally before a thread exists.
+  // Neither a "mock" provider label nor simulated data bounds those paid requests.
+  if (!has('--selftest')) {
+    report.errors.push('O 域不透明产品派单缺少可信服务端逐请求预算契约；在登录、派单、数据库或模型调用前阻断。simulated/provider/试验次数声明不能代替总输入、输出、重试与上下文的硬上界');
+    return 2;
+  }
+  if (environment.isProduction) { report.errors.push('自有 selftest 夹具只供结构回归，不能标为部署目标或生产验收'); return 2; }
+  if (suites.some(({ suite }) => suite.tasks.some(task => task.state_asserts?.length || task.intervention && task.intervention !== 'none'))) {
+    report.errors.push('自有 selftest 不连接外部数据库或审批服务；SQL/人工手势需可信项目适配器'); return 2;
+  }
   if (environment.isProduction && !environment.allowWrites) { report.errors.push('生产 O 域会创建验收线程；缺少显式写入授权，未登录、未派单、未连数据库'); return 2; }
   if (environment.isProduction && (!profile.outcome?.fixtureMarker || !profile.outcome?.residualDisclosure)) { report.errors.push('生产 O 域必须声明 outcome.fixtureMarker 与 residualDisclosure'); return 2; }
   if (suites.some(({ suite }) => suite.tasks.some((task) => task.intervention && task.intervention !== 'none')) && !has('--allow-measurement-interventions')) { report.errors.push('任务要求审批手势；必须显式 --allow-measurement-interventions，未自动审批'); return 2; }
 
-  const endpoint = environment.urls.api;
+  fixture = await createOutcomeFixture({ fault: value('--selftest-fault') });
+  const endpoint = fixture.endpoint;
+  report.provider = 'runner-owned-mock'; report.dataMode = 'simulated';
+  report.warnings.push('HTTP fixture 由本执行器创建与关闭，忽略外部目标；仅运行确定性回执与断言，不调用供应商或数据库，业务能力未验证');
   const request = async (procedure, input, { auth = true, method = 'GET' } = {}) => {
     const url = method === 'GET' ? `${endpoint}/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify(input ?? {}))}` : `${endpoint}/trpc/${procedure}`;
     const headers = { 'content-type': 'application/json', ...(auth && token ? { authorization: `Bearer ${token}` } : {}) };
+    report.called = true;
     const response = await fetch(url, { method, headers, ...(method === 'POST' ? { body: JSON.stringify(input) } : {}), signal: AbortSignal.timeout(Math.min(30000, timeoutS * 1000)) });
     let json;
     try { json = await response.json(); } catch { throw new Error(`${procedure} 返回非 JSON（HTTP ${response.status}）`); }
@@ -249,6 +264,11 @@ let exitCode = 2;
 try { exitCode = await main(); } catch (error) { report.errors.push(redact(error.message)); report.status = 'fail'; exitCode = 1; }
 finally {
   if (sqlClient) { try { await sqlClient.end(); } catch (error) { report.errors.push(`SQL 连接关闭失败：${redact(error.message)}`); report.status = 'fail'; exitCode = 1; } }
+  if (fixture) {
+    report.fixtureObservation = { runnerOwned: true, externalTargetUsed: false, modelCalls: 0, databaseConnections: 0, requests: fixture.requests, threads: fixture.threads };
+    try { await fixture.close(); report.fixtureObservation.closed = true; }
+    catch (error) { report.errors.push(`自有 HTTP 夹具关闭失败：${redact(error.message)}`); report.status = 'fail'; exitCode = 1; }
+  }
 }
 try {
   writeReport();

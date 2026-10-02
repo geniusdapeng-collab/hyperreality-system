@@ -1,8 +1,8 @@
 /** Shared read-back evidence contract. Node built-ins only; never executes commands while validating. */
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const RUN_SCHEMA = "workloom.evidence-run/v1";
@@ -15,16 +15,35 @@ const date = (value) => typeof value === "string" ? Date.parse(value) : NaN;
 const jsonEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const validValidation = (value) => value && typeof value === "object" && !Array.isArray(value) && typeof value.ok === "boolean" && Array.isArray(value.errors) && value.errors.every((error) => typeof error === "string" && error.trim()) && value.ok === (value.errors.length === 0);
 const NODE_REPORTER = fileURLToPath(new URL("./node-test-reporter.mjs", import.meta.url));
-const isNodeTest = (spec) => spec && /^(node|nodejs)(\.exe)?$/i.test(basename(spec.file)) && spec.args?.includes("--test");
+function executablePath(file, repoRoot = process.cwd()) {
+  const candidates = isAbsolute(file) || file.includes("/") || file.includes("\\") ? [resolve(repoRoot, file)]
+    : String(process.env.PATH ?? "").split(delimiter).map((part) => resolve(repoRoot, part || ".", file));
+  for (const candidate of candidates) {
+    try { accessSync(candidate, constants.X_OK); return realpathSync(candidate); }
+    catch { /* Continue through PATH exactly as an executable lookup, without a shell. */ }
+  }
+  throw new Error("Node 可执行文件无法解析为实际文件");
+}
+function isNodeTest(spec, repoRoot) {
+  if (!spec?.args?.includes("--test")) return false;
+  if (/^(node|nodejs)(\.exe)?$/i.test(basename(spec.file))) return true;
+  try { return executablePath(spec.file, repoRoot) === realpathSync(process.execPath); }
+  catch { return false; }
+}
+function nodeExecutableIdentity(spec, repoRoot) {
+  const path = executablePath(spec.file, repoRoot);
+  if (path !== realpathSync(process.execPath) || !lstatSync(path).isFile()) throw new Error("Node 测试执行器必须是当前真实 Node 可执行文件，文件名不能代替实际身份");
+  return { path, sha256: hashBytes(readFileSync(path)) };
+}
 
-function observedNodeExec(requested, reporter, destination) {
+function observedNodeExec(requested, reporter, destination, executable = requested.file) {
   const count = (flag) => requested.args.filter((arg) => arg === flag || arg.startsWith(`${flag}=`)).length;
   const reporters = count("--test-reporter"); const destinations = count("--test-reporter-destination");
   if (destinations !== 0 && destinations !== reporters) throw new Error("Node reporter/destination 数量不一致，无法安全添加测试观测器");
   const injected = [`--test-reporter=${reporter}`, `--test-reporter-destination=${destination}`];
   if (reporters === 0) injected.push("--test-reporter=tap", "--test-reporter-destination=stdout");
   else if (destinations === 0) for (let i = 0; i < reporters; i++) injected.push("--test-reporter-destination=stdout");
-  return { file: requested.file, args: [...injected, ...requested.args] };
+  return { file: executable, args: [...injected, ...requested.args] };
 }
 
 function readNodeSummary(bytes) {
@@ -136,23 +155,30 @@ export function verifyRun(ref, { artifactRoot, repoRoot, commit, command, actor,
       } catch { errors.push(`${label} Git commit 不存在`); }
       if (!Array.isArray(data.outputs) || data.outputs.length === 0) errors.push(`${label} 缺真实输出文件清单`);
       else for (const [i, output] of data.outputs.entries()) errors.push(...verifyArtifact(output, { artifactRoot, commit, label: `${label}.outputs[${i}]` }).errors);
-      if (isNodeTest(data.requested_exec ?? data.exec)) {
+      if (isNodeTest(data.requested_exec ?? data.exec, repoRoot)) {
         const observer = data.node_observer;
         if (!observer) { if (data.result === "pass") errors.push(`${label} Node 测试缺实际 TestsStream 逐文件摘要，不能用外层文件加载成功作为断言`); }
         else {
           try {
             validateExecSpec(data.requested_exec); validateExecSpec(data.exec);
-            if (observer.schema !== "workloom.node-test-observer/v1" || observer.reporter_sha256 !== hashBytes(readFileSync(NODE_REPORTER)) || !isAbsolute(observer.reporter_path) || !isAbsolute(observer.destination) || !jsonEqual(data.exec, observedNodeExec(data.requested_exec, observer.reporter_path, observer.destination))) throw new Error("Node observer/实际 argv 与受控执行器不同");
+            const executable = nodeExecutableIdentity(data.exec, repoRoot);
+            if (!isAbsolute(data.exec.file) || !jsonEqual(data.node_executable, executable)) throw new Error("Node 实际可执行文件路径/字节散列缺失或与当前执行器不同");
+            if (executablePath(data.requested_exec.file, repoRoot) !== executable.path) throw new Error("Node 声明与实际可执行文件必须指向当前同一执行器");
+            if (observer.schema !== "workloom.node-test-observer/v1" || observer.reporter_sha256 !== hashBytes(readFileSync(NODE_REPORTER)) || !isAbsolute(observer.reporter_path) || !isAbsolute(observer.destination) || !jsonEqual(data.exec, observedNodeExec(data.requested_exec, observer.reporter_path, observer.destination, executable.path))) throw new Error("Node observer/实际 argv 与受控执行器不同");
+            const reporterStat = lstatSync(observer.reporter_path);
+            if (!reporterStat.isFile() || reporterStat.isSymbolicLink() || realpathSync(observer.reporter_path) !== realpathSync(NODE_REPORTER) || hashBytes(readFileSync(observer.reporter_path)) !== observer.reporter_sha256) throw new Error("Node reporter 实际文件身份/字节与当前受控观测器不同");
             if (observer.summary) {
               if (!(data.outputs ?? []).some((ref) => jsonEqual(ref, observer.summary))) throw new Error("Node 机器摘要不属于本次执行输出");
               const proof = verifyArtifact(observer.summary, { artifactRoot, commit, label: `${label}.node-summary` });
               if (!proof.ok) throw new Error("Node 机器摘要不可回读");
+              const summaryFile = safeFile(artifactRoot, observer.summary.path); const destinationStat = lstatSync(observer.destination);
+              if (!destinationStat.isFile() || destinationStat.isSymbolicLink() || realpathSync(observer.destination) !== realpathSync(summaryFile.abs)) throw new Error("Node observer destination 必须指向本次绑定机器摘要的同一真实文件");
               const summary = readNodeSummary(proof.bytes);
               if (!jsonEqual(validation.testSummary, nodeCounts(summary)) || (validation.ok && (summary.files <= 0 || summary.passed <= 0 || summary.failed !== 0 || summary.cancelled !== 0 || summary.success !== true))) throw new Error("Node 机器摘要与断言校验不同或没有实际通过测试");
             } else if (data.result === "pass") throw new Error("Node pass 缺真实机器摘要");
           } catch (error) { errors.push(`${label} ${error.message}`); }
         }
-      } else if (data.requested_exec || data.node_observer) errors.push(`${label} 非 Node 测试不能声明 Node observer`);
+      } else if (data.requested_exec || data.node_observer || data.node_executable) errors.push(`${label} 非 Node 测试不能声明 Node observer/执行器身份`);
     }
     base = { errors, data }; cache?.set(key, base);
   }
@@ -171,7 +197,7 @@ function writeJson(path, value) { mkdirSync(dirname(path), { recursive: true });
 const safeId = (id) => { if (!/^[A-Za-z0-9_-]+$/.test(String(id))) throw new Error("runId 必须是安全文件名"); return id; };
 
 /** Called by a real executor after observing its process exit; never infers pass from file presence. */
-export function recordEvidenceRun({ repoRoot, artifactRoot, runId, command, actor, role = "automation", exitCode, signal = null, startedAt, finishedAt = new Date().toISOString(), outputPaths, exec = null, subject = null, validation = { ok: true, errors: [] }, requestedExec = null, nodeObserver = null }) {
+export function recordEvidenceRun({ repoRoot, artifactRoot, runId, command, actor, role = "automation", exitCode, signal = null, startedAt, finishedAt = new Date().toISOString(), outputPaths, exec = null, subject = null, validation = { ok: true, errors: [] }, requestedExec = null, nodeObserver = null, nodeExecutable = null }) {
   if (!Number.isInteger(exitCode) || exitCode < 0) throw new Error("运行记录必须提供实际非负整数 exitCode（未运行不能记 pass）");
   if (!validValidation(validation)) throw new Error("运行记录 assertion validation 必须有一致的 ok/errors");
   if (typeof command !== "string" || !command.trim() || typeof actor !== "string" || !actor.trim()) throw new Error("运行记录缺 command/actor");
@@ -183,7 +209,7 @@ export function recordEvidenceRun({ repoRoot, artifactRoot, runId, command, acto
   if (!artifacts.length) throw new Error("运行记录至少含一个实际输出文件");
   const observer = nodeObserver ? { ...nodeObserver, summary: artifacts.find((ref) => ref.path === nodeObserver.summaryPath) ?? null } : null;
   if (observer) delete observer.summaryPath;
-  const body = { schema: RUN_SCHEMA, id: safeId(runId), command, exec, ...(requestedExec ? { requested_exec: requestedExec, node_observer: observer } : {}), actor, role, subject, commit, working_tree_dirty: dirty, started_at: startedAt, finished_at: finishedAt, exit_code: exitCode, signal, validation, result: exitCode === 0 && !signal && validation.ok ? "pass" : "fail", outputs: artifacts };
+  const body = { schema: RUN_SCHEMA, id: safeId(runId), command, exec, ...(requestedExec ? { requested_exec: requestedExec, node_observer: observer, node_executable: nodeExecutable } : {}), actor, role, subject, commit, working_tree_dirty: dirty, started_at: startedAt, finished_at: finishedAt, exit_code: exitCode, signal, validation, result: exitCode === 0 && !signal && validation.ok ? "pass" : "fail", outputs: artifacts };
   const path = `runs/${body.id}.json`;
   if (existsSync(join(artifactRoot, path))) throw new Error(`运行记录不可覆盖：${path}`);
   writeJson(join(artifactRoot, path), body); const runRef = bindArtifact(artifactRoot, path, commit);
@@ -208,14 +234,16 @@ export function captureEvidenceRun(options) {
   if (revision.dirty) throw new Error("断言执行前必须提交被测源码，不能把工作树结果绑定到旧 commit");
   const outputPath = `evidence/${safeId(options.runId)}.txt`;
   mkdirSync(dirname(join(options.artifactRoot, outputPath)), { recursive: true });
-  const nodeTest = isNodeTest(spec); const summaryPath = `evidence/${safeId(options.runId)}-node-tests.jsonl`;
+  const nodeTest = isNodeTest(spec, options.repoRoot); const summaryPath = `evidence/${safeId(options.runId)}-node-tests.jsonl`;
+  const nodeExecutable = nodeTest ? nodeExecutableIdentity(spec, options.repoRoot) : null;
   const destination = resolve(options.artifactRoot, summaryPath);
-  const observedExec = nodeTest ? observedNodeExec(spec, NODE_REPORTER, destination) : spec;
+  const observedExec = nodeTest ? observedNodeExec(spec, NODE_REPORTER, destination, nodeExecutable.path) : spec;
   const observer = nodeTest ? { schema: "workloom.node-test-observer/v1", reporter_path: NODE_REPORTER, reporter_sha256: hashBytes(readFileSync(NODE_REPORTER)), destination, summaryPath } : null;
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
   // node:test's internal child marker must not turn a nested CLI assertion into a zero-test exit 0.
   delete env.NODE_TEST_CONTEXT;
   const result = spawnSync(observedExec.file, observedExec.args, { cwd: options.repoRoot, encoding: "utf8", shell: false, timeout: options.timeoutMs ?? 60_000, maxBuffer: 8 * 1024 * 1024, env });
+  if (nodeTest && !jsonEqual(nodeExecutable, nodeExecutableIdentity(observedExec, options.repoRoot))) throw new Error("Node 可执行文件在实际运行中发生变化，结果不可绑定");
   if (revisionOf(options.repoRoot).commit !== revision.commit || revisionOf(options.repoRoot).dirty) throw new Error("断言执行中被测源码发生变化，结果不可绑定");
   const validation = { ok: true, errors: [] };
   const outputPaths = [outputPath];
@@ -230,7 +258,7 @@ export function captureEvidenceRun(options) {
   for (const [key, value] of Object.entries(process.env)) if (/TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY/i.test(key) && value && value.length >= 4) output = output.split(value).join("[REDACTED]");
   output = output.replace(/\b((?:Proxy-)?Authorization)\s*:\s*(?:Basic|Bearer)\s+[^\s"'<>]+/gi, "$1: [REDACTED]");
   mkdirSync(dirname(join(options.artifactRoot, outputPath)), { recursive: true }); writeFileSync(join(options.artifactRoot, outputPath), output);
-  return recordEvidenceRun({ ...options, exec: observedExec, requestedExec: nodeTest ? spec : null, nodeObserver: observer, validation, startedAt, finishedAt: new Date().toISOString(), outputPaths, exitCode: result.status ?? 1, signal: result.signal ?? (result.error ? result.error.code : null) });
+  return recordEvidenceRun({ ...options, exec: observedExec, requestedExec: nodeTest ? spec : null, nodeObserver: observer, nodeExecutable, validation, startedAt, finishedAt: new Date().toISOString(), outputPaths, exitCode: result.status ?? 1, signal: result.signal ?? (result.error ? result.error.code : null) });
 }
 
 export function writeAcceptanceItems({ artifactRoot, run, checks }) {

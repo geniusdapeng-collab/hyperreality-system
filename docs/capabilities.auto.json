@@ -2,7 +2,7 @@
  "schema": "workloom.capabilities/v2",
  "repo": "hyperreality",
  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）",
- "generatedAt": "2026-10-02T19:36:10.849Z",
+ "generatedAt": "2026-10-02T21:28:07.474Z",
  "demoPages": [
   "hyperreality-demo-c.html",
   "hyperreality-demo-mobile.html",
