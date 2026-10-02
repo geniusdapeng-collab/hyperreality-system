@@ -1,133 +1,137 @@
-/**
- * 本机克隆音色服务端适配单测（不连真工位：用假 fetch + 临时目录）。
- * 关注三件事：配置口径（默认 profile / 关闭开关 / 缺 token）、幂等缓存、失败一律结构化不假装成功。
- */
-import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-
+import { afterEach, describe, expect, it, vi } from "vitest";
+import voice from "./loommate-voice.json";
 import { synthesizeVoice, voiceCacheFile, voiceCacheKey, voiceStationConfig } from "./station.js";
-
-function tempConfig(overrides: Partial<ReturnType<typeof voiceStationConfig>> = {}) {
-  const cacheDir = mkdtempSync(join(tmpdir(), "voice-station-"));
-  return { ...voiceStationConfig({} as NodeJS.ProcessEnv), token: "test-token", cacheDir, ...overrides };
+import { parseVoiceWav } from "./wav.js";
+import { wave } from "./wav.fixture.js";
+const dirs: string[] = [];
+function temp() { const dir = mkdtempSync(join(tmpdir(), 'loommate-voice-')); dirs.push(dir); return dir; }
+function config(overrides: Partial<ReturnType<typeof voiceStationConfig>> = {}) {
+  const dir = temp();
+  return { ...voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }), token: 'test-only', cacheDir: dir,
+    sweetModel: '/local/pinned-model', ...overrides };
 }
-
-describe("工位配置口径", () => {
-  it("默认音色是 zh-myvoice，桥地址默认本机 9776，启用开关默认开", () => {
-    const cfg = voiceStationConfig({} as NodeJS.ProcessEnv);
-    expect(cfg.profile).toBe("zh-myvoice");
-    expect(cfg.bridgeUrl).toBe("http://127.0.0.1:9776");
-    expect(cfg.enabled).toBe(true);
-    expect(cfg.cacheDir.endsWith(join("deliveries", "voice-cache"))).toBe(true);
+const jsonResponse = (data: unknown) => new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } });
+const asFetch = (fn: (...args: any[]) => any) => fn as typeof fetch;
+function cloneFetch(_url: unknown, init: RequestInit) {
+  const body = JSON.parse(String(init.body)); writeFileSync(body.params.out, wave());
+  return Promise.resolve(jsonResponse({ ok: true, result: { out: body.params.out } }));
+}
+afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { force: true, recursive: true }); });
+describe("工位配置与凭据边界", () => {
+  it("默认甜美女声、共享工位缓存和回环引擎", () => {
+    const cfg = config(); expect(cfg.profile).toBe('loommate-sweet'); expect(cfg.enabled).toBe(true);
+    expect(cfg.engineUrl).toBe('http://127.0.0.1:8100'); expect(cfg.bridgeUrl).toBe('http://127.0.0.1:9776');
   });
-
-  it("环境变量可覆盖：profile / 关闭开关 / 桥地址去尾斜杠", () => {
-    const cfg = voiceStationConfig({
-      WORKLOOM_VOICE_PROFILE: "zh-hotel-boss",
-      WORKLOOM_VOICE_ENABLED: "0",
-      WORKLOOM_VOICE_BRIDGE_URL: "http://127.0.0.1:9877/",
-    } as NodeJS.ProcessEnv);
-    expect(cfg.profile).toBe("zh-hotel-boss");
-    expect(cfg.enabled).toBe(false);
-    expect(cfg.bridgeUrl).toBe("http://127.0.0.1:9877");
+  it("只读取当前用户的私有常规 token 文件，env 显式优先", () => {
+    const dir = temp(), file = join(dir, 'bridge-token'); writeFileSync(file, 'local-test', { mode: 0o600 });
+    expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).token).toBe('local-test');
+    expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir, WORKLOOM_VOICE_BRIDGE_TOKEN: 'explicit' }).token).toBe('explicit');
+    chmodSync(file, 0o644); expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).token).toBe('');
+    chmodSync(file, 0o600); rmSync(file); writeFileSync(join(dir, 'source'), 'local-test', { mode: 0o600 });
+    symlinkSync(join(dir, 'source'), file); expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).token).toBe('');
   });
-
-  it("缓存键只由 profile+文本决定（同输入同文件，可幂等复用）", () => {
-    expect(voiceCacheKey("zh-myvoice", "你好")).toBe(voiceCacheKey("zh-myvoice", "你好"));
-    expect(voiceCacheKey("zh-myvoice", "你好")).not.toBe(voiceCacheKey("zh-myvoice", "你好呀"));
-    expect(voiceCacheKey("zh-myvoice", "你好")).not.toBe(voiceCacheKey("zh-other", "你好"));
+  it("远端桥不自动读取本机 token，超时非法值使用有界默认值", () => {
+    const dir = temp(); writeFileSync(join(dir, 'bridge-token'), 'private', { mode: 0o600 });
+    const cfg = voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir, WORKLOOM_VOICE_BRIDGE_URL: 'http://remote.invalid/', WORKLOOM_VOICE_TIMEOUT_MS: 'NaN' });
+    expect(cfg.token).toBe(''); expect(cfg.timeoutMs).toBe(90000); expect(cfg.bridgeUrl).toBe('http://remote.invalid');
+  });
+  it("只激活安装器已验证的固定模型修订", () => {
+    const dir = temp(), model = join(dir, 'model'); mkdirSync(model);
+    writeFileSync(join(model, 'config.json'), '{}'); writeFileSync(join(model, voice.modelFile), 'test');
+    const file = join(dir, 'loommate-voice.json');
+    writeFileSync(file, JSON.stringify({ model: voice.model, revision: voice.revision, modelPath: model }));
+    expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).sweetModel).toBe(model);
+    writeFileSync(file, JSON.stringify({ model: voice.model, revision: 'wrong', modelPath: model }));
+    expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).sweetModel).toBe('');
   });
 });
-
-describe("合成路径", () => {
-  it("文本为空 → text_required（不发请求）", async () => {
+describe("合成、缓存与回退", () => {
+  it("空、超过上限、路径穿越、未配置、关闭、远端均结构化拒绝", async () => {
+    const cases = [
+      { text: ' ', cfg: {}, profile: undefined, error: 'text_required' },
+      { text: '甲'.repeat(2001), cfg: {}, profile: undefined, error: 'text_too_long' },
+      { text: '你好', cfg: {}, profile: '../secret', error: 'invalid_voice_profile' },
+      { text: '你好', cfg: { token: '' }, profile: undefined, error: 'voice_station_unconfigured' },
+      { text: '你好', cfg: { enabled: false }, profile: undefined, error: 'voice_station_disabled' },
+      { text: '你好', cfg: { engineUrl: 'http://remote.invalid' }, profile: undefined, error: 'voice_station_nonlocal' },
+    ];
     const fetchImpl = vi.fn();
-    const result = await synthesizeVoice("   ", { config: tempConfig(), fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(result.ok).toBe(false);
-    expect(result).toMatchObject({ error: "text_required" });
+    for (const c of cases) expect(await synthesizeVoice(c.text, { config: config(c.cfg), profile: c.profile, fetchImpl: asFetch(fetchImpl) })).toMatchObject({ ok: false, error: c.error });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
-
-  it("缺 token → 明确要求配置（不静默回落）", async () => {
-    const result = await synthesizeVoice("你好", { config: tempConfig({ token: "" }) });
-    expect(result).toMatchObject({ ok: false, error: "voice_station_unconfigured" });
+  it("旧客户端 profile 自动使用女声，声线和语言发送到引擎且不发送 token", async () => {
+    const cfg = config(), fn = vi.fn(async () => new Response(wave()));
+    const result = await synthesizeVoice('你好', { config: cfg, profile: 'zh-myvoice', fetchImpl: asFetch(fn) });
+    expect(result).toMatchObject({ ok: true, profile: 'loommate-sweet', cached: false });
+    const [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:8100/v1/audio/speech');
+    expect(JSON.parse(String(init.body))).toMatchObject({ voice: join(cfg.sweetModel, voice.voiceFile), lang_code: 'z', pitch: 1, speed: 1 });
+    expect(JSON.stringify(init.headers)).not.toContain(cfg.token);
   });
-
-  it("已缓存 → 直接命中，不再调用工位", async () => {
-    const cfg = tempConfig();
-    const file = voiceCacheFile(cfg, cfg.profile, "早安播报");
-    writeFileSync(file, "RIFF-fake");
-    const fetchImpl = vi.fn();
-    const result = await synthesizeVoice("早安播报", { config: cfg, fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(result).toEqual({ ok: true, file, cached: true, profile: cfg.profile });
-    expect(fetchImpl).not.toHaveBeenCalled();
+  it("显式 server profile 保留个人克隆，回执 profile 与实际声音一致", async () => {
+    const cfg = config({ profile: 'zh-myvoice' }), fn = vi.fn(cloneFetch);
+    const r = await synthesizeVoice('你好', { config: cfg, fetchImpl: asFetch(fn) });
+    expect(r).toMatchObject({ ok: true, profile: 'zh-myvoice' });
+    expect(fn.mock.calls[0]![0]).toBe('http://127.0.0.1:9776/action');
+    expect((fn.mock.calls[0]![1].headers as Record<string,string>).authorization).toBe('Bearer test-only');
   });
-
-  it("工位成功 → 返回产物路径（并透传 profile / token）", async () => {
-    const cfg = tempConfig();
-    const produced = voiceCacheFile(cfg, cfg.profile, "今日战报");
-    const calls: Array<{ url: string; body: Record<string, unknown>; auth: string | null }> = [];
-    const fetchImpl = async (url: string, init: RequestInit) => {
-      calls.push({
-        url: String(url),
-        body: JSON.parse(String(init.body)),
-        auth: (init.headers as Record<string, string>).authorization ?? null,
-      });
-      // 模拟工位把产物写到请求里的 out 路径（真实工位就是这样落盘的）
-      const requestedOut = (JSON.parse(String(init.body)).params as { out?: string }).out;
-      if (requestedOut) writeFileSync(requestedOut, "RIFF-real");
-      return new Response(JSON.stringify({ ok: true, result: { out: produced }, receipt: { synced: true } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    };
-    const result = await synthesizeVoice("今日战报", { config: cfg, fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(result).toEqual({ ok: true, file: produced, cached: false, profile: "zh-myvoice" });
-    expect(calls[0]!.url).toBe("http://127.0.0.1:9776/action");
-    expect(calls[0]!.auth).toBe("Bearer test-token");
-    const params = calls[0]!.body.params as Record<string, unknown>;
-    expect(calls[0]!.body.tool).toBe("voicewrite.speak");
-    expect(params.profile).toBe("zh-myvoice");
-    // 产物路径来自配置的缓存目录（同 profile+文本 → 同文件，可幂等复用）
-    expect(params.out).toBe(voiceCacheFile(cfg, cfg.profile, "今日战报"));
+  it("有效缓存直接播放；损坏缓存重新合成；模型和不同声线互不混用", async () => {
+    const cfg = config(), fn = vi.fn(async () => new Response(wave())), file = voiceCacheFile(cfg, cfg.profile, '早安');
+    writeFileSync(file, 'RIFF-fake');
+    expect(await synthesizeVoice('早安', { config: cfg, fetchImpl: asFetch(fn) })).toMatchObject({ cached: false });
+    expect(await synthesizeVoice('早安', { config: cfg, fetchImpl: asFetch(fn) })).toMatchObject({ cached: true });
+    expect(fn).toHaveBeenCalledTimes(1); expect(parseVoiceWav(readFileSync(file)).data.length).toBe(2400);
+    expect(file).not.toBe(voiceCacheFile(cfg, 'zh-myvoice', '早安'));
+    expect(voiceCacheKey('a','text','revision1')).not.toBe(voiceCacheKey('a','text','revision2'));
   });
-
-  it("工位报错 → 透传错误码（不伪造产物）", async () => {
-    const cfg = tempConfig();
-    const fetchImpl = async () =>
-      new Response(JSON.stringify({ ok: false, error: "consent_required", message: "缺授权" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    const result = await synthesizeVoice("你好", { config: cfg, fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(result).toMatchObject({ ok: false, error: "consent_required", message: "缺授权" });
+  it("缺模型、HTTP 失败、损坏 WAV 均优先尝试个人克隆", async () => {
+    for (const mode of ['missing', 'http', 'corrupt']) {
+      const cfg = config(mode === 'missing' ? { sweetModel: '' } : {});
+      const fn = vi.fn(async (url, init) => String(url).endsWith('/action') ? cloneFetch(url, init)
+        : mode === 'http' ? new Response('failed', { status: 503 }) : new Response('not-wav'));
+      expect(await synthesizeVoice('你好', { config: cfg, fetchImpl: asFetch(fn) })).toMatchObject({ ok: true, profile: 'zh-myvoice' });
+      expect(fn.mock.calls.some(c => String(c[0]).endsWith('/action'))).toBe(true);
+    }
   });
-
-  it("工位回执成功但产物不在 → 判失败（无回执不算完成）", async () => {
-    const cfg = tempConfig();
-    const fetchImpl = async () =>
-      new Response(JSON.stringify({ ok: true, result: { out: join(cfg.cacheDir, "missing.wav") } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    const result = await synthesizeVoice("你好", { config: cfg, fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(result).toMatchObject({ ok: false, error: "voice_station_failed" });
-    expect(existsSync(join(cfg.cacheDir, "missing.wav"))).toBe(false);
+  it("女声超时中止后克隆仍可完成", async () => {
+    const cfg = config({ primaryTimeoutMs: 5 });
+    const fn = async (url: unknown, init: RequestInit) => String(url).endsWith('/action') ? cloneFetch(url, init)
+      : new Promise<Response>((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(new DOMException('timeout', 'AbortError'))));
+    expect(await synthesizeVoice('你好', { config: cfg, fetchImpl: asFetch(fn) })).toMatchObject({ ok: true, profile: 'zh-myvoice' });
   });
-
-  it("工位不可达 → voice_station_unavailable（客户端据此回落系统语音）", async () => {
-    const cfg = tempConfig();
-    const fetchImpl = async () => {
-      throw new Error("ECONNREFUSED");
-    };
-    const result = await synthesizeVoice("你好", { config: cfg, fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(result).toMatchObject({ ok: false, error: "voice_station_unavailable" });
+  it("并发相同文本只合成一次，长文本按顺序合成并保存完整音频", async () => {
+    const cfg = config(), fn = vi.fn(async () => new Response(wave()));
+    const text = '甲'.repeat(81) + '。最后一句！';
+    const results = await Promise.all(Array.from({length: 8}, () => synthesizeVoice(text, { config: cfg, fetchImpl: asFetch(fn) })));
+    expect(results.every(r => r.ok)).toBe(true); expect(fn).toHaveBeenCalledTimes(3);
+    const bodies = fn.mock.calls.map(c => JSON.parse(String((c as unknown as [unknown,RequestInit])[1].body)).input);
+    expect(bodies.join('')).toBe(text);
   });
-
-  it("关闭开关 → voice_station_disabled", async () => {
-    const result = await synthesizeVoice("你好", { config: tempConfig({ enabled: false }) });
-    expect(result).toMatchObject({ ok: false, error: "voice_station_disabled" });
+  it("失败请求不会永久锁死，下次恢复后可重新合成", async () => {
+    const cfg = config(), bad = asFetch(async () => { throw new Error('offline'); });
+    expect(await synthesizeVoice('重试', { config: cfg, fetchImpl: bad })).toMatchObject({ ok: false });
+    expect(await synthesizeVoice('重试', { config: cfg, fetchImpl: asFetch(async () => new Response(wave())) })).toMatchObject({ ok: true });
+  });
+  it("克隆同意门禁失败保留结构化原因，失败信息不泄漏凭据", async () => {
+    const cfg = config({ sweetModel: '' });
+    const result = await synthesizeVoice('你好', { config: cfg, fetchImpl: asFetch(async () => jsonResponse({ok:false,error:'consent_required',message:'denied test-only'})) });
+    expect(result).toMatchObject({ ok: false, error: 'consent_required', profile: 'zh-myvoice' });
+    expect(JSON.stringify(result)).not.toContain(cfg.token);
+  });
+  it("克隆回执不得指定请求外路径，不得把不存在或伪 WAV 当成功", async () => {
+    const cfg = config({ sweetModel: '' });
+    for (const out of [join(cfg.cacheDir, 'other.wav'), undefined]) {
+      expect(await synthesizeVoice('你好', { config: cfg, fetchImpl: asFetch(async () => jsonResponse({ ok: true, result: { out } })) })).toMatchObject({ ok: false });
+    }
+  });
+  it("克隆超时与磁盘写失败均返回失败", async () => {
+    const cfg = config({ profile:'zh-myvoice', timeoutMs:5 });
+    const fn = (_url: unknown, init: RequestInit) => new Promise<Response>((_r,reject) => init.signal!.addEventListener('abort', () => reject(new DOMException('timeout','AbortError'))));
+    expect(await synthesizeVoice('你好', { config:cfg, fetchImpl:asFetch(fn) })).toMatchObject({error:'voice_station_timeout'});
+    const file = join(temp(),'file'); writeFileSync(file,'not-a-directory');
+    expect(await synthesizeVoice('磁盘异常', { config:config({cacheDir:file}), fetchImpl:asFetch(async () => new Response(wave())) })).toMatchObject({ok:false});
   });
 });
