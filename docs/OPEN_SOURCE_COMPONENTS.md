@@ -4,7 +4,7 @@
 
 > 生成器：`scripts/oss-inventory.mjs`（离线事实）＋ `scripts/oss-watch.sh`（上游最新版本）
 > 仓库：workloom-ai/hyperreality-system ｜ 最近一次上游扫描：2026-09-19T03:13:55.000Z
-> 统计：登记组件 94 个 ｜ npm 直接依赖 155 个 ｜ Python 依赖 5 个 ｜ 容器镜像 2 个
+> 统计：登记组件 95 个 ｜ npm 直接依赖 155 个 ｜ Python 依赖 5 个 ｜ 容器镜像 2 个
 
 ## 0. 维护机制（四件事）
 
@@ -112,9 +112,10 @@
 | 89 | npm（桌面载荷安装器） | [github.com/npm/cli](https://github.com/npm/cli) · Artistic-2.0 | 11.17.0 | **12.0.2** ⬆ | 随包二进制 | .workloom-runtime-deps（受控 npm ci 安装桌面运行载荷） | 载荷安装器版本与 package-lock.json 绑定；升级需重跑 runtime:deps:refresh/verify |
 | 90 | python-pptx | [github.com/scanny/python-pptx](https://github.com/scanny/python-pptx) · MIT | 按需安装（未锁定版本） | 1.0.2 | 开发/构建 | scripts/build-capability-pptx.py（能力清单 PPT 生成） | 本地工具链依赖，不随产品分发；版本未锁定属已知缺口（建议后续补 requirements 引脚） |
 | 91 | Playwright（Python · computer-use 工具链） | [github.com/microsoft/playwright-python](https://github.com/microsoft/playwright-python) · Apache-2.0 | >=1.40.0 | **1.46.0** ⬆ | 开发/构建 | packages/base/computer-use/toolkit（安装脚本按 requirements 拉取） | 与 Node 侧 @playwright/test 独立版本线；浏览器二进制由 playwright install 管理，升级需同步预检脚本断言 |
-| 92 | Kokoro-82M（织伴本机女声模型） | [github.com/hexgrad/kokoro](https://github.com/hexgrad/kokoro) · Apache-2.0 | a71e4d38b236d968966a2002c4c895dbd12b1c3c | —（未扫描） | 素材/资产 | 本机可选织伴语音包（zf_xiaoni，不随基础客户端打包） | 模型事实源为 loommate-voice.json：HF 固定修订与 SHA-256 校验；Apple Silicon 独立回环推理服务，128 MiB Metal 缓存。中文自然韵律，不支持任意情绪指令。模型升级需同句试听、延迟与回退回归。 |
+| 92 | Kokoro-82M（织伴本机女声模型） | [github.com/hexgrad/kokoro](https://github.com/hexgrad/kokoro) · Apache-2.0 | ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c | —（未扫描） | 素材/资产 | 本机可选织伴语音包（zf_xiaoni，不随基础客户端打包） | 模型事实源为 loommate-voice.json：固定 Kokoro ONNX INT8 图与声线集 SHA-256；约 142 MB，本机 CPU 子进程推理，两个计算线程与有界队列。中文自然韵律，不支持任意情绪指令。导出来源 thewh1teagle/kokoro-onnx（MIT），模型 Apache-2.0。更新需同句试听、延迟与回退回归。 |
 | 93 | Misaki（织伴中文文本转发音） | [github.com/hexgrad/misaki](https://github.com/hexgrad/misaki) · Apache-2.0 | 0.9.4 | 0.9.4 | 独立服务 | 已有语音工位 venv；scripts/install-loommate-voice.py 安装可选 zh 依赖 | 仅可选本机语音环境，既有业务和 Agent 运行时不增加 Python 依赖；复核中文、数字、英文混读后才升级。 |
-| 94 | mlx-audio（织伴独立轻量推理服务） | [github.com/Blaizzy/mlx-audio](https://github.com/Blaizzy/mlx-audio) · MIT | 0.5.5 | **0.5.7** ⬆ | 独立服务 | 复用已有本机语音工位 venv；scripts/loommate-voice-engine.py | 复用已安装且实测的 0.5.5，安装器只校验版本；共享影视/个人克隆引擎配置保持独立。独立服务只加载固定 Kokoro 资产；版本升级需重跑本机真实 HTTP 与冷启动、热机、缓存测试。 |
+| 94 | mlx-audio（既有个人克隆工位） | [github.com/Blaizzy/mlx-audio](https://github.com/Blaizzy/mlx-audio) · MIT | 0.5.5 | **0.5.7** ⬆ | 独立服务 | 现有个人克隆/影视工位；女声安装器不升级该共享环境的 mlx-audio | 保留已安装且实测的 0.5.5，女声安装器只校验版本。织伴默认使用独立 CPU ONNX 后端；现有影视和个人克隆模型配置保持独立。升级需重跑原工位回归。 |
+| 95 | ONNX Runtime（织伴 CPU 女声推理） | [github.com/microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) · MIT | 1.30.0 | 1.30.0 | 独立服务 | 可选本机织伴工位；scripts/loommate-voice-engine.py | 固定并实测 1.30.0，显式 CPUExecutionProvider；导入前禁用遥测。不改 Node 或行业依赖锁。模型与声音不联网推理；更新需真实合成、并发、进程恢复回归。 |
 
 ## 2. 全量直接依赖（本仓事实，含上游最新）
 
@@ -326,5 +327,5 @@
 - `pnpm` 10.14.0 → **12.4.2**（门禁 standard）
 - `npm（桌面载荷安装器）` 11.17.0 → **12.0.2**（门禁 standard）
 - `Playwright（Python · computer-use 工具链）` >=1.40.0 → **1.46.0**（门禁 standard）
-- `mlx-audio（织伴独立轻量推理服务）` 0.5.5 → **0.5.7**（门禁 standard）
+- `mlx-audio（既有个人克隆工位）` 0.5.5 → **0.5.7**（门禁 standard）
 

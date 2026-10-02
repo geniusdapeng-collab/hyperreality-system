@@ -1614,14 +1614,14 @@
       "probe": {
         "kind": "regex",
         "file": "apps/server/src/voice/loommate-voice.json",
-        "pattern": "\"revision\": \"([a-f0-9]{40})\""
+        "pattern": "\"revision\": \"([a-f0-9]{64})\""
       },
       "scope": [
         "本机可选织伴语音包（zf_xiaoni，不随基础客户端打包）"
       ],
       "cadence": "monthly",
       "gate": "standard",
-      "notes": "模型事实源为 loommate-voice.json：HF 固定修订与 SHA-256 校验；Apple Silicon 独立回环推理服务，128 MiB Metal 缓存。中文自然韵律，不支持任意情绪指令。模型升级需同句试听、延迟与回退回归。"
+      "notes": "模型事实源为 loommate-voice.json：固定 Kokoro ONNX INT8 图与声线集 SHA-256；约 142 MB，本机 CPU 子进程推理，两个计算线程与有界队列。中文自然韵律，不支持任意情绪指令。导出来源 thewh1teagle/kokoro-onnx（MIT），模型 Apache-2.0。更新需同句试听、延迟与回退回归。"
     },
     {
       "name": "Misaki（织伴中文文本转发音）",
@@ -1645,7 +1645,7 @@
       "latest_checked_at": "2026-10-02T16:00:00.000Z"
     },
     {
-      "name": "mlx-audio（织伴独立轻量推理服务）",
+      "name": "mlx-audio（既有个人克隆工位）",
       "package": "mlx-audio",
       "repo": "https://github.com/Blaizzy/mlx-audio",
       "license": "MIT",
@@ -1657,13 +1657,34 @@
         "pattern": "\"mlxAudioVersion\": \"([0-9.]+)\""
       },
       "scope": [
-        "复用已有本机语音工位 venv；scripts/loommate-voice-engine.py"
+        "现有个人克隆/影视工位；女声安装器不升级该共享环境的 mlx-audio"
       ],
       "cadence": "monthly",
       "gate": "standard",
-      "notes": "复用已安装且实测的 0.5.5，安装器只校验版本；共享影视/个人克隆引擎配置保持独立。独立服务只加载固定 Kokoro 资产；版本升级需重跑本机真实 HTTP 与冷启动、热机、缓存测试。",
+      "notes": "保留已安装且实测的 0.5.5，女声安装器只校验版本。织伴默认使用独立 CPU ONNX 后端；现有影视和个人克隆模型配置保持独立。升级需重跑原工位回归。",
       "latest": "0.5.7",
       "latest_checked_at": "2026-10-02T16:00:00.000Z"
+    },
+    {
+      "name": "ONNX Runtime（织伴 CPU 女声推理）",
+      "package": "onnxruntime",
+      "repo": "https://github.com/microsoft/onnxruntime",
+      "license": "MIT",
+      "channel": "pypi",
+      "usage": "service",
+      "probe": {
+        "kind": "regex",
+        "file": "apps/server/src/voice/loommate-voice.json",
+        "pattern": "\"runtimeDependency\": \"onnxruntime==([0-9.]+)\""
+      },
+      "scope": [
+        "可选本机织伴工位；scripts/loommate-voice-engine.py"
+      ],
+      "cadence": "monthly",
+      "gate": "standard",
+      "notes": "固定并实测 1.30.0，显式 CPUExecutionProvider；导入前禁用遥测。不改 Node 或行业依赖锁。模型与声音不联网推理；更新需真实合成、并发、进程恢复回归。",
+      "latest": "1.30.0",
+      "latest_checked_at": "2026-10-02T19:30:00.000Z"
     }
   ]
 }
