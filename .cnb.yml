@@ -74,6 +74,7 @@
         instrumentation_dir=$(mktemp -d)
         trap 'rm -rf "$instrumentation_dir"' EXIT HUP INT TERM
         npm install --prefix "$instrumentation_dir" playwright@1.63.0 --ignore-scripts --no-audit --no-fund
+        export PLAYWRIGHT_BROWSERS_PATH="$instrumentation_dir/browsers"
         node "$instrumentation_dir/node_modules/playwright/cli.js" install --with-deps chromium
         export NODE_PATH="$instrumentation_dir/node_modules${NODE_PATH:+:$NODE_PATH}"
         pnpm test:media

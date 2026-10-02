@@ -1,9 +1,9 @@
 {
   "baseRepo": "workloom-ai/workloom-im",
   "lastSyncedBaseSha": "8393ef57e2d369ae969fbba61ad92d96e46fb08a",
-  "lastSyncAt": "2026-10-02T21:28:04.872Z",
-  "filesTouched": 11,
-  "lastRequiredAssetsBaseSha": "cf59f7c626d86a79607b503a667be99f66ec5481",
+  "lastSyncAt": "2026-10-02T23:18:28.171894+00:00",
+  "filesTouched": 2,
+  "lastRequiredAssetsBaseSha": "7cf350a4a595549c8572c0a384e3b9a1a33bb5d8",
   "lastSyncMode": "required-only",
   "pathPrefix": ".",
   "requiredRootAssetsSha256": {
@@ -15,8 +15,8 @@
     "docs/acceptance/checklist.v2.json": "3a1993d3b539daf78ce1fa1f8af214c633d74795f64ef6d00d0134ee3cbfcbcf",
     "docs/acceptance/checklist.v3.json": "2b700fb571dd3393c3f8f301616cde397854cccabd785c6aa99b417943443f1a",
     "docs/acceptance/checklist.v3.md": "344da4bf6bb5ad29ec24918c5af37e70bebd6ae527aa4fb762059160c43b10d1",
-    "docs/acceptance/report-template.md": "3ee38bf4e8c3082db11cc47ef0385f31f0ec24470311a807fa5f246f9600a6d3",
-    "docs/acceptance/profile.example.json": "488f7e472106dab75005251c4f9206e81f34409cdd0cefbd34eb3a3e77b054ed",
+    "docs/acceptance/report-template.md": "789631a913e621b29a942591744c87f9c982503808f1fd3e72743dc84072ff67",
+    "docs/acceptance/profile.example.json": "5839fe170b0ece3da73db146b68bf2cb61e9b13878ac2d1424076f2b0c024b62",
     "docs/acceptance/outcome-suite.example.yaml": "9110d0b7092130c2cf067221e37f7d66bd4e4271ceff2ada7299205197fa9060",
     "docs/MINE-CLEAR-DELIVERY-SPEC.md": "bf56a8a5bc2e267d08aefcc98451703f53d565c1f58e3017ac29e6d94ca61463",
     "docs/mine-clear/ledger.schema.json": "db2b34f9fb45f83ff1eb60b71726c89e705011b90e22c6bda6fbf87d65d36d83",
