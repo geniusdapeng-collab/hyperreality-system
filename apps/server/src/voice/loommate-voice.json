@@ -1,0 +1,28 @@
+{
+  "schema": "workloom.loommate-voice/v1",
+  "profile": "loommate-sweet",
+  "model": "mlx-community/Kokoro-82M-bf16",
+  "revision": "a71e4d38b236d968966a2002c4c895dbd12b1c3c",
+  "modelFile": "kokoro-v1_0.safetensors",
+  "voice": "zf_xiaoni",
+  "voiceFile": "voices/zf_xiaoni.safetensors",
+  "language": "z",
+  "speed": 1.0,
+  "instruction": "",
+  "fallbackProfile": "zh-myvoice",
+  "license": "Apache-2.0",
+  "source": "https://github.com/hexgrad/kokoro",
+  "weightsSource": "https://huggingface.co/mlx-community/Kokoro-82M-bf16",
+  "requiredFiles": [
+    "config.json",
+    "kokoro-v1_0.safetensors",
+    "voices/zf_xiaoni.safetensors"
+  ],
+  "pythonDependency": "misaki[zh]==0.9.4",
+  "weightsSha256": {
+    "kokoro-v1_0.safetensors": "4e9ecdf03b8b6cf906070390237feda473dc13327cb8d56a43deaa374c02acd8",
+    "voices/zf_xiaoni.safetensors": "ef37a82850e10eb15f18a4549c76707a8eebd682e61facdda6ee4a4dc4eb0bf0"
+  },
+  "enginePort": 8100,
+  "mlxAudioVersion": "0.5.5"
+}
