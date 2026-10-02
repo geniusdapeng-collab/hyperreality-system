@@ -55,6 +55,15 @@
     - name: 交付证据、预算与行业配置回归
       script: |
         set -eu
+        # The CLI fixture drops ambient NODE_PATH; expose only the pinned test package.
+        instrumentation_dir=$(mktemp -d)
+        playwright_link_created=0
+        trap 'if [ "$playwright_link_created" = 1 ]; then rm -f node_modules/playwright; fi; rm -rf "$instrumentation_dir"' EXIT HUP INT TERM
+        npm install --prefix "$instrumentation_dir" playwright@1.63.0 --ignore-scripts --no-audit --no-fund
+        if [ ! -e node_modules/playwright ] && [ ! -L node_modules/playwright ]; then
+          ln -s "$instrumentation_dir/node_modules/playwright" node_modules/playwright
+          playwright_link_created=1
+        fi
         pnpm test:governance
         node scripts/generate-capabilities.mjs --check
         node scripts/acceptance/profile-check.mjs --repo .
