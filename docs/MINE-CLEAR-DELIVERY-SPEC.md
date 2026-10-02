@@ -1,7 +1,8 @@
 # 排雷式交付规范（Mine-Clear Delivery · MCD）
 
-> **受控原文（canonical）**：本规范由 `workloom-im` 维护，经 base-sync 分发到十个订阅仓的只读副本（隔离副本 `workloom-growthtest` / `workloom-growthmatrix` 不接收，见 `docs/DEVELOPMENT-PROTOCOL.md` §11）。
+> **受控原文（canonical）**：本规范由 `workloom-im` 维护，经 base-sync 分发到注册的订阅仓只读副本（隔离副本 `workloom-growthtest` / `workloom-growthmatrix` 不接收，见 `docs/DEVELOPMENT-PROTOCOL.md` §11）。
 > **版本**：`mcd/v1.0`（2026-09-29）。
+> **执行证据契约**：2026-10-02 加固；`workloom.evidence-run/v1`、`workloom.acceptance-item/v1`、`workloom.evidence-index/v1`，字段见 `docs/mine-clear/evidence.schema.json`。
 > **融合来源**：①《AI-Coding 项目交付排雷方法论 V3.0》（七阶段模型 + 十条纪律 + 七套指令模板）；②本仓 `docs/REAL-DEVICE-ACCEPTANCE-SPEC.md`（RDAS v3.1 真机深度验收，276 项）；③`docs/DEVELOPMENT-PROTOCOL.md`（任务卡 / 锁 / 门禁 / 合并）；④`AI-AUTONOMOUS-OPERATIONS.md`（自治档位、信任工程、无回执不算完成）。
 > **一句话定位**：把"看起来做完了"变成"敢让客户签字"——先系统性挖出挡交付的问题，再做有断言兜底的修复，最后交给独立验收背书。
 > **规范正文与执行器**：本文件 + `docs/mine-clear/ledger.schema.json`（台账 schema）+ `docs/mine-clear/report-template.md`（报告模板）+ `docs/mine-clear/prompt-pack.md`(七套投喂模板) + `scripts/delivery/mine-clear.mjs`（执行器）。
@@ -85,6 +86,7 @@ AI 协作链路里最贵的浪费不是修错，而是**在旧代码上修**：�
 - **样例断言**：具体输入 → 具体预期，兜底；
 - **属性断言**：不变量在任意输入下成立（如"任何参数缺失的写动作都不得跳过人工审查"），覆盖样例漏掉的边缘情形；
 - **证据优先于声明**：完成必须出示断言输出原文，不接受"应该修好了"。
+- **记录由真实执行产生**：断言给出 `exec.file/exec.args`；提交被测源码后运行 `run-assertions`，捕获实际退出码、信号、时间、角色与文件散列。`fail/not-run` 或裸路径不得进入 `verified`。
 
 ---
 
@@ -165,13 +167,16 @@ outputs/mine-clear/<任务号>/
   baseline.json        # 审计基线（commit/branch/工作树态/冒烟结果/不变量清单）
   ledger.json          # 问题卡 + 修复卡 + 断言 + 证据（schema：docs/mine-clear/ledger.schema.json）
   evidence/            # 断言输出、日志摘录、响应原文、截图、脚本运行记录
+  runs/                # 实际运行 JSON：完整 commit / argv / exit / 角色 / 起止时刻 / 输出引用
+  approvals/           # 独立批准来源 JSON（仅需要豁免时）
+  evidence-index.json  # 运行记录与真实输出文件索引
   report.md            # 排雷报告 / 修复报告（模板：docs/mine-clear/report-template.md）
   handoff.json         # M6 交接单（RDAS 验收输入）
 ```
 
 **证据分级**（与 RDAS 一致，报告逐条标注）：
 
-- **A**＝代码精读 / 真机实测得出；
+- **A**＝代码精读得出；真机实测另注明环境、步骤及原始证据；
 - **B**＝全量机检 / 元数据解析得出；
 - **C**＝抽样得出；
 - **D**＝推断 / 未验证。
@@ -236,14 +241,33 @@ pnpm release:gate                              # 发布门禁（需要真机在�
 |---|---|---|
 | `init` | 记录审计基线 + 生成 `ledger.json` 骨架（含不变量占位） | 0 / 2 参数错误 |
 | `card-template` | 打印问题卡或修复卡模板（可直接填好 `add`） | 0 |
-| `add` | 校验并追加一张卡（问题卡需实证 + 断言；修复卡需修法 + 回滚） | 1 校验失败 |
-| `gate` | 台账完整性门禁：断言可运行、修复卡有回归、验证人与修复人分离、P0 未闭环即红 | 1 门禁未过 |
+| `add` | 校验并回读一张卡的真实提交 blob/发现文件；已闭环卡还须回读运行证据 | 1 校验失败 |
+| `run-assertions` | 显式执行该卡全部 argv 断言，捕获实际结果；`--actor` + `--role repair/acceptance` | 0 实际通过 / 1 失败或超时 / 2 参数或环境错误 |
+| `gate` | 回读三基线、断言输出与独立角色；P0/P1 非 `verified` 即红 | 1 门禁未过 |
 | `status` | 按级别 / 批次 / 状态统计，列出未闭环清单 | 0 |
 | `plan` | 生成四批修复计划 + 冲突面（同文件卡）分组 | 0 |
-| `verify-baseline` | 每卡基线 vs 当前云端：`ancestor / diverged / unknown` + 需重新定位的行号引用 | 1 存在 stale 卡 |
+| `verify-baseline` | 每卡基线 vs 当前 Git 历史：`current / needs-relocate / diverged / unknown`；显式记录抓取结果 | 1 存在 stale 卡 / 2 抓取失败或环境错误 |
 | `handoff` | 生成 RDAS 验收交接单（含每条未闭环断言的复验命令） | 1 存在无回归路径的未闭环卡 |
 
-`gate` 与 `handoff` 是**机器可判定的硬闸**：报告里写"已修复"但台账里没有断言输出路径的，一律判红。
+`gate` 与 `handoff` 是**机器可判定的硬闸**：通过声明必须能回读到同一提交、同一卡、同一断言和独立执行角色的实际成功记录。
+
+### 6.1 真实执行与回读规则
+
+1. `baseline.audit/repair/acceptance.commit` 在门禁时必须是本仓存在的完整 40 位 SHA。实际核验 `audit` 是 `repair` 的祖先、`repair` 是 `acceptance` 的祖先、`acceptance` 等于当前 HEAD；tracked 改动及未被 gitignore 排除的 untracked 文件均使被测源码未验证。M0 的 repair/acceptance 可保留 null，但不能凭该骨架通过 gate/handoff。
+2. 发现类代码证据使用 `file:line@commit` 与提交 blob 的 `sha256`；根因文件、行号和提交也要真实存在。非代码证据绑定 `{path, sha256, commit}`，相对台账目录回读。目录、空文件、symlink、越界路径和散列不符不能替代证据。
+3. `assertion.exec` 是 `{file,args}`，执行器不经过 shell。必须为有通过/失败信号的实际断言。`run-assertions --role repair` 通过只进入 `fixed`；独立 `--role acceptance` 通过才进入 `verified`。通过前置条件后、首个实际执行前先落盘 `unfixed/not-run`、清旧验收基线与验证声明，保留 `last_assertion_attempt`；证据索引发布出错/中断也不得保留旧绿。失败、超时、找不到可执行文件均记录实际原因并保持 `unfixed`。
+4. 每条运行记录含 `command/exec/actor/role/subject/commit/started_at/finished_at/exit_code/signal/validation/result/outputs`。`pass` 必须对应实际 exit 0、无失败信号、断言观测通过和干净提交；时间不能早于绑定提交、逆序或指向未来。MCD 的 subject 必须匹配 `{card_id,assertion_index}`，`verification_evidence` 必须引用本卡独立验收运行。Node `--test` 清理 `NODE_TEST_CONTEXT` 并注入受控 TestsStream observer；`requested_exec` 绑定声明 argv、`exec` 绑定实际 argv，`node_observer` 绑定观测器和逐文件机器摘要。零匹配、全跳过、空文件或缺逐文件摘要不能通过；原始 exit 0 不会被伪改成 1，而是记录 `validation.ok=false/result=fail`。人工报告文本及外层文件加载的 passed 不算实际断言。
+5. `P0/P1` 问题只有独立 `verified` 才闭环。`fixed/covered/wontfix` 不能绕过；发现被其他提交覆盖时仍要在当前验收基线复跑。`P2` 未闭环项可以交接，但每项必须给出明确 `regression.command`。
+6. 同 actor 豁免须有独立 `approved_by/approved_at/reason/source`。source 回读为 `workloom.evidence-approval/v1`，批准的 commit、卡号、范围 `role-separation`、原因和批准者必须与声明一致；批准者不能是修复/验收者。只有 reason 或不可回读来源不能放行。原始批准事件可用 `source_uri` 关联，供独立验收者核对身份。actor 是调用方传入字符串，绑定 JSON 不是平台签名身份认证；可信协调者必须分配真实未参与修复的会话并保留来源，本地检查不证明调用者身份。
+7. `init` 抓取失败时记录 `fetch_status=failed`、`fetched_at=null`，明确只取得本地基线；`verify-baseline` 抓取失败不能放行。显式 `--no-fetch` 仅核验本地 Git 历史，不声明云端最新。
+
+```bash
+node scripts/delivery/mine-clear.mjs run-assertions --ledger <台账> --card MC-001 --actor <修复会话> --role repair
+node scripts/delivery/mine-clear.mjs run-assertions --ledger <台账> --card MC-001 --actor <独立验收会话> --role acceptance
+node scripts/delivery/mine-clear.mjs gate --ledger <台账>
+```
+
+RDAS 共享相同证据契约：固定 276 个唯一 ID、检查单散列与完整提交不可裁剪；每项需要同 ID 的原始 `expected/actual/pass`、实际运行和真实输出引用，不能从聚合成功扩展通过。批准的不适用须用范围 `not-applicable` 的独立来源，仍保留在固定分母中。报告再次复核每项与阶段输入，P 域另回读独立 receipt/transcript、同线程原始事件与状态断言、真实媒体产物及 reserve→commit 配额账本，实际 calls/tokens、未计量用量与冻结原因必须一致。缺失/不一致/实际计量未知为 `unverified`（退出 2），实际失败为 `fail`（退出 1）；仅完整 pass 退出 0。`reportGenerated=true` 与 `acceptancePassed=true` 分别表达生成报告和验收通过。
 
 ---
 
@@ -258,8 +282,9 @@ pnpm release:gate                              # 发布门禁（需要真机在�
   "repo": "workloom-im",
   "audit_baseline": "<commit>",
   "repair_baseline": "<commit>",
+  "acceptance_baseline": "<commit>",
   "invariants": [{"id": "INV-1", "text": "...", "source": "AGENTS.md#4.1"}],
-  "closed_problems": [{"id": "MC-001", "assertions": [{"command": "...", "last_result": "pass"}]}],
+  "closed_problems": [{"id": "MC-001", "assertions": [{"command": "node --test ...", "exec": {"file": "node", "args": ["--test", "..."]}, "last_result": "pass", "evidence": {"path": "evidence/....txt", "sha256": "<64hex>", "commit": "<40hex>"}, "run": {"path": "runs/....json", "sha256": "<64hex>", "commit": "<40hex>"}}]}],
   "open_problems": [{"id": "MC-007", "evidence": "...", "regression": "node ...", "fix_plan": "..."}],
   "acceptance_commands": [
     "pnpm acceptance:profile:check",

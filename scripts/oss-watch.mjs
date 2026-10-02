@@ -24,7 +24,8 @@ import {
   STATE_FILE,
   buildInventory,
   compareVersions,
-  generateDocument,
+  renderMarkdown,
+  repoIdentity,
   highestVersion,
   isOutdated,
   loadRegistry,
@@ -32,6 +33,7 @@ import {
   normalizeVersion,
   probeVersions,
   resolveCurrent,
+  upstreamObservation,
 } from "./oss-inventory.mjs";
 
 const DEFAULT_REGISTRY = "https://registry.npmmirror.com";
@@ -90,16 +92,19 @@ export async function npmLatest(packageName, registry = DEFAULT_REGISTRY) {
     latest: data.version ?? null,
     license: data.license ?? null,
     repo: repository ? repository.replace(/^git\+/, "").replace(/\.git$/, "") : null,
+    source: url,
   };
 }
 
 export async function pypiLatest(packageName, registry = DEFAULT_PYPI, { fallbackRegistry = "https://pypi.org/pypi" } = {}) {
   let data;
+  let source = `${registry}/${packageName}/json`;
   try {
-    data = await fetchJson(`${registry}/${packageName}/json`);
+    data = await fetchJson(source);
   } catch (error) {
     if (!fallbackRegistry) throw error;
-    data = await fetchJson(`${fallbackRegistry}/${packageName}/json`, { timeout: 45000 });
+    source = `${fallbackRegistry}/${packageName}/json`;
+    data = await fetchJson(source, { timeout: 45000 });
   }
   const info = data.info ?? {};
   const urls = info.project_urls ?? {};
@@ -107,7 +112,7 @@ export async function pypiLatest(packageName, registry = DEFAULT_PYPI, { fallbac
     Object.entries(urls).find(([key]) => /source|repository|homepage|code/i.test(key))?.[1] ??
     info.home_page ??
     null;
-  return { latest: info.version ?? null, license: info.license ?? null, repo };
+  return { latest: info.version ?? null, license: info.license ?? null, repo, source };
 }
 
 export async function githubLatest(repoUrl, { tagPrefix = "" } = {}) {
@@ -116,7 +121,7 @@ export async function githubLatest(repoUrl, { tagPrefix = "" } = {}) {
   const slug = `${match[1]}/${match[2].replace(/\.git$/, "").replace(/（.*/, "")}`;
   try {
     const release = await fetchJson(`${GITHUB_API}/repos/${slug}/releases/latest`);
-    if (release?.tag_name) return { latest: release.tag_name, repo: slug };
+    if (release?.tag_name) return { latest: release.tag_name, repo: slug, source: `${GITHUB_API}/repos/${slug}/releases/latest` };
   } catch {
     /* 无 release 的仓库回退 tags */
   }
@@ -125,25 +130,56 @@ export async function githubLatest(repoUrl, { tagPrefix = "" } = {}) {
     .map((tag) => tag.name)
     .filter((name) => (tagPrefix ? name.startsWith(tagPrefix) : true))
     .map((name) => (tagPrefix ? name.slice(tagPrefix.length) : name))
-    .filter((name) => /^v?\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$/.test(name));
-  if (!names.length) return { latest: null, repo: slug };
+    .filter((name) => /^v?\d+\.\d+\.\d+(?:\+[0-9A-Za-z.-]+)?$/.test(name));
+  if (!names.length) throw new Error(`没有可识别的稳定版本标签：${slug}`);
   const sorted = names.sort((a, b) => compareVersions(a, b) ?? 0);
-  return { latest: sorted[sorted.length - 1], repo: slug };
+  return { latest: sorted[sorted.length - 1], repo: slug, source: `${GITHUB_API}/repos/${slug}/tags?per_page=100` };
+}
+
+/** Docker Hub 的真实 tags 通道。未声明镜像、不完整分页或无版本均不能报成功。 */
+export async function dockerLatest(image, { tagPattern = "^v?(\\d+\\.\\d+(?:\\.\\d+)?)$", request = fetchJson } = {}) {
+  if (!/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(String(image ?? ""))) {
+    throw new Error("docker 通道必须声明 registryImage=namespace/repository");
+  }
+  const matcher = new RegExp(tagPattern);
+  const source = `https://hub.docker.com/v2/namespaces/${image.split('/')[0]}/repositories/${image.split('/')[1]}/tags`;
+  const versions = [];
+  const seen = new Set();
+  let url = `${source}?page_size=100`;
+  for (let page = 0; url && page < 100; page += 1) {
+    if (seen.has(url) || new URL(url).origin !== "https://hub.docker.com" || !new URL(url).pathname.startsWith(new URL(source).pathname)) {
+      throw new Error("docker tags 分页重复或逃逸来源");
+    }
+    seen.add(url);
+    const data = await request(url);
+    if (!Array.isArray(data.results)) throw new Error("docker tags 响应缺少 results");
+    for (const tag of data.results) {
+      const match = matcher.exec(String(tag.name ?? ""));
+      if (match && tag.tag_status !== "inactive") versions.push(match[1] ?? match[0]);
+    }
+    url = data.next ? new URL(data.next, source).href : null;
+  }
+  if (url) throw new Error("docker tags 超出分页上限，无法核实最新版本");
+  const latest = highestVersion(versions);
+  if (!latest) throw new Error("docker tags 无匹配的稳定版本");
+  return { latest, source, repo: `https://hub.docker.com/r/${image}` };
 }
 
 /* ============================ 扫描主流程 ============================ */
 
 function dueFor(component, state, now) {
-  const last = state.components?.[component.name]?.last_scan ?? 0;
+  const entry = state.components?.[component.name];
+  if (entry?.status === "error" || entry?.status === "unverified") return true;
+  const last = entry?.last_success ?? entry?.last_scan ?? 0;
   const cadence = CADENCE_SECONDS[component.cadence] ?? CADENCE_SECONDS.monthly;
   return now - last >= cadence;
 }
 
 function cacheFresh(entry, now, ttl) {
-  return entry?.checked_at && now - entry.checked_at < ttl;
+  return upstreamObservation(entry, { now, ttlSeconds: ttl }).verified;
 }
 
-export async function runWatch({ root, all = false, offline = false, exitZero = false, log = console.log } = {}) {
+export async function runWatch({ root, all = false, offline = false, exitZero = false, dryRun = false, log = console.log } = {}) {
   const now = Math.floor(Date.now() / 1000);
   const iso = new Date(now * 1000).toISOString();
   const registry = loadRegistry(root);
@@ -176,6 +212,7 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     await mapLimit(npmTargets, CONCURRENCY, async (name) => {
       try {
         const info = await npmLatest(name, arg("--npm-registry", DEFAULT_REGISTRY));
+        if (!info.latest) throw new Error("npm 未返回 version");
         state.registry_cache[name] = {
           ecosystem: "npm",
           latest: info.latest,
@@ -183,8 +220,11 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
           repo: info.repo,
           checked_at: now,
           checked_at_iso: iso,
+          last_attempt: now, last_success: now, status: info.latest ? "ok" : "unverified",
+          source: `${arg("--npm-registry", DEFAULT_REGISTRY)}/${name.replace("/", "%2f")}/latest`,
         };
       } catch (error) {
+        state.registry_cache[name] = { ...state.registry_cache[name], last_attempt: now, status: "error", error: error.message };
         failures.push(`npm:${name} ${error.message}`);
       }
     });
@@ -192,6 +232,7 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     await mapLimit(pypiTargets, CONCURRENCY, async (name) => {
       try {
         const info = await pypiLatest(name, arg("--pypi", DEFAULT_PYPI));
+        if (!info.latest) throw new Error("PyPI 未返回 version");
         state.registry_cache[name] = {
           ecosystem: "pypi",
           latest: info.latest,
@@ -199,8 +240,11 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
           repo: info.repo,
           checked_at: now,
           checked_at_iso: iso,
+          last_attempt: now, last_success: now, status: info.latest ? "ok" : "unverified",
+          source: info.source ?? `${arg("--pypi", DEFAULT_PYPI)}/${name}/json`,
         };
       } catch (error) {
+        state.registry_cache[name] = { ...state.registry_cache[name], last_attempt: now, status: "error", error: error.message };
         failures.push(`pypi:${name} ${error.message}`);
       }
     });
@@ -212,50 +256,55 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
       !["vendor", "skill"].includes(component.channel) &&
       (all || dueFor(component, state, now)),
   );
-  log(`→ 登记组件上游刷新 ${componentTargets.length} 个（频道 github/docker 走 releases，npm/pypi 复用缓存）…`);
+  log(`→ 登记组件上游刷新 ${componentTargets.length} 个（GitHub releases/tags；Docker Hub tags；npm/PyPI 已成功缓存）…`);
   await mapLimit(componentTargets, 4, async (component) => {
-    const cached = component.package ? state.registry_cache[component.package] : null;
-    let latest = cached?.latest ?? null;
-    if (!offline && component.channel === "github" && component.repo) {
-      try {
-        const info = await githubLatest(component.repo, { tagPrefix: component.tag_prefix ?? "" });
-        latest = info.latest ?? latest;
-      } catch (error) {
-        failures.push(`github:${component.name} ${error.message}`);
-      }
-    }
-    state.components[component.name] = {
-      last_scan: now,
-      last_scan_iso: iso,
-      latest_seen: latest ?? state.components[component.name]?.latest_seen ?? null,
-      channel: component.channel,
-    };
-    if (latest) {
-      component.latest = latest;
+    if (offline) return; // 离线重算绝不伪造联网成功时间。
+    const previous = state.components[component.name] ?? {};
+    const entry = { ...previous, channel: component.channel, last_attempt: now, last_attempt_iso: iso };
+    state.components[component.name] = entry;
+    try {
+      let info;
+      if (component.channel === "github" && component.repo) info = await githubLatest(component.repo, { tagPrefix: component.tag_prefix ?? "" });
+      else if (component.channel === "docker") info = await dockerLatest(component.registryImage, { tagPattern: component.tag_pattern });
+      else if (["npm", "pypi"].includes(component.channel)) {
+        info = state.registry_cache[component.registryPackage ?? component.package];
+        if (!info || info.status === "error" || !cacheFresh(info, now, CACHE_TTL_SECONDS)) throw new Error("没有本次或TTL内成功核实的上游缓存");
+      } else throw new Error(`未实现的上游通道：${component.channel}`);
+      if (!info.latest) throw new Error("上游未返回可用版本");
+      Object.assign(entry, { last_scan: now, last_scan_iso: iso, last_success: now, last_success_iso: iso, status: "ok", error: null, source: info.source, latest_seen: info.latest });
+      component.latest = info.latest;
       component.latest_checked_at = iso;
+      if (info.license && !component.license) component.license = info.license;
+      if (info.repo && !component.repo) component.repo = info.repo;
+    } catch (error) {
+      entry.status = component.channel === "docker" && !component.registryImage ? "unverified" : "error";
+      entry.error = error.message;
+      failures.push(`${component.channel}:${component.name} ${error.message}`);
     }
-    if (cached?.license && !component.license) component.license = cached.license;
-    if (cached?.repo && !component.repo) component.repo = cached.repo;
   });
 
   /* 写回登记表（current 只随升级 PR 改写：扫描器不直接改包版本） */
   const registryPath = join(root, REGISTRY_FILE);
   registry.meta = { ...registry.meta, updated: iso.slice(0, 10) };
-  writeFileSync(
+  if (!dryRun) writeFileSync(
     registryPath,
     `${JSON.stringify({ meta: registry.meta, components: registry.components }, null, 2)}\n`,
   );
 
-  state.last_full_scan = iso;
-  state.last_full_scan_epoch = now;
+  if (!offline) {
+    state.last_attempt = iso;
+    if (!failures.length) { state.last_full_scan = iso; state.last_full_scan_epoch = now; state.last_success = iso; }
+  }
   state.registry = { npm: DEFAULT_REGISTRY, pypi: DEFAULT_PYPI, github: "api.github.com" };
-  writeFileSync(join(root, STATE_FILE), `${JSON.stringify(state, null, 1)}\n`);
+  if (!dryRun) writeFileSync(join(root, STATE_FILE), `${JSON.stringify(state, null, 1)}\n`);
 
   /* 重新生成全量清单 + 更新计划 */
-  const generated = generateDocument(root);
-  writeFileSync(join(root, generated.registry.meta?.doc ?? "docs/OPEN_SOURCE_COMPONENTS.md"), generated.content);
-  const plan = renderPlan({ root, registry: generated.registry, inventory, state, iso });
-  writeFileSync(join(root, PLAN_FILE), plan.content);
+  const content = renderMarkdown({ root, repo: repoIdentity(root), registry, inventory, state });
+  const plan = renderPlan({ root, registry, inventory, state, iso });
+  if (!dryRun) {
+    writeFileSync(join(root, registry.meta?.doc ?? "docs/OPEN_SOURCE_COMPONENTS.md"), content);
+    writeFileSync(join(root, PLAN_FILE), plan.content);
+  }
 
   const summary = {
     scannedAt: iso,
@@ -264,6 +313,9 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
     componentUpdates: plan.updates.length,
     dependencyUpdates: plan.dependencyUpdates.length,
     failures,
+    status: failures.length ? "unverified" : offline ? "offline" : "ok",
+    dryRun,
+    plannedFiles: [REGISTRY_FILE, STATE_FILE, registry.meta?.doc ?? "docs/OPEN_SOURCE_COMPONENTS.md", PLAN_FILE],
   };
   log(
     `[oss-watch] 刷新完成：登记组件更新 ${summary.componentUpdates} 个，直接依赖更新 ${summary.dependencyUpdates} 个，失败 ${failures.length} 个`,
@@ -272,7 +324,7 @@ export async function runWatch({ root, all = false, offline = false, exitZero = 
   log(`[oss-watch] 清单 → docs/OPEN_SOURCE_COMPONENTS.md；计划 → ${PLAN_FILE}`);
 
   const hasUpdates = summary.componentUpdates > 0 || summary.dependencyUpdates > 0;
-  return { summary, exitCode: hasUpdates && !exitZero ? 2 : 0 };
+  return { summary, exitCode: failures.length ? 1 : hasUpdates && !exitZero ? 2 : 0 };
 }
 
 /* ============================ 更新计划 ============================ */
@@ -281,6 +333,7 @@ export function renderPlan({ root, registry, inventory, state, iso }) {
   const probes = root ? probeVersions(root, registry.components) : {};
   const updates = [];
   for (const component of registry.components) {
+    if (!upstreamObservation(state.components?.[component.name], { ttlSeconds: CADENCE_SECONDS[component.cadence] ?? CADENCE_SECONDS.monthly }).verified) continue;
     if (!component.latest) continue;
     const resolved = root
       ? resolveCurrent(component, inventory, probes)
@@ -294,6 +347,7 @@ export function renderPlan({ root, registry, inventory, state, iso }) {
     entry.importers.length > 0 && entry.importers.every((importer) => importer.startsWith("vendor/"));
   const dependencyUpdates = [];
   for (const entry of inventory.npm.packages) {
+    if (!upstreamObservation(state.registry_cache?.[entry.package]).verified) continue;
     const latest = state.registry_cache?.[entry.package]?.latest;
     const current = highestVersion(entry.versions);
     if (!latest || !current || !isOutdated(current, latest)) continue;
@@ -311,6 +365,7 @@ export function renderPlan({ root, registry, inventory, state, iso }) {
   }
   const pythonUpdates = [];
   for (const entry of inventory.python) {
+    if (!upstreamObservation(state.registry_cache?.[entry.package]).verified) continue;
     const latest = state.registry_cache?.[entry.package]?.latest;
     const pinned = entry.specifier.includes("==") || entry.specifier.includes("~=");
     if (latest && pinned && entry.versions[0] && isOutdated(entry.versions[0], latest)) {
@@ -357,7 +412,9 @@ export function renderPlan({ root, registry, inventory, state, iso }) {
     }
     lines.push("");
   } else {
-    lines.push("## 本周期登记组件均为最新 ✅");
+    lines.push(Object.values(state.components ?? {}).some(entry => entry.status === "error" || entry.status === "unverified")
+      ? "## 没有可据本次扫描判定的更新；仍有上游未核实项"
+      : "## 已核实记录未发现可用更新（未登记或未扫描项不在此结论内）");
     lines.push("");
   }
   if (dependencyUpdates.length || pythonUpdates.length) {
@@ -378,7 +435,7 @@ export function renderPlan({ root, registry, inventory, state, iso }) {
     lines.push("");
   }
   const stale = Object.entries(state.registry_cache ?? {})
-    .filter(([, entry]) => !entry?.latest)
+    .filter(([, entry]) => !entry?.latest || !upstreamObservation(entry).verified)
     .map(([name]) => name);
   if (stale.length) {
     lines.push("## 附：复核项（未取到上游版本；AI 重试 / 人工兜底）");
@@ -398,6 +455,7 @@ async function main() {
     all: has("--all"),
     offline: has("--offline"),
     exitZero: has("--exit-zero"),
+    dryRun: has("--dry-run"),
   });
   process.exit(exitCode);
 }

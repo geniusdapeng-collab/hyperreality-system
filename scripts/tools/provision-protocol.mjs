@@ -14,7 +14,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createLabel, createPull, createBranchProtection, listBranchProtections, listLabels,
-  branchProtectionPayload, rawFile, requireToken } from "./cnb-api.mjs";
+  branchProtectionPayload, validateBranchProtection, rawFile, requireToken,
+  gitAuthenticationEnvironment, redactCredentials } from "./cnb-api.mjs";
+export { gitAuthenticationEnvironment } from './cnb-api.mjs';
 import { isIsolated } from "./fleet-rules.mjs";
 
 export const FLEET_LABELS = {
@@ -75,14 +77,8 @@ export function injectGate(cnbYaml) {
 }
 
 function git(cwd, args, options = {}) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", ...options }).trim();
-}
-
-function authenticatedUrl(slug, token) {
-  // 不写成 `https://user:secret@host` 字面量：基座密钥扫描会把该形态判为「凭据写进 URL」。
-  // 这里的 token 是运行时参数（来自环境/调用方），并非落盘秘密；拼段构造即可表达同一语义。
-  const userInfo = ["cnb", encodeURIComponent(token)].join(":");
-  return `https://${userInfo}@cnb.cool/${slug}.git`;
+  try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options }).trim(); }
+  catch (error) { throw new Error(redactCredentials(`Git ${args[0]} 失败：${error.stderr?.toString() ?? error.code ?? 'unknown'}`)); }
 }
 
 export async function ensureLabels(slug, { dryRun = false, log = console.log } = {}) {
@@ -98,7 +94,7 @@ export async function ensureLabels(slug, { dryRun = false, log = console.log } =
   if (extras.length) {
     const { deleteLabel } = await import("./cnb-api.mjs");
     for (const name of extras) {
-      if (!dryRun) await deleteLabel(slug, name).catch(() => {});
+      if (!dryRun) await deleteLabel(slug, name);
     }
   }
   log(`  标签：新增 ${created.length}（${created.join(", ") || "无"}）；清理非标准 ${extras.length}`);
@@ -107,13 +103,20 @@ export async function ensureLabels(slug, { dryRun = false, log = console.log } =
 
 export async function ensureBranchProtection(slug, { dryRun = false, log = console.log } = {}) {
   const rules = await listBranchProtections(slug);
-  const hasMain = rules.some((rule) => rule.rule === "main");
-  if (hasMain) {
-    log("  分支保护：已存在 main 规则");
+  const main = rules.find((rule) => rule.rule === "main");
+  if (main) {
+    const errors = validateBranchProtection(main);
+    if (errors.length) throw new Error(`main 分支保护不足，必须先经授权收紧平台策略：${errors.join("；")}`);
+    log("  分支保护：main 的 PR、状态检查、评审与管理员限制已回读有效");
     return { created: false };
   }
   if (!dryRun) await createBranchProtection(slug, branchProtectionPayload());
-  log("  分支保护：已创建 main 规则（强制 PR + 必需状态检查 + 禁强推/删除）");
+  if (!dryRun) {
+    const actual = (await listBranchProtections(slug)).find(rule => rule.rule === "main");
+    const errors = validateBranchProtection(actual);
+    if (errors.length) throw new Error(`分支保护创建后回读不满足契约：${errors.join("；")}`);
+  }
+  log(`  分支保护：${dryRun ? "计划创建" : "已创建并回读"} main（PR + 状态检查 + 评审；禁管理员直推/强推/删除）`);
   return { created: true };
 }
 
@@ -126,10 +129,14 @@ export async function provisionProtocol(slug, options = {}) {
     allowIsolated = false,
     log = console.log,
   } = options;
+  for (const target of [slug, baseRepo]) if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(target)) throw new Error('无效 CNB 仓库 slug');
+  try { execFileSync('git', ['check-ref-format', '--branch', branch], { stdio: ['ignore', 'pipe', 'pipe'] }); }
+  catch { throw new Error('无效纳管分支'); }
   const token = requireToken();
   log(`== 纳管 ${slug}`);
 
   const fleetText = await rawFile(baseRepo, "main", "sync/child-repos.json");
+  if (!fleetText) throw new Error("无法读取隔离仓登记表，拒绝纳管");
   if (isIsolated(slug, fleetText) && !allowIsolated) {
     throw new Error(
       `${slug} 已登记为隔离副本（sync/child-repos.json#isolatedRepos）：不接收基座下发、也不向基座回流。` +
@@ -142,9 +149,10 @@ export async function provisionProtocol(slug, options = {}) {
 
   const workdir = mkdtempSync(join(tmpdir(), "workloom-provision-"));
   const repoDir = join(workdir, "repo");
-  const remote = authenticatedUrl(slug, token);
+  const remote = `https://cnb.cool/${slug}.git`;
+  const authEnv = gitAuthenticationEnvironment(token);
   try {
-    git(workdir, ["clone", "--depth", "1", remote, "repo"]);
+    git(workdir, ["clone", "--depth", "1", remote, "repo"], { env: authEnv });
     git(repoDir, ["config", "user.name", "cnb-protocol-bot"]);
     git(repoDir, ["config", "user.email", "protocol-bot@cnb.cool"]);
     const mainSha = git(repoDir, ["rev-parse", "HEAD"]);
@@ -153,8 +161,7 @@ export async function provisionProtocol(slug, options = {}) {
     for (const asset of PROTOCOL_ASSETS) {
       const content = await rawFile(baseRepo, "main", asset);
       if (!content) {
-        log(`  ! 跳过缺失资产 ${asset}`);
-        continue;
+        throw new Error(`必需协议资产缺失：${asset}，拒绝创建不完整纳管 PR`);
       }
       const target = join(repoDir, asset);
       mkdirSync(dirname(target), { recursive: true });
@@ -169,11 +176,12 @@ export async function provisionProtocol(slug, options = {}) {
     if (existsSync(cnbPath)) {
       const original = readFileSync(cnbPath, "utf8");
       const { content, changed, mode } = injectGate(original);
+      if (mode === "unsupported") throw new Error("无法识别 .cnb.yml 结构，拒绝缺少协议门禁的纳管");
       if (changed && !dryRun) writeFileSync(cnbPath, content, "utf8");
       log(`  门禁流水线：${changed ? `已注入（${mode}）` : mode === "already" ? "已存在" : "结构未识别，需人工处理"}`);
       if (changed) files.push(".cnb.yml");
     } else {
-      log("  ! 未找到 .cnb.yml，跳过门禁注入");
+      throw new Error("必需 .cnb.yml 缺失，拒绝无门禁纳管");
     }
 
     if (!files.length) {
@@ -183,7 +191,7 @@ export async function provisionProtocol(slug, options = {}) {
     if (dryRun) return { slug, changed: true, files, dryRun: true };
 
     git(repoDir, ["checkout", "-b", branch]);
-    git(repoDir, ["add", "-A"]);
+    git(repoDir, ["add", "--", ...files]);
     const layer = options.layer ?? "base";
     git(repoDir, [
       "commit",
@@ -194,7 +202,7 @@ export async function provisionProtocol(slug, options = {}) {
       log("  --skip-push：已本地提交，未推送");
       return { slug, changed: true, files, branch, pushed: false };
     }
-    git(repoDir, ["push", "origin", `HEAD:refs/heads/${branch}`]);
+    git(repoDir, ["push", "origin", `HEAD:refs/heads/${branch}`], { env: authEnv });
     const pull = await createPull(slug, {
       title: `sync: 纳管开发协作协议（文档 + CI 校验 + 门禁 stage） [${options.taskId ?? "T-2026-0918-0004"}]`,
       head: branch,

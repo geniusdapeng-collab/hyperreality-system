@@ -913,6 +913,11 @@
 
 ### 11.2 profile v2（`acceptance/profile.json`）
 
+以下配置展示字段与任务形状，不是业务通过证据。健康端点 HTTP 200 只证明可达；产品交付还需成功终态、同线程/任务回执、实际事件与结果状态断言同时成立。
+P0 重复可靠性按每个实际 P0 任务的唯一 trial 统计，每个至少 5 次；P1 次数或 profile 中的声明次数不能补足 P0。只执行部分任务集或降低 trial override 时，对应可靠性项保持未验证。
+生成媒体的默认/请求时长不能冒充产物时长，必须下载、散列并实际解码。当前真实 gateway、DSH 与产品派单入口缺可信总 token 上界时，在任何付费 I/O 前 blocked；配置模型与凭据就绪不能解除此限制。
+回归文件使用 `workloom.acceptance-regression/v2`，实际聚合进程绑定完整 required 输入、各命令的运行记录与机器观测；手写“通过”摘要无效。coverage 固定 276 项，报告生成与验收通过分别表示。
+
 ```jsonc
 {
   "schemaVersion": "workloom.acceptance-profile/v2",
@@ -1329,8 +1334,8 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 | `client-runtime` | 已安装的桌面客户端运行时（自包含 PG/NATS + 客户端内置模型配置；缺省 server 8787 / web 5173） | 只读探测、真实模型任务、目标内既有夹具 | 迁移种子复位、关停客户端进程、改写客户端 `.env` |
 | `deployed` | 客户可访问的正式地址 + 正式库 | 只读探测、真实模型任务 | 未显式 `--allow-prod-writes` 的任何写入；未声明 target 的默认证 |
 
-声明方式：`acceptance/profile.json#environment`，或 CLI `--env <档位>`（CLI 优先）。
-生产档位缺 `environment.target`（`deployed`）时验收器判“目标未声明”，不得默认打本机端口。
+声明方式：`acceptance/profile.json#environment`、CLI `--env <档位>` 与父执行器 `ACCEPTANCE_ENV_KIND` 必须一致；冲突时拒绝运行，不能用 CLI 静默覆盖生产声明。
+`deployed` 必须显式声明 `environment.target.apiUrl`；页面探针另需对应三端 URL。地址不得包含凭据、查询参数或 fragment，缺目标不得默认打本机端口。
 
 ### 18.3 四条真实链路（证据深度不同，报告必须逐任务标注）
 
@@ -1342,6 +1347,8 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 | `product-dispatch` | 经产品自身入口（trpc `threads.dispatch` + `threads.get`）派单，用**环境状态/回执**判分 | 产品运行时 → model-router → provider | `asserts` + `falseSuccess` 判定 + 回执 |
 
 纪律：`model-gateway` 与 `gen-http` **不含围栏与账本**，不能替代 `dsh-harness`；要宣称“走通生产链路（含 DeepSeek Harness）”，必须至少有一条 `dsh-harness` 任务通过。
+
+**当前执行器边界（2026-10-02 修复）**：上表是链路与证据目标，不是可用性认证。非 selftest 的 gateway、DSH 与产品派单均没有可证明的输入/上下文/重试/多步调用总 token 上界，CLI 在预占、登录、子进程或 provider HTTP 前 blocked，并留下 `called:false`。低层受控本地 HTTP/子进程替身验证实际 usage、围栏事件与拒绝路径，不能计为生产模型通过。`gen-http` 只有在环境/授权/数量时长/预算前提满足时才允许发请求；未知实际用量冻结后续全部模态。解除 LLM 阻断需先实现可信请求总量上界与每次实际调用的完整记账，并通过独立验收。
 
 ### 18.4 任务矩阵与配额硬闸（默认值 = 产品所有者 2026-09-20 口径）
 
@@ -1359,8 +1366,8 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 执行纪律：
 
 1. **超限即中止**（fail-closed）：`budget.reserve` 拒绝后任务状态写 `blocked` 并进台账，禁止静默跳过；
-2. **先占额后回填**：实际用量少于预估不退还（保守口径），多于预估补记；
-3. **产物必须落盘**：生图/生视频产物写入 `live/artifacts/`，URL 必须可下载（否则判失败，对应 T-54）；
+2. **先占额后回填**：按可信请求上界预占并以实际 usage 结算，累计 token 不随单次结算重置，同一 reservation 只结算一次；未知实际用量保留预占并冻结所有模态的后续付费调用。无法证明请求上界时，调用前 blocked。`expectedTokens` 或仅限制输出的 `maxTokens` 不算可信总量上界；
+3. **产物必须落盘**：生图/生视频产物写入 `live/artifacts/`，逐文件散列并实际解码校验格式、数量与视频时长。URL、请求 duration、缺省 duration 或只检查 magic bytes 不能证明产物可用（对应 T-54）；
 4. **凭据只从环境/秘密存储解析，且必须**自动发现**（v3.1.1 起，验收器内置）**：
    报告只写“来源 + 键名 + 已配置/缺失”，密钥永不落盘、不进日志；key 只进 Keychain、仓库外秘密文件或客户端运行时 `.env`，
    不得贴进聊天/Issue/PR/任何入库文件。
@@ -1378,10 +1385,9 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 
    - 同名键**不覆盖**已有值（避免串仓）；`--no-auto-keys` 可关闭 ③④⑤，`--no-keys-from-client` 可关闭 ⑥；
    - **自证**：任一任务报告里 `live-report.json#credentialSources` 必须列出实际命中的来源与键名；
-     三模型 `ready=true` 才允许进入真实调用；
+     模型 `ready=true` 只代表凭据可用，仍须满足请求上界、授权、预算与链路支持前提；
    - **缺凭据 = blocked**（不是 fail，也不是通过）；`--require-live` 时整体非零退出，适配发布门禁；
-   - **封存一次即可**：`security add-generic-password -a "$USER" -s workloom-live-deepseek -w '<key>' -U`；
-     `security add-generic-password -a "$USER" -s workloom-live-ark -w '<key>' -U`；或写入 `~/.workloom/live.env`。
+   - **封存方式**：通过「钥匙串访问」添加 `workloom-live-deepseek` / `workloom-live-ark` 对应通用密码，或由受控包装脚本通过 stdin 写入。真实值不放进命令参数、文档或日志；仓库外 `~/.workloom/live.env` 仍须权限 `600`。
    - **客户端打包纪律**：key 不得打进安装包/载荷（不变量 11）；安装后在**本机**注入客户端 `runtime/.env`
      或 Keychain，使客户端首启即真实可用（详见 §18.7）。
 5. **selftest 只证明管道**：`--selftest` 用本地替身，产物是合成数据，报告必须标记“非生产实测证据”。
@@ -1390,6 +1396,7 @@ AVR: require ΔKPI>0 ∧ ΔADR1≥+5pp ∧ ΔHIR_NI≤-5pp ∧ HMPO≤0.9B ∧ g
 
 - 判定：见 §9.1 的 P 层判定；`blocked` 与 `selftest` 一律“未验证”，不得写“通过”；
 - 报告：`live-report.json/md`（环境指纹、模型就绪、逐任务链路与回执、配额台账、未验证清单）；
+- `live.budgets.maxCostCny` 为估算成本门禁，真实供应商账单需单独对账；替身测试不能证明供应商扣费或客户运行状态。报告必须区分调用前 blocked、已调用但未知实际用量、真实失败和未执行。
 - 命令：
 
 ```bash

@@ -1,7 +1,8 @@
 {
+ "schema": "workloom.capabilities/v2",
  "repo": "hyperreality",
  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）",
- "generatedAt": "2026-09-19T06:54:30.770Z",
+ "generatedAt": "2026-10-02T18:28:12.232Z",
  "demoPages": [
   "hyperreality-demo-c.html",
   "hyperreality-demo-mobile.html",
@@ -14,22 +15,52 @@
  "groups": [
   {
    "icon": "🖥",
-   "title": "三端应用（开箱即看）",
+   "title": "三端应用入口",
    "items": [
     {
      "name": "PC 端 · B 端工作台",
      "how": "`pnpm preview:all` → http://localhost:3000",
-     "desc": "经营主页/任务中心/规则中心/装配中心，全模拟运行态"
+     "desc": "经营主页/任务中心/规则中心/装配中心，目录描述不代表运行通过",
+     "id": "cap:34fa4c1e489423b4",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "移动端 · B 端高保真",
      "how": "`pnpm preview:all` → http://localhost:3001",
-     "desc": "6 页高保真演示页 + 手机壳容器"
+     "desc": "6 页演示资产；运行状态须验收",
+     "id": "cap:beb247b8723f2514",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "移动端 · C 端 AI 服务前台",
      "how": "`pnpm preview:all` → http://localhost:3002",
-     "desc": "小程序入口 H5 模拟：对话/服务/工单/消息/我的，演示直登"
+     "desc": "对话/服务/工单/消息入口；目录存在不代表已验证",
+     "id": "cap:5bb91f07f8363f76",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     }
    ]
   },
@@ -40,17 +71,47 @@
     {
      "name": "bundles/ai-pm/",
      "how": "见 bundles/ai-pm/ 目录",
-     "desc": "围栏/技能/员工/对象/管线一键装配"
+     "desc": "围栏/技能/员工/对象/管线定义；装配结果需按环境验证",
+     "id": "cap:c2affff1597e158b",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "bundles/ai-video/",
      "how": "见 bundles/ai-video/ 目录",
-     "desc": "围栏/技能/员工/对象/管线一键装配（33 个数字员工岗位 · 9 个技能）"
+     "desc": "围栏/技能/员工/对象/管线定义；装配结果需按环境验证",
+     "id": "cap:daba5cfaea701a15",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "bundles/hotel/",
      "how": "见 bundles/hotel/ 目录",
-     "desc": "围栏/技能/员工/对象/管线一键装配"
+     "desc": "围栏/技能/员工/对象/管线定义；装配结果需按环境验证",
+     "id": "cap:2f3bfa6de7ccc126",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     }
    ]
   },
@@ -61,17 +122,62 @@
     {
      "name": "数字员工中心（`/agents`）",
      "how": "`pnpm preview:all` → http://localhost:3000/agents",
-     "desc": "人机混编通讯录：员工档案 / 围栏对账 / 30 天战绩 / 派遣 / 夜班自动上线（本包 33 个岗位）"
+     "desc": "人机混编通讯录：员工档案 / 围栏绑定 / 30 天战绩 / 段位 / 派遣 / 夜班 22:00-08:00 自动上线",
+     "id": "cap:6b96e2fe6c064fb5",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "织伴数字人（Live2D 常驻浮层）",
      "how": "打开任一 PC 页面右下角；`pnpm preview:all`",
-     "desc": "全页面常驻数字人：语音播报 + 口型/表情/动作 + 三态（小角落 / 大形象 / 屏保）+ 记忆透明面板"
+     "desc": "全页面常驻数字人：语音播报 + 口型/表情/动作 + 三态（小角落 / 大形象 / 屏保）+ 记忆透明面板",
+     "id": "cap:5cbbd9a5f2f82e36",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "语音与口型引擎",
      "how": "docs/voice-and-avatar-delivery-contract.md",
-     "desc": "TTS 音色映射 + 中文逐字开口度时间线 + 音频振幅驱动口型；人设/音色可切换"
+     "desc": "TTS 音色映射 + 中文逐字开口度时间线 + 音频振幅驱动口型；人设/音色可切换",
+     "id": "cap:6a3ba38265d74473",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
+    },
+    {
+     "name": "Live2D 渲染后端与资产",
+     "how": "apps/web/public/live2d/",
+     "desc": "pixi-live2d-display + Cubism core（MIT/官方 SDK）；换形象=换模型文件，驱动链路零改动",
+     "id": "cap:3116df9376081195",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     }
    ]
   },
@@ -80,14 +186,34 @@
    "title": "操作电脑能力（本仓自带 · 可装生产工作站）",
    "items": [
     {
-     "name": "computer-use 三层感知（65 动作）",
+     "name": "computer-use 三层感知入口",
      "how": "`pnpm computer:preflight && pnpm computer:smoke`",
-     "desc": "L1 浏览器 DOM 零 token / L2 全 GUI 语义树 / L3 像素兜底——克隆即可用，不依赖沙箱"
+     "desc": "浏览器 DOM / GUI 语义树 / 像素兜底；安装、权限及运行结果须预检",
+     "id": "cap:1a3475f87ce14c4b",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "HTTP 远程驱动 + MCP server",
      "how": "`pnpm computer:serve` / `pnpm computer:mcp`",
-     "desc": "大脑/手分离：专用工作站被云端 Agent/CI 远程驱动（docs/computer-use-production.md）"
+     "desc": "大脑/手分离：专用工作站被云端 Agent/CI 远程驱动（docs/computer-use-production.md）",
+     "id": "cap:5794b746b2484bd9",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     }
    ]
   },
@@ -98,77 +224,227 @@
     {
      "name": "围栏 DSL 引擎",
      "how": "见 docs/capability-map.md L3",
-     "desc": "事前裁决：支持 in/contains_any 列表语义"
+     "desc": "事前裁决：支持 in/contains_any 列表语义",
+     "id": "cap:0ed8d235033b22df",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "技能保鲜环（下行分发）",
      "how": "见 docs/capability-map.md L3",
-     "desc": "官方技能一键投放：五道预检 + L0/L1 静默/L2 审批 + 一键回滚 + 全事件留痕"
+     "desc": "官方技能一键投放：五道预检 + L0/L1 静默/L2 审批 + 一键回滚 + 全事件留痕",
+     "id": "cap:6275ec3e7eb37073",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "L2 编排（ASK/QUEST）",
      "how": "见 docs/capability-map.md L3",
-     "desc": "一句话目标自动拆解多步骤并派发"
+     "desc": "一句话目标自动拆解多步骤并派发",
+     "id": "cap:f7b74cf7056e59e5",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "夜班自动运行",
      "how": "见 docs/capability-map.md L3",
-     "desc": "离线任务推进，次日晨报"
+     "desc": "离线任务推进，次日晨报",
+     "id": "cap:f8d4d4832f6dd333",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "模型路由",
      "how": "见 docs/capability-map.md L3",
-     "desc": "离线确定性模型，无密钥可跑"
+     "desc": "离线确定性模型，无密钥可跑",
+     "id": "cap:9509763cabc81d89",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "全平台 RPA 发布",
      "how": "见 docs/capability-map.md L3",
-     "desc": "抖音/小红书/B站/YouTube，BrowserDriver 注入接真浏览器"
+     "desc": "抖音/小红书/B站/YouTube，BrowserDriver 注入接真浏览器",
+     "id": "cap:26dbb80053f26847",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "五元事件 + RLS 隔离",
      "how": "见 docs/capability-map.md L3",
-     "desc": "全链路可追溯、可验链"
+     "desc": "全链路可追溯、可验链",
+     "id": "cap:32761968a453afc3",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "IM 渠道",
      "how": "见 docs/capability-map.md L3",
-     "desc": "企微等出入站，审批卡片直达手机"
+     "desc": "企微等出入站，审批卡片直达手机",
+     "id": "cap:0f358f9adabef072",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "C 端 AI 服务前台",
      "how": "见 docs/capability-map.md L3",
-     "desc": "对话/知识库 385 问/工单/SLA"
+     "desc": "对话/知识库 385 问/工单/SLA",
+     "id": "cap:8fd2b28194f66946",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "自动巡检",
      "how": "见 docs/capability-map.md L3",
-     "desc": "异常发现→派发→处置闭环"
+     "desc": "异常发现→派发→处置闭环",
+     "id": "cap:c158a390e84ef60d",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "人审台",
      "how": "见 docs/capability-map.md L3",
-     "desc": "必审事项人拍板，AI 不越权"
+     "desc": "必审事项人拍板，AI 不越权",
+     "id": "cap:2f47c6ea3ac45bde",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "资产管理",
      "how": "见 docs/capability-map.md L3",
-     "desc": "素材/成片全生命周期"
+     "desc": "素材/成片全生命周期",
+     "id": "cap:62a58be0dbaa543b",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "成本台账",
      "how": "见 docs/capability-map.md L3",
-     "desc": "每次模型调用可计量"
+     "desc": "每次模型调用可计量",
+     "id": "cap:6fb897b448046de1",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "交易流",
      "how": "见 docs/capability-map.md L3",
-     "desc": "商机到成交全链路"
+     "desc": "商机到成交全链路",
+     "id": "cap:e6d3c8dd0035e92d",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "社媒监听",
      "how": "见 docs/capability-map.md L3",
-     "desc": "评论/询盘意图雷达"
+     "desc": "评论/询盘意图雷达",
+     "id": "cap:883067f8e43e90ae",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     }
    ]
   },
@@ -179,32 +455,92 @@
     {
      "name": "一键安装（bootstrap）",
      "how": "`pnpm setup`",
-     "desc": "克隆后一条命令装好全部能力：环境/依赖/PG/迁移种子/桌面栈，幂等"
+     "desc": "环境/依赖/PG/迁移种子/可选桌面栈初始化入口；结果以预检和执行回执为准",
+     "id": "cap:1855991afc03482b",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "主测试套件",
      "how": "`pnpm suite`",
-     "desc": "数百条场景用例逐条执行"
+     "desc": "数百条场景用例逐条执行",
+     "id": "cap:e2668fa2e16aba36",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "发布门禁",
      "how": "`pnpm release:gate`",
-     "desc": "未全过禁止发布（硬性）"
+     "desc": "未全过禁止发布（硬性）",
+     "id": "cap:6a5047b97a3f75c0",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "五元事件验链",
      "how": "`pnpm db:verify-chain`",
-     "desc": "事件链完整性校验"
+     "desc": "事件链完整性校验",
+     "id": "cap:aeaf1dc697fa9bb9",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "Agent 能力巡游",
      "how": "`pnpm agent:tour`",
-     "desc": "AI Agent 一键自检全部能力"
+     "desc": "遍历登记能力的检查入口；覆盖与结果看本轮报告",
+     "id": "cap:8e7bf4efd0c1911c",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "环境自检",
      "how": "`pnpm doctor`",
-     "desc": "一屏排查环境问题"
+     "desc": "一屏排查环境问题",
+     "id": "cap:6ec73d2f23bcd4fe",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     }
    ]
   },
@@ -215,27 +551,77 @@
     {
      "name": "高保真演示页 ×6",
      "how": "http://localhost:3001",
-     "desc": "糖果色，含手机壳容器"
+     "desc": "糖果色，含手机壳容器",
+     "id": "cap:f83fe3e064fa848f",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "官网静态站",
      "how": "apps/site/index.html",
-     "desc": "对外产品故事"
+     "desc": "对外产品故事",
+     "id": "cap:0cd9bdcd5775ef3f",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "自带技能 ×8",
      "how": "skills/official/",
-     "desc": "client-demo-recorder / component-integration / cross-platform-review / deal-flow 等"
+     "desc": "client-demo-recorder / component-integration / cross-platform-review / deal-flow 等",
+     "id": "cap:7c34aa08db8de015",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "能力导览 PPT",
      "how": "docs/capability-tour.pptx",
-     "desc": "路演/汇报直接用"
+     "desc": "路演/汇报直接用",
+     "id": "cap:ba77e72f3fa367ab",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     },
     {
      "name": "Mock 数据体系",
      "how": "mock/README.md",
-     "desc": "种子 + 离线模型 + 演示直登，开箱即用"
+     "desc": "种子 + 离线模型 + 演示直登；显式模拟环境",
+     "id": "cap:b1ab4e4436bdbe4f",
+     "availability": {
+      "discoverable": true,
+      "callable": "unverified",
+      "verified": "unverified",
+      "environment": null,
+      "lastSuccess": null,
+      "evidence": null,
+      "reason": "仅目录与入口元数据；没有对应运行证据"
+     }
     }
    ]
   }

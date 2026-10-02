@@ -27,7 +27,8 @@
     },
     "baseline": {
       "type": "object",
-      "description": "三基线：审计 / 修复 / 验收。任何阶段开始前显式对齐（规范 §1.2）",
+      "required": ["audit", "repair", "acceptance"],
+      "description": "三基线：审计 / 修复 / 验收。M0 骨架可用 null；gate/handoff 必须是本仓存在的完整 SHA，并实际验证 audit→repair→acceptance=当前干净 HEAD。",
       "properties": {
         "audit": { "$ref": "#/$defs/baselineStamp" },
         "repair": { "$ref": "#/$defs/baselineStamp" },
@@ -72,7 +73,8 @@
           "name": { "type": "string" },
           "command": { "type": "string" },
           "result": { "enum": ["pass", "fail", "not-run"] },
-          "evidence": { "type": "string" },
+          "evidence": { "$ref": "evidence.schema.json#/$defs/artifact" },
+          "run": { "$ref": "evidence.schema.json#/$defs/artifact" },
           "ran_at": { "type": "string", "format": "date-time" }
         },
         "additionalProperties": true
@@ -91,8 +93,9 @@
   "$defs": {
     "baselineStamp": {
       "type": "object",
+      "required": ["commit"],
       "properties": {
-        "commit": { "type": ["string", "null"] },
+        "commit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
         "branch": { "type": ["string", "null"] },
         "remote": { "type": ["string", "null"] },
         "fetched_at": { "type": ["string", "null"] },
@@ -104,16 +107,19 @@
     },
     "evidence": {
       "type": "object",
-      "required": ["type", "ref"],
+      "required": ["type", "ref", "sha256"],
       "properties": {
         "type": { "enum": ["code", "log", "db", "http", "ui", "script", "receipt", "doc"] },
         "ref": {
           "type": "string",
           "minLength": 3,
-          "description": "code 类必须带 @<commit>（如 apps/server/src/service/x.ts:42@abc1234）；其余为路径 / 查询 / 响应原文位置"
+          "description": "code 必须是仓内 file:line@commit，sha256 对应审计提交的真实 blob；其余是相对台账目录的真实文件，不能用查询文本/目录替代。"
         },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "commit": { "$ref": "evidence.schema.json#/$defs/commit" },
         "note": { "type": "string" }
       },
+      "allOf": [{ "if": { "properties": { "type": { "const": "code" } } }, "then": { "properties": { "ref": { "pattern": "^.+:[0-9]+@[0-9a-f]{7,40}$" } } }, "else": { "required": ["commit"] } }],
       "additionalProperties": true
     },
     "assertion": {
@@ -124,8 +130,10 @@
         "given": { "type": "string", "minLength": 1, "description": "输入 / 前置条件" },
         "expect": { "type": "string", "minLength": 1, "description": "可判定的预期（禁止『优化/提升/加强』类不可验收措辞）" },
         "command": { "type": "string", "minLength": 3, "description": "可运行的通过/失败信号" },
+        "exec": { "$ref": "evidence.schema.json#/$defs/exec" },
         "last_result": { "enum": ["pass", "fail", "not-run"] },
-        "evidence": { "type": "string", "description": "断言输出原文路径（outputs/mine-clear/<任务号>/evidence/...）" }
+        "evidence": { "$ref": "evidence.schema.json#/$defs/artifact" },
+        "run": { "$ref": "evidence.schema.json#/$defs/artifact" }
       },
       "additionalProperties": true
     },
@@ -150,7 +158,7 @@
         "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" }, "minItems": 1 },
         "root_cause": {
           "type": "object",
-          "required": ["file"],
+          "required": ["file", "line", "commit"],
           "properties": {
             "file": { "type": "string" },
             "line": { "type": "integer", "minimum": 1 },
@@ -169,7 +177,7 @@
           "required": ["command"],
           "properties": {
             "command": { "type": "string" },
-            "evidence": { "type": "string" }
+            "evidence": { "oneOf": [{ "$ref": "evidence.schema.json#/$defs/artifact" }, { "type": "null" }] }
           },
           "additionalProperties": true
         },
@@ -177,15 +185,17 @@
         "fixed_by": { "type": ["string", "null"], "description": "执行修复的会话/角色标识" },
         "verified_by": { "type": ["string", "null"], "description": "独立验证者标识，必须不同于 fixed_by（规范纪律 7）" },
         "verified_at": { "type": ["string", "null"], "format": "date-time" },
-        "verification_evidence": { "type": "string", "description": "独立验证的断言输出路径" },
+        "verification_evidence": { "oneOf": [{ "$ref": "evidence.schema.json#/$defs/artifact" }, { "type": "null" }], "description": "本卡 acceptance 运行记录的 path/sha256/commit，必须命中实际断言 run。" },
         "waiver": {
           "type": ["object", "null"],
           "description": "豁免：仅在无法做到角色分离时使用，必须写明理由与批准来源",
           "properties": {
             "reason": { "type": "string" },
-            "approved_by": { "type": "string" }
+            "approved_by": { "type": "string" },
+            "approved_at": { "type": "string", "format": "date-time" },
+            "source": { "$ref": "evidence.schema.json#/$defs/artifact" }
           },
-          "required": ["reason"],
+          "required": ["reason", "approved_by", "approved_at", "source"],
           "additionalProperties": true
         },
         "covered_by": { "type": ["string", "null"], "description": "state=covered 时的覆盖提交（含 commit）" },
@@ -212,7 +222,11 @@
         },
         {
           "if": { "properties": { "state": { "const": "verified" } }, "required": ["state"] },
-          "then": { "required": ["verified_by", "verified_at", "verification_evidence"] }
+          "then": { "required": ["fixed_by", "verified_by", "verified_at", "verification_evidence"], "properties": { "fixed_by": { "type": "string", "minLength": 1 }, "verified_by": { "type": "string", "minLength": 1 }, "verified_at": { "type": "string", "format": "date-time" }, "verification_evidence": { "$ref": "evidence.schema.json#/$defs/artifact" } } }
+        },
+        {
+          "if": { "properties": { "state": { "enum": ["fixed", "verified"] } }, "required": ["state"] },
+          "then": { "required": ["fixed_by"], "properties": { "assertions": { "items": { "required": ["exec", "last_result", "run", "evidence"], "properties": { "last_result": { "const": "pass" } } } } } }
         },
         {
           "if": { "properties": { "state": { "const": "covered" } }, "required": ["state"] },

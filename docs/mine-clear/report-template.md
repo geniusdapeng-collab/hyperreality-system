@@ -14,6 +14,7 @@
 | 轮次 | 第 N 轮（发现 / 修复 / 复验） |
 | 档位 | A 全景（M0–M6）｜B1 静态｜B2 动态｜B3 联动｜B4 交付面｜C 修复 |
 | 审计基线 | `<commit>`（`git fetch` 于 `<时间>`，是否等于云端 main：是/否） |
+| 修复基线 / 验收基线 | `<完整40位SHA>` / `<完整40位SHA>`；actual Git 后代关系及 HEAD 对齐结果 |
 | 环境 | `local-preview` / `client-runtime` / `deployed`；数据库：`<库名>`；配置：出厂默认 |
 | 执行角色 | 发现者 / 修复者 / 验证者（三者标识必须可区分） |
 
@@ -54,12 +55,12 @@
 | M2 动态 | | 脚本：`evidence/...` | |
 | M3 联动 | | 变更前后各面响应 | |
 | M4 交付面 | | 门禁与性能记录 | |
-| M5 修复 | | 断言输出原文 | |
+| M5 修复 | | `runs/<ID>.json` + 输出文件 `{path,sha256,commit}` | |
 | M6 交接 | | `handoff.json` | |
 
 ## 5. 证据分级
 
-- **A（精读/真机实测）**：
+- **A（代码精读；真机实测另注明环境/步骤/原始证据）**：
 - **B（全量机检）**：
 - **C（抽样）**：
 - **D（推断/未验证）**：
@@ -102,4 +103,12 @@
 | 每条未闭环项都有回归路径 | 是 / 否（否 → 不得交接） |
 | 环境档位声明 | `local-preview` / `client-runtime` / `deployed`（决定报告能怎么写） |
 | 独立验证者与修复者不同 | 是 / 否（否 → 需 `waiver` 且写明批准来源） |
+| 真实角色来源 | 协调者分配的未参与修复会话及原始批准/会话引用；actor 字符串与本地 JSON 不构成身份认证 |
+| 新执行先失效旧绿 | 进程启动前 `unfixed/not-run`、旧验收基线与验证声明清除；证据发布失败/中断保持阻断 |
+| 每条闭环断言确实通过 | 实际 exit 0、无信号、validation.ok=true、正确 requested/实际 argv/card_id/assertion_index/actor/role；Node逐文件真实passed>0，0匹配/全skip/空文件不能闭环 |
+| 发现与运行证据能回读 | 非空普通文件、无路径越界/symlink，sha256与审计blob或实际输出一致 |
+| P0/P1 全部独立 verified | 是 / 否；fixed/covered/wontfix不能替代当前基线的独立验收 |
+| 豁免有独立批准来源 | `reason/approved_by/approved_at/source` 与批准 JSON 的 commit/subject/scope 一致；只有理由不得放行 |
+| RDAS 固定 276 项 | pass/fail/unverified/批准不适用逐项分列；原始expected/actual与同ID观测一致，不从聚合摘要扩展通过 |
+| 报告生成与验收通过分列 | `reportGenerated` / `acceptancePassed` / 实际exit；缺证据保持unverified与非零 |
 | 验收命令 | `pnpm acceptance:profile:check` → `node scripts/acceptance/fleet-run.mjs --repo <repo> --env <档位> [--live-only]` |

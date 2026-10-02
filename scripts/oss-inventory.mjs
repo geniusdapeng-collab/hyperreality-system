@@ -22,7 +22,7 @@
  * 纪律：本脚本只读仓库、零网络；写盘仅限清单文档（--write）。
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -220,7 +220,10 @@ export function compareVersions(a, b) {
   const pb = normalizeVersion(b);
   if (!pa || !pb) return null;
   const split = (value) => {
-    const [core, pre = ""] = value.split("-");
+    const withoutBuild = value.split('+')[0];
+    const separator = withoutBuild.indexOf('-');
+    const core = separator < 0 ? withoutBuild : withoutBuild.slice(0, separator);
+    const pre = separator < 0 ? '' : withoutBuild.slice(separator + 1);
     const nums = core.split(".").map((part) => Number.parseInt(part, 10));
     return { nums, pre };
   };
@@ -234,7 +237,17 @@ export function compareVersions(a, b) {
   if (A.pre === B.pre) return 0;
   if (!A.pre) return 1;
   if (!B.pre) return -1;
-  return A.pre > B.pre ? 1 : -1;
+  const left = A.pre.split('.'); const right = B.pre.split('.');
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    if (index >= left.length) return -1;
+    if (index >= right.length) return 1;
+    if (left[index] === right[index]) continue;
+    const ln = /^(?:0|[1-9]\d*)$/.test(left[index]); const rn = /^(?:0|[1-9]\d*)$/.test(right[index]);
+    if (ln && rn) return BigInt(left[index]) > BigInt(right[index]) ? 1 : -1;
+    if (ln !== rn) return ln ? -1 : 1;
+    return left[index] > right[index] ? 1 : -1;
+  }
+  return 0;
 }
 
 export function isOutdated(current, latest) {
@@ -570,9 +583,14 @@ export function buildInventory(root) {
 /* ============================ 登记表 / 状态 ============================ */
 
 export function loadRegistry(root) {
-  const registry = readJson(join(root, REGISTRY_FILE));
-  if (!registry) return { meta: {}, components: [] };
-  return { meta: registry.meta ?? {}, components: Array.isArray(registry.components) ? registry.components : [] };
+  const path = join(root, REGISTRY_FILE); let registry;
+  try {
+    const info = lstatSync(path);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error('not a regular file');
+    registry = JSON.parse(readFileSync(path, 'utf8'));
+  } catch { throw new Error(`${REGISTRY_FILE} 必需登记表缺失、无法读取或不是有效 JSON；未扫描、未覆盖事实`); }
+  if (!registry || typeof registry !== 'object' || Array.isArray(registry) || !Array.isArray(registry.components) || !registry.components.length || registry.components.some((entry) => !entry || typeof entry !== 'object' || Array.isArray(entry) || typeof entry.name !== 'string' || !entry.name.trim())) throw new Error(`${REGISTRY_FILE} 必需登记表必须声明非空、有效的 components 数组；零登记不能作为成功扫描`);
+  return { meta: registry.meta ?? {}, components: registry.components };
 }
 
 export function loadState(root) {
@@ -640,8 +658,21 @@ function shortRepos(paths, limit = 3) {
   return `${list.slice(0, limit).join("、")} 等 ${list.length} 处`;
 }
 
+export function upstreamObservation(entry, { now = Date.now() / 1000, ttlSeconds = 7 * 86400 } = {}) {
+  const success = entry?.last_success ?? entry?.checked_at ?? 0;
+  const verified = entry?.status === 'ok' && Number.isFinite(success) && success > 0 && success <= now + 60 && now - success < ttlSeconds;
+  return { verified, status: verified ? 'ok' : entry?.status === 'error' ? 'error' : 'unverified', success };
+}
+
+function latestCellFor(latest, current, entry, ttlSeconds) {
+  if (!latest || latest === '—') return '—（未扫描）';
+  const observation = upstreamObservation(entry, { ttlSeconds });
+  if (!observation.verified) return `${latest}（历史记录；${observation.status === 'error' ? '本次查询失败' : '未核实或已过期'}）`;
+  return isOutdated(current, latest) ? `**${latest}** ⬆（已核实）` : `${latest}（已核实）`;
+}
+
 export function renderMarkdown({ root, repo, registry, inventory, state, planFile = PLAN_FILE }) {
-  const scannedAt = state?.last_full_scan ? state.last_full_scan : "尚未扫描（运行 `pnpm oss:watch`）";
+  const scannedAt = state?.last_success ?? state?.last_full_scan ?? "尚未成功扫描（运行 `pnpm oss:watch`）";
   const hasNodeStack = existsSync(join(root, "package.json"));
   const cmd = (task) =>
     hasNodeStack
@@ -655,7 +686,8 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
   lines.push("<!-- 自动生成，请勿手改：node scripts/oss-inventory.mjs --write -->");
   lines.push("");
   lines.push(`> 生成器：\`scripts/oss-inventory.mjs\`（离线事实）＋ \`scripts/oss-watch.sh\`（上游最新版本）`);
-  lines.push(`> 仓库：${repo.slug ?? repo.name} ｜ 最近一次上游扫描：${scannedAt}`);
+  lines.push(`> 仓库：${repo.slug ?? repo.name} ｜ 最近一次成功扫描：${scannedAt} ｜ 最近尝试：${state?.last_attempt ?? '未记录'}`);
+  lines.push('> 每项上游版本按成功时间、查询状态和 TTL 单独判定；历史缓存与失败查询不作本次最新版本结论。');
   lines.push(
     `> 统计：登记组件 ${registry.components.length} 个 ｜ npm 直接依赖 ${inventory.npm.packages.length} 个 ｜ Python 依赖 ${inventory.python.length} 个 ｜ 容器镜像 ${inventory.containers.length} 个`,
   );
@@ -682,8 +714,7 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
   registry.components.forEach((component, index) => {
     const resolved = resolveCurrent(component, inventory, probes);
     const latest = component.latest ? `${component.latest}` : component.package && cache[component.package]?.latest ? cache[component.package].latest : "—";
-    const outdated = isOutdated(resolved.current, latest);
-    const latestCell = latest === "—" ? "—（未扫描）" : outdated ? `**${latest}** ⬆` : latest;
+    const latestCell = latestCellFor(latest, resolved.current, state?.components?.[component.name] ?? cache[component.registryPackage ?? component.package], component.cadence === 'weekly' ? 7 * 86400 : 30 * 86400);
     const repoCell = component.repo ? `[${shortRepoLabel(component.repo)}](${component.repo})` : "—";
     const license = component.license ? ` · ${component.license}` : "";
     const scope = Array.isArray(component.scope) ? component.scope.join("、") : component.scope;
@@ -700,8 +731,7 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
   lines.push("|---|---|---|---|---|---|");
   for (const entry of inventory.npm.packages) {
     const latest = cache[entry.package]?.latest ?? "—";
-    const outdated = isOutdated(highestVersion(entry.versions), latest);
-    const latestCell = latest === "—" ? "—（未扫描）" : outdated ? `**${latest}** ⬆` : latest;
+    const latestCell = latestCellFor(latest, highestVersion(entry.versions), cache[entry.package], 7 * 86400);
     const kinds = entry.kinds
       .map((kind) => (kind === "prod" ? "生产" : kind === "dev" ? "开发" : "可选"))
       .join("/");
@@ -721,8 +751,7 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
       const latest = cache[entry.package]?.latest ?? cache[entry.package.toLowerCase()]?.latest ?? "—";
       const pinned = entry.specifier.includes("==") || entry.specifier.includes("~=");
       const current = pinned && entry.versions.length ? entry.versions.join(" / ") : `${entry.specifier}（下限声明）`;
-      const outdated = pinned && isOutdated(entry.versions[0], latest);
-      const latestCell = latest === "—" ? "—（未扫描）" : outdated ? `**${latest}** ⬆` : latest;
+      const latestCell = latestCellFor(latest, pinned ? entry.versions[0] : null, cache[entry.package] ?? cache[entry.package.toLowerCase()], 7 * 86400);
       lines.push(`| \`${cell(entry.package)}\` | ${cell(current)} | ${cell(entry.specifier)} | ${cell(shortRepos(entry.sources))} | ${cell(latestCell)} |`);
     }
   } else {
@@ -758,10 +787,10 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
   lines.push("");
   const outdatedComponents = registry.components.filter((component) => {
     const resolved = resolveCurrent(component, inventory, probes);
-    return component.latest && isOutdated(resolved.current, component.latest);
+    return upstreamObservation(state?.components?.[component.name], { ttlSeconds: component.cadence === 'weekly' ? 7 * 86400 : 30 * 86400 }).verified && component.latest && isOutdated(resolved.current, component.latest);
   });
   const outdatedPackages = inventory.npm.packages.filter((entry) =>
-    isOutdated(highestVersion(entry.versions), cache[entry.package]?.latest),
+    upstreamObservation(cache[entry.package]).verified && isOutdated(highestVersion(entry.versions), cache[entry.package]?.latest),
   );
   if (outdatedComponents.length || outdatedPackages.length) {
     lines.push(`登记组件滞后 ${outdatedComponents.length} 个，直接依赖滞后 ${outdatedPackages.length} 个 —— 逐项执行单见 \`${planFile}\`。`);
@@ -772,7 +801,7 @@ export function renderMarkdown({ root, repo, registry, inventory, state, planFil
       }
     }
   } else {
-    lines.push("本周期无滞后项（或尚未扫描上游最新版本）。");
+    lines.push("已核实记录未发现可用更新；历史缓存、失败及未扫描项不在此结论内。");
   }
   lines.push("");
   return `${lines.join("\n")}\n`;

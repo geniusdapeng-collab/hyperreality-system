@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workloom.evidence/v1",
+  "title": "MCD 与 RDAS 可回读执行证据契约",
+  "description": "字段约束由本 schema 描述；文件存在性、非空/非链接、sha256、Git 提交、实际退出码、执行角色、逐项原始观测由 scripts/delivery/evidence.mjs 与 scripts/acceptance/lib/evidence.mjs 回读校验。",
+  "oneOf": [
+    { "$ref": "#/$defs/run" },
+    { "$ref": "#/$defs/acceptanceItem" },
+    { "$ref": "#/$defs/index" },
+    { "$ref": "#/$defs/approval" },
+    { "$ref": "#/$defs/commandObservation" },
+    { "$ref": "#/$defs/regressionInput" },
+    { "$ref": "#/$defs/regressionSummary" }
+  ],
+  "$defs": {
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "artifact": {
+      "type": "object",
+      "required": ["path", "sha256", "commit"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "description": "相对产物根目录的真实非空普通文件；禁止目录、路径越界及 symlink。" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "commit": { "$ref": "#/$defs/commit" }
+      },
+      "additionalProperties": false
+    },
+    "exec": {
+      "type": "object",
+      "required": ["file", "args"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "args": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false,
+      "description": "直接 argv，执行器使用 shell:false；文件和参数必须组成能真正返回通过/失败的断言。"
+    },
+    "nodeObserver": {
+      "type": "object",
+      "required": ["schema", "reporter_path", "reporter_sha256", "destination", "summary"],
+      "properties": {
+        "schema": { "const": "workloom.node-test-observer/v1" },
+        "reporter_path": { "type": "string", "minLength": 1 },
+        "reporter_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "destination": { "type": "string", "minLength": 1 },
+        "summary": { "oneOf": [{ "$ref": "#/$defs/artifact" }, { "type": "null" }] }
+      },
+      "additionalProperties": false,
+      "description": "受控Node TestsStream观测器。reporter散列与当前执行器相同；实际argv只可按该请求添加受控reporter/destination；pass必须绑定同run的逐文件机器摘要。"
+    },
+    "run": {
+      "type": "object",
+      "required": ["schema", "id", "command", "actor", "role", "commit", "working_tree_dirty", "started_at", "finished_at", "exit_code", "signal", "result", "outputs"],
+      "properties": {
+        "schema": { "const": "workloom.evidence-run/v1" },
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+        "command": { "type": "string", "minLength": 1 },
+        "exec": { "oneOf": [{ "$ref": "#/$defs/exec" }, { "type": "null" }] },
+        "requested_exec": { "$ref": "#/$defs/exec", "description": "Node测试的原始声明argv；exec保存添加受控observer后的真实执行argv。" },
+        "node_observer": { "$ref": "#/$defs/nodeObserver" },
+        "actor": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["discovery", "repair", "acceptance", "automation", "manual"] },
+        "subject": { "type": ["object", "null"], "description": "MCD 断言必须绑定 {card_id, assertion_index}；RDAS stage 绑定执行阶段。" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "working_tree_dirty": { "type": "boolean", "description": "门禁仅接受 false；包括 tracked 改动及未被 gitignore 排除的 untracked 文件。" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" },
+        "exit_code": { "type": "integer", "minimum": 0 },
+        "signal": { "type": ["string", "null"] },
+        "validation": { "type": "object", "required": ["ok", "errors"], "properties": { "ok": { "type": "boolean" }, "errors": { "type": "array", "items": { "type": "string", "minLength": 1 } }, "testSummary": { "type": "object", "properties": { "total": { "type": ["integer", "null"] }, "passed": { "type": ["integer", "null"] }, "failed": { "type": ["integer", "null"] }, "cancelled": { "type": "integer", "minimum": 0 }, "skipped": { "type": "integer", "minimum": 0 }, "todo": { "type": "integer", "minimum": 0 } } } }, "description": "保存断言观测，独立于原始进程退出码。Node --test 需TestsStream逐文件非零实际passed；0匹配/全部跳过/空文件/缺逐文件摘要即validation.ok=false、result=fail，即使原始exit_code=0；不得解析人工reporter或使用外层file wrapper计数。" },
+        "result": { "enum": ["pass", "fail"] },
+        "outputs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } }
+      },
+      "allOf": [{ "if": { "properties": { "result": { "const": "pass" } } }, "then": { "properties": { "exit_code": { "const": 0 }, "signal": { "const": null }, "validation": { "properties": { "ok": { "const": true }, "errors": { "maxItems": 0 } } } } } }],
+      "additionalProperties": true
+    },
+    "approval": {
+      "type": "object",
+      "required": ["schema", "decision", "commit", "reason", "approved_by", "approved_at", "scope", "subjects"],
+      "properties": {
+        "schema": { "const": "workloom.evidence-approval/v1" },
+        "decision": { "enum": ["approved", "rejected"] },
+        "commit": { "$ref": "#/$defs/commit" },
+        "reason": { "type": "string", "minLength": 1 },
+        "approved_by": { "type": "string", "minLength": 1 },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "scope": { "enum": ["role-separation", "not-applicable"] },
+        "subjects": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "source_uri": { "type": "string", "description": "批准事件/任务卡原始来源，供独立验收者复核身份；本地源文件同时受 commit/sha256 约束。" }
+      },
+      "additionalProperties": true
+    },
+    "approvalRef": {
+      "type": "object",
+      "required": ["reason", "approved_by", "approved_at", "source"],
+      "properties": {
+        "reason": { "type": "string", "minLength": 1 },
+        "approved_by": { "type": "string", "minLength": 1 },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "source": { "$ref": "#/$defs/artifact" }
+      },
+      "additionalProperties": true
+    },
+    "acceptanceItem": {
+      "type": "object",
+      "required": ["schema", "id", "commit", "status", "command", "actor", "observed_at", "expected", "actual", "evidence", "run"],
+      "properties": {
+        "schema": { "const": "workloom.acceptance-item/v1" },
+        "id": { "type": "string", "minLength": 1, "description": "必须命中固定 RDAS v3.1 检查单中的同一 ID；不接受自造 ID、聚合域 ID 或裁剪检查单。" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "status": { "enum": ["pass", "fail", "not-applicable", "unverified"], "description": "unverified 仅作诊断记录，不能作为已通过的逐项证据。" },
+        "command": { "type": "string", "minLength": 1 },
+        "actor": { "type": "string", "minLength": 1 },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "expected": { "type": "string", "minLength": 1 },
+        "actual": { "not": { "type": "null" } },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } },
+        "run": { "$ref": "#/$defs/artifact" },
+        "approval": { "$ref": "#/$defs/approvalRef" },
+        "note": { "type": "string" }
+      },
+      "allOf": [{ "if": { "properties": { "status": { "const": "not-applicable" } } }, "then": { "required": ["approval"] } }],
+      "additionalProperties": true
+    },
+    "commandObservation": {
+      "type": "object",
+      "required": ["schema", "name", "exec", "exit_code", "signal", "started_at", "finished_at"],
+      "properties": {
+        "schema": { "const": "workloom.command-observation/v1" },
+        "name": { "$ref": "#/$defs/regressionCommandName" },
+        "exec": { "$ref": "#/$defs/exec" },
+        "exit_code": { "type": "integer", "minimum": 0 },
+        "process_exit_code": { "type": ["integer", "null"], "minimum": 0 },
+        "signal": { "type": ["string", "null"] },
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false,
+      "description": "真实命令完成后记录的机器观测；必须与同 run 的 subject.commandName/kind、实际 argv、退出码、信号和时刻一致。"
+    },
+    "regressionCommandName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9:_./-]*$" },
+    "regressionInput": {
+      "type": "object",
+      "required": ["schema", "commit", "required", "executions"],
+      "properties": {
+        "schema": { "const": "workloom.acceptance-regression-input/v1" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "required": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/regressionCommandName" } },
+        "executions": { "type": "object", "additionalProperties": { "type": "object", "required": ["run"], "properties": { "run": { "$ref": "#/$defs/artifact" } }, "additionalProperties": false } }
+      },
+      "additionalProperties": false,
+      "description": "由实际聚合子进程读取并纳入同 run 输出的必需命令清单及各运行记录；尚未执行的必需命令可以不在 executions 中，汇总必须未验证。"
+    },
+    "regressionExecution": {
+      "type": "object",
+      "required": ["status", "run"],
+      "properties": {
+        "status": { "enum": ["pass", "fail", "unverified"] },
+        "run": { "oneOf": [{ "$ref": "#/$defs/artifact" }, { "type": "null" }] },
+        "exit_code": { "type": ["integer", "null"], "minimum": 0 },
+        "signal": { "type": ["string", "null"] },
+        "command": { "type": ["string", "null"] },
+        "exec": { "oneOf": [{ "$ref": "#/$defs/exec" }, { "type": "null" }] },
+        "started_at": { "type": ["string", "null"], "format": "date-time" },
+        "finished_at": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "regressionSummary": {
+      "type": "object",
+      "required": ["schemaVersion", "commit", "at", "status", "required", "commands", "executions", "errors"],
+      "properties": {
+        "schemaVersion": { "const": "workloom.acceptance-regression/v2" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "at": { "type": "string", "format": "date-time" },
+        "status": { "enum": ["pass", "fail", "unverified"] },
+        "required": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/regressionCommandName" } },
+        "commands": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string", "minLength": 1 } },
+        "executions": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/regressionExecution" } },
+        "errors": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false,
+      "description": "真实汇总进程按绑定输入回读逐命令 run 生成；报告重新核对完整 required、实际退出码、argv、时间及错误，不接受只有字符串的旧 summary。"
+    },
+    "index": {
+      "type": "object",
+      "required": ["schema", "commit", "runs", "artifacts"],
+      "properties": {
+        "schema": { "const": "workloom.evidence-index/v1" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "runs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } },
+        "artifacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}

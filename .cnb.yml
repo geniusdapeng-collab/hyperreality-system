@@ -52,6 +52,23 @@
         pnpm -C apps/webb build
         pnpm -C apps/webc build
 
+    - name: 交付证据、预算与行业配置回归
+      script: |
+        set -eu
+        pnpm test:governance
+        node scripts/generate-capabilities.mjs --check
+        node scripts/acceptance/profile-check.mjs --repo .
+
+    - name: 媒体真实解码与完整 CLI 回归（隔离夹具）
+      script: |
+        set -eu
+        instrumentation_dir=$(mktemp -d)
+        trap 'rm -rf "$instrumentation_dir"' EXIT HUP INT TERM
+        npm install --prefix "$instrumentation_dir" playwright@1.63.0 --ignore-scripts --no-audit --no-fund
+        node "$instrumentation_dir/node_modules/playwright/cli.js" install --with-deps chromium
+        export NODE_PATH="$instrumentation_dir/node_modules${NODE_PATH:+:$NODE_PATH}"
+        pnpm test:media
+
 .db-gate: &db_gate
   name: db-gate
   docker:
