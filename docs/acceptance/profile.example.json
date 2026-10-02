@@ -73,6 +73,8 @@
     }
   },
   "outcome": {
+    "fixtureMarker": "suite.rdas.<本轮唯一runId>",
+    "residualDisclosure": "保留带本轮唯一 marker 的验收线程、事件和回执；按 autonomy.fixtureFilters 从真实经营指标与 ADR/HIR 中排除。",
     "roles": [
       {
         "role": "<岗位 preset_key>",
@@ -105,7 +107,7 @@
     "notes": "local-preview=本机预览（mock 口径）；client-runtime=已安装桌面客户端运行时（默认 server 8787 / web 5173，supportDir 缺省按产品名推导）；deployed=生产部署，必须显式声明 target.{pcUrl,apiUrl}。生产档位默认只读，写入需 --allow-prod-writes。"
   },
   "live": {
-    "enabled": true,
+    "enabled": false,
     "requireRealModels": false,
     "allowDb": false,
     "budgets": {
@@ -120,7 +122,7 @@
       "maxWallClockMin": 45
     },
     "models": [
-      { "id": "deepseek-v4.1-flash", "kind": "llm", "model": "deepseek-flash", "adapter": "dsh-harness", "apiKeyEnv": "DEEPSEEK_API_KEY", "baseUrlEnv": "DEEPSEEK_BASE_URL", "note": "客户端内置 LLM（dsh deepseek-official 路由，内置目录 deepseek-flash 支持文本+图像）" },
+      { "id": "deepseek-v4.1-flash", "kind": "llm", "model": "deepseek-flash", "adapter": "dsh-harness", "apiKeyEnv": "DEEPSEEK_API_KEY", "baseUrlEnv": "DEEPSEEK_BASE_URL", "note": "仅为模型/adapter 配置写法示例，不声明本仓当前可用模型、最新版本或供应商支持；按本轮真实 profile、运行时目录与实际回执填写。" },
       { "id": "seedream-5.0", "kind": "image", "model": "seedream-5.0", "adapter": "gen-http", "apiKeyEnv": "SEEDREAM_API_KEY", "baseUrlEnv": "SEEDREAM_ENDPOINT" },
       { "id": "seedance-2.5", "kind": "video", "model": "seedance-2.5", "adapter": "gen-http", "apiKeyEnv": "SEEDANCE_API_KEY", "baseUrlEnv": "SEEDANCE_ENDPOINT" }
     ],
@@ -182,16 +184,21 @@
         "id": "PROD-01",
         "kind": "product",
         "criticality": "P0",
-        "title": "<经产品入口派单的交付链任务>",
-        "input": "<派单标题；含交付物与截止>",
+        "title": "<本仓当前工作区经营事实复核>",
+        "input": "suite.rdas.<本轮唯一runId>.PROD-01：请根据本工作区当前事实交付经营事实复核摘要，列出事实来源与未核实项；资料不足明确披露，不补造事实。回答须包含本轮完整 marker，以及“事实来源”和“未核实项”两个结果段落。",
         "presetKey": "<岗位 preset_key>",
         "workspaceSlug": "<本仓演示工作区>",
+        "requireModel": true,
+        "fixtureMarker": "suite.rdas.<本轮唯一runId>.PROD-01",
+        "residualDisclosure": "保留带本轮唯一 marker 的产品派单线程、事件和回执；不计入真实经营指标、ADR/HIR，按 fixtureFilters 排除。",
         "state_asserts": [
-          { "http": { "url": "http://127.0.0.1:8787/health", "status": 200 } }
+          { "event": { "action": "ask.answer", "field": "decision.after.text", "contains": "suite.rdas.<本轮唯一runId>.PROD-01", "minLength": 80 } },
+          { "event": { "action": "ask.answer", "field": "decision.after.text", "contains": "事实来源" } },
+          { "event": { "action": "ask.answer", "field": "decision.after.text", "contains": "未核实项" } }
         ]
       }
     ],
-    "notes": "P 域生产实测：每个内置模型 ≥1 条真实任务；生图/生视频按张、按秒硬计量（图 ≤8 张、视频 ≤3 段且各 10–15s、总 ≤45s）。凭据经环境变量或秘密存储注入，禁止写进 profile 或仓库。"
+    "notes": "本文件仅为需按仓填写的示例，live 默认关闭；models 中全部 ID/model/版本标签仅展示配置结构，不证明当前可用或已通过。启用前以本轮实际 profile、运行时目录与供应商实际返回/回执逐项核对模型、端点和任务，把 <本轮唯一runId> 替换成每轮不同且一致绑定输入/断言/marker 的值，并填本仓真实 preset/工作区/结果标准。P 域每个实际模型需真实任务与回执；生图/生视频按张、按秒硬计量（图 ≤8 张、视频 ≤3 段且各 10–15s、总 ≤45s）。产品派单当前缺可信服务端逐请求预算接口，requireModel=true 仍会调用前 blocked；不能改为 false 或用健康检查代替业务交付来放行。凭据经环境变量或秘密存储注入，禁止写进 profile 或仓库。"
   },
   "journeys": [
     { "id": "EXP-01", "persona": "owner", "title": "首启看到价值与待拍板", "script": "builtin:first-value" },

@@ -16,7 +16,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runWatch } from "./oss-watch.mjs";
-import { createPull, listPulls, requireToken } from "./tools/cnb-api.mjs";
+import { createPull, listPulls, requireToken, gitAuthenticationEnvironment, redactCredentials } from "./tools/cnb-api.mjs";
 
 const WATCHED_PATHS = [
   "oss-components.json",
@@ -26,7 +26,8 @@ const WATCHED_PATHS = [
 ];
 
 function git(args, options = {}) {
-  return execFileSync("git", args, { encoding: "utf8", ...options }).trim();
+  try { return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options }).trim(); }
+  catch (error) { throw new Error(redactCredentials(`Git 失败：${error.stderr?.toString() ?? error.code ?? 'unknown'}`)); }
 }
 
 function slugFromRemote(cwd) {
@@ -48,16 +49,13 @@ function pushBranch(repoDir, slug, branch, token, log) {
   } catch (error) {
     log(`  · origin 推送失败（${String(error.message).split("\n")[0]}），改用 CNB_TOKEN 头部鉴权`);
   }
-  const basic = Buffer.from(`cnb:${token}`, "utf8").toString("base64");
   git([
     "-C",
     repoDir,
-    "-c",
-    `http.extraheader=Authorization: Basic ${basic}`,
     "push",
     `https://cnb.cool/${slug}.git`,
     refspec,
-  ]);
+  ], { env: gitAuthenticationEnvironment(token) });
   return "token-header";
 }
 
@@ -68,7 +66,12 @@ function changedFiles(cwd) {
 
 export async function run({ cwd, dryRun = false, taskId = "", log = console.log } = {}) {
   const root = resolve(cwd);
-  const { summary } = await runWatch({ root, all: false, exitZero: true, log });
+  const { summary, exitCode } = await runWatch({ root, all: false, exitZero: true, dryRun, log });
+  if (dryRun) {
+    log(`--dry-run：只查询与生成计划，不写文件、不建分支、不推送；状态 ${summary.status}`);
+    return { changed: false, dryRun: true, plannedFiles: summary.plannedFiles, summary, exitCode };
+  }
+  if (exitCode === 1) throw new Error(`上游扫描有 ${summary.failures.length} 个未核实项，拒绝提交成功清单`);
   const changed = changedFiles(root);
   if (!changed.length) {
     log("✓ 开源组件清单无变化：无需 PR");
@@ -90,10 +93,6 @@ export async function run({ cwd, dryRun = false, taskId = "", log = console.log 
     return { changed: true, branch, pull: existing.number, summary, reused: true };
   }
 
-  if (dryRun) {
-    log(`--dry-run：将创建分支 ${branch} 并提交 ${changed.length} 个文件`);
-    return { changed: true, branch, dryRun: true, summary };
-  }
 
   git(["-C", root, "config", "user.name", "cnb-oss-watch-bot"]);
   git(["-C", root, "config", "user.email", "oss-watch-bot@cnb.cool"]);
@@ -142,7 +141,7 @@ async function main() {
   const taskId = process.argv.includes("--task-id") ? process.argv[process.argv.indexOf("--task-id") + 1] : "";
   const result = await run({ cwd, dryRun: process.argv.includes("--dry-run"), taskId });
   const exitZero = process.argv.includes("--exit-zero");
-  process.exit(result.changed && !exitZero ? 2 : 0);
+  process.exit(result.exitCode === 1 ? 1 : result.changed && !exitZero ? 2 : 0);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

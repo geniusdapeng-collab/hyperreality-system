@@ -13,7 +13,7 @@ environment=<local-preview|client-runtime|deployed> production=<true|false> targ
 clientRuntime=<VERSION> dsh=<@deepseek-ai/dsh 版本> providerKeys=<已配置/缺失（只写状态不写值）>
 seed=<seed hash> deps=<lock hash> browser=<name/version> os=<version>
 promptHash=<hash> skillVersion=<ver> fenceVersion=<ver> bundleVersion=<ver>
-checklist=rdas/v3.0 profile=<schemaVersion> judge=<model/version/κ>
+checklist=rdas/v3.1 profile=<schemaVersion> judge=<model/version/κ>
 dataset=<suite hash / golden / holdout / adversarial>
 stats=<confidence level / interval method / standardization weights>
 ```
@@ -43,7 +43,7 @@ T1（冒烟核心）：<n>/52；T2（标准轮）：<n>/201；T3（长跑/专项
 | 指标 | 实测 | 阈值/预期 | 结论 |
 |---|---|---|---|
 | 环境档位 | client-runtime / deployed | 非 local-preview | |
-| 内置模型就绪 | <n>/<n>（DeepSeek V4.1 Flash / Seedream 5.0 / Seedance 2.5） | 全部就绪 | |
+| 内置模型就绪 | <ready>/<declared>（来自本轮实际 profile.live.models；逐项见下表） | 实际清单非空且逐项就绪；0/0 为未验证 | |
 | 任务通过 | <ok>/<total> | 全部通过 | |
 | LLM 推理 / 多模态 / 工具循环 | | ≥1 条真实任务 + 回执 | |
 | 生图张数 | | ≤8 张 | |
@@ -51,6 +51,12 @@ T1（冒烟核心）：<n>/52；T2（标准轮）：<n>/201；T3（长跑/专项
 | 预估成本 | | ≤¥<上限>（估算≠账单） | |
 | 工具循环与账本链 | | 围栏判定 ≥1 + 链验证通过 | |
 | 被凭据/目标拦下的任务 | | 0（拦下即未验证） | |
+
+模型明细逐行从本轮实际 profile、`live/live-report.json` 与绑定回执填写。声明模型与供应商实际返回模型分列；缺少实际模型/回执、`blocked` 或 `skipped` 写“未验证”，不得用示例标签或声明值补齐。
+
+| profile 模型 ID / kind / adapter | profile 声明 model | 本轮回执实际 model | 本轮任务 ID / 状态 | 证据路径 / SHA / 事件或调用 ID |
+|---|---|---|---|---|
+| <本轮实际配置> | <声明值> | <回执实际值；缺失则未验证> | <实际任务/状态> | <绑定本轮的证据> |
 
 链路深度逐任务标注（`dsh-harness` / `model-gateway` / `gen-http` / `product-dispatch`）；
 `blocked` 不得写成通过，配额拦下的任务必须逐条披露。

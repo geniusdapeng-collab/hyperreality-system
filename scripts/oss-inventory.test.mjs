@@ -152,9 +152,10 @@ test("清单渲染：确定性、含上游最新与漂移标记、--check 可复
     ".oss-watch-state.json": {
       schema: "workloom.oss-watch-state/v2",
       last_full_scan: "2026-09-18T00:00:00.000Z",
+      last_success: "2026-09-18T00:00:00.000Z",
       components: {},
       registry_cache: {
-        react: { ecosystem: "npm", latest: "19.3.0", checked_at: 1, checked_at_iso: "2026-09-18T00:00:00.000Z" },
+        react: { ecosystem: "npm", latest: "19.3.0", status: 'ok', checked_at: Math.floor(Date.now() / 1000), checked_at_iso: new Date().toISOString() },
         vite: { ecosystem: "npm", latest: "8.3.0", checked_at: 1, checked_at_iso: "2026-09-18T00:00:00.000Z" },
       },
     },
@@ -165,7 +166,7 @@ test("清单渲染：确定性、含上游最新与漂移标记、--check 可复
     assert.equal(first, second, "同一仓库两次生成必须逐字节一致（--check 才可复现）");
     assert.match(first, /19\.2\.8/);
     assert.match(first, /\*\*19\.3\.0\*\* ⬆/, "滞后项应标出上游最新");
-    assert.match(first, /最近一次上游扫描：2026-09-18T00:00:00\.000Z/);
+    assert.match(first, /最近一次成功扫描：2026-09-18T00:00:00\.000Z/);
     const inventory = buildInventory(root);
     const rendered = renderMarkdown({
       root,
@@ -187,6 +188,10 @@ test("版本工具：最高版本选择与滞后判定", () => {
   assert.equal(highestVersion(["3.2.7", "5.0.1"]), "5.0.1");
   assert.equal(highestVersion([]), null);
   assert.equal(compareVersions("1.0.0-rc.1", "1.0.0-rc.2"), -1);
+  assert.equal(compareVersions("1.0.0-rc.10", "1.0.0-rc.2"), 1);
+  assert.equal(compareVersions("1.0.0+build.1", "1.0.0+build.9"), 0);
+  assert.equal(compareVersions("1.0.0-1", "1.0.0-alpha"), -1);
+  assert.equal(compareVersions("1.0.0-alpha", "1.0.0-alpha.1"), -1);
   assert.equal(isOutdated("8.2.2", "8.3.0"), true);
   assert.equal(isOutdated("8.3.0", "8.3.0"), false);
   assert.equal(isOutdated("（未锁定）", "8.3.0"), false);
@@ -213,4 +218,41 @@ test("仓库标识行：克隆 URL 大小写不同不算清单漂移", () => {
     "换仓造成的真实漂移必须仍然判出",
   );
   assert.equal(normalizeRepoIdentityForCompare(null), "");
+});
+
+function clockDocument(t, state) {
+  const root = fixture({
+    "package.json": { name: "clock-fixture" },
+    "oss-components.json": { components: [{ name: "fixture", current: "1.0.0" }] },
+    ".oss-watch-state.json": { components: {}, registry_cache: {}, ...state },
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  return generateDocument(root).content;
+}
+
+test("成功扫描钟：legacy last_full_scan 只显示历史未核实尝试，不能作为成功兜底", t => {
+  const content = clockDocument(t, { last_full_scan: "2026-09-18T00:00:00.000Z" });
+  assert.match(content, /最近一次成功扫描：尚未记录已核实成功/u);
+  assert.match(content, /历史全量扫描\/尝试（未核实）：2026-09-18T00:00:00\.000Z/u);
+  assert.doesNotMatch(content, /最近一次成功扫描：2026-09-18T00:00:00\.000Z/u);
+});
+
+test("成功扫描钟：无效、未来或错误类型的 last_success 不能显示为成功", t => {
+  for (const last_success of ["not-a-time", "2099-01-01T00:00:00.000Z", 123]) {
+    const content = clockDocument(t, { last_success, last_full_scan: "2026-09-18T00:00:00.000Z" });
+    assert.match(content, /最近一次成功扫描：尚未记录已核实成功/u);
+    assert.doesNotMatch(content, /最近一次成功扫描：(not-a-time|2099-01-01|123)/u);
+  }
+});
+
+test("成功扫描钟：last_success 与后来失败尝试、legacy 历史字段分别保留", t => {
+  const content = clockDocument(t, {
+    last_success: "2026-09-19T00:00:00.000Z",
+    last_attempt: "2026-09-20T00:00:00.000Z",
+    last_full_scan: "2026-09-18T00:00:00.000Z",
+    status: "error",
+  });
+  assert.match(content, /最近一次成功扫描：2026-09-19T00:00:00\.000Z/u);
+  assert.match(content, /最近尝试：2026-09-20T00:00:00\.000Z/u);
+  assert.match(content, /历史全量扫描\/尝试（未核实）：2026-09-18T00:00:00\.000Z/u);
 });
