@@ -1,0 +1,332 @@
+{
+  "startup": {
+    "command": "pnpm preview:all",
+    "ports": {
+      "pc": 3000,
+      "bMobile": 3001,
+      "cMobile": 3002,
+      "server": 8787
+    }
+  },
+  "surfaces": {
+    "pcRoutes": [
+      "/",
+      "/tasks",
+      "/approvals",
+      "/reports",
+      "/events",
+      "/guardrails",
+      "/agents"
+    ],
+    "bMobileRoutes": [
+      "/",
+      "/inbox",
+      "/tasks",
+      "/operations",
+      "/account"
+    ],
+    "cRoutes": [
+      "#chat",
+      "#service",
+      "#tickets",
+      "#messages",
+      "#me"
+    ]
+  },
+  "thresholds": {
+    "firstValueMs": 20000,
+    "dispatchMs": 60000,
+    "approvalMs": 30000,
+    "traceClicks": 2,
+    "guestFirstReplyMs": 30000,
+    "decisionQuota": 7,
+    "minContrastRatio": 4.5,
+    "idleInterruptionWindowS": 20,
+    "taskSuccessP0": 1.0,
+    "taskSuccessP1": 0.9,
+    "susMin": 68,
+    "susTarget": 80,
+    "seqMin": 5.5,
+    "csatMin": 4.2,
+    "targetSizePx": 24,
+    "zoomPercent": 200,
+    "axCritical": 0,
+    "adr1Target": 0.85,
+    "hirNiMax": 0.1,
+    "h34Max": 0.03,
+    "hmpoMax": 0.5,
+    "passK": 5,
+    "p0PassKTarget": 0.8,
+    "offlineAuditSample": 10,
+    "soakHours": 24
+  },
+  "schemaVersion": "workloom.acceptance-profile/v2",
+  "repo": "workloom-ai/hyperreality-system",
+  "productName": "HyperReality 智能视频经营系统",
+  "lane": "industry",
+  "primaryBundle": "ai-video",
+  "workspaceId": null,
+  "dataMode": "simulated",
+  "identity": {
+    "workspaceSlug": "video-studio",
+    "human": "MEM-V01",
+    "guest": "demo-direct",
+    "authTokenEnv": "ACCEPTANCE_AUTH_TOKEN"
+  },
+  "environment": {
+    "kind": "local-preview",
+    "target": {},
+    "supportDir": null,
+    "allowWrites": false,
+    "notes": "本仓档位必须与 CLI/父执行器一致；切换环境需提供同档位的显式 profile。生产默认只读，写入需受控身份、显式授权、夹具标记与残留披露。"
+  },
+  "ux": {
+    "personas": [
+      {
+        "id": "owner",
+        "jtbd": [
+          "看到视频管线确认门的事实、缺失项与待决事项"
+        ],
+        "criticality": "P0"
+      },
+      {
+        "id": "manager",
+        "jtbd": [
+          "核对视频管线确认门的来源与责任岗位"
+        ],
+        "criticality": "P0"
+      },
+      {
+        "id": "staff",
+        "jtbd": [
+          "完成视频管线确认门并看到结果回执"
+        ],
+        "criticality": "P0"
+      },
+      {
+        "id": "partner",
+        "jtbd": [
+          "看到授权边界与越权拒绝原因"
+        ],
+        "criticality": "P1"
+      },
+      {
+        "id": "guest",
+        "jtbd": [
+          "得到清晰回答与转人工入口"
+        ],
+        "criticality": "P0"
+      }
+    ],
+    "journeys": [
+      {
+        "id": "U-01",
+        "persona": "owner",
+        "stage": "daily",
+        "title": "视频管线确认门：事实与待决项",
+        "mot": true
+      },
+      {
+        "id": "U-02",
+        "persona": "manager",
+        "stage": "daily",
+        "title": "视频管线确认门：来源核查与结果回执",
+        "mot": true
+      },
+      {
+        "id": "U-03",
+        "persona": "owner",
+        "stage": "exception",
+        "title": "视频管线确认门：数据缺失与权限拒绝",
+        "mot": true
+      }
+    ],
+    "tasks": [
+      {
+        "id": "U2-T01",
+        "persona": "manager",
+        "criticality": "P0",
+        "budgetMs": 60000,
+        "paths": [
+          "normal",
+          "empty",
+          "error",
+          "permission",
+          "offline"
+        ]
+      }
+    ],
+    "research": {
+      "participants": [],
+      "methods": [
+        "think-aloud",
+        "first-click",
+        "five-second"
+      ],
+      "instruments": [
+        "SUS",
+        "SEQ"
+      ]
+    }
+  },
+  "journeys": [
+    {
+      "id": "EXP-01",
+      "persona": "owner",
+      "title": "视频管线确认门：首启事实与待决项",
+      "script": "builtin:first-value"
+    },
+    {
+      "id": "EXP-02",
+      "persona": "owner",
+      "title": "视频管线确认门：授权边界与审批留痕",
+      "script": "builtin:approval"
+    },
+    {
+      "id": "EXP-03",
+      "persona": "manager",
+      "title": "视频管线确认门：结果与来源核对",
+      "script": "builtin:traceability"
+    },
+    {
+      "id": "EXP-04",
+      "persona": "staff",
+      "title": "视频管线确认门：派活与结果读回",
+      "script": "builtin:dispatch"
+    },
+    {
+      "id": "EXP-05",
+      "persona": "partner",
+      "title": "视频管线确认门：越权拒绝可见",
+      "script": "builtin:partner-scope"
+    },
+    {
+      "id": "EXP-06",
+      "persona": "guest",
+      "title": "视频管线确认门：首响与转人工",
+      "script": "builtin:guest-service"
+    }
+  ],
+  "outcome": {
+    "roles": [
+      {
+        "role": "director",
+        "agentPreset": "director",
+        "al": "AL3",
+        "deliverableUnit": "制片管线核查清单",
+        "minSubstance": "确认门、上游产物回执、预算依赖与需人工介入项；不越过审批",
+        "kpis": [
+          {
+            "name": "已核实来源完整性",
+            "source": "threads.events/ask.answer",
+            "baseline": null,
+            "target": null
+          }
+        ],
+        "attribution": "observational",
+        "guardrails": [
+          "无依据结论",
+          "越权写入",
+          "模拟数据污染"
+        ]
+      }
+    ],
+    "receipts": [],
+    "taskSuites": [
+      "acceptance/outcomes/industry.yaml"
+    ],
+    "fixtureMarker": "suite.rdas.hyperreality-system",
+    "residualDisclosure": "视频管线确认门验收会保留带 suite.rdas.hyperreality-system 标记的线程和事件；不会删除审计事件，需单独列入残留清单并排除 ADR/HIR 与经营指标。"
+  },
+  "autonomy": {
+    "interventionTaxonomy": "H0-H4",
+    "windows": [
+      "4w"
+    ],
+    "targetPrecisionPp": 10,
+    "offlineAuditSample": 10,
+    "fixtureFilters": [
+      "suite.rdas."
+    ]
+  },
+  "soak": {
+    "hours": [
+      24,
+      168,
+      672
+    ],
+    "metrics": [
+      "success",
+      "latency",
+      "cost",
+      "drift"
+    ]
+  },
+  "live": {
+    "enabled": true,
+    "requireRealModels": false,
+    "allowDb": false,
+    "budgets": {
+      "maxLlmCalls": 40,
+      "maxLlmTokens": 300000,
+      "maxImages": 8,
+      "maxVideoClips": 3,
+      "minVideoSeconds": 10,
+      "maxVideoSeconds": 15,
+      "maxVideoSecondsTotal": 45,
+      "maxCostCny": 120,
+      "maxWallClockMin": 45
+    },
+    "models": [
+      {
+        "id": "deepseek-v4.1-flash",
+        "kind": "llm",
+        "model": "deepseek-flash",
+        "adapter": "dsh-harness",
+        "apiKeyEnv": "DEEPSEEK_API_KEY",
+        "baseUrlEnv": "DEEPSEEK_BASE_URL"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "LLM-R1",
+        "kind": "llm",
+        "chain": "dsh-harness",
+        "model": "deepseek-v4.1-flash",
+        "criticality": "P0",
+        "title": "视频管线确认门：事实与缺口推理",
+        "prompt": "当前视频制片管线在推进镜头前应核对哪些确认门、产物回执和预算？请用“确认门”标注依赖与缺失材料，只回答核查清单，不创建项目或推进管线。\n最后另起一行输出 TASK_COMPLETE。",
+        "expect": [
+          "确认门"
+        ],
+        "expectAll": [
+          "TASK_COMPLETE"
+        ]
+      },
+      {
+        "id": "PROD-01",
+        "kind": "product",
+        "criticality": "P0",
+        "title": "视频管线确认门（经产品入口与线程事件读回）",
+        "input": "suite.rdas.hyperreality-system：当前视频制片管线在推进镜头前应核对哪些确认门、产物回执和预算？请用“确认门”标注依赖与缺失材料，只回答核查清单，不创建项目或推进管线。",
+        "presetKey": "director",
+        "workspaceSlug": "video-studio",
+        "requireModel": true,
+        "fixtureMarker": "suite.rdas.hyperreality-system",
+        "residualDisclosure": "视频管线确认门验收会保留带 suite.rdas.hyperreality-system 标记的线程和事件；不会删除审计事件，需单独列入残留清单并排除 ADR/HIR 与经营指标。",
+        "state_asserts": [
+          {
+            "event": {
+              "action": "ask.answer",
+              "field": "decision.after.text",
+              "contains": "确认门",
+              "minLength": 12
+            }
+          }
+        ]
+      }
+    ],
+    "notes": "声明视频管线确认门的模型/产品任务。无受控身份、实际模型或结果回执时保持未验证；配置校验与 HTTP fixture 不构成生产通过。"
+  },
+  "notes": "本仓代表任务是视频管线确认门：正常结果（P0 k=5）、输入错误、无身份权限三路径。profile-check/outcome --validate-only 仅校验配置；真实行业结果、体验、长跑和完整276项仍须独立验收。"
+}

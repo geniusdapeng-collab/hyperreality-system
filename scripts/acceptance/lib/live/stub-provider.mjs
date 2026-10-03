@@ -11,24 +11,10 @@
  *   POST /api/v3/images/generations                Seedream 形态（同步）
  *   POST /api/v3/contents/generations/tasks        Seedance 形态（异步）
  *   GET  /api/v3/contents/generations/tasks/:id    轮询
- *   GET  /artifacts/:name                          产物下载（1×1 PNG / 伪 MP4）
+ *   GET  /artifacts/:name                          产物下载（可解码的合成 PNG / 12s MP4）
  */
 import http from "node:http";
-
-/** 1×1 透明 PNG */
-const PNG_1PX = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
-
-/** 最小可识别容器（不是可播放视频；仅用于产物落盘自检） */
-const FAKE_MP4 = Buffer.concat([
-  Buffer.from([0x00, 0x00, 0x00, 0x18]),
-  Buffer.from("ftypisom"),
-  Buffer.from([0x00, 0x00, 0x02, 0x00]),
-  Buffer.from("isomiso2mp41"),
-  Buffer.alloc(512),
-]);
+import { PNG_BYTES, MP4_BYTES } from "./test-fixtures.mjs";
 
 export async function startStubProvider({ port = 0, durationSeconds = 12 } = {}) {
   const tasks = new Map();
@@ -105,12 +91,13 @@ export async function startStubProvider({ port = 0, durationSeconds = 12 } = {})
         created: Math.floor(Date.now() / 1000),
         model: body?.model ?? "stub-image",
         data: Array.from({ length: n }, (_, i) => ({ url: `${base}/artifacts/stub-image-${i + 1}.png` })),
+        usage: { generated_images: n },
       });
     }
     if (req.method === "POST" && url.pathname === "/api/v3/contents/generations/tasks") {
       const body = await readJson(req);
       const id = `stub-video-${tasks.size + 1}`;
-      tasks.set(id, { duration: Number(body?.duration ?? durationSeconds) });
+      tasks.set(id, { duration: Number(body?.duration ?? durationSeconds), model: body?.model ?? "stub-video" });
       return json(200, { id, model: body?.model ?? "stub-video", status: "queued" });
     }
     if (req.method === "GET" && url.pathname.startsWith("/api/v3/contents/generations/tasks/")) {
@@ -119,6 +106,7 @@ export async function startStubProvider({ port = 0, durationSeconds = 12 } = {})
       if (!t) return json(404, { error: { message: "task not found" } });
       return json(200, {
         id,
+        model: t.model,
         status: "succeeded",
         duration: t.duration,
         content: { video_url: `http://127.0.0.1:${boundPort}/artifacts/${id}.mp4` },
@@ -126,7 +114,7 @@ export async function startStubProvider({ port = 0, durationSeconds = 12 } = {})
     }
     if (req.method === "GET" && url.pathname.startsWith("/artifacts/")) {
       const isVideo = url.pathname.endsWith(".mp4");
-      const buf = isVideo ? FAKE_MP4 : PNG_1PX;
+      const buf = isVideo ? MP4_BYTES : PNG_BYTES;
       res.writeHead(200, { "content-type": isVideo ? "video/mp4" : "image/png", "content-length": buf.length });
       return res.end(buf);
     }

@@ -1,0 +1,649 @@
+{
+  "version": 18,
+  "description": "WorkLoom IM 基座能力同步范围声明——base-sync 引擎的唯一事实源。文件型公共能力按 include/exclude 受控分发；三端组件/视觉语言通过与 ui-v* 同版的 CNB Release @workloom/ui tarball 下发，三端应用壳/导航/布局/状态/API 接线通过同一稳定标签和逐文件指纹升级 PR 下发。行业属性与演示能力永不同步。requiredRootAssets 无视行业代码的 pathPrefix，始终安装并校验在 Git 仓库根目录。修改本文件即修改同步边界，需基座 owner 评审。",
+  "registryCapabilities": [
+    {
+      "package": "@workloom/ui",
+      "source": "packages/ui/**",
+      "consumers": [
+        "apps/web",
+        "apps/webb",
+        "apps/webc"
+      ],
+      "distribution": "stable-github-release-upgrade-pr",
+      "consumerGate": "scripts/verify-ui-consumer.mjs",
+      "migration": "two-phase-required",
+      "comment": "第一阶段先补齐三个真实生产客户端与产品身份配置，第二阶段再锁定同标签 CNB Release tarball 并运行消费门禁；缺少 apps/webb 等客户端时必须报告迁移未完成，禁止按三端合规处理。"
+    }
+  ],
+  "clientFoundationCapability": {
+    "source": "apps/web/** + apps/webb/** + apps/webc/**",
+    "configuration": "sync/base-capabilities.json#clientFoundation",
+    "installer": "sync/client-foundation.mjs",
+    "stateFile": ".workloom-client-foundation.json",
+    "distribution": "stable-tag-upgrade-pr",
+    "conflictPolicy": "previous-source-sha256-fail-close",
+    "industryExtensionPaths": [
+      "apps/*/src/extensions/**",
+      "apps/*/src/projections/**",
+      "apps/*/src/config/industry/**",
+      "apps/*/src/theme/industry/**",
+      "apps/*/public/industry/**"
+    ],
+    "comment": "这些路径仍显式排除普通 base-sync，避免双通道覆盖。新行业用 adopt.sh --new-industry 从 latest stable 一次生成三端；存量仓只经 ui-upgrade-pr 波次 PR 更新。"
+  },
+  "uiGovernanceCapability": {
+    "installer": "sync/install-ui-governance.mjs",
+    "stateFile": ".workloom-ui-governance.json",
+    "dependency": "npm:typescript@5.9.3",
+    "yamlDependency": "npm:yaml@2.9.0",
+    "managedFiles": [
+      "scripts/verify-ui-consumer.mjs",
+      "scripts/ui-governance-rules.mjs"
+    ],
+    "distribution": "stable-upgrade-pr-only",
+    "comment": "消费 verifier、AST 规则和固定解析器是同一个稳定治理单元；不得再由普通 base-sync 提前覆盖，否则治理 state 会与实际脚本失配，并阻断后续稳定升级。"
+  },
+  "protectedChildAssets": {
+    "files": [
+      "electron-builder.yml",
+      "product.manifest.json"
+    ],
+    "identityFields": [
+      "appId",
+      "productName",
+      "demoWorkspaceSlug",
+      "demoMemberNo",
+      "ports",
+      "publish"
+    ],
+    "comment": "桌面应用标识、产品名、端口和发布身份属于部署实例资产；base-sync 不得整文件覆盖。新行业应由 product.manifest.json 显式配置，存量仓先完成身份迁移再接收稳定基座升级。"
+  },
+  "desktopReleaseCapability": {
+    "consumerWorkflow": ".github/workflows/build-desktop.yml",
+    "finalizer": "scripts/desktop-release-finalizer.mjs",
+    "publisherTemplate": "sync/downstream-desktop-publisher-job.yml",
+    "buildRuntime": {
+      "nodeVersion": "24.19.0",
+      "npmVersion": "11.17.0",
+      "nodeSource": "scripts/release-assets.json",
+      "npmSource": ".workloom-runtime-deps/metadata.json",
+      "setupNodePolicy": "exact-version-only"
+    },
+    "platformCandidates": [
+      "macos",
+      "windows"
+    ],
+    "installerDiscovery": [
+      "*-mac-arm64.dmg",
+      "*-mac-x64.dmg",
+      "*-win-x64.exe"
+    ],
+    "evidenceAssets": [
+      "WorkLoom-SHA512SUMS.txt",
+      "WorkLoom-release-manifest.json"
+    ],
+    "distribution": "base-sync-script-plus-reviewed-workflow-upgrade-pr",
+    "publisherInvariant": "platform jobs are read-only; one publisher seals a draft, verifies five assets, then promotes Latest",
+    "comment": "桌面正式发布封口器从各仓 electron-builder.yml 已生成的真实 artifactName 发现三平台安装包，不维护产品名称表。行业身份由 github.repository、稳定 tag、精确提交和签名模式注入；平台 job 只能上传同一 run 的候选，唯一发布 job 才能写 Release。setup-node 必须使用 buildRuntime.nodeVersion 精确值，禁止 24 等浮动主版本，否则 Node 随附 npm 会与 runtime lock 漂移。"
+  },
+  "requiredRootAssets": {
+    "files": [
+      "WORKLOOM_PRODUCT_CONTEXT.md",
+      "AI-AUTONOMOUS-OPERATIONS.md",
+      "docs/DEVELOPMENT-PROTOCOL.md",
+      "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md",
+      "docs/acceptance/checklist.v1.json",
+      "docs/acceptance/checklist.v2.json",
+      "docs/acceptance/checklist.v3.json",
+      "docs/acceptance/checklist.v3.md",
+      "docs/acceptance/report-template.md",
+      "docs/acceptance/profile.example.json",
+      "docs/acceptance/outcome-suite.example.yaml",
+      "docs/MINE-CLEAR-DELIVERY-SPEC.md",
+      "docs/mine-clear/ledger.schema.json",
+      "docs/mine-clear/report-template.md",
+      "docs/mine-clear/prompt-pack.md",
+      "scripts/acceptance/README.md",
+      "scripts/acceptance/matrix.mts",
+      "scripts/acceptance/ui-probe.mjs",
+      "scripts/acceptance/experience.mjs",
+      "scripts/acceptance/report.mjs",
+      "scripts/acceptance/ux.mjs",
+      "scripts/acceptance/outcome.mjs",
+      "scripts/acceptance/autonomy.mjs",
+      "scripts/acceptance/redteam.mjs",
+      "scripts/acceptance/soak.mjs",
+      "scripts/acceptance/coverage.mjs",
+      "scripts/acceptance/report-v3.mjs",
+      "scripts/acceptance/profile-check.mjs",
+      "scripts/acceptance/fleet-run.mjs",
+      "scripts/acceptance/lib/profile.mjs",
+      "scripts/acceptance/lib/playwright.mjs",
+      "scripts/acceptance/lib/compose.mjs",
+      "scripts/acceptance/lib/target.mjs",
+      "scripts/acceptance/lib/live/budget.mjs",
+      "scripts/acceptance/lib/live/providers.mjs",
+      "scripts/acceptance/lib/live/stub-provider.mjs",
+      "scripts/acceptance/live.mjs",
+      "scripts/delivery/README.md",
+      "scripts/delivery/mine-clear.mjs",
+      "scripts/delivery/mine-clear.test.mjs",
+      "scripts/delivery/evidence.mjs",
+      "scripts/acceptance/lib/live/media.mjs",
+      "scripts/acceptance/lib/live/verification.mjs",
+      "scripts/acceptance/lib/session.mjs",
+      "scripts/oss-inventory.mjs",
+      "scripts/oss-inventory.test.mjs",
+      "scripts/oss-watch.mjs",
+      "scripts/oss-watch-ci.mjs",
+      "scripts/oss-watch.test.mjs",
+      "scripts/oss-watch.sh",
+      "scripts/capability-status.mjs",
+      "scripts/capability-status.test.mjs",
+      "scripts/tools/cnb-api.mjs",
+      "scripts/tools/provision-protocol.mjs",
+      "scripts/tools/provision-safety.test.mjs",
+      "scripts/tools/fleet-rules.mjs",
+      "scripts/tools/fleet-rules.test.mjs",
+      "sync/base-sync.mjs",
+      "sync/base-sync.test.mjs",
+      "sync/direct-push.test.mjs",
+      "sync/ui-lockfile-integrity.mjs",
+      "sync/README.md",
+      "scripts/delivery/evidence-controls.test.mjs",
+      "docs/mine-clear/evidence.schema.json",
+      "scripts/acceptance/lib/evidence.mjs",
+      "scripts/acceptance/lib/outcome-contract.mjs",
+      "scripts/acceptance/lib/outcome-fixture.mjs",
+      "scripts/acceptance/lib/outcome-contract.test.mjs",
+      "scripts/acceptance/lib/environment-safety.test.mjs",
+      "scripts/acceptance/fleet-run.test.mjs",
+      "scripts/acceptance/lib/live/checks.mjs",
+      "scripts/acceptance/lib/live/test-fixtures.mjs",
+      "scripts/acceptance/lib/live/providers.test.mjs",
+      "scripts/acceptance/lib/live/live-truth.test.mjs",
+      "scripts/acceptance/lib/live/budget.test.mjs",
+      "sync/fanout-rules.mjs",
+      "scripts/acceptance/lib/live/product.test.mjs",
+      "scripts/acceptance/lib/live/media-negative.test.mjs",
+      "scripts/acceptance/lib/live/live-cli.test.mjs",
+      "scripts/acceptance/lib/live/media-decoder.test.mjs",
+      "scripts/acceptance/lib/live/live-cli-browser.test.mjs",
+      "scripts/acceptance/lib/live/cli-fixtures.mjs",
+      "scripts/acceptance/lib/live/README.md",
+      "scripts/acceptance/outcome.test.mjs",
+      "scripts/acceptance/lib/profile-contract.mjs",
+      "scripts/acceptance/lib/profile-contract.test.mjs",
+      "scripts/acceptance/profile-check.test.mjs",
+      "scripts/delivery/node-test-reporter.mjs",
+      "scripts/acceptance/lib/live/usage.mjs",
+      "scripts/acceptance/lib/live/usage.test.mjs",
+      "scripts/acceptance/lib/live/audit.plugin.mjs",
+      "scripts/acceptance/lib/live/audit.test.mjs",
+      "scripts/acceptance/lib/live/providers-http.test.mjs",
+      "scripts/acceptance/lib/live/dsh-process.test.mjs",
+      "scripts/acceptance/lib/live/live-cli-wire.test.mjs",
+      "scripts/ui-release-registration.mjs",
+      "scripts/ui-release-registration.test.mjs",
+      "sync/fanout-cnb.mjs",
+      "sync/fanout-safety.test.mjs",
+      "sync/fanout-rules.test.mjs",
+      "scripts/acceptance/lib/regression-evidence.mjs",
+      "scripts/acceptance/lib/live/assertions.mjs"
+    ],
+    "copiedFiles": {
+      ".github/workflows/base-sync-heartbeat.yml": {
+        "source": "sync/heartbeat-template.yml"
+      }
+    },
+    "managedSections": {
+      "AGENTS.md": {
+        "beginMarker": "<!-- WORKLOOM-CONTEXT:BEGIN -->",
+        "endMarker": "<!-- WORKLOOM-CONTEXT:END -->",
+        "missingFilePrefix": "# WorkLoom 仓库开发指引\n\n> 本文件包含 WorkLoom 各仓共享的受控规则；仓库专属规则位于 AGENTS.repo.md 或更近层级的 AGENTS.md / AGENTS.override.md。共享规则由 workloom-im 统一维护和分发。",
+        "missingFileSuffix": "## 本仓专属规则\n\n请把本仓独有的职责、命令、验证要求与例外写入根级 AGENTS.repo.md 或更近层级的 AGENTS.md / AGENTS.override.md；不得修改上方受控区块来放宽公共安全不变量。",
+        "replaceWholeFileSha256": [
+          "72f6c5c7f636f8a507ec2b7d4db40e7bdaf4e2dcfab0ea2fdb57c07bb13b8e5d"
+        ],
+        "legacyGitBlobOids": [
+          "6fbce152b7a9439ebac5829061b75f754913b882"
+        ]
+      }
+    },
+    "comment": "copiedFiles 与 files 均整文件验真；AGENTS.md 只按受控区块合并。legacyGitBlobOids 仅供审计，迁移判定只使用逐字节 SHA-256 allowlist。"
+  },
+  "preCommitSecretScanner": "scripts/secret-scan.mjs",
+  "perProductDerivedAssets": [
+    {
+      "directory": ".workloom-runtime-deps",
+      "files": [
+        "package.json",
+        "package-lock.json",
+        "metadata.json"
+      ],
+      "generator": "scripts/runtime-deps-lock.mjs",
+      "refreshArgs": [
+        "refresh"
+      ],
+      "verifyArgs": [
+        "verify"
+      ],
+      "strategy": "preserve-and-regenerate-after-product-lockfile",
+      "comment": "桌面运行时锁由每仓自身产品身份、依赖清单与 pnpm-lock 派生；普通 base-sync 只下发生成器，绝不把 workloom-im 的锁覆盖到仙女座或行业仓。"
+    }
+  ],
+  "acceptedBaseSecretScanFindings": {
+    ".env.example": {
+      "sha256": "ba5f1958c32f5bc9ec2061f4e8a6291a17244a4b0f5b31f7edad429a45c0d2a2",
+      "findings": [
+        {
+          "rule": "private-key",
+          "line": 31
+        }
+      ],
+      "reason": "环境示例仅展示带省略号的 Ed25519 PEM 结构，并明确要求私钥只能进入密钥库；不含可用私钥。"
+    },
+    ".github/workflows/ui-release.yml": {
+      "sha256": "2c10bcbd92d7b1b880f8859bb55d4b7c2d1d9aef28ecb484aeec81c891871f89",
+      "findings": [
+        {
+          "rule": "credential-in-url",
+          "line": 56
+        },
+        {
+          "rule": "literal-sensitive-assignment",
+          "line": 56
+        },
+        {
+          "rule": "credential-in-url",
+          "line": 57
+        },
+        {
+          "rule": "credential-in-url",
+          "line": 58
+        }
+      ],
+      "reason": "UI 发布门禁连接串是临时 GitHub Actions PostgreSQL 服务的公开测试值，不用于任何外部或生产数据库。"
+    },
+    "apps/server/src/service/adapters/business-registry.pg.test.ts": {
+      "sha256": "d8d66b9414ef7c29de5eea4d6a34f31eadd5a0bbf2a2d35f9ca731be0a5f7889",
+      "findings": [
+        {
+          "rule": "credential-in-url",
+          "line": 8
+        },
+        {
+          "rule": "credential-in-url",
+          "line": 9
+        },
+        {
+          "rule": "credential-in-url",
+          "line": 10
+        }
+      ],
+      "reason": "活库适配器契约仅使用仓库 docker-compose 的本机测试库默认值，不用于任何外部或生产数据库。"
+    },
+    "apps/server/src/service/channels-state.test.ts": {
+      "sha256": "226b697a961afc3237e3cec3ae99144a5f099a7122c79139dff0a1c57a82027f",
+      "findings": [
+        {
+          "rule": "literal-sensitive-assignment",
+          "line": 14
+        }
+      ],
+      "reason": "C 端 H5 签名负向测试使用明确标记为 test 的固定夹具，不是运行凭据。"
+    },
+    "apps/server/src/service/eval-source.pg.test.ts": {
+      "sha256": "afbfaa543b54db948ec41d0802aacb9b1ed85b07ac3fbf32863b2c97d0dfcc70",
+      "findings": [
+        {
+          "rule": "credential-in-url",
+          "line": 8
+        },
+        {
+          "rule": "credential-in-url",
+          "line": 9
+        }
+      ],
+      "reason": "仅用于可选 PG 契约测试的仓库内公开本机开发库默认连接串；生产值仍只能来自环境变量。"
+    },
+    "apps/server/src/service/h5-session-auth.test.ts": {
+      "sha256": "de726630d410434cd02bab6094a3dd35d356c4b2cc4537d386f26c88e597256a",
+      "findings": [
+        {
+          "rule": "literal-sensitive-assignment",
+          "line": 4
+        }
+      ],
+      "reason": "H5 正式鉴权负向测试使用明确标记为 production-test 的固定夹具，不是运行凭据。"
+    },
+    "apps/server/src/service/onboarding-continuity.pg.test.ts": {
+      "sha256": "bdb9d9abdf7c309fe28ee92c093e82e4f27bfbd8ffa2564edd971a74c7119026",
+      "findings": [
+        {
+          "rule": "literal-sensitive-assignment",
+          "line": 118
+        }
+      ],
+      "reason": "落地向导秘密不落库测试使用 sk-never-store 负向哨兵，验证该字段会被剔除。"
+    },
+    "apps/server/src/service/onboarding-continuity.test.ts": {
+      "sha256": "0873f0fedc697713b16038a6ac804bac9b9d5f9fda96c854751666b1d8c3ceda",
+      "findings": [
+        {
+          "rule": "literal-sensitive-assignment",
+          "line": 44
+        }
+      ],
+      "reason": "落地向导秘密不持久化单测使用 sk-must-not-persist 负向哨兵，验证该字段会被剔除。"
+    },
+    "scripts/hotel-seed-preflight.test.ts": {
+      "sha256": "a26d099d842fce9431613451decab4bda0240f5dac04a6d8f859626ffb3d5692",
+      "findings": [
+        {
+          "rule": "literal-sensitive-assignment",
+          "line": 22
+        }
+      ],
+      "reason": "种子预检负向测试连接固定的 127.0.0.1:1 不可达地址，用户名和密码均为 invalid。"
+    },
+    "scripts/seed-aipm.ts": {
+      "sha256": "b3bb5599958e25b9025e26d5166cc409633c98740707d65c36158af830154708",
+      "findings": [
+        {
+          "rule": "credential-in-url",
+          "line": 30
+        },
+        {
+          "rule": "credential-in-url",
+          "line": 32
+        }
+      ],
+      "reason": "AI 产品经理示例种子只使用仓库 docker-compose 的本机 owner / gateway 测试默认值；生产值只能来自环境变量。"
+    },
+    "scripts/release-gate.ts": {
+      "sha256": "83ffbd5660b2dc90cf6a856b50c7a314f481778d85e51f6d2f7f5b078210b23b",
+      "findings": [
+        {
+          "rule": "credential-in-url",
+          "line": 28
+        },
+        {
+          "rule": "credential-in-url",
+          "line": 29
+        }
+      ],
+      "reason": "发布门禁的 app / owner 连接串均为仓库 docker-compose 中公开的本机测试库默认值；生产连接仍只能来自环境变量。"
+    },
+    "vendor/dsh/package.json": {
+      "sha256": "0a85203e3e907dd2e3bec34324a2494758ca6cdee234b07090a7c8df0b11acac",
+      "findings": [
+        {
+          "rule": "literal-sensitive-assignment",
+          "line": 128
+        }
+      ],
+      "reason": "上游 dsh 0.2.0-rc.2 的 devDependencies 新增包名 @deepseek-ai/dsh-llm-deepseek-api-key，被启发式规则按「api-key + 字符串字面量」误判；该字面量是 npm 版本号 0.2.0-rc.2，不是凭据。vendor/dsh 为上游 tarball 逐字节基线（sha512 已与 registry 核对），按 D12 纪律不得改写，故登记内容绑定放行。"
+    }
+  },
+  "adoptMigrations": {
+    "AGENTS.repo.md": {
+      "strategy": "replace-if-identical-to-base",
+      "scaffold": "# 本仓专属开发规则\n\n> 本文件用于补充当前行业仓独有的职责、命令、验证要求与例外。请结合本仓实际内容填写；共享产品认知与安全不变量由根级 AGENTS.md 的受控区块继承。\n"
+    },
+    ".github/workflows/base-sync-push.yml": {
+      "strategy": "remove-if-identical-to-base"
+    }
+  },
+  "dependencyClosure": {
+    "relativeImports": "fail-closed",
+    "allowedExcludedTargets": [
+      {
+        "importer": "apps/server/src/index.ts",
+        "target": "apps/server/src/trpc/router.ts",
+        "reason": "服务组合根由行业仓保留路由装配，公共启动器只依赖其稳定导出。"
+      },
+      {
+        "importer": "apps/server/src/index.ts",
+        "target": "apps/server/src/service/gateway.ts",
+        "reason": "C 端网关包含行业业务适配器装配，由行业仓保留实现。"
+      },
+      {
+        "importer": "apps/server/src/service/channels.ts",
+        "target": "apps/server/src/service/store.ts",
+        "reason": "行业服务数据表与迁移链由子仓维护，通道层只依赖稳定存储接口。"
+      },
+      {
+        "importer": "apps/server/src/service/contract.test.ts",
+        "target": "apps/server/src/service/gateway.ts",
+        "reason": "公共 C 端契约测试刻意验证行业仓自己的网关组合根。"
+      },
+      {
+        "importer": "apps/server/src/service/eval.ts",
+        "target": "apps/server/src/service/dialog.ts",
+        "reason": "考试院调用行业仓保留的对话编排实现，不复制任何行业语义。"
+      },
+      {
+        "importer": "apps/server/src/service/eval.ts",
+        "target": "apps/server/src/service/adapters/business-registry.ts",
+        "reason": "考试院通过行业仓保留的业务适配器注册表运行行业题目。"
+      },
+      {
+        "importer": "apps/server/src/service/h5-session-auth.test.ts",
+        "target": "apps/server/src/service/gateway.ts",
+        "reason": "公共 H5 鉴权负向测试刻意验证行业仓自己的网关组合根。"
+      },
+      {
+        "importer": "packages/db/src/client.ts",
+        "target": "packages/db/src/schema.ts",
+        "reason": "数据库客户端消费子仓自有 schema；行业迁移链不得被基座整文件覆盖。"
+      },
+      {
+        "importer": "packages/db/src/index.ts",
+        "target": "packages/db/src/schema.ts",
+        "reason": "公共 DB 导出保留子仓自有 schema 与迁移链。"
+      }
+    ],
+    "comment": "所有随 base-sync 下发的 JS/TS 文件，其相对 import/export/require 目标也必须下发；确需由子仓保留实现的缝必须逐对登记并说明原因。"
+  },
+  "include": [
+    "packages/base/**",
+    "packages/industry-contract/**",
+    "packages/runtime/**",
+    "packages/shared/**",
+    "packages/db/**",
+    "apps/server/src/**",
+    "apps/server/package.json",
+    "apps/desktop/**",
+    "scripts/**",
+    "docker-compose.yml"
+  ],
+  "exclude": [
+    "bundles/**",
+    "demo/**",
+    "docs/**",
+    "mock/**",
+    "vendor/**",
+    "design-system/**",
+    "apps/site/**",
+    "apps/web/**",
+    "apps/webb/**",
+    "apps/webc/**",
+    "electron-builder.yml",
+    "product.manifest.json",
+    "apps/web/src/App.tsx",
+    "apps/web/src/shell/**",
+    "apps/web/src/pages/**",
+    "apps/web/src/components/**",
+    "apps/web/src/styles/**",
+    "apps/web/src/audio/**",
+    "apps/web/src/voice/**",
+    "apps/web/index.html",
+    "apps/web/public/**",
+    "apps/web/src/lib/display.ts",
+    "apps/web/src/lib/demo-conversation.ts",
+    "apps/server/src/trpc/router.ts",
+    "apps/server/src/service/router.ts",
+    "apps/server/src/service/dialog.ts",
+    "apps/server/src/service/kb.ts",
+    "apps/server/src/service/store.ts",
+    "apps/server/src/service/gateway.ts",
+    "apps/server/src/service/ticket.ts",
+    "apps/server/src/service/dialog.test.ts",
+    "apps/server/src/service/inspection-adapter.ts",
+    "apps/server/src/service/inspection-adapter.test.ts",
+    "apps/server/src/service/adapters/**",
+    "apps/server/src/service/aipm.ts",
+    "apps/server/src/industry/**",
+    "packages/base/bundles/bundles.test.ts",
+    "packages/base/bundles/eval-questions.test.ts",
+    "packages/base/fence-engine/fence-engine.test.ts",
+    "packages/base/overlay/overlay.test.ts",
+    "packages/db/src/schema.ts",
+    "packages/db/migrations/**",
+    "apps/desktop/WorkLoom.app/**",
+    "skills/**",
+    "scripts/seed*.ts",
+    "scripts/demo.ts",
+    "scripts/reset.sh",
+    "scripts/simulate-twin.ts",
+    "scripts/snapshot-twin.sh",
+    "scripts/restore-twin.sh",
+    "scripts/twin-genie.ts",
+    "scripts/audit-scan.ts",
+    "scripts/hardcode-scan.mjs",
+    "scripts/hp01-repro.mts",
+    "scripts/hp02-repro.mts",
+    "scripts/hp02-action-inventory.mts",
+    "scripts/bundle-governance.test.ts",
+    "scripts/hotel-seed-preflight.ts",
+    "scripts/hotel-seed-preflight.test.ts",
+    "scripts/suite.ts",
+    "scripts/verify-seed-aipm-idempotence.ts",
+    "scripts/verify-ui-consumer.mjs",
+    "scripts/verify-ui-consumer.test.mjs",
+    "scripts/ui-governance-rules.mjs",
+    "scripts/ui-governance-rules.test.mjs",
+    "scripts/verify-ui-governance.mjs",
+    "scripts/action-pins.json",
+    "scripts/action-trust-policy.test.mjs",
+    "scripts/desktop-release-policy.test.mjs",
+    "scripts/desktop-release-state.mjs",
+    "scripts/desktop-release-state.test.mjs",
+    "scripts/desktop-workflow-path.test.mjs",
+    "scripts/release-publisher-policy.test.mjs",
+    "scripts/install-im-channels.sh",
+    "scripts/skill-forge.mts",
+    "scripts/skill-dist-demo.mts",
+    "scripts/build-sales-pptx.py",
+    "scripts/eval/report/**",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    ".ai-prompt",
+    ".env*",
+    "README*",
+    "CHANGELOG.md",
+    "LICENSE",
+    "oss-components.json",
+    ".oss-watch-state.json",
+    "core.*",
+    "PREVIEW_CHECKLIST.md",
+    ".github/workflows/**",
+    "sync/**"
+  ],
+  "anchorMerge": {
+    "packages/base/package.json": {
+      "strategy": "json-merge-keep-child-extra",
+      "mergeKeys": [
+        "exports",
+        "dependencies",
+        "devDependencies"
+      ],
+      "comment": "基座版为底；子仓独有的 exports（如 asset-cms/publish-rpa 等行业模块）与依赖必须保留——2026-09-05 八仓对齐时整体覆盖曾致 ERR_PACKAGE_PATH_NOT_EXPORTED 服务瘫痪"
+    },
+    "packages/base/tsconfig.json": {
+      "strategy": "json-merge-keep-child-extra",
+      "mergeKeys": [
+        "include"
+      ],
+      "comment": "基座版为底；子仓独有的 include 目录（如 audit-core 试验田）必须保留"
+    },
+    "apps/server/package.json": {
+      "strategy": "json-merge-keep-child-extra",
+      "mergeKeys": [
+        "dependencies",
+        "devDependencies"
+      ],
+      "comment": "基座版为底；子仓独有依赖（如 segment 接线需要的 yaml）保留"
+    }
+  },
+  "publicAppendOnlyFiles": [
+    "packages/db/migrations/0026_tenant_overlay.sql",
+    "packages/db/migrations/0028_onboarding_truth_gate.sql",
+    "packages/db/migrations/0029_onboarding_continuity.sql",
+    "packages/db/migrations/0030_single_active_bundle_install.sql",
+    "packages/db/migrations/0031_accounts_overlay_least_privilege.sql",
+    "packages/db/migrations/0032_remove_cross_industry_hotel_bootstrap.sql",
+    "packages/db/migrations/0033_neutral_workspace_industry_default.sql",
+    "packages/db/migrations/0034_api_key_rotation.sql",
+    "packages/db/migrations/0035_tenant_overlay_single_active.sql"
+  ],
+  "newIndustryBootstrapFiles": [
+    "packages/db/migrations/0001_init.sql",
+    "packages/db/migrations/0002_bugfix.sql",
+    "packages/db/migrations/0003_im_inbound_dedupe.sql",
+    "packages/db/migrations/0004_biz_events_no_truncate.sql",
+    "packages/db/migrations/0005_fence_baseline_guard.sql",
+    "packages/db/migrations/0006_industry_publish_gate.sql",
+    "packages/db/migrations/0007_append_event_function.sql",
+    "packages/db/migrations/0008_publish_reviews_rls.sql",
+    "packages/db/migrations/0009_captain.sql",
+    "packages/db/migrations/0010_service_c.sql",
+    "packages/db/migrations/0011_service_c_hardening.sql",
+    "packages/db/migrations/0012_service_c_demo_pk.sql",
+    "packages/db/migrations/0013_memory_usage_workspace_rls.sql",
+    "packages/db/migrations/0013_pipeline_hardening.sql",
+    "packages/db/migrations/0016_readable_id_tail.sql",
+    "packages/db/migrations/0017_skill_revoke_channel.sql",
+    "packages/db/migrations/0018_skill_ops_distribution.sql",
+    "packages/db/migrations/0019_skill_ops_autosync.sql",
+    "packages/db/migrations/0020_skill_reflux.sql",
+    "packages/db/migrations/0021_eval_core.sql",
+    "packages/db/migrations/0022_bundle_mechanism.sql",
+    "packages/db/migrations/0023_dev_fabric.sql",
+    "packages/db/migrations/0024_secretary.sql",
+    "packages/db/migrations/0025_loommate_modes.sql",
+    "packages/db/migrations/0026_tenant_overlay.sql",
+    "packages/db/migrations/0027_accounts.sql",
+    "packages/db/migrations/0028_onboarding_truth_gate.sql",
+    "packages/db/migrations/0029_onboarding_continuity.sql",
+    "packages/db/migrations/0030_single_active_bundle_install.sql",
+    "packages/db/migrations/0031_accounts_overlay_least_privilege.sql",
+    "packages/db/migrations/0032_remove_cross_industry_hotel_bootstrap.sql",
+    "packages/db/migrations/0033_neutral_workspace_industry_default.sql",
+    "packages/db/migrations/0034_api_key_rotation.sql",
+    "packages/db/migrations/0035_tenant_overlay_single_active.sql"
+  ],
+  "appendOnlyDirs": [],
+  "pollutionGuard": {
+    "pathBlacklist": [
+      "^bundles/",
+      "^demo/",
+      "^docs/demo",
+      "^scripts/seed",
+      "^scripts/demo",
+      "hotel-baseline",
+      "ai-pm",
+      "yunqi",
+      "ecommerce",
+      "panda-cineforge",
+      "platform-ops"
+    ],
+    "blacklistNote": "以 ^ 开头=路径前缀匹配；其余=子串匹配。^bundles/ 只锚定仓库根的行业包目录，不误伤 packages/base/bundles（基座 bundle 加载器）",
+    "maxFilesPerSync": 200,
+    "maxFilesPerAdopt": 450,
+    "comment": "推送前硬校验：待同步文件路径命中黑名单或数量超限即中止。常规同步最多 200 项；仅新行业显式 adopt 的首次完整装配可放宽至 450 项，仍须先通过依赖闭包与零写入预检。"
+  }
+}

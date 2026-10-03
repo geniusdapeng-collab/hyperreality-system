@@ -28,6 +28,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { captureEvidenceRun, hashBytes, isAncestor, resolveCommit, revisionOf, validateExecSpec, verifyApproval, verifyArtifact, verifyRun } from "./evidence.mjs";
 
 const SCHEMA_ID = "workloom.mine-clear/ledger@1";
 const CARD_ID_RE = /^MC-\d{3,}$/;
@@ -50,8 +51,10 @@ const HELP = `排雷式交付执行器（MCD v1.0）
                     --kind <problem|fix>
   add               校验并追加一张卡（同 ID 需 --replace）
                     --ledger <台账> --card <文件|-> [--replace]
-  gate              台账完整性门禁：断言可运行 / 修复卡有回归 / 验证人与修复人分离 / P0 未闭环即红
-                    --ledger <台账> [--json]
+  gate              台账与实证门禁：三基线 / 实际断言 / 独立验证 / P0/P1 未 verified 即红
+                    --ledger <台账> [--repo <路径>] [--json]
+  run-assertions    显式运行一张卡的 argv 断言，捕获实际退出码/输出/散列/commit/角色
+                    --ledger <台账> --card <MC-...> --actor <标识> --role <repair|acceptance> [--repo <路径>] [--timeout-ms <毫秒>]
   status            按状态、级别、批次统计并列出未闭环清单
                     --ledger <台账> [--json]
   plan              生成四批修复计划与冲突面（同文件卡）分组
@@ -184,6 +187,7 @@ function validateCard(card, { ledger = null, index = 0 } = {}) {
     for (const [i, item] of card.evidence.entries()) {
       if (!item?.type) errors.push(`${where}：evidence[${i}] 缺 type`);
       if (!item?.ref) errors.push(`${where}：evidence[${i}] 缺 ref`);
+      if (!/^[0-9a-f]{64}$/i.test(String(item?.sha256 ?? ""))) errors.push(`${where}：evidence[${i}] 缺真实文件/提交 blob 的 sha256`);
       if (item?.type === "code" && item?.ref && !isSha(evidenceCommit(item.ref))) {
         errors.push(`${where}：evidence[${i}] 是代码类证据，ref 必须带 @<commit>（如 apps/server/src/x.ts:42@abc1234）`);
       }
@@ -209,6 +213,11 @@ function validateCard(card, { ledger = null, index = 0 } = {}) {
       if (assertion?.last_result && !["pass", "fail", "not-run"].includes(assertion.last_result)) {
         errors.push(`${tag} last_result 必须是 pass|fail|not-run`);
       }
+      if (["fixed", "verified"].includes(card?.state) && assertion?.last_result !== "pass") errors.push(`${tag} 闭环必须是实际运行的 pass，fail/not-run 不可闭环`);
+      if (["fixed", "verified"].includes(card?.state) && (!assertion?.run || !assertion?.evidence)) errors.push(`${tag} 缺 run 和带散列/commit 的实际输出`);
+      if (["fixed", "verified"].includes(card?.state)) {
+        try { validateExecSpec(assertion?.exec); } catch (error) { errors.push(`${tag} ${error.message}`); }
+      }
     }
   }
   if (card?.kind === "problem") {
@@ -229,12 +238,14 @@ function validateCard(card, { ledger = null, index = 0 } = {}) {
   if (card?.state === "fixed" && !card?.regression?.command) {
     errors.push(`${where}：state=fixed 必须给 regression.command（修完凭什么说修好了）`);
   }
+  if (card?.state === "fixed" && !card?.fixed_by) errors.push(`${where}：state=fixed 必须给 fixed_by`);
   if (card?.state === "verified") {
+    if (!card?.fixed_by) errors.push(`${where}：state=verified 必须给 fixed_by，缺修复角色不能证明独立性`);
     if (!card?.verified_by) errors.push(`${where}：state=verified 必须给 verified_by`);
     if (!card?.verified_at) errors.push(`${where}：state=verified 必须给 verified_at`);
     if (!card?.verification_evidence) errors.push(`${where}：state=verified 必须给 verification_evidence（独立验证的断言输出路径）`);
-    if (card?.verified_by && card?.fixed_by && card.verified_by === card.fixed_by && !card?.waiver?.reason) {
-      errors.push(`${where}：验证人与修复人相同（修复者不自验）——换独立会话，或写 waiver.reason 说明豁免理由`);
+    if (card?.verified_by && card?.fixed_by && card.verified_by === card.fixed_by && (!card?.waiver?.reason || !card.waiver.approved_by || !card.waiver.approved_at || !card.waiver.source)) {
+      errors.push(`${where}：验证人与修复人相同（修复者不自验）——必须给独立批准者、时间及真实批准来源，reason 本身不是批准`);
     }
   }
   if (card?.state === "covered" && !isSha(evidenceCommit(card?.covered_by)) && !isSha(card?.covered_by)) {
@@ -254,21 +265,93 @@ function validateCard(card, { ledger = null, index = 0 } = {}) {
   return errors;
 }
 
-function collectErrors(ledger) {
+function evidenceContext(ledger, ledgerPath) {
+  const root = repoRoot(arg("--repo", ledger.repo_path ?? "."));
+  return { repoRoot: root, artifactRoot: dirname(ledgerPath), cache: new Map() };
+}
+
+function verifyBaselines(ledger, context) {
+  const errors = []; const commits = {};
+  for (const name of ["audit", "repair", "acceptance"]) {
+    try {
+      commits[name] = resolveCommit(context.repoRoot, ledger.baseline?.[name]?.commit);
+      if (commits[name] !== ledger.baseline?.[name]?.commit) errors.push(`baseline.${name}.commit 必须记录完整 40 位 SHA`);
+    }
+    catch { errors.push(`baseline.${name}.commit 缺失/null/未知提交：不能证明三基线对齐`); }
+  }
+  try {
+    const revision = revisionOf(context.repoRoot);
+    if (revision.dirty) errors.push("被测工作树存在未提交源码：不能用旧 commit 的证据放行");
+    if (commits.acceptance && commits.acceptance !== revision.commit) errors.push("验收基线不是当前 HEAD（过期验收证据）");
+    if (commits.audit && commits.repair && !isAncestor(context.repoRoot, commits.audit, commits.repair)) errors.push("修复基线不是审计基线的后代");
+    if (commits.repair && commits.acceptance && !isAncestor(context.repoRoot, commits.repair, commits.acceptance)) errors.push("验收基线不是修复基线的后代");
+  } catch (error) { errors.push(`三基线 Git 核验失败：${error.message}`); }
+  context.auditCommit = commits.audit; context.repairCommit = commits.repair; context.commit = commits.acceptance;
+  return errors;
+}
+
+function verifyCardEvidence(card, context) {
+  const errors = []; const { repoRoot: root, artifactRoot, commit, repairCommit, auditCommit, cache } = context;
+  for (const [i, item] of (card.evidence ?? []).entries()) {
+    if (item?.type === "code") {
+      try {
+        const match = /^(.+):(\d+)@([0-9a-f]{7,40})$/i.exec(item.ref);
+        if (!match || match[1].startsWith("/") || match[1].split(/[\\/]/).includes("..")) throw new Error("ref 必须是仓内 file:line@commit");
+        const sourceCommit = resolveCommit(root, match[3]);
+        if (sourceCommit !== auditCommit) throw new Error("代码证据不属于审计基线");
+        const blob = execFileSync("git", ["show", `${sourceCommit}:${match[1]}`], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+        if (hashBytes(blob) !== item.sha256) throw new Error("代码证据 sha256 与提交中的真实 blob 不一致");
+        if (Number(match[2]) < 1 || Number(match[2]) > blob.toString("utf8").split("\n").length) throw new Error("代码行号越界");
+      } catch (error) { errors.push(`${card.id}.evidence[${i}]：${error.message}`); }
+    } else errors.push(...verifyArtifact({ path: item?.ref, sha256: item?.sha256, commit: item?.commit }, { artifactRoot, commit: auditCommit, label: `${card.id}.evidence[${i}]` }).errors);
+  }
+  if (card.root_cause) {
+    try {
+      const sourceCommit = resolveCommit(root, card.root_cause.commit);
+      if (sourceCommit !== auditCommit) errors.push(`${card.id} 根因 commit 与审计基线不一致`);
+      const file = card.root_cause.file;
+      if (typeof file !== "string" || file.startsWith("/") || file.split(/[\\/]/).includes("..")) throw new Error("根因文件必须位于仓内");
+      const blob = execFileSync("git", ["show", `${sourceCommit}:${file}`], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+      if (!Number.isInteger(card.root_cause.line) || card.root_cause.line < 1 || card.root_cause.line > blob.toString("utf8").split("\n").length) errors.push(`${card.id} 根因行号缺失/超出审计提交中的文件`);
+    } catch { errors.push(`${card.id} 根因 commit/文件在本仓不存在或路径非法`); }
+  }
+  if (!["fixed", "verified"].includes(card.state)) return errors;
+  const expectedCommit = card.state === "verified" ? commit : repairCommit;
+  const actor = card.state === "verified" ? card.verified_by : card.fixed_by;
+  const role = card.state === "verified" ? "acceptance" : "repair";
+  for (const [i, assertion] of (card.assertions ?? []).entries()) {
+    const label = `${card.id}.assertions[${i}]`;
+    const run = verifyRun(assertion.run, { artifactRoot, repoRoot: root, commit: expectedCommit, actor, role, command: assertion.command, subject: { card_id: card.id, assertion_index: i }, cache, label: `${label}.run` });
+    errors.push(...run.errors, ...verifyArtifact(assertion.evidence, { artifactRoot, commit: expectedCommit, label: `${label}.evidence` }).errors);
+    if (run.data && !(run.data.outputs ?? []).some((ref) => JSON.stringify(ref) === JSON.stringify(assertion.evidence))) errors.push(`${label} 断言输出未绑定到该次执行`);
+    if (!(run.data?.requested_exec ?? run.data?.exec) || JSON.stringify(run.data.requested_exec ?? run.data.exec) !== JSON.stringify(assertion.exec)) errors.push(`${label} 声明 exec argv 与实际执行请求不同或缺失（受控 Node observer 另回读实际 argv）`);
+    if (card.state === "verified" && (Date.parse(card.verified_at) < Date.parse(run.data?.finished_at) || !Number.isFinite(Date.parse(card.verified_at)) || Date.parse(card.verified_at) > Date.now() + 300_000)) errors.push(`${label} verified_at 早于运行完成或时间非法`);
+  }
+  if (card.state === "verified") {
+    if (!(card.assertions ?? []).some((a) => JSON.stringify(a.run) === JSON.stringify(card.verification_evidence))) errors.push(`${card.id} verification_evidence 必须引用本卡独立验收运行记录`);
+    if (card.fixed_by === card.verified_by) errors.push(...verifyApproval(card.waiver, { artifactRoot, commit, subject: card.id, scope: "role-separation", excludedActors: [card.fixed_by, card.verified_by], label: `${card.id}.waiver` }));
+  }
+  return errors;
+}
+
+function collectErrors(ledger, ledgerPath) {
   const errors = [];
   validateLedger(ledger, errors);
   if (!Array.isArray(ledger?.cards)) return errors;
+  const context = evidenceContext(ledger, ledgerPath);
+  errors.push(...verifyBaselines(ledger, context));
   const seen = new Set();
   ledger.cards.forEach((card, index) => {
     errors.push(...validateCard(card, { ledger, index }));
+    errors.push(...verifyCardEvidence(card, context));
     if (card?.id) {
       if (seen.has(card.id)) errors.push(`卡片 ID 重复：${card.id}`);
       seen.add(card.id);
     }
   });
   for (const card of ledger.cards) {
-    if (card?.kind === "problem" && card?.severity === "P0" && ["open", "unfixed"].includes(card?.state)) {
-      errors.push(`${card.id}：P0 未闭环（突破核心不变量 / 安全）——阻断交付，必须先修再验收`);
+    if (card?.kind === "problem" && ["P0", "P1"].includes(card?.severity) && card?.state !== "verified") {
+      errors.push(`${card.id}：${card.severity} 未闭环（未独立 verified）——阻断交付，fixed/covered/wontfix 不能绕过`);
     }
   }
   return errors;
@@ -285,8 +368,8 @@ function commandInit() {
   if (!taskId || !TASK_ID_RE.test(taskId)) {
     die("缺少 --task T-YYYY-MMDD-XXXX（或把分支命名为 task/T-YYYY-MMDD-XXXX）", 2);
   }
-  const fetchedAt = has("--no-fetch") ? null : nowIso();
-  if (!has("--no-fetch")) git(root, ["fetch", "--quiet", remote], { allowFailure: true });
+  const fetched = has("--no-fetch") ? null : git(root, ["fetch", "--quiet", remote], { allowFailure: true }) !== null;
+  const fetchedAt = fetched === true ? nowIso() : null;
   const remoteMain = git(root, ["rev-parse", `${remote}/main`], { allowFailure: true });
   const dirty = (git(root, ["status", "--porcelain"]) || "").split("\n").filter(Boolean);
 
@@ -297,6 +380,7 @@ function commandInit() {
   }
 
   const notes = [];
+  if (fetched === false) notes.push(`抓取 ${remote} 失败：无法核实云端最新，只记录当前本地基线`);
   if (!remoteMain) notes.push(`未能解析 ${remote}/main（离线或未配置 remote）`);
   else if (remoteMain !== head) notes.push(`本地 HEAD 不是 ${remote}/main 最新（云端 ${remoteMain.slice(0, 8)} / 本地 ${head.slice(0, 8)}）——按 §1.2 先对齐基线`);
   if (dirty.length) notes.push(`工作树不干净（${dirty.length} 项未提交改动）：排雷结论只对已提交内容成立`);
@@ -313,6 +397,7 @@ function commandInit() {
       remote,
       remote_main: remoteMain,
       fetched_at: fetchedAt,
+      fetch_status: fetched === null ? "skipped" : fetched ? "success" : "failed",
       dirty_count: dirty.length,
       notes,
     },
@@ -325,11 +410,12 @@ function commandInit() {
     schema: SCHEMA_ID,
     task_id: taskId,
     repo: basename(root),
+    repo_path: root,
     title: arg("--title", ""),
     created_at: nowIso(),
     updated_at: nowIso(),
     baseline: {
-      audit: { commit: head, branch, remote, fetched_at: fetchedAt, notes: notes.join("；") },
+      audit: { commit: head, branch, remote, fetched_at: fetchedAt, fetch_status: fetched === null ? "skipped" : fetched ? "success" : "failed", notes: notes.join("；") },
       repair: { commit: null, reverified_problem_ids: [] },
       acceptance: { commit: null, is_descendant_of_repair: null },
     },
@@ -399,15 +485,15 @@ function cardTemplate(kind) {
       state: "open",
       title: "<一句话说清修什么>",
       covers: ["MC-001"],
-      evidence: [{ type: "code", ref: "<path>:<line>@<commit>", note: "<实证>" }],
+      evidence: [{ type: "code", ref: "<path>:<line>@<commit>", sha256: "<提交 blob 的 64 位 sha256>", note: "<实证>" }],
       fix_plan: "<代码级：改哪个文件哪一段>",
       blast_radius: "<此改动改变谁的行为 / 谁依赖被改的文案·字段·顺序>",
       conflict_paths: ["<path>"],
       assertions: [
-        { kind: "sample", given: "<输入>", expect: "<可判定的预期>", command: "<可运行命令>", last_result: "not-run" },
-        { kind: "property", given: "<任意输入>", expect: "<不变量成立>", command: "<可运行命令>", last_result: "not-run" },
+        { kind: "sample", given: "<输入>", expect: "<可判定的预期>", command: "node --test <path>", exec: { file: "node", args: ["--test", "<path>"] }, last_result: "not-run" },
+        { kind: "property", given: "<任意输入>", expect: "<不变量成立>", command: "node --test <path>", exec: { file: "node", args: ["--test", "<path>"] }, last_result: "not-run" },
       ],
-      regression: { command: "<回归命令>", evidence: "" },
+      regression: { command: "<回归命令>", evidence: null },
       rollback: "revert <commit>",
       fixed_by: null,
       verified_by: null,
@@ -422,12 +508,12 @@ function cardTemplate(kind) {
     batch: 2,
     state: "open",
     title: "<一句话说清问题>",
-    evidence: [{ type: "code", ref: "<path>:<line>@<commit>", note: "<实证：代码原文 / 日志 / 响应>" }],
+    evidence: [{ type: "code", ref: "<path>:<line>@<commit>", sha256: "<提交 blob 的 64 位 sha256>", note: "<实证：代码原文 / 日志 / 响应>" }],
     root_cause: { file: "<path>", line: 1, commit: "<commit>", symbol: "<函数/类>" },
     trigger_path: "<什么输入或时序能走到这个坑>",
     assertions: [
-      { kind: "sample", given: "<输入>", expect: "<可判定的预期>", command: "<可运行命令>", last_result: "not-run" },
-      { kind: "property", given: "<任意输入>", expect: "<不变量成立>", command: "<可运行命令>", last_result: "not-run" },
+      { kind: "sample", given: "<输入>", expect: "<可判定的预期>", command: "node --test <path>", exec: { file: "node", args: ["--test", "<path>"] }, last_result: "not-run" },
+      { kind: "property", given: "<任意输入>", expect: "<不变量成立>", command: "node --test <path>", exec: { file: "node", args: ["--test", "<path>"] }, last_result: "not-run" },
     ],
     notes: "",
   };
@@ -451,6 +537,19 @@ function commandAdd() {
     die(`卡片不是合法 JSON：${error.message}`, 2);
   }
   const errors = validateCard(card, { ledger, index: ledger.cards?.length ?? 0 });
+  if (!errors.length) {
+    const context = evidenceContext(ledger, ledgerPath);
+    if (card.state === "verified") errors.push(...verifyBaselines(ledger, context));
+    else {
+      for (const [field, name] of [["auditCommit", "audit"], ["repairCommit", "repair"], ["commit", "acceptance"]]) {
+        if (ledger.baseline?.[name]?.commit) {
+          try { context[field] = resolveCommit(context.repoRoot, ledger.baseline[name].commit); }
+          catch { errors.push(`baseline.${name}.commit 不存在`); }
+        }
+      }
+    }
+    errors.push(...verifyCardEvidence(card, context));
+  }
   if (errors.length) {
     console.error("✗ 卡片校验未通过：");
     for (const item of errors) console.error(`  - ${item}`);
@@ -472,7 +571,7 @@ function commandAdd() {
 function commandGate() {
   const ledgerPath = requireLedgerPath();
   const ledger = readJsonFile(ledgerPath, "台账");
-  const errors = collectErrors(ledger);
+  const errors = collectErrors(ledger, ledgerPath);
   const asJson = has("--json");
   if (asJson) {
     console.log(JSON.stringify({ ledger: ledgerPath, ok: errors.length === 0, errors }, null, 2));
@@ -484,6 +583,61 @@ function commandGate() {
     process.exit(1);
   }
   ok(`台账门禁通过：${ledger.cards.length} 张卡 / ${ledger.invariants.length} 条不变量`);
+}
+
+function commandRunAssertions() {
+  const ledgerPath = requireLedgerPath(); const ledger = readJsonFile(ledgerPath, "台账");
+  const context = evidenceContext(ledger, ledgerPath); const id = arg("--card");
+  const card = ledger.cards?.find((c) => c.id === id); if (!card) die("--card 必须指定台账中的一张卡", 2);
+  const actor = arg("--actor"); const role = arg("--role");
+  if (!actor || !["repair", "acceptance"].includes(role)) die("需要 --actor 与 --role repair|acceptance", 2);
+  const timeoutMs = Number(arg("--timeout-ms", "60000"));
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 3_600_000) die("--timeout-ms 必须为 1–3600000", 2);
+  const revision = revisionOf(context.repoRoot);
+  if (revision.dirty) die("断言执行前必须提交被测源码", 1);
+  if (!isAncestor(context.repoRoot, ledger.baseline?.audit?.commit, revision.commit)) die("当前 HEAD 不包含审计基线", 1);
+  if (role === "acceptance") {
+    if (!card.fixed_by) die("独立验收前必须记录 fixed_by", 1);
+    if (!isAncestor(context.repoRoot, ledger.baseline?.repair?.commit, revision.commit)) die("验收 HEAD 不包含修复基线", 1);
+    if (actor === card.fixed_by) {
+      const errors = verifyApproval(card.waiver, { artifactRoot: context.artifactRoot, commit: revision.commit, subject: card.id, scope: "role-separation", excludedActors: [actor] });
+      if (errors.length) die(errors.join("；"), 1);
+    }
+  }
+  if (!Array.isArray(card.assertions) || !card.assertions.length) die("卡片缺断言", 1);
+  for (const assertion of card.assertions) validateExecSpec(assertion.exec);
+  if (!card.regression?.command) die("运行闭环前必须记录 regression.command", 1);
+  // Publish invalidation before the first process starts. A capture/index/file error
+  // after a real execution must never leave the previous verified result green.
+  card.state = "unfixed";
+  card.verified_by = null; card.verified_at = null; card.verification_evidence = null;
+  for (const assertion of card.assertions) {
+    assertion.last_result = "not-run"; delete assertion.run; delete assertion.evidence;
+  }
+  ledger.baseline.acceptance = { ...(ledger.baseline.acceptance ?? {}), commit: null, is_descendant_of_repair: null };
+  card.last_assertion_attempt = { actor, role, result: "running", at: nowIso(), commit: revision.commit };
+  ledger.updated_at = nowIso(); writeJsonFile(ledgerPath, ledger);
+  let passed = true;
+  for (const [i, assertion] of card.assertions.entries()) {
+    const run = captureEvidenceRun({ repoRoot: context.repoRoot, artifactRoot: context.artifactRoot, runId: `${card.id}-${i}-${Date.now()}`, command: assertion.command, exec: assertion.exec, actor, role, subject: { card_id: card.id, assertion_index: i }, timeoutMs });
+    assertion.run = run.runRef; assertion.evidence = run.artifacts[0]; assertion.last_result = run.result;
+    passed = passed && run.result === "pass";
+  }
+  if (role === "repair") {
+    card.fixed_by = actor; card.state = passed ? "fixed" : "unfixed";
+    card.verified_by = null; card.verified_at = null; card.verification_evidence = null;
+    ledger.baseline.repair = { ...(ledger.baseline.repair ?? {}), commit: revision.commit };
+    ledger.baseline.acceptance = { ...(ledger.baseline.acceptance ?? {}), commit: null, is_descendant_of_repair: null };
+  } else {
+    card.state = passed ? "verified" : "unfixed"; card.verified_by = passed ? actor : null;
+    card.verified_at = passed ? new Date().toISOString() : null; card.verification_evidence = passed ? card.assertions[0].run : null;
+    card.last_verification_attempt = { actor, result: passed ? "pass" : "fail", at: nowIso(), runs: card.assertions.map((assertion) => assertion.run) };
+    ledger.baseline.acceptance = { ...(ledger.baseline.acceptance ?? {}), commit: revision.commit, is_descendant_of_repair: true };
+  }
+  card.last_assertion_attempt = { ...card.last_assertion_attempt, result: passed ? "pass" : "fail", finished_at: nowIso() };
+  ledger.updated_at = nowIso(); writeJsonFile(ledgerPath, ledger);
+  console.log(JSON.stringify({ id, actor, role, result: passed ? "pass" : "fail", commit: revision.commit, assertions: card.assertions.map((a) => ({ result: a.last_result, run: a.run })) }, null, 2));
+  process.exitCode = passed ? 0 : 1;
 }
 
 function summarize(ledger) {
@@ -589,7 +743,7 @@ function commandVerifyBaseline() {
   const ledger = readJsonFile(ledgerPath, "台账");
   const root = repoRoot(arg("--repo", "."));
   const remote = arg("--remote", "origin");
-  if (!has("--no-fetch")) git(root, ["fetch", "--quiet", remote], { allowFailure: true });
+  const fetched = has("--no-fetch") ? null : git(root, ["fetch", "--quiet", remote], { allowFailure: true }) !== null;
   const head = git(root, ["rev-parse", "HEAD"]);
   const rows = [];
   let stale = 0;
@@ -600,9 +754,9 @@ function commandVerifyBaseline() {
     let status = "unknown";
     let changed = null;
     if (exists) {
-      const isAncestor = git(root, ["merge-base", "--is-ancestor", commit, head], { allowFailure: true }) !== null;
-      status = isAncestor ? "current" : "diverged";
-      if (isAncestor && card?.root_cause?.file) {
+      const ancestor = isAncestor(root, commit, head);
+      status = ancestor ? "current" : "diverged";
+      if (ancestor && card?.root_cause?.file) {
         const diff = git(root, ["diff", "--name-only", `${commit}..HEAD`, "--", card.root_cause.file], { allowFailure: true });
         if (diff && diff.length) {
           changed = diff.split("\n").length;
@@ -615,9 +769,10 @@ function commandVerifyBaseline() {
     rows.push({ id: card.id, state: card.state, base_commit: commit.slice(0, 8), status, file: card.root_cause?.file ?? null, changed_files: changed });
   }
   if (has("--json")) {
-    console.log(JSON.stringify({ head: head.slice(0, 8), rows, stale }, null, 2));
+    console.log(JSON.stringify({ head, fetch_status: fetched === null ? "skipped" : fetched ? "success" : "failed", freshness_errors: fetched === false ? [`抓取 ${remote} 失败：云端最新未验证`] : [], rows, stale }, null, 2));
   } else {
     console.log(`基线核对（当前 HEAD ${head.slice(0, 8)}）`);
+    if (fetched === false) warn(`抓取 ${remote} 失败：云端新鲜度未验证，本次核对不能放行`);
     if (!rows.length) console.log("  （台账里没有带 commit 的卡）");
     for (const row of rows) {
       const hint = {
@@ -628,15 +783,15 @@ function commandVerifyBaseline() {
       }[row.status];
       console.log(`  - ${row.id} [${row.state}] @${row.base_commit} → ${row.status}（${hint}）`);
     }
-    console.log(stale ? `! ${stale} 张卡需要先对齐基线，再动键盘` : "✓ 全部卡基线在线");
+    console.log(fetched === false ? "! 云端最新未验证，本次核对不能放行" : stale ? `! ${stale} 张卡需要先对齐基线，再动键盘` : "✓ 本次列出的卡位于已读取的 Git 历史线上");
   }
-  process.exit(stale ? 1 : 0);
+  process.exit(fetched === false ? 2 : stale ? 1 : 0);
 }
 
 function commandHandoff() {
   const ledgerPath = requireLedgerPath();
   const ledger = readJsonFile(ledgerPath, "台账");
-  const errors = collectErrors(ledger);
+  const errors = collectErrors(ledger, ledgerPath);
   if (errors.length) {
     console.error(`✗ 交接被拒：台账门禁未过（${errors.length} 项）`);
     for (const item of errors.slice(0, 12)) console.error(`  - ${item}`);
@@ -657,6 +812,7 @@ function commandHandoff() {
     process.exit(1);
   }
   const env = arg("--env", ledger.environment?.kind ?? "unknown");
+  if (!["local-preview", "client-runtime", "deployed"].includes(env)) die("交接需要有效环境档位 local-preview|client-runtime|deployed", 1);
   const repo = ledger.repo ?? basename(repoRoot(arg("--repo", ".")));
   const handoff = {
     schema: "workloom.mine-clear/handoff@1",
@@ -674,7 +830,7 @@ function commandHandoff() {
       verified_by: card.verified_by,
       verified_at: card.verified_at,
       verification_evidence: card.verification_evidence,
-      assertions: (card.assertions ?? []).map((item) => ({ kind: item.kind, given: item.given, expect: item.expect, command: item.command, last_result: item.last_result ?? "not-run" })),
+      assertions: (card.assertions ?? []).map((item) => ({ kind: item.kind, given: item.given, expect: item.expect, command: item.command, exec: item.exec, last_result: item.last_result ?? "not-run", evidence: item.evidence, run: item.run })),
     })),
     open_problems: open.map((card) => ({
       id: card.id,
@@ -731,6 +887,7 @@ const run = {
   "card-template": commandCardTemplate,
   add: commandAdd,
   gate: commandGate,
+  "run-assertions": commandRunAssertions,
   status: commandStatus,
   plan: commandPlan,
   "verify-baseline": commandVerifyBaseline,

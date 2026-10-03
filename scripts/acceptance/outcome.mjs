@@ -1,284 +1,281 @@
 #!/usr/bin/env node
-/**
- * outcome.mjs · O 域受控任务套件执行器（RDAS v3.1 M2）
- *
- * 任务套件：acceptance/outcomes/*.yaml（格式见 docs/acceptance/outcome-suite.example.yaml）
- * 每次尝试：真实入口派发 → 轮询线程状态 → （可选）脚本化人工介入 → 状态断言/HTTP 断言/回执校验
- * 产出：outcome-report.json + trials.jsonl + outcome-report.md（pass@1 / pass^k / 假成功 / 介入计数）
- *
- * 纪律：结果以环境状态/回执为准；agent 自述完成但状态断言失败 → 记 falseSuccess（红线候选）。
- * 无 suite 时不伪造通过：写 configured=false 并生成模板，交给 report-v3 标“未验证”。
- *
- * 用法：node scripts/acceptance/outcome.mjs [--out <dir>] [--suite <yaml>] [--trials 5] [--timeout-s 120]
- */
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import pg from "pg";
-import YAML from "yaml";
-import { cliArgs, findRepoRoot, loadProfile, urlsOf } from "./lib/profile.mjs";
+/** Real entry → thread/event read-back → concrete assertions → bound receipt. Missing evidence exits 2. */
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { bundleDirOf, cliArgs, findRepoRoot, loadProfile } from './lib/profile.mjs';
+import { loadEnvFile } from './lib/target.mjs';
+import { validateSuite, evaluateThread, evaluateDenial, assertReadOnlySql, outcomeStats, evaluateP0Repetition } from './lib/outcome-contract.mjs';
+import { createOutcomeFixture } from './lib/outcome-fixture.mjs';
+import { recordEvidenceRun, revisionOf, writeAcceptanceItems } from '../delivery/evidence.mjs';
 
-const args = cliArgs();
-const REPO_ROOT = findRepoRoot();
-const { profile, warnings: profileWarnings } = loadProfile(REPO_ROOT, args.profilePath);
-const OUT_DIR = resolve(args.outDir ?? join(REPO_ROOT, "outputs", "acceptance", "outcome"));
-mkdirSync(OUT_DIR, { recursive: true });
-const URLS = urlsOf(profile);
-const TRIALS = Number(process.env.ACCEPTANCE_TRIALS ?? (args.has("--trials") ? process.argv[process.argv.indexOf("--trials") + 1] : 5));
-const TIMEOUT_S = Number(process.env.ACCEPTANCE_TASK_TIMEOUT_S ?? (args.has("--timeout-s") ? process.argv[process.argv.indexOf("--timeout-s") + 1] : 120));
-const SUITE_DIR = join(REPO_ROOT, "acceptance", "outcomes");
-const explicitSuite = args.has("--suite") ? process.argv[process.argv.indexOf("--suite") + 1] : null;
+const startedAt = new Date().toISOString();
+const argv = process.argv.slice(2);
+const value = (flag, fallback = null) => {
+  const i = argv.indexOf(flag);
+  if (i < 0) return fallback;
+  if (argv.indexOf(flag, i + 1) >= 0 || !argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`${flag} 需要一个且仅一个值`);
+  return argv[i + 1];
+};
+const has = (flag) => argv.includes(flag);
+const repoRoot = findRepoRoot();
+const executorRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+let outDir = join(repoRoot, 'outputs/acceptance/outcome');
+let artifactRoot = join(repoRoot, 'outputs/acceptance');
+let token = null; let sqlClient = null; let fixture = null;
+const secretValues = Object.entries({ ...loadEnvFile(join(repoRoot, '.env')), ...process.env }).filter(([key, text]) => /TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|DATABASE.*URL/i.test(key) && text?.length >= 4).map(([, text]) => text.replace(/^['"]|['"]$/g, ''));
+const redact = (input) => {
+  let text = String(input ?? '');
+  for (const secret of [...secretValues, token].filter(Boolean).sort((a, b) => b.length - a.length)) text = text.split(secret).join('[REDACTED]');
+  return text.replace(/\b(?:https?|postgres(?:ql)?):\/\/[^/\s:@]+:[^@\s/]+@/gi, '[REDACTED-URL]@').replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '$1 [REDACTED]');
+};
+const safeObject = (object) => JSON.parse(redact(JSON.stringify(object)));
+const pause = (ms) => new Promise((done) => setTimeout(done, ms));
+const report = { schema: 'workloom.outcome-report/v2', spec: 'docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1', startedAt, configured: false, mode: has('--validate-only') ? 'contract-validation' : has('--selftest') ? 'owned-fixture' : 'runtime', status: 'unverified', verified: false, called: false, environmentKind: null, dataMode: null, provider: 'unknown', suites: [], errors: [], warnings: [], trials: [], checks: [] };
 
-function readEnvValue(key) {
-  const p = join(REPO_ROOT, ".env");
-  if (!existsSync(p)) return undefined;
-  const line = readFileSync(p, "utf-8").split("\n").find((l) => l.startsWith(`${key}=`));
-  return line ? line.slice(key.length + 1).trim() : undefined;
-}
-const DB_URL = process.env.DATABASE_URL ?? readEnvValue("DATABASE_URL");
-
-const files = explicitSuite ? [resolve(REPO_ROOT, explicitSuite)] : (existsSync(SUITE_DIR) ? readdirSync(SUITE_DIR).filter((f) => /\.ya?ml$/.test(f)).map((f) => join(SUITE_DIR, f)) : []);
-if (!files.length) {
-  const template = `# RDAS v3.1 O 域任务套件模板（复制为 <role>.yaml 并填写）
-role: channel-ops
-agentPreset: channel-watcher
-tasks:
-  - id: O2-T01
-    title: 为酒店写一条可发布的促销文案
-    input: 为云栖酒店写一条周末促销文案，交付物：文案（含标题/正文/标签），截止：今天 18:00
-    criticality: P0
-    trials: 5
-    allowClarify: true
-    intervention: none        # none | approval | edit | reject
-    state_asserts:
-      - sql: "SELECT count(*)::int AS n FROM biz_events WHERE workspace_id=$1 AND session_id=$2 AND payload->>'decision' IS NOT NULL"
-        params: [workspaceId, threadId]
-        op: ">="
-        value: 1
-    http_asserts:
-      - url: "http://127.0.0.1:8787/health"
-        status: 200
-    receipt:
-      require: false
-      ref: acceptance/receipts/example.json
-`;
-  mkdirSync(SUITE_DIR, { recursive: true });
-  writeFileSync(join(SUITE_DIR, "outcome-suite.example.yaml"), template);
-  const report = { at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1", configured: false, note: "未配置 acceptance/outcomes/*.yaml；已生成模板。O 域按“未验证”处理。", trials: [] };
-  writeFileSync(join(OUT_DIR, "outcome-report.json"), JSON.stringify(report, null, 1));
-  writeFileSync(join(OUT_DIR, "outcome-report.md"), `# O 域任务套件报告\n\n未配置 \`acceptance/outcomes/*.yaml\`；已生成模板 \`acceptance/outcomes/outcome-suite.example.yaml\`。O 域按“结构合规/能力未验证”处理，不得写通过。\n`);
-  console.log("[acceptance:outcome] 未配置任务套件：configured=false（已生成模板）");
-  process.exit(0);
+function writeReport() {
+  report.finishedAt = new Date().toISOString(); report.stats = outcomeStats(report.trials);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'outcome-report.json'), `${JSON.stringify(safeObject(report), null, 2)}\n`);
+  writeFileSync(join(outDir, 'trials.jsonl'), `${report.trials.map((trial) => JSON.stringify(safeObject(trial))).join('\n') || JSON.stringify({ configured: report.configured, status: report.status, mode: report.mode })}\n`);
+  const md = ['# O 域任务契约与执行报告', '', `- 环境 ${report.environmentKind ?? '未解析'}；模式 ${report.mode}；状态 ${report.status}；能力已验证 ${report.verified}`, `- 任务 ${report.stats.tasks}；尝试 ${report.stats.trials}；pass@1=${report.stats.passAt1 ?? '未验证'}；pass^${report.stats.k}=${report.stats.passAtK ?? '未验证'}；假成功 ${report.stats.falseSuccess}`, `- 数据模式 ${report.dataMode ?? '未声明'}；provider ${report.provider}；commit ${report.revision?.commit ?? '未绑定'}`, '', ...report.errors.map((error) => `- 失败/未验证：${redact(error)}`), ...report.warnings.map((warning) => `- 说明：${redact(warning)}`), '', '| 任务 | 场景 | trial | 线程/拒绝 | 状态 | 结果 |', '|---|---|---:|---|---|---|'];
+  for (const trial of report.trials) md.push(`| ${trial.taskId} | ${trial.scenario} | ${trial.trial} | ${trial.threadId ?? trial.httpStatus ?? '-'} | ${trial.status ?? 'unknown'} | ${trial.pass ? (trial.verified ? '已验证' : '结构通过/能力未验证') : trial.falseSuccess ? '假成功' : '失败'} |`);
+  writeFileSync(join(outDir, 'outcome-report.md'), `${md.join('\n')}\n`);
 }
 
-const client = new pg.Client({ connectionString: DB_URL });
-await client.connect();
-const login = await fetch(`${URLS.api}/trpc/auth.loginAs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workspaceSlug: profile.identity?.workspaceSlug ?? null, memberNo: profile.identity?.human ?? "MEM-001" }) });
-const loginJson = await login.json().catch(() => ({}));
-const TOKEN = loginJson?.result?.data?.token;
-if (!TOKEN) throw new Error(`登录失败：${JSON.stringify(loginJson).slice(0, 200)}`);
-const wsRow = profile.workspaceId
-  ? (await client.query("SELECT id FROM workspaces WHERE id=$1", [profile.workspaceId])).rows[0]
-  : (await client.query("SELECT id FROM workspaces WHERE slug=$1 LIMIT 1", [profile.identity?.workspaceSlug ?? ""])).rows[0];
-if (!wsRow) throw new Error("找不到工作区");
-
-const authHeaders = { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" };
-const trpcPost = async (path, data) => {
-  const res = await fetch(`${URLS.api}/trpc/${path}`, { method: "POST", headers: authHeaders, body: JSON.stringify(data) });
-  return { status: res.status, json: await res.json().catch(() => ({})) };
-};
-const trpcGet = async (path, input) => {
-  const res = await fetch(`${URLS.api}/trpc/${path}?input=${encodeURIComponent(JSON.stringify(input))}`, { headers: { authorization: `Bearer ${TOKEN}` } });
-  return { status: res.status, json: await res.json().catch(() => ({})) };
-};
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/** 高危判据与 packages/base/review-console#isHighRiskApproval 同口径（tier / high_risk / irreversible） */
-const isHighRiskRow = (row) =>
-  row?.tier === "l4_chairman" || row?.snapshot?.high_risk === true || row?.snapshot?.irreversible === true;
-
-/**
- * 低风险关卡批量放行（MC-105）：
- *  - 只批「本 trial 线程事件链上的 pending 关卡」（approvals.event_id ∈ 本线程事件集合）；
- *  - 高危/不可逆关卡预筛排除，留待下面按 task.intervention 的显式手势逐条裁决
- *    （服务端 approvals.batchApprove 内仍会二次拒绝，属纵深防御）；
- *  - 实际放行 id 与跳过原因逐条写进 trial.interventions 供审计。
- * 历史缺陷：旧实现调用 `approvals.batchRelease`——该过程从未在服务端实现（实测
- * 404 "No procedure found"），所有需要介入的 trial 都卡在 pending_review 被记成失败。
- */
-const releaseLowRiskApprovals = async (ownEvents, trial) => {
-  const queue = await trpcGet("approvals.list", { status: "pending" });
-  const rows = Array.isArray(queue.json?.result?.data) ? queue.json.result.data : [];
-  const ownRows = rows.filter((r) => ownEvents.has(r.event_id));
-  for (const r of ownRows.filter(isHighRiskRow)) {
-    trial.interventions.push({ class: "H1-batch-skip", approvalId: r.approval_id, ok: true, reason: "高危/不可逆关卡不预批（留待显式手势）" });
+async function main() {
+  const args = cliArgs();
+  const requestedOut = resolve(args.outDir ?? outDir);
+  const requestedRoot = resolve(value('--evidence-root', dirname(requestedOut)));
+  const outputRelative = relative(requestedRoot, requestedOut);
+  if (!outputRelative || outputRelative.startsWith('..') || outputRelative.startsWith('/')) throw new Error('--out 必须位于 --evidence-root 内的独立子目录');
+  outDir = requestedOut;
+  artifactRoot = requestedRoot;
+  const loaded = loadProfile(repoRoot, args.profilePath);
+  if (loaded.isDefault) { report.errors.push('缺少本仓显式 profile，O 域未运行'); return 2; }
+  const { profile, environment } = loaded;
+  report.environmentKind = environment.kind; report.dataMode = profile.dataMode ?? 'unknown'; report.warnings.push(...loaded.warnings);
+  const envFile = loadEnvFile(join(repoRoot, '.env'));
+  report.provider = process.env.LLM_PROVIDER ?? envFile.LLM_PROVIDER ?? 'unknown';
+  report.revision = revisionOf(repoRoot); report.executor = revisionOf(executorRoot);
+  if (report.revision.dirty || report.executor.dirty) report.warnings.push('被测仓或执行器有未提交代码；输出可排查，但不能作为提交绑定的通过证据');
+  const trialsOverride = value('--trials', process.env.ACCEPTANCE_TRIALS ?? null);
+  const timeoutS = Number(value('--timeout-s', process.env.ACCEPTANCE_TASK_TIMEOUT_S ?? '120'));
+  const pollMs = Number(value('--poll-ms', '1500'));
+  if (trialsOverride !== null && (!Number.isSafeInteger(Number(trialsOverride)) || Number(trialsOverride) < 1 || Number(trialsOverride) > 8)) throw new Error('--trials 必须是 1—8 的整数');
+  if (!Number.isFinite(timeoutS) || timeoutS <= 0 || timeoutS > 1800 || !Number.isFinite(pollMs) || pollMs < 10 || pollMs > 30000) throw new Error('timeout-s/poll-ms 超出安全范围');
+  const suiteDir = join(repoRoot, 'acceptance/outcomes');
+  const explicitSuite = value('--suite');
+  const files = explicitSuite ? [resolve(repoRoot, explicitSuite)] : existsSync(suiteDir) ? readdirSync(suiteDir).filter((name) => /\.ya?ml$/.test(name) && !/\.example\./.test(name)).sort().map((name) => join(suiteDir, name)) : [];
+  if (!files.length) { report.errors.push('未配置 acceptance/outcomes/*.yaml；未生成或改写行业文件'); return 2; }
+  let YAML;
+  try { YAML = (await import('yaml')).default; } catch { report.errors.push('执行器 yaml 依赖未就绪；未读取或派发任务'); return 2; }
+  const presetDir = join(bundleDirOf(repoRoot, profile.primaryBundle), 'presets');
+  const presetKeys = new Set();
+  if (existsSync(presetDir)) for (const name of readdirSync(presetDir).filter((name) => /\.ya?ml$/.test(name))) {
+    const preset = YAML.parse(readFileSync(join(presetDir, name), 'utf8'));
+    if (preset?.preset_key) presetKeys.add(preset.preset_key);
   }
-  const batchable = ownRows.filter((r) => !isHighRiskRow(r));
-  if (!batchable.length) return [];
-  const batch = await trpcPost("approvals.batchApprove", { approvalIds: batchable.map((r) => r.approval_id) });
-  const data = batch.json?.result?.data ?? {};
-  const released = Array.isArray(data.approved) ? data.approved : [];
-  for (const id of released) trial.interventions.push({ class: "H1-batch", approvalId: id, ok: batch.status === 200 });
-  for (const skip of Array.isArray(data.skipped) ? data.skipped : []) {
-    trial.interventions.push({ class: "H1-batch-skip", approvalId: skip?.id, ok: true, reason: skip?.reason ?? "服务端跳过" });
+  const suites = files.map((path) => ({ path, suite: YAML.parse(readFileSync(path, 'utf8')) }));
+  const declaredSuites = profile.outcome?.taskSuites;
+  const declaredRoles = new Map((profile.outcome?.roles ?? []).map((role) => [role.role, role.agentPreset]));
+  if (!Array.isArray(declaredSuites) || !declaredSuites.length || new Set(declaredSuites).size !== declaredSuites.length || !declaredSuites.every((path) => /^acceptance\/outcomes\/[A-Za-z0-9_-]+\.ya?ml$/.test(path))) report.errors.push('profile.outcome.taskSuites 必须绑定本仓实际、唯一的任务套件');
+  if (!declaredRoles.size) report.errors.push('profile.outcome.roles 必须声明本行业岗位与 preset');
+  const selectedPaths = files.map((path) => relative(repoRoot, path).split('\\').join('/'));
+  for (const path of selectedPaths) if (!declaredSuites?.includes(path)) report.errors.push(`所选套件未登记在 profile.outcome.taskSuites：${path}`);
+  if (!explicitSuite) for (const path of declaredSuites ?? []) if (!selectedPaths.includes(path)) report.errors.push(`profile 声明的套件未执行：${path}`);
+  const taskIds = new Set();
+  for (const { path, suite } of suites) {
+    report.errors.push(...validateSuite(suite, { presetKeys, requireScenarioMatrix: true, requireP0Repetition: true }).map((error) => `${relative(repoRoot, path)}：${error}`));
+    if (!declaredRoles.has(suite?.role) || declaredRoles.get(suite.role) !== suite.agentPreset) report.errors.push(`${relative(repoRoot, path)} 岗位/preset 与 profile.outcome.roles 不一致`);
+    for (const task of Array.isArray(suite?.tasks) ? suite.tasks : []) { if (taskIds.has(task?.id)) report.errors.push(`跨套件 task.id 重复：${task?.id}`); taskIds.add(task?.id); }
+    report.suites.push(relative(repoRoot, path));
   }
-  if (batch.status !== 200 && !released.length) {
-    trial.interventions.push({ class: "H1-batch", ok: false, reason: `approvals.batchApprove HTTP ${batch.status}` });
+  report.configured = report.errors.length === 0;
+  if (!report.configured) { report.status = 'fail'; return 1; }
+  if (has('--validate-only')) {
+    report.contractValid = true;
+    report.warnings.push('本次只读校验契约、岗位引用和正常/失败/权限场景；未连接服务、数据库或模型，业务能力仍未验证');
+    return 0;
   }
-  return released;
-};
+  // Public product dispatch may classify and retry internally before a thread exists.
+  // Neither a "mock" provider label nor simulated data bounds those paid requests.
+  if (!has('--selftest')) {
+    report.errors.push('O 域不透明产品派单缺少可信服务端逐请求预算契约；在登录、派单、数据库或模型调用前阻断。simulated/provider/试验次数声明不能代替总输入、输出、重试与上下文的硬上界');
+    return 2;
+  }
+  if (environment.isProduction) { report.errors.push('自有 selftest 夹具只供结构回归，不能标为部署目标或生产验收'); return 2; }
+  if (suites.some(({ suite }) => suite.tasks.some(task => task.state_asserts?.length || task.intervention && task.intervention !== 'none'))) {
+    report.errors.push('自有 selftest 不连接外部数据库或审批服务；SQL/人工手势需可信项目适配器'); return 2;
+  }
+  if (environment.isProduction && !environment.allowWrites) { report.errors.push('生产 O 域会创建验收线程；缺少显式写入授权，未登录、未派单、未连数据库'); return 2; }
+  if (environment.isProduction && (!profile.outcome?.fixtureMarker || !profile.outcome?.residualDisclosure)) { report.errors.push('生产 O 域必须声明 outcome.fixtureMarker 与 residualDisclosure'); return 2; }
+  if (suites.some(({ suite }) => suite.tasks.some((task) => task.intervention && task.intervention !== 'none')) && !has('--allow-measurement-interventions')) { report.errors.push('任务要求审批手势；必须显式 --allow-measurement-interventions，未自动审批'); return 2; }
 
-const trials = [];
-for (const file of files) {
-  const suite = YAML.parse(readFileSync(file, "utf-8"));
-  for (const task of suite.tasks ?? []) {
-    const k = Number(task.trials ?? suite.trials ?? TRIALS);
-    for (let t = 1; t <= k; t += 1) {
-      const startedAt = Date.now();
-      const trial = { suite: file.replace(REPO_ROOT, "."), taskId: task.id, title: task.title, criticality: task.criticality ?? "P1", trial: t, interventions: [], asserts: [], pass: false, clarify: false, falseSuccess: false, status: null, threadId: null, ms: 0 };
+  fixture = await createOutcomeFixture({ fault: value('--selftest-fault') });
+  const endpoint = fixture.endpoint;
+  report.provider = 'runner-owned-mock'; report.dataMode = 'simulated';
+  report.warnings.push('HTTP fixture 由本执行器创建与关闭，忽略外部目标；仅运行确定性回执与断言，不调用供应商或数据库，业务能力未验证');
+  const request = async (procedure, input, { auth = true, method = 'GET' } = {}) => {
+    const url = method === 'GET' ? `${endpoint}/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify(input ?? {}))}` : `${endpoint}/trpc/${procedure}`;
+    const headers = { 'content-type': 'application/json', ...(auth && token ? { authorization: `Bearer ${token}` } : {}) };
+    report.called = true;
+    const response = await fetch(url, { method, headers, ...(method === 'POST' ? { body: JSON.stringify(input) } : {}), signal: AbortSignal.timeout(Math.min(30000, timeoutS * 1000)) });
+    let json;
+    try { json = await response.json(); } catch { throw new Error(`${procedure} 返回非 JSON（HTTP ${response.status}）`); }
+    const error = json?.error?.json ?? json?.error;
+    return { status: response.status, data: json?.result?.data?.json ?? json?.result?.data ?? null, code: error?.data?.code ?? error?.code ?? null, message: error?.message ?? null };
+  };
+  const mustRead = async (procedure, input) => {
+    const response = await request(procedure, input);
+    if (response.status !== 200 || response.code) throw new Error(`${procedure} 读回失败：HTTP ${response.status} ${response.code ?? ''}`);
+    return response.data;
+  };
+  let workspaceId = profile.workspaceId;
+  if (environment.isProduction) {
+    const key = profile.identity?.authTokenEnv ?? 'ACCEPTANCE_AUTH_TOKEN';
+    token = process.env[key];
+    if (!token || !workspaceId) { report.errors.push('生产 O 域缺少受控身份 token 或显式 workspaceId；禁止 demo loginAs'); return 2; }
+  } else {
+    const login = await request('auth.loginAs', { workspaceSlug: profile.identity.workspaceSlug, memberNo: profile.identity.human }, { auth: false, method: 'POST' });
+    if (login.status !== 200 || !login.data?.token || !login.data?.identity?.workspaceId) throw new Error(`本机演示身份失败：HTTP ${login.status} ${login.code ?? ''}`);
+    token = login.data.token; workspaceId = login.data.identity.workspaceId;
+    if (profile.workspaceId && profile.workspaceId !== workspaceId) throw new Error('登录身份 workspaceId 与 profile 冲突');
+  }
+
+  const runSqlAssert = async (assertion, threadId) => {
+    assertReadOnlySql(assertion.sql);
+    if (!sqlClient) {
+      const connectionString = process.env.DATABASE_URL ?? envFile.DATABASE_URL;
+      if (!connectionString) throw new Error('SQL 断言缺少 DATABASE_URL，未使用默认数据库');
+      const { default: pg } = await import('pg');
+      sqlClient = new pg.Client({ connectionString, connectionTimeoutMillis: 8000 }); await sqlClient.connect();
+    }
+    try {
+      await sqlClient.query('BEGIN READ ONLY');
+      await sqlClient.query("SET LOCAL statement_timeout='10000ms'");
+      const params = assertion.params.map((param) => param === 'workspaceId' ? workspaceId : param === 'threadId' ? threadId : param);
+      const result = await sqlClient.query(assertion.sql, params); await sqlClient.query('COMMIT');
+      const actual = Number(result.rows?.[0]?.n ?? result.rows?.[0]?.count ?? result.rows?.[0]?.value ?? result.rows?.length);
+      const expected = assertion.value;
+      const ok = Number.isFinite(actual) && (assertion.op === '>=' ? actual >= expected : assertion.op === '<=' ? actual <= expected : assertion.op === '==' ? actual === expected : actual > expected);
+      return { type: 'sql', ok, actual, expected, op: assertion.op };
+    } catch (error) { await sqlClient.query('ROLLBACK'); throw error; }
+  };
+
+  for (const { path, suite } of suites) for (const task of suite.tasks) {
+    const k = Number(trialsOverride ?? task.trials ?? suite.trials ?? 5);
+    for (let trialNo = 1; trialNo <= k; trialNo += 1) {
+      const start = Date.now();
+      const marker = `${profile.outcome?.fixtureMarker ?? 'suite.rdas'}.${task.id}.${process.pid}.${trialNo}`;
+      const trial = { suite: relative(repoRoot, path), taskId: task.id, scenario: task.scenario ?? 'normal', criticality: task.criticality ?? 'P1', trial: trialNo, marker, threadId: null, status: null, pass: false, verified: false, falseSuccess: false, interventions: [], asserts: [], ms: 0 };
       try {
-        const preset = task.presetKey ?? suite.agentPreset;
-        /**
-         * 受控测量要立即执行（2026-09-24 修复）：threads.dispatch 默认只建档并把线程留 'queued'
-         * （生产由调度器拉取）；O 域测量若不带 runImmediately，所有 trial 都会停在 queued 上，
-         * 断言必然失败（实测 GEO-T01..ADR-T02 全 queued）。这里显式要求立即执行，仍走真实入口。
-         */
-        const dispatchInput = { title: task.input ?? task.title, runImmediately: true };
-        if (preset) dispatchInput.presetKey = preset;
-        const dispatch = await trpcPost("threads.dispatch", dispatchInput);
-        const d = dispatch.json?.result?.data ?? {};
-        trial.kind = d.kind ?? "unknown";
-        if (d.kind === "clarify") {
-          trial.clarify = true;
-          if (task.allowClarify === false || task.retryOnClarify === true) {
-            const retryInput = { title: `${task.input ?? task.title}（交付物/截止已明确）` };
-            if (preset) retryInput.presetKey = preset;
-            const retry = await trpcPost("threads.dispatch", retryInput);
-            trial.threadId = retry.json?.result?.data?.threadId ?? null;
-          }
-        } else trial.threadId = d.threadId ?? null;
-
-        /**
-         * 受控测量的人工介入（2026-09-24 修复）：
-         * Quest 会在**每一个**越围栏的步骤上挂起等放行，一次手势远远不够——旧实现只批准一条
-         * 就 break，线程停在下一道关卡上（实测 T-104..T-107 全 pending_review）。现在逐轮推进：
-         *   ① 先用 B-70 的 `approvals.batchRelease` 放行低风险关卡（L4/高危留待，配额与抽检生效）；
-         *   ② 再按 task.intervention 对**本 trial 线程**的关卡做一次显式手势（H1 批准 / H2 编辑 / H3 驳回）；
-         *   ③ 直到线程终态或总体时限（默认 ≥5 分钟），全程把每次介入记进 trial.interventions 供审计。
-         *
-         * 2026-09-24 二次修复（ADR-T02 实测 T-153）：手势后的**续跑是异步的**（服务端 fire-and-forget，
-         * 含一次 LLM 规划，实测 20–60s）；旧实现 10 轮 × ~1.5s 就退出，第二道关卡还没出现，
-         * 线程停在 pending_review 被记成失败。现在把"放行/手势"和"等终态"合成一个**受时限的推进循环**：
-         * 每次醒来先看线程状态，未终态就继续放行可达的关卡；只有到时限或终态才退出。
-         * 另外：优先放行**本线程**的关卡（approvals.event_id ∈ 本线程事件链），避免误放别的线程/夹具的关卡。
-         */
-        if (trial.threadId && task.intervention && task.intervention !== "none") {
-          const gesture = task.intervention === "edit" ? "edit" : task.intervention === "reject" ? "reject" : "approve";
-          const deadline = Date.now() + Math.max(TIMEOUT_S, 300) * 1000;
-          let rounds = 0;
-          while (Date.now() < deadline && rounds < 60) {
-            rounds += 1;
-            const cur = await trpcGet("threads.get", { threadId: trial.threadId });
-            trial.status = cur.json?.result?.data?.status ?? trial.status;
-            if (["completed", "failed", "paused"].includes(trial.status)) break;
-            const ev = await trpcGet("threads.events", { threadId: trial.threadId, limit: 200 });
-            const ownEvents = new Set((ev.json?.result?.data ?? []).map((e) => e.event_id));
-            const releasedIds = await releaseLowRiskApprovals(ownEvents, trial);
-            const queue = await trpcGet("approvals.list", { status: "pending" });
-            const rows = queue.json?.result?.data ?? [];
-            /**
-             * M6-N2：只对本 trial 线程链上的关卡落手势。旧实现 `?? rows[0]` 会回退到任意待批行
-             * （实测点到无关的 L4/遗留夹具行）——既改变了他方状态，又让 O 域 pass@1 随库内遗留波动。
-             * 本线程暂无待批关卡时只等待下一轮（推进循环本身受时限约束），并在干预记录里留一次说明。
-             */
-            const first = rows.find((r) => ownEvents.has(r.event_id));
-            if (!first && !trial.interventions.some((i) => i.class === "H1-idle")) {
-              trial.interventions.push({ class: "H1-idle", ok: true, reason: "本线程暂无待批关卡（不对无关待批行落手势，等待下一轮）" });
-            }
-            if (first) {
-              const body = { approvalId: first.approval_id, gesture };
-              if (gesture === "edit") { body.editedAfter = task.editAfter ?? { note: "acceptance-edit" }; body.editKind = "correction"; }
-              if (gesture === "reject") { body.reasonEnum = "other"; body.reasonText = "acceptance-reject"; }
-              const decided = await trpcPost("approvals.decide", body);
-              trial.interventions.push({ class: gesture === "approve" ? "H1" : gesture === "edit" ? "H2" : "H3", approvalId: first.approval_id, ok: decided.status === 200 });
-            }
-            // 续跑是异步的：给 LLM/执行留出时间再醒来（有关卡刚放行时等短一点）
-            await sleep(first || releasedIds.length > 0 ? 4000 : 5000);
-          }
-        }
-
-        if (trial.threadId) {
-          const deadline = Date.now() + TIMEOUT_S * 1000;
+        const normal = trial.scenario === 'normal';
+        const before = normal ? [] : await mustRead('threads.list', {});
+        if (!normal && !Array.isArray(before)) throw new Error('拒绝路径无法读回线程集合');
+        const input = task.request?.data ? { ...task.request.data } : { title: `${marker}：${task.input ?? task.title}`, runImmediately: true, presetKey: task.presetKey ?? suite.agentPreset };
+        if (task.request?.data) input.title = `${marker}：${input.title ?? task.input ?? task.title}`;
+        if (task.invalidInput === 'title-too-long') input.title = `${marker}：${'边'.repeat(501)}`;
+        if (normal && input.title.length > 500) throw new Error('验收标记加入后 title 超出公开入口 500 字上限');
+        const dispatched = await request('threads.dispatch', input, { method: 'POST', auth: task.auth !== 'none' });
+        trial.httpStatus = dispatched.status;
+        trial.threadId = dispatched.data?.threadId ?? null; trial.clarify = dispatched.data?.kind === 'clarify';
+        if (!normal) {
+          const after = await mustRead('threads.list', {});
+          if (!Array.isArray(after)) throw new Error('拒绝路径无法读回线程集合');
+          const oldIds = new Set(before.map((row) => row.id));
+          const createdThreads = after.filter((row) => !oldIds.has(row.id) && row.title?.includes(marker)).map((row) => row.id);
+          Object.assign(trial, evaluateDenial(task, { status: dispatched.status, code: dispatched.code, message: dispatched.message, threadId: trial.threadId, createdThreads }));
+          trial.verified = trial.pass;
+        } else {
+          if (dispatched.status !== 200 || !trial.threadId) throw new Error(`派单未创建线程：HTTP ${dispatched.status} ${dispatched.code ?? (trial.clarify ? 'clarify' : '')}`);
+          const deadline = Date.now() + timeoutS * 1000; let thread; let events = [];
           while (Date.now() < deadline) {
-            const got = await trpcGet("threads.get", { threadId: trial.threadId });
-            trial.status = got.json?.result?.data?.status ?? trial.status;
-            if (["completed", "failed", "paused"].includes(trial.status)) break;
-            await sleep(1500);
+            thread = await mustRead('threads.get', { threadId: trial.threadId });
+            events = await mustRead('threads.events', { threadId: trial.threadId, limit: 200 });
+            if (!Array.isArray(events)) throw new Error('线程事件读回不是数组');
+            if (['completed', 'failed', 'paused'].includes(thread?.status)) break;
+            if (task.intervention && task.intervention !== 'none' && thread?.status === 'pending_review') {
+              const eventIds = new Set(events.map((event) => event.event_id));
+              const queue = await mustRead('approvals.list', { status: 'pending' });
+              const ownApproval = Array.isArray(queue) ? queue.find((approval) => eventIds.has(approval.event_id)) : null;
+              if (ownApproval) {
+                const gesture = task.intervention === 'approval' ? 'approve' : task.intervention;
+                const body = { approvalId: ownApproval.approval_id, gesture, ...(gesture === 'edit' ? { editKind: 'correction', editedAfter: task.editAfter ?? { note: marker } } : {}), ...(gesture === 'reject' ? { reasonEnum: 'other', reasonText: marker } : {}) };
+                const decided = await request('approvals.decide', body, { method: 'POST' });
+                trial.interventions.push({ approvalId: ownApproval.approval_id, class: gesture === 'approve' ? 'H1' : gesture === 'edit' ? 'H2' : 'H3', ok: decided.status === 200 && !decided.code });
+                if (decided.status !== 200 || decided.code) throw new Error('本线程审批手势失败');
+              }
+            }
+            await pause(pollMs);
           }
+          const externalAsserts = [];
+          for (const assertion of task.state_asserts ?? []) {
+            try { externalAsserts.push(await runSqlAssert(assertion, trial.threadId)); }
+            catch (error) { externalAsserts.push({ type: 'sql', ok: false, error: redact(error.message) }); }
+          }
+          for (const assertion of task.http_asserts ?? []) {
+            try {
+              const url = new URL(assertion.url, endpoint);
+              if (url.origin !== new URL(endpoint).origin || url.username || url.password) throw new Error('HTTP 断言必须是同一目标的只读 URL');
+              const response = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { authorization: `Bearer ${token}` } });
+              externalAsserts.push({ type: 'http', ok: response.status === assertion.status, actual: response.status, expected: assertion.status, path: url.pathname });
+            } catch (error) { externalAsserts.push({ type: 'http', ok: false, error: redact(error.message) }); }
+          }
+          const sanitizedObserved = safeObject({ thread, events });
+          trial.evidenceRedacted = JSON.stringify(sanitizedObserved) !== JSON.stringify({ thread, events });
+          // Receipt hashes cover the actual persisted event snapshot; changed private values cannot prove a pass.
+          const result = evaluateThread(task, { threadId: trial.threadId, workspaceId, thread: sanitizedObserved.thread, events: sanitizedObserved.events, externalAsserts, observedAt: new Date().toISOString() });
+          result.receipt.evidenceSha256 = createHash('sha256').update(JSON.stringify(sanitizedObserved.events)).digest('hex');
+          Object.assign(trial, result);
+          const modelEvents = events.filter((event) => event.object?.id === trial.threadId && event.context?.workspace_id === workspaceId && event.decision?.action === 'ask.answer');
+          const realModel = modelEvents.length > 0 && modelEvents.every((event) => event.decision?.params?.via === 'llm' && event.model_trace?.model_id && !/mock|simulat|fixture|unknown/i.test(event.model_trace.model_id));
+          trial.modelTrace = modelEvents.map((event) => ({ eventId: event.event_id, via: event.decision?.params?.via ?? null, model: event.model_trace?.model_id ?? null }));
+          trial.verified = trial.pass && !trial.evidenceRedacted && profile.dataMode === 'real' && realModel && !/mock|stub|unknown/i.test(report.provider);
+          trial.observed = sanitizedObserved;
+          if (!trial.verified && trial.pass) trial.unverifiedReason = trial.evidenceRedacted ? '回读证据包含私密值，已脱敏；该断言不作为已验证通过证据' : '模拟数据、确定性兜底或缺少实际模型 trace；只验证结构与状态链';
         }
-        for (const a of task.state_asserts ?? []) {
-          try {
-            const params = (a.params ?? []).map((p) => (p === "workspaceId" ? wsRow.id : p === "threadId" ? trial.threadId : p));
-            const res = await client.query(a.sql, params);
-            const value = res.rows?.[0]?.n ?? res.rows?.[0]?.count ?? res.rows?.[0]?.value ?? res.rows?.length ?? 0;
-            const target = Number(a.value ?? 1);
-            const num = Number(value);
-            const ok = a.op === ">=" ? num >= target : a.op === "<=" ? num <= target : a.op === "==" ? num === target : num > target;
-            trial.asserts.push({ type: "sql", ok, value: num, target, op: a.op ?? ">=" });
-          } catch (err) { trial.asserts.push({ type: "sql", ok: false, error: String(err).split("\n")[0] }); }
-        }
-        for (const h of task.http_asserts ?? []) {
-          try {
-            const res = await fetch(h.url, { method: h.method ?? "GET" });
-            const ok = h.status ? res.status === h.status : res.ok;
-            trial.asserts.push({ type: "http", ok, status: res.status, url: h.url });
-          } catch (err) { trial.asserts.push({ type: "http", ok: false, error: String(err).split("\n")[0], url: h.url }); }
-        }
-        if (task.receipt?.require) {
-          try {
-            const receipt = JSON.parse(readFileSync(resolve(REPO_ROOT, task.receipt.ref), "utf-8"));
-            const ok = receipt.synced === true;
-            trial.asserts.push({ type: "receipt", ok, ref: task.receipt.ref, synced: receipt.synced });
-          } catch (err) { trial.asserts.push({ type: "receipt", ok: false, error: String(err).split("\n")[0], ref: task.receipt.ref }); }
-        }
-        const assertsOk = trial.asserts.every((a) => a.ok);
-        trial.pass = trial.status === "completed" && assertsOk && trial.interventions.every((i) => i.ok);
-        trial.falseSuccess = trial.status === "completed" && trial.asserts.length > 0 && !assertsOk;
-      } catch (err) {
-        trial.error = String(err).split("\n")[0];
-      }
-      trial.ms = Date.now() - startedAt;
-      trials.push(trial);
-      console.log(`${trial.pass ? "✓" : "✗"} ${trial.taskId} trial ${trial.trial} status=${trial.status} clarify=${trial.clarify} falseSuccess=${trial.falseSuccess}`);
+      } catch (error) { trial.error = redact(error.message); }
+      trial.ms = Date.now() - start; report.trials.push(trial);
+      console.log(`${trial.pass ? '✓' : '✗'} ${trial.taskId} ${trial.scenario} trial=${trialNo} status=${trial.status ?? 'unknown'} verified=${trial.verified}`);
     }
   }
+  const normalTrials = report.trials.filter((trial) => trial.scenario === 'normal');
+  const normalStats = outcomeStats(normalTrials); report.normalStats = normalStats;
+  report.status = report.trials.some((trial) => !trial.pass) ? 'fail' : !report.trials.length || report.trials.some((trial) => !trial.verified) || report.revision.dirty || report.executor.dirty ? 'unverified' : 'pass';
+  const p0Stats = evaluateP0Repetition(suites.flatMap(({ suite }) => suite.tasks), report.trials);
+  report.p0Stats = p0Stats;
+  const selectedAllSuites = selectedPaths.length === declaredSuites.length && declaredSuites.every((path) => selectedPaths.includes(path));
+  if (report.status === 'pass' && (!p0Stats.ok || !selectedAllSuites)) {
+    report.status = 'unverified';
+    report.warnings.push('P0 代表任务没有各自完成至少 5 次可信重复，或只选择了部分声明套件；其他任务次数不能代替缺失覆盖');
+  }
+  report.verified = report.status === 'pass';
+  const falseSuccess = report.trials.some((trial) => trial.falseSuccess);
+  report.checks = [
+    { id: 'O2-01', status: report.verified && p0Stats.ok && selectedAllSuites ? 'pass' : report.status === 'fail' ? 'fail' : 'unverified', expected: '每个所声明 P0 代表任务各自完成不重复的 k≥5 次可信 trial，P0 任务 pass^k≥80%；部分套件和其他任务次数不能代替', actual: p0Stats },
+    { id: 'O2-07', status: falseSuccess ? 'fail' : report.verified ? 'pass' : 'unverified', expected: '任务结果、completed 终态、本线程回执与非空具体断言一致；确认假成功为 0', actual: { falseSuccess: report.trials.filter((trial) => trial.falseSuccess).length, trials: report.trials.length, verified: report.verified } },
+  ];
+  return report.status === 'fail' ? 1 : report.status === 'unverified' ? 2 : 0;
 }
 
-const byTask = {};
-for (const t of trials) { byTask[t.taskId] = byTask[t.taskId] ?? []; byTask[t.taskId].push(t); }
-const passAt1 = trials.length ? trials.filter((t) => t.pass).length / trials.length : null;
-const passAtK = Object.values(byTask).length ? Object.values(byTask).filter((list) => list.every((t) => t.pass)).length / Object.values(byTask).length : null;
-const stats = {
-  tasks: Object.keys(byTask).length,
-  trials: trials.length,
-  passAt1: passAt1 == null ? null : Number(passAt1.toFixed(4)),
-  passAtK: passAtK == null ? null : Number(passAtK.toFixed(4)),
-  k: Math.max(0, ...Object.values(byTask).map((l) => l.length)),
-  clarify: trials.filter((t) => t.clarify).length,
-  interventions: trials.reduce((a, t) => a + t.interventions.length, 0),
-  passed: trials.filter((t) => t.pass).length,
-};
-const report = {
-  at: new Date().toISOString(), spec: "docs/REAL-DEVICE-ACCEPTANCE-SPEC.md@rdas/v3.1", configured: true,
-  provider: readEnvValue("LLM_PROVIDER") ?? "unknown", dataMode: profile.dataMode ?? "unknown",
-  suites: files.map((f) => f.replace(REPO_ROOT, ".")), stats,
-  falseSuccess: trials.filter((t) => t.falseSuccess).length,
-  trials,
-};
-writeFileSync(join(OUT_DIR, "outcome-report.json"), JSON.stringify(report, null, 1));
-writeFileSync(join(OUT_DIR, "trials.jsonl"), `${trials.map((t) => JSON.stringify(t)).join("\n")}\n`);
-const md = ["# O 域受控任务套件报告（RDAS v3.1 M2）", "", `- 任务 ${stats.tasks}；尝试 ${stats.trials}；pass@1=${stats.passAt1}；pass^${stats.k}=${stats.passAtK}；clarify=${stats.clarify}；假成功=${report.falseSuccess}`, `- LLM_PROVIDER=${report.provider}${/mock/i.test(report.provider) ? "（能力未验证）" : ""}`, "", "| 任务 | trial | 状态 | 介入 | 断言 | 结论 |", "|---|---:|---|---|---|---|"];
-for (const t of trials) md.push(`| ${t.taskId} | ${t.trial} | ${t.status ?? "-"} | ${t.interventions.map((i) => i.class).join(",") || "-"} | ${t.asserts.map((a) => `${a.ok ? "✓" : "✗"}${a.type}`).join(" ") || "-"} | ${t.pass ? "通过" : t.falseSuccess ? "**假成功**" : "未通过"} |`);
-writeFileSync(join(OUT_DIR, "outcome-report.md"), `${md.join("\n")}\n`);
-await client.end().catch(() => undefined);
-console.log(`[acceptance:outcome] tasks=${stats.tasks} trials=${stats.trials} pass@1=${stats.passAt1} pass^k=${stats.passAtK} falseSuccess=${report.falseSuccess}；输出 ${OUT_DIR}`);
-if (report.falseSuccess > 0) process.exitCode = 1;
+let exitCode = 2;
+try { exitCode = await main(); } catch (error) { report.errors.push(redact(error.message)); report.status = 'fail'; exitCode = 1; }
+finally {
+  if (sqlClient) { try { await sqlClient.end(); } catch (error) { report.errors.push(`SQL 连接关闭失败：${redact(error.message)}`); report.status = 'fail'; exitCode = 1; } }
+  if (fixture) {
+    report.fixtureObservation = { runnerOwned: true, externalTargetUsed: false, modelCalls: 0, databaseConnections: 0, requests: fixture.requests, threads: fixture.threads };
+    try { await fixture.close(); report.fixtureObservation.closed = true; }
+    catch (error) { report.errors.push(`自有 HTTP 夹具关闭失败：${redact(error.message)}`); report.status = 'fail'; exitCode = 1; }
+  }
+}
+try {
+  writeReport();
+  const paths = ['outcome-report.json', 'trials.jsonl', 'outcome-report.md'].map((name) => relative(artifactRoot, join(outDir, name)).split('\\').join('/'));
+  const run = recordEvidenceRun({ repoRoot, artifactRoot, runId: `outcome-${process.pid}-${Date.now()}`, command: [process.execPath, ...process.argv.slice(1)].map((part) => JSON.stringify(part)).join(' '), exec: { file: process.execPath, args: process.argv.slice(1) }, actor: 'acceptance:outcome', role: 'acceptance', exitCode, startedAt, finishedAt: report.finishedAt, outputPaths: paths, subject: { environmentKind: report.environmentKind, mode: report.mode } });
+  const checks = report.checks.filter((check) => check.status === 'fail' || (check.status === 'pass' && exitCode === 0));
+  if (checks.length) writeAcceptanceItems({ artifactRoot, run, checks: checks.map((check) => ({ ...check, evidencePaths: [paths[0]], note: '仅对应本仓本次声明的代表任务，不覆盖未声明的行业流程' })) });
+} catch (error) { console.error(`[acceptance:outcome] 证据未绑定：${redact(error.message)}`); exitCode = 1; }
+console.log(`[acceptance:outcome] status=${report.status} mode=${report.mode} verified=${report.verified} output=${outDir}`);
+process.exitCode = exitCode;

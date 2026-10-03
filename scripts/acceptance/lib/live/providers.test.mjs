@@ -71,12 +71,12 @@ describe("resolveLiveModels 端点方言分流", () => {
     assert.equal(m.baseUrlDialect, "anthropic");
   });
 
-  it("缺任何端点变量时，两条链路都退回内置默认（OpenAI 兼容根）", () => {
+  it("缺任何端点变量时，两条链路使用各自官方协议默认根", () => {
     const env = { DEEPSEEK_API_KEY: "k" };
     const gateway = one(entry({ adapter: "model-gateway" }), env);
     const dsh = one(entry({ adapter: "dsh-harness" }), env);
     assert.equal(gateway.baseUrl, "https://api.deepseek.com");
-    assert.equal(dsh.baseUrl, "https://api.deepseek.com");
+    assert.equal(dsh.baseUrl, "https://api.deepseek.com/anthropic");
     assert.equal(gateway.ready, true);
   });
 

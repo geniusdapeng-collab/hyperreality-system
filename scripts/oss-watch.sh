@@ -9,7 +9,7 @@
 #   bash scripts/oss-watch.sh --inventory # 只重新生成清单文档（不联网）
 #   bash scripts/oss-watch.sh --offline   # 用现有缓存重算清单与计划（不联网）
 #
-# 退出码：0=全部最新 / 2=有可用更新（提醒，非错误） / 1=执行错误
+# 退出码：0=操作完成（offline/dry-run 不代表上游已核实） / 2=有可用更新 / 1=查询或执行失败
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

@@ -74,16 +74,32 @@ function urlsFromPorts(ports) {
 
 /**
  * 解析本次验收的环境档位。
- * 优先级：CLI `--env` > profile.environment.kind > 默认 local-preview。
+ * 环境只允许一个事实值；CLI、父执行器和显式 profile 相互冲突时拒绝运行。
  */
 export function resolveEnvironment(profile, { flag = null, allowProdWrites = false } = {}) {
   const declared = profile?.environment ?? DEFAULT_ENVIRONMENT;
-  const kind = flag ?? declared.kind ?? DEFAULT_ENVIRONMENT.kind;
+  const inherited = process.env.ACCEPTANCE_ENV_KIND || null;
+  const explicitProfileKind = profile?.environmentKindDeclared === false ? null : profile?.environment?.kind ?? null;
+  const declarations = [flag, inherited, explicitProfileKind].filter((value) => value !== null && value !== undefined);
+  if (new Set(declarations).size > 1) throw new Error("环境档位冲突：CLI / 父执行器 / profile 必须一致");
+  const kind = declarations[0] ?? DEFAULT_ENVIRONMENT.kind;
   if (!ENVIRONMENT_KINDS.includes(kind)) {
     throw new Error(`未知环境档位：${kind}（可选 ${ENVIRONMENT_KINDS.join(" | ")}）`);
   }
   const ports = profile?.startup?.ports ?? { pc: 3000, bMobile: 3001, cMobile: 3002, server: 8787 };
   const target = declared.target ?? {};
+  if (!target || typeof target !== "object" || Array.isArray(target)) throw new Error("environment.target 必须是 URL 对象");
+  if (kind === "deployed" && !target.apiUrl) throw new Error("deployed 目标未声明：必须显式配置 environment.target.apiUrl");
+  const checkedUrl = (key, fallback) => {
+    const value = target[key];
+    if (value === undefined || value === null) return fallback;
+    try {
+      if (typeof value !== "string" || value.trim() !== value || !value) throw new Error();
+      const url = new URL(value);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
+      return value.replace(/\/$/, "");
+    } catch { throw new Error(`environment.target.${key} 必须是无凭据、无查询参数的 HTTP(S) URL`); }
+  };
   const localUrls = urlsFromPorts(ports);
   const isLocal = kind === "local-preview";
   /**
@@ -96,10 +112,10 @@ export function resolveEnvironment(profile, { flag = null, allowProdWrites = fal
   const clientDefaults = { pc: "http://localhost:5173", bMobile: null, cMobile: null, api: "http://127.0.0.1:8787" };
   const kindDefaults = isLocal ? localUrls : kind === "client-runtime" ? clientDefaults : { pc: null, bMobile: null, cMobile: null, api: null };
   const urls = {
-    pc: target.pcUrl ?? kindDefaults.pc,
-    bMobile: target.bMobileUrl ?? kindDefaults.bMobile,
-    cMobile: target.cMobileUrl ?? kindDefaults.cMobile,
-    api: target.apiUrl ?? kindDefaults.api,
+    pc: checkedUrl("pcUrl", kindDefaults.pc),
+    bMobile: checkedUrl("bMobileUrl", kindDefaults.bMobile),
+    cMobile: checkedUrl("cMobileUrl", kindDefaults.cMobile),
+    api: checkedUrl("apiUrl", kindDefaults.api),
   };
   const supportDir = declared.supportDir
     ?? (kind === "client-runtime"
@@ -116,7 +132,7 @@ export function resolveEnvironment(profile, { flag = null, allowProdWrites = fal
     declaredTarget: kind === "client-runtime" ? true : declaredTarget,
     targetDeclaredExplicitly: declaredTarget,
     supportDir,
-    allowWrites: Boolean(allowProdWrites || declared.allowWrites),
+    allowWrites: Boolean(allowProdWrites || declared.allowWrites || process.env.ACCEPTANCE_ALLOW_PROD_WRITES === "1"),
     timeouts: { ...DEFAULT_ENVIRONMENT.timeouts, ...(declared.timeouts ?? {}) },
     /** 生产档位禁止的步骤：装依赖、迁移/种子复位、起本机预览、写演示夹具 */
     gateLocalSteps: isLocal,
@@ -130,7 +146,7 @@ async function probe(url, { timeoutMs, expect = "any" } = {}) {
     const text = await res.text().catch(() => "");
     let json = null;
     try { json = JSON.parse(text); } catch { /* 非 JSON 健康页（HTML 预览）按文本判定 */ }
-    const ok = expect === "json" ? Boolean(json) : res.ok;
+    const ok = res.ok && (expect !== "json" || Boolean(json));
     return { url, status: res.status, ok, ms: Date.now() - started, sample: text.slice(0, 160), json };
   } catch (err) {
     return { url, status: 0, ok: false, ms: Date.now() - started, error: String(err?.message ?? err).slice(0, 200) };

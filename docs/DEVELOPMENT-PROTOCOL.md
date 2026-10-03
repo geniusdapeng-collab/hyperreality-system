@@ -151,6 +151,46 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 ② `node sync/ui-upgrade-pr.mjs --rollout --wave <波次>`（默认按波次顺序，先到先得）；
 ③ 升级 PR 门禁全绿后合并；④ 确认 `state.retiredManagedForks` 与仓内文件一一对应。
 
+### 10.4 仓级扩展路径全链路（2026-09-30 新增，解除 workloom 波次暂停）
+
+**问题**：§10.3 的分叉容差只对 `lane: experiment` 生效。但 **产品分叉仓**（如 workloom：
+2026-09-29 按产品所有者指令把整树复刻为 `WorkLoom-growth@2edea37`，客户端成为"三端壳之上的产品层"）
+同样需要它——否则升级会 fail closed（workloom 实测 85 冲突：`MANAGED_FILE_MODIFIED` 19 /
+`MANAGED_FILE_DELETED` 6 / `UNTRACKED_MANAGED_FILE` 40 / `ILLEGAL_INDUSTRY_APP_PATH` 20），
+而"整包覆盖"又等于替换产品 UI。
+
+**决策（产品所有者指令：完成 loop/客户端收尾）**：把分叉容差从"实验车道专用"升级为
+**仓级显式声明**，即「仓级扩展路径全链路」。能力与代价与 §10.3 相同，差别在**适用面与登记要求**：
+
+| 项 | 规则 |
+|---|---|
+| 生效范围 | `lane: experiment`（§10.3）**或** 在 `sync/child-repos.json` 显式声明 `children[].tolerateExtensionSnapshotOverlap = true` 的产品分叉仓（T-2026-0930-0003 起） |
+| 登记要求 | 必须同时给出原因（`clientForkReason` 或 `rolloutResumeNote`，≥20 字，写明产品分叉的事实依据）与非空 `industryExtensionPaths`；该容差与 `uiRolloutWave: paused` 互斥（二选一） |
+| 采纳基座版 | 可选 `adoptBaseClientPaths`（同样只允许 `apps/` 前缀、不含 `..`，且不得与扩展路径重叠）：这些路径"既有指纹不可信但不是本仓定制"，升级时**按稳定快照覆盖/重建**——例如 `apps/*/package.json`（必须由基座通道写入 `@workloom/ui` 版本与 lock 完整性）与纯文案代差的页面 |
+| 退管留痕 | 与 §10.3 相同：路径从新 state 的 `managedFiles` 移除，记入 `state.retiredManagedForks`（含退管版本与原因），从此不接收基座更新 |
+| 单一事实源 | 仍然只认 `sync/child-repos.json`；仓内 `.workloom-client-extensions.json` 仅供本仓自包含门禁参考，不参与 rollout 判定（仓内私改会在下一次 rollout fail closed） |
+| 门禁 | `validateChildInventory` 逐条失败闭合（缺理由 / 空扩展路径 / paused 冲突 / 非法路径 / 未开容差却给 adopt 路径）；引擎 `planClientFoundation` 对"扩展路径与采纳路径重叠"抛错 |
+
+**两个实测坑（照抄清单时必看）**：
+1. `apps/*/package.json` **不能**放进 `industryExtensionPaths`：扩展路径会被从稳定快照里过滤掉，而
+   `materializeUiVersion` 必须读它来写 `@workloom/ui` 版本 → 直接报 `客户端基座缺少 package.json`（硬错）。
+2. 它也不能不声明：0.1.1 时代的旧 state 没登记过它，内容又与快照不同 → `UNTRACKED_MANAGED_FILE` 卡死。
+   **唯一正解**是上面第 3 行那类「采纳基座版」声明（覆盖它、同时保留 `setUiVersion` 通道）。
+   同理，宽口径如 `apps/webb/src/**` 会把必需入口 `apps/webb/src/main.tsx` 过滤掉（`稳定客户端基座缺少真实生产入口`），要用具体文件/子目录。
+
+**首发适用**：`workloom` 24 条扩展路径 + 2 条采纳基座版路径（三端 `package.json`、`apps/webb/src/Auth.tsx`）→
+`ready=true`（退管 71 条、更新 5 文件 + 新建 `styles/subtitle.css`）；`WorkLoom-growth` 39 条扩展路径 +
+1 条采纳基座版路径（三端 `package.json`）→ `ready=true`（退管 71 条、更新 4 文件 + 新建 `styles/subtitle.css`）。
+两仓的声明都可用 `work/tools/simulate-workloom-plan.mjs` 只读复现。
+恢复/回滚：删除 `tolerateExtensionSnapshotOverlap`/`adoptBaseClientPaths`（必要时保留 `industryExtensionPaths`）、
+`uiRolloutWave` 改回 `paused` 并补 `rolloutPauseNote`，即可回到"挂起"状态。
+
+**UI 消费契约在分叉仓的边界（2026-09-30 补，T-2026-0929-0001 follow-up）**：`UI_CONSUMER_CONTRACT_FAILED`
+（中文边界 / 动态值映射 / 文字出口 / 共享组件渲染等）只约束**基座受管面**。对已声明分叉容差的仓，
+这些发现降级为 `advisories`（保留在 preflight 报告里可查、可另立产品迁移任务卡），**不再阻断波次推进**——
+否则 `targetVersionApplied` 永远为 false，会把 W3B 之后的整条波次链永久卡死（workloom / growth 实测各 207 项）。
+非分叉仓不受影响，仍是硬门禁；回滚即删除该降级逻辑。
+
 ## 11. 隔离副本车道（isolated：双向不同步，2026-09-22 新增）
 
 **背景**：`workloom-growthtest`（AI超增长·实验版）与 `workloom-growthmatrix`（骇客帝国·实验版）是 2026-09-21 从
@@ -200,7 +240,7 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 | 提交规范校验 | **自动** | `.cnb.yml` 协议门禁 stage → `scripts/ci/verify-commit-msg.mjs` |
 | 并发冲突检测（同文件/同互斥模块） | **自动** | 同上 → `scripts/ci/verify-lock-conflict.mjs`（比对同仓 open PR） |
 | 合并前闸门（类型/测试/构建/迁移种子验链/视觉） | **自动** | 各仓 `.cnb.yml`（基座 static/db/ui 三道必需） |
-| 分支保护（禁直推/禁强推/必需状态检查） | **自动** | CNB 平台规则（十个订阅仓已配；隔离副本仓不再新增/修改） |
+| 分支保护（禁直推/禁强推/必需状态检查/评审） | **平台强制 + API 回读** | 规则必须包含 PR、非空必需检查、评审与管理员推送/强推/删除限制；纳管时逐字段验证。隔离副本不参加公共分发，产品所有者明确授权的仓内安全修复可以收紧其本仓保护，不能改变隔离登记。 |
 | 新仓发现与纳管 | **自动** | 每日 cron：`scripts/tools/fleet-scan.mjs --issue --provision` → 开扫描卡 + 建纳管 PR（**隔离副本仓跳过**，见 §11） |
 | 基座资产分发（根级受控资产 → 各仓 `sync/base-*` PR） | **自动** | 每 30 分钟 cron + `api_trigger_base_sync`：`sync/fanout-cnb.mjs`（详见《FLEET-AUTO-SYNC.md》§1） |
 | 任务卡创建/回执/关单 | **半自动** | `scripts/tools/task.mjs new|receipt|close`（一条命令，不再手写 JSON） |
@@ -210,6 +250,8 @@ CNB 每仓**最多 10 个标签**（实测：创建第 11 个返回 201 但不�
 | 高风险裁决与叫停 / 回滚 | **人来** | 协议 §3；协议文本语义变更由 AI 按 §1 合并，人保留叫停权 |
 
 结论：门禁、扫描、纳管与根级资产**开同步 PR**是自动的；非执行性资产和符合 §9.5 的普通代码可无人值守合并。治理资产同步 PR 须显式审查后由会话内 AI 合并，人保留高风险裁决、叫停与回滚权。
+
+平台要求评审时，自动合并器必须等待真实评审满足，不能用任务标签或 `force` 代替。当前会话授权代码修复与合并，也必须遵守平台的必需检查和评审结果；权限不足或红灯须保留 PR 和失败回执。
 
 ### 9.4 纯同步 PR 的自动合并（2026-09-19 新增）
 

@@ -6,7 +6,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { DEFAULT_ENVIRONMENT, ENVIRONMENT_KINDS } from "./target.mjs";
+import { DEFAULT_ENVIRONMENT, ENVIRONMENT_KINDS, resolveEnvironment } from "./target.mjs";
 import { LIVE_BUDGET_CAPS, normalizeBudgets } from "./live/budget.mjs";
 
 export const PROFILE_SCHEMA = "workloom.acceptance-profile/v2";
@@ -125,13 +125,30 @@ export function findRepoRoot(start = process.cwd()) {
   return resolve(start);
 }
 
+/** Tiger keeps its application assets in governance while exposing root CLI wrappers. */
+export function bundleDirOf(repoRoot, primaryBundle) {
+  if (typeof primaryBundle !== 'string' || !/^[A-Za-z0-9_-]+$/.test(primaryBundle)) throw new Error('primaryBundle 必须是本仓安全目录标识');
+  const direct = join(repoRoot, 'bundles', primaryBundle);
+  if (existsSync(join(direct, 'presets'))) return direct;
+  const nested = join(repoRoot, 'governance', 'bundles', primaryBundle);
+  const rootManifest = join(repoRoot, 'product.manifest.json');
+  const nestedManifest = join(repoRoot, 'governance', 'product.manifest.json');
+  if (existsSync(join(nested, 'presets')) && existsSync(rootManifest) && existsSync(nestedManifest)) {
+    const root = JSON.parse(readFileSync(rootManifest, 'utf8'));
+    const governance = JSON.parse(readFileSync(nestedManifest, 'utf8'));
+    if (root.repository !== governance.repository || root.defaultBundle !== governance.defaultBundle || root.defaultBundle !== primaryBundle) throw new Error('governance Bundle 与根产品 manifest 不一致');
+    return nested;
+  }
+  return direct;
+}
+
 /** 读取 profile；缺失时返回 isDefault=true 的默认 profile（并在报告里告警） */
 export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
   const path = explicitPath ? resolve(explicitPath) : join(repoRoot, "acceptance", "profile.json");
   const warnings = [];
   if (!existsSync(path)) {
     warnings.push(`未找到 ${path}，使用基座默认 profile（行业角色/旅程/阈值可能不适用）`);
-    return {
+    const fallback = {
       isDefault: true,
       warnings,
       profile: {
@@ -158,6 +175,9 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
         notes: "",
       },
     };
+    Object.defineProperty(fallback.profile, "environmentKindDeclared", { value: false });
+    fallback.environment = resolveEnvironment(fallback.profile, { flag: cliArgs().environmentKind, allowProdWrites: cliArgs().has("--allow-prod-writes") });
+    return fallback;
   }
   const raw = JSON.parse(readFileSync(path, "utf-8"));
   if (raw.schemaVersion !== PROFILE_SCHEMA) {
@@ -184,8 +204,7 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
   const journeys = Array.isArray(raw.journeys) && raw.journeys.length ? raw.journeys : DEFAULT_BUILTIN_JOURNEYS;
   const environment = { ...DEFAULT_ENVIRONMENT, ...(raw.environment ?? {}) };
   if (!ENVIRONMENT_KINDS.includes(environment.kind)) {
-    warnings.push(`environment.kind=${environment.kind} 非法（可选 ${ENVIRONMENT_KINDS.join("/")}），已回落 ${DEFAULT_ENVIRONMENT.kind}`);
-    environment.kind = DEFAULT_ENVIRONMENT.kind;
+    throw new Error(`profile.environment.kind 非法（可选 ${ENVIRONMENT_KINDS.join("/")}）`);
   }
   const live = { ...DEFAULT_LIVE, ...(raw.live ?? {}) };
   const normalizedBudgets = normalizeBudgets({ ...DEFAULT_LIVE.budgets, ...(raw.live?.budgets ?? {}) });
@@ -211,46 +230,30 @@ export function loadProfile(repoRoot = findRepoRoot(), explicitPath = null) {
     autonomy: { ...DEFAULT_AUTONOMY, ...(raw.autonomy ?? {}) },
     soak: { ...DEFAULT_SOAK, ...(raw.soak ?? {}) },
   };
-  return { isDefault: false, warnings, profile, path };
+  Object.defineProperty(profile, "environmentKindDeclared", { value: Object.hasOwn(raw.environment ?? {}, "kind") });
+  const resolvedEnvironment = resolveEnvironment(profile, { flag: cliArgs().environmentKind, allowProdWrites: cliArgs().has("--allow-prod-writes") });
+  return { isDefault: false, warnings, profile, path, environment: resolvedEnvironment };
 }
 
 export function urlsOf(profile) {
-  /**
-   * v3.1：环境档位优先——生产/客户端档位必须打真实目标地址，
-   * 只有 local-preview 才回落到本机端口。禁止用本机端口冒充生产目标。
-   */
-  const target = profile?.environment?.target ?? {};
-  if (target.pcUrl || target.apiUrl || target.cMobileUrl || target.bMobileUrl) {
-    const ports = profile?.startup?.ports ?? { pc: 3000, bMobile: 3001, cMobile: 3002, server: 8787 };
-    return {
-      pc: target.pcUrl ?? `http://localhost:${ports.pc}`,
-      bMobile: target.bMobileUrl ?? `http://localhost:${ports.bMobile}`,
-      cMobile: target.cMobileUrl ?? `http://localhost:${ports.cMobile}`,
-      api: target.apiUrl ?? `http://127.0.0.1:${ports.server}`,
-      environmentKind: profile?.environment?.kind ?? "local-preview",
-    };
-  }
-  const p = profile.startup.ports;
-  return {
-    pc: `http://localhost:${p.pc}`,
-    bMobile: `http://localhost:${p.bMobile}`,
-    cMobile: `http://localhost:${p.cMobile}`,
-    api: `http://127.0.0.1:${p.server}`,
-    environmentKind: profile?.environment?.kind ?? "local-preview",
-  };
+  const environment = resolveEnvironment(profile, { flag: cliArgs().environmentKind, allowProdWrites: cliArgs().has("--allow-prod-writes") });
+  return { ...environment.urls, environmentKind: environment.kind };
 }
 
 /** CLI 小工具：--profile <path> --out <dir> --workspace <id> --bundle <slug> */
 export function cliArgs(argv = process.argv.slice(2)) {
   const value = (name) => {
     const i = argv.indexOf(name);
-    return i >= 0 ? argv[i + 1] : undefined;
+    if (i < 0) return undefined;
+    if (argv.indexOf(name, i + 1) >= 0 || !argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`${name} 需要一个且仅一个值`);
+    return argv[i + 1];
   };
   return {
     profilePath: value("--profile") ?? null,
     outDir: value("--out") ?? null,
     workspaceId: value("--workspace") ?? null,
     primaryBundle: value("--bundle") ?? null,
+    environmentKind: value("--env") ?? null,
     has: (flag) => argv.includes(flag),
   };
 }

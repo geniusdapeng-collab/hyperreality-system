@@ -62,7 +62,9 @@
     "desktop:release:contract": "node --test scripts/unsigned-desktop-release.test.mjs scripts/desktop-release-finalizer.test.mjs",
     "oss:inventory": "bash scripts/oss-watch.sh --inventory",
     "oss:check": "bash scripts/oss-watch.sh --check",
-    "test:oss": "node --test scripts/oss-inventory.test.mjs"
+    "test:oss": "node --test scripts/oss-inventory.test.mjs",
+    "test:governance": "node --test --test-concurrency=1 scripts/delivery/*.test.mjs scripts/acceptance/fleet-run.test.mjs scripts/acceptance/lib/environment-safety.test.mjs scripts/acceptance/lib/outcome-contract.test.mjs scripts/acceptance/lib/live/budget.test.mjs scripts/acceptance/lib/live/live-truth.test.mjs scripts/acceptance/lib/live/providers.test.mjs scripts/acceptance/lib/live/usage.test.mjs scripts/acceptance/lib/live/audit.test.mjs scripts/acceptance/lib/live/providers-http.test.mjs scripts/capability-status.test.mjs scripts/oss-inventory.test.mjs scripts/oss-watch.test.mjs scripts/tools/provision-safety.test.mjs sync/direct-push.test.mjs scripts/acceptance/lib/live/product.test.mjs scripts/acceptance/lib/live/media-negative.test.mjs scripts/acceptance/lib/live/live-cli.test.mjs scripts/acceptance/outcome.test.mjs scripts/acceptance/lib/profile-contract.test.mjs scripts/acceptance/profile-check.test.mjs scripts/ui-release-registration.test.mjs scripts/acceptance/lib/live/dsh-process.test.mjs scripts/acceptance/lib/live/live-cli-wire.test.mjs sync/fanout-safety.test.mjs",
+    "test:media": "node --test --test-concurrency=1 scripts/acceptance/lib/live/media-decoder.test.mjs scripts/acceptance/lib/live/live-cli-browser.test.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
