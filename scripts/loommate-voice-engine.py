@@ -15,15 +15,34 @@ import subprocess
 import sys
 from threading import BoundedSemaphore, Lock, Thread
 import time
+from types import SimpleNamespace
 
 MAX_AUDIO_BYTES = 32 * 1024 * 1024
 
 
 def phoneme_batches(phonemes, vocab):
-    tokens = [vocab[character] for character in phonemes if character in vocab]
+    if any(character not in vocab for character in phonemes):
+        raise RuntimeError('text_has_unsupported_phonemes')
+    tokens = [vocab[character] for character in phonemes]
     if not tokens:
         raise RuntimeError('text_has_no_supported_phonemes')
     return [tokens[start:start + 510] for start in range(0, len(tokens), 510)]
+
+
+def create_phonemizer(spec):
+    from misaki.zh import ZHG2P
+    from misaki.espeak import EspeakFallback
+    english = EspeakFallback(british=False)
+
+    def english_phonemes(text):
+        phonemes, _ = english(SimpleNamespace(text=text))
+        if not isinstance(phonemes, str) or not phonemes.strip():
+            raise RuntimeError('english_phonemization_failed')
+        return phonemes
+
+    # The Chinese 1.1 graph needs its matching frontend. The callback preserves
+    # mixed English text, which upstream otherwise replaces with an unknown.
+    return ZHG2P(version=spec.get('phonemizerVersion'), en_callable=english_phonemes)
 
 
 class ProcessSynthesizer:
@@ -122,7 +141,6 @@ def load_synthesizer(model_path, spec):
     import numpy as np
     import onnxruntime as ort
     import soundfile as sf
-    from misaki.zh import ZHG2P
     ort.disable_telemetry_events()
     options = ort.SessionOptions()
     options.intra_op_num_threads = 2
@@ -143,7 +161,7 @@ def load_synthesizer(model_path, spec):
         voice = np.asarray(voices[spec['voice']], dtype=np.float32)
     if voice.ndim != 3 or voice.shape[1:] != (1, 256) or voice.shape[0] < 1:
         raise RuntimeError('female_voice_shape_invalid')
-    g2p = ZHG2P()
+    g2p = create_phonemizer(spec)
 
     def synthesize(text):
         phonemes, _ = g2p(text)
@@ -276,7 +294,9 @@ def create_voice_server(spec, model_path, synthesizer_factory, max_pending=4):
 def read_installed(station, spec_file):
     spec = json.loads(spec_file.read_text())
     installed = json.loads((station / 'loommate-voice.json').read_text())
-    if installed.get('model') != spec['model'] or installed.get('revision') != spec['revision']:
+    if (installed.get('model') != spec['model'] or installed.get('revision') != spec['revision']
+            or installed.get('voice') != spec['voice']
+            or installed.get('phonemizerVersion') != spec.get('phonemizerVersion')):
         raise RuntimeError('Installed model does not match worker specification')
     model_path = Path(installed['modelPath']).resolve()
     if not (model_path / spec['voiceFile']).is_file():

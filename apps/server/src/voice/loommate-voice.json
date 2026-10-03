@@ -1,12 +1,13 @@
 {
   "schema": "workloom.loommate-voice/v2",
   "profile": "loommate-sweet",
-  "model": "thewh1teagle/kokoro-onnx:kokoro-v1.0.int8",
-  "revision": "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c",
+  "model": "thewh1teagle/kokoro-onnx:kokoro-v1.1-zh.int8",
+  "revision": "11751c087b4bbeed031e2b687b11dda698bd27ba0509472f960b57f835a999f7",
   "backend": "onnx-cpu",
-  "modelFile": "kokoro-v1.0.int8.onnx",
-  "voice": "zf_xiaoni",
-  "voiceFile": "voices-v1.0.bin",
+  "modelFile": "kokoro-v1.1-zh.int8.onnx",
+  "voice": "zf_001",
+  "voiceFile": "voices-v1.1-zh.bin",
+  "phonemizerVersion": "1.1",
   "language": "z",
   "speed": 1.0,
   "instruction": "",
@@ -14,16 +15,17 @@
   "license": "Apache-2.0",
   "source": "https://github.com/hexgrad/kokoro",
   "weightsSource": "https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.1",
-  "requiredFiles": ["config.json", "kokoro-v1.0.int8.onnx", "voices-v1.0.bin"],
+  "requiredFiles": ["config.json", "kokoro-v1.1-zh.int8.onnx", "voices-v1.1-zh.bin"],
   "pythonDependency": "misaki[zh]==0.9.4",
   "runtimeDependency": "onnxruntime==1.30.0",
+  "extraDependencies": ["phonemizer-fork==3.3.2", "espeakng-loader==0.2.4"],
   "weightsSha256": {
-    "kokoro-v1.0.int8.onnx": "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c",
-    "voices-v1.0.bin": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
+    "kokoro-v1.1-zh.int8.onnx": "11751c087b4bbeed031e2b687b11dda698bd27ba0509472f960b57f835a999f7",
+    "voices-v1.1-zh.bin": "14cb6186c99e4f6016871405f62046c5df863ae27465cbdc4ee08be7dd703acd"
   },
   "weightsUrls": {
-    "kokoro-v1.0.int8.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.int8.onnx",
-    "voices-v1.0.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin"
+    "kokoro-v1.1-zh.int8.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.1-zh.int8.onnx",
+    "voices-v1.1-zh.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.1-zh.bin"
   },
   "enginePort": 8100,
   "mlxAudioVersion": "0.5.5"

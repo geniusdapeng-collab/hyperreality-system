@@ -66,7 +66,8 @@ def atomic_json(file, data):
 def run_dependency(python, dependency, offline):
     package = dependency.split('==', 1)[0].split('[', 1)[0]
     version = dependency.split('==', 1)[1]
-    module = 'misaki.zh' if package == 'misaki' else package
+    module = {'misaki': 'misaki.zh', 'phonemizer-fork': 'phonemizer',
+              'espeakng-loader': 'espeakng_loader'}.get(package, package)
     code = 'import importlib.util as u,importlib.metadata as m,sys; sys.exit(0 if u.find_spec(sys.argv[1]) and m.version(sys.argv[2])==sys.argv[3] else 1)'
     env = {**os.environ, 'ORT_DISABLE_TELEMETRY': '1'}
     check = subprocess.run([str(python), '-c', code, module, package, version], env=env, capture_output=True, timeout=60)
@@ -247,23 +248,27 @@ def main(argv=None):
         raise RuntimeError('Existing station needs tested mlx-audio==' + spec['mlxAudioVersion'] + '; its shared environment was not upgraded')
     manifest = station / 'loommate-voice.json'
     if args.check:
-        run_dependency(python, spec['pythonDependency'], True)
-        run_dependency(python, spec['runtimeDependency'], True)
+        for dependency in [spec['pythonDependency'], spec['runtimeDependency'], *spec.get('extraDependencies', [])]:
+            run_dependency(python, dependency, True)
         installed = json.loads(manifest.read_text())
-        if installed.get('model') != spec['model'] or installed.get('revision') != spec['revision']:
+        if (installed.get('model') != spec['model'] or installed.get('revision') != spec['revision']
+                or installed.get('voice') != spec['voice']
+                or installed.get('phonemizerVersion') != spec.get('phonemizerVersion')):
             raise RuntimeError('Installed LoomMate model does not match the pinned model')
         model_path = Path(installed['modelPath'])
     else:
         if platform.system() != 'Darwin' or platform.machine() != 'arm64':
             raise RuntimeError('This installer is verified on Apple Silicon macOS; existing clone/system fallback remains available elsewhere')
-        run_dependency(python, spec['pythonDependency'], args.offline)
-        run_dependency(python, spec['runtimeDependency'], args.offline)
+        for dependency in [spec['pythonDependency'], spec['runtimeDependency'], *spec.get('extraDependencies', [])]:
+            run_dependency(python, dependency, args.offline)
         model_path = prepare_model(station, python, spec, args.offline)
     verify_weights(model_path, spec['weightsSha256'], spec['requiredFiles'])
     if not args.check:
         atomic_json(manifest, {'schema': spec['schema'], 'model': spec['model'],
                               'revision': spec['revision'], 'modelPath': str(model_path),
-                              'profile': spec['profile'], 'voice': spec['voice'], 'license': spec['license'], 'backend': spec['backend']})
+                              'profile': spec['profile'], 'voice': spec['voice'],
+                              'phonemizerVersion': spec.get('phonemizerVersion'),
+                              'license': spec['license'], 'backend': spec['backend']})
         if not args.skip_worker:
             install_worker(station, python, spec)
     print(json.dumps({'ok': True, 'profile': spec['profile'], 'voice': spec['voice'], 'revision': spec['revision'],

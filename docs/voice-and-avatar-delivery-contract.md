@@ -9,7 +9,7 @@
 - 角色配置明确区分男女声；系统语音回落时优先 `Flo / Tingting / Xiaoxiao / Xiaoyi / Meijia / Sinji`，音高只做轻微修饰。
 
 <!-- VOICE-DEFAULT:BEGIN -->
-- **织伴（小织）的默认音色 = 本机 Kokoro 自然中文女生声线 `zf_xiaoni`**（逻辑档案 `loommate-sweet`）；
+- **织伴（小织）的默认音色 = 本机 Kokoro-82M-v1.1-zh 普通话女生声线 `zf_001`**（逻辑档案 `loommate-sweet`）；
   客户端经服务端 `/api/voice/speech` 取音频。女声引擎失败时优先本机本人克隆 `zh-myvoice`，
   两条路径都不可用才回落现有系统语音。服务端 `WORKLOOM_VOICE_PROFILE=zh-myvoice` 可明确选择本人音色。
   同机已有的私有 `bridge-token` 自动读取；实际声线由响应头 `x-voice-profile` 标识。安装、缓存与边界见 [织伴自然女声](loommate-expressive-voice.md)。
@@ -20,15 +20,15 @@
 
 ## 2. 本机神经女声与克隆备选
 
-默认路径由 `apps/server/src/voice/station.ts` 从本机织伴独立 CPU 模型工位获取 `zf_xiaoni` 的完整 WAV，
+默认路径由 `apps/server/src/voice/station.ts` 从本机织伴独立 CPU 模型工位获取 `zf_001` 的完整 WAV，
 `apps/web/src/voice/neuralVoice.ts` 用同一播放队列驱动字幕与口型。旧前端默认档案名在服务器映射到新女声，
 不要求行业页面或数字人形象升级。其他岗位的角色声音配置独立。
 
-- 模型为可选本机语音包，约 142 MB，只安装一份，不进入每个基础客户端包；离线运行不临时下载权重。
+- 模型为可选本机语音包，约 168 MB，只安装一份，不进入每个基础客户端包；离线运行不临时下载权重。
 - 能力探测依旧经过 `/api/voice/status`；本机凭据可读取时启用神经路径。首次安装后重启服务器并刷新页面。
 - 女声失败优先本人克隆；参考音频和声音授权记录留在本机工位，不进仓库、数据库或蜂群。
 - 克隆他人声音仍需授权声明；对外发布继续遵循现有声音授权围栏。
-- 同模型、声线、语速与文本的有效缓存直接播放；长文本分段完整合成；损坏 WAV 不算成功。
+- 同模型、声线、发音前端、语速与文本的有效缓存直接播放；长文本分段完整合成；损坏 WAV 不算成功。
 - Kokoro 当前提供自然韵律与女生声线，不支持任意情绪指令；听感以真实试听为准。
 - 未安装语音包或工位不可达时保留系统 TTS 与字幕兜底。当前女声包仅验证 Apple Silicon macOS，其他系统不得冒充已安装。
 

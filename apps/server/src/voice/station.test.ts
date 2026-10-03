@@ -41,14 +41,33 @@ describe("工位配置与凭据边界", () => {
   it("只激活安装器已验证的固定模型修订", () => {
     const dir = temp(), model = join(dir, 'model'); mkdirSync(model);
     writeFileSync(join(model, 'config.json'), '{}'); writeFileSync(join(model, voice.modelFile), 'test');
+    writeFileSync(join(model, voice.voiceFile), 'test-voice');
     const file = join(dir, 'loommate-voice.json');
-    writeFileSync(file, JSON.stringify({ model: voice.model, revision: voice.revision, modelPath: model }));
+    const manifest = { model: voice.model, revision: voice.revision, modelPath: model,
+      voice: voice.voice, phonemizerVersion: voice.phonemizerVersion };
+    writeFileSync(file, JSON.stringify(manifest));
     expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).sweetModel).toBe(model);
-    writeFileSync(file, JSON.stringify({ model: voice.model, revision: 'wrong', modelPath: model }));
-    expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).sweetModel).toBe('');
+    for (const override of [{ revision: 'wrong' }, { voice: 'zf_xiaoni' }, { phonemizerVersion: 'legacy' }]) {
+      writeFileSync(file, JSON.stringify({ ...manifest, ...override }));
+      expect(voiceStationConfig({ WORKLOOM_VOICE_STATION_DIR: dir }).sweetModel).toBe('');
+    }
   });
 });
 describe("合成、缓存与回退", () => {
+  it("已选普通话模型和新版发音前端不复用被否决的小妮缓存", async () => {
+    const cfg = config(), text = '你好，小织。';
+    const oldIdentity = JSON.stringify(['v2', 'thewh1teagle/kokoro-onnx:kokoro-v1.0.int8',
+      'ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c', 'zf_xiaoni', 'z', 1, '']);
+    const oldFile = join(cfg.cacheDir, `${voiceCacheKey(cfg.profile, text, oldIdentity)}.wav`);
+    writeFileSync(oldFile, wave());
+    expect(voice.voice).toBe('zf_001'); expect(voice.phonemizerVersion).toBe('1.1');
+    expect(voiceCacheFile(cfg, cfg.profile, text)).not.toBe(oldFile);
+    const fn = vi.fn(async () => new Response(wave()));
+    expect(await synthesizeVoice(text, { config: cfg, fetchImpl: asFetch(fn) })).toMatchObject({ ok: true, cached: false });
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String((fn.mock.calls[0] as unknown as [unknown, RequestInit])[1].body)).voice)
+      .toBe(join(cfg.sweetModel, 'voices-v1.1-zh.bin'));
+  });
   it("空、超过上限、路径穿越、未配置、关闭、远端均结构化拒绝", async () => {
     const cases = [
       { text: ' ', cfg: {}, profile: undefined, error: 'text_required' },

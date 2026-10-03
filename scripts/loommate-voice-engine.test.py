@@ -10,7 +10,8 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 import wave
 
 module_spec = importlib.util.spec_from_file_location('loommate_worker', Path(__file__).with_name('loommate-voice-engine.py'))
@@ -36,6 +37,27 @@ for line in sys.stdin.buffer:
 
 
 class ModelProcessTests(unittest.TestCase):
+    def test_matching_chinese_frontend_preserves_english_and_reports_empty_english(self):
+        chinese, english_factory, english = Mock(), Mock(), Mock()
+        english_factory.return_value = english
+        modules = {'misaki.zh': SimpleNamespace(ZHG2P=chinese),
+                   'misaki.espeak': SimpleNamespace(EspeakFallback=english_factory)}
+        with patch.dict(sys.modules, modules):
+            worker.create_phonemizer({'phonemizerVersion': '1.1'})
+        english_factory.assert_called_once_with(british=False)
+        self.assertEqual(chinese.call_args.kwargs['version'], '1.1')
+        callback = chinese.call_args.kwargs['en_callable']
+        english.return_value = ('ˈAˌI', 2)
+        self.assertEqual(callback('AI'), 'ˈAˌI')
+        self.assertEqual(english.call_args.args[0].text, 'AI')
+        english.return_value = (None, None)
+        with self.assertRaisesRegex(RuntimeError, 'english_phonemization_failed'):
+            callback('AI')
+
+    def test_unsupported_phonemes_are_rejected_instead_of_skipped(self):
+        with self.assertRaisesRegex(RuntimeError, 'unsupported_phonemes'):
+            worker.phoneme_batches('a❓b', {'a': 11, 'b': 22})
+
     def test_slow_os_termination_keeps_child_owned_until_it_is_reaped(self):
         model = worker.ProcessSynthesizer.__new__(worker.ProcessSynthesizer)
         model.stop_lock = threading.Lock()
@@ -58,6 +80,23 @@ class ModelProcessTests(unittest.TestCase):
         self.assertEqual([token for batch in batches for token in batch], [11, 22] * 511)
         with self.assertRaisesRegex(RuntimeError, 'supported_phonemes'):
             worker.phoneme_batches('unsupported', {})
+
+    def test_installed_voice_and_frontend_must_match_current_specification(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            spec = {'model': 'model', 'revision': 'fixed', 'voice': 'zf_001',
+                    'phonemizerVersion': '1.1', 'voiceFile': 'voices.bin'}
+            installed = {**spec, 'modelPath': str(root)}
+            file = root / 'spec.json'
+            file.write_text(json.dumps(spec))
+            (root / 'voices.bin').touch()
+            manifest = root / 'loommate-voice.json'
+            manifest.write_text(json.dumps(installed))
+            self.assertEqual(worker.read_installed(root, file)[1], root.resolve())
+            for override in [{'voice': 'zf_xiaoni'}, {'phonemizerVersion': None}]:
+                manifest.write_text(json.dumps({**installed, **override}))
+                with self.assertRaisesRegex(RuntimeError, 'specification'):
+                    worker.read_installed(root, file)
 
     def test_model_process_stays_on_main_thread_and_is_reused_and_closed(self):
         model = worker.ProcessSynthesizer([sys.executable, '-u', '-c', FAKE_CHILD], startup_timeout=15)

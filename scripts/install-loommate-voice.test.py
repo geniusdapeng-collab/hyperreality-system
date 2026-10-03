@@ -3,6 +3,7 @@ from io import BytesIO
 import importlib.util
 import json
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -13,6 +14,42 @@ spec.loader.exec_module(installer)
 
 
 class InstallerTests(unittest.TestCase):
+    def test_dependency_distribution_names_map_to_the_real_import_modules(self):
+        with patch.object(installer.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            for dependency, module, package, version in [
+                ('phonemizer-fork==3.3.2', 'phonemizer', 'phonemizer-fork', '3.3.2'),
+                ('espeakng-loader==0.2.4', 'espeakng_loader', 'espeakng-loader', '0.2.4'),
+            ]:
+                installer.run_dependency(Path('/test/python'), dependency, True)
+                self.assertEqual(run.call_args.args[0][-3:], [module, package, version])
+
+    def test_install_and_check_both_require_the_english_frontend_dependencies(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            configuration = json.loads(installer.SPEC_FILE.read_text())
+            manifest = {**configuration, 'modelPath': str(root)}
+            (root / 'loommate-voice.json').write_text(json.dumps(manifest))
+            with patch.object(installer, 'require_station', return_value=root / 'python'), \
+                    patch.object(installer.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=configuration['mlxAudioVersion'])), \
+                    patch.object(installer, 'prepare_model', return_value=root), \
+                    patch.object(installer, 'verify_weights'), \
+                    patch.object(installer, 'install_worker'), \
+                    patch.object(installer.platform, 'system', return_value='Darwin'), \
+                    patch.object(installer.platform, 'machine', return_value='arm64'), \
+                    patch.object(installer, 'run_dependency') as dependency:
+                for flags in [['--offline'], ['--check']]:
+                    dependency.reset_mock()
+                    self.assertEqual(installer.main(['--station-dir', str(root), *flags]), 0)
+                    self.assertEqual([call.args[1] for call in dependency.call_args_list],
+                                     [configuration['pythonDependency'], configuration['runtimeDependency'],
+                                      *configuration['extraDependencies']])
+                    self.assertTrue(all(call.args[2] is True for call in dependency.call_args_list))
+                    dependency.side_effect = lambda _python, name, _offline: (_ for _ in ()).throw(RuntimeError('missing_english_dependency')) if name.startswith('phonemizer-fork') else None
+                    with self.assertRaisesRegex(RuntimeError, 'missing_english_dependency'):
+                        installer.main(['--station-dir', str(root), *flags])
+                    dependency.side_effect = None
+
     def test_atomic_manifest_contains_no_token(self):
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / 'loommate-voice.json'
