@@ -1,27 +1,31 @@
 {
-  "schema": "workloom.loommate-voice/v1",
+  "schema": "workloom.loommate-voice/v2",
   "profile": "loommate-sweet",
-  "model": "mlx-community/Kokoro-82M-bf16",
-  "revision": "a71e4d38b236d968966a2002c4c895dbd12b1c3c",
-  "modelFile": "kokoro-v1_0.safetensors",
-  "voice": "zf_xiaoni",
-  "voiceFile": "voices/zf_xiaoni.safetensors",
+  "model": "thewh1teagle/kokoro-onnx:kokoro-v1.1-zh.int8",
+  "revision": "11751c087b4bbeed031e2b687b11dda698bd27ba0509472f960b57f835a999f7",
+  "backend": "onnx-cpu",
+  "modelFile": "kokoro-v1.1-zh.int8.onnx",
+  "voice": "zf_001",
+  "voiceFile": "voices-v1.1-zh.bin",
+  "phonemizerVersion": "1.1",
   "language": "z",
   "speed": 1.0,
   "instruction": "",
   "fallbackProfile": "zh-myvoice",
   "license": "Apache-2.0",
   "source": "https://github.com/hexgrad/kokoro",
-  "weightsSource": "https://huggingface.co/mlx-community/Kokoro-82M-bf16",
-  "requiredFiles": [
-    "config.json",
-    "kokoro-v1_0.safetensors",
-    "voices/zf_xiaoni.safetensors"
-  ],
+  "weightsSource": "https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.1",
+  "requiredFiles": ["config.json", "kokoro-v1.1-zh.int8.onnx", "voices-v1.1-zh.bin"],
   "pythonDependency": "misaki[zh]==0.9.4",
+  "runtimeDependency": "onnxruntime==1.30.0",
+  "extraDependencies": ["phonemizer-fork==3.3.2", "espeakng-loader==0.2.4"],
   "weightsSha256": {
-    "kokoro-v1_0.safetensors": "4e9ecdf03b8b6cf906070390237feda473dc13327cb8d56a43deaa374c02acd8",
-    "voices/zf_xiaoni.safetensors": "ef37a82850e10eb15f18a4549c76707a8eebd682e61facdda6ee4a4dc4eb0bf0"
+    "kokoro-v1.1-zh.int8.onnx": "11751c087b4bbeed031e2b687b11dda698bd27ba0509472f960b57f835a999f7",
+    "voices-v1.1-zh.bin": "14cb6186c99e4f6016871405f62046c5df863ae27465cbdc4ee08be7dd703acd"
+  },
+  "weightsUrls": {
+    "kokoro-v1.1-zh.int8.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.1-zh.int8.onnx",
+    "voices-v1.1-zh.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.1-zh.bin"
   },
   "enginePort": 8100,
   "mlxAudioVersion": "0.5.5"

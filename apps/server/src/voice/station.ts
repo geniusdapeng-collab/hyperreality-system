@@ -1,4 +1,4 @@
-/** 织伴默认 小妮自然女声；工位故障依次回退本机个人克隆、既有客户端系统语音。 */
+/** 织伴默认已试听选定的普通话女声 zf_001；工位故障依次回退个人克隆与系统语音。 */
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -43,11 +43,13 @@ function localToken(stationDir: string): string {
 function installedModel(stationDir: string): string {
   try {
     const manifest = JSON.parse(readFileSync(path.join(stationDir, "loommate-voice.json"), "utf8")) as {
-      revision?: string; model?: string; modelPath?: string;
+      revision?: string; model?: string; modelPath?: string; voice?: string; phonemizerVersion?: string;
     };
     if (manifest.model !== voice.model || manifest.revision !== voice.revision || !manifest.modelPath
+      || manifest.voice !== voice.voice || manifest.phonemizerVersion !== voice.phonemizerVersion
       || !path.isAbsolute(manifest.modelPath) || !existsSync(path.join(manifest.modelPath, "config.json"))
-      || !existsSync(path.join(manifest.modelPath, voice.modelFile))) return "";
+      || !existsSync(path.join(manifest.modelPath, voice.modelFile))
+      || !existsSync(path.join(manifest.modelPath, voice.voiceFile))) return "";
     return manifest.modelPath;
   } catch { return ""; } // Installer reports detailed errors; speech uses the personal-clone fallback.
 }
@@ -69,7 +71,8 @@ export function voiceCacheKey(profile: string, text: string, identity = "v2"): s
 }
 export function voiceCacheFile(cfg: VoiceStationConfig, profile: string, text: string): string {
   const identity = profile === voice.profile
-    ? JSON.stringify(["v2", voice.model, voice.revision, voice.voice, voice.language, voice.speed, voice.instruction]) : "v2";
+    ? JSON.stringify(["v3", voice.model, voice.revision, voice.voice, voice.voiceFile, voice.phonemizerVersion,
+      voice.pythonDependency, voice.extraDependencies, voice.language, voice.speed, voice.instruction]) : "v2";
   return path.join(cfg.cacheDir, `${voiceCacheKey(profile, text, identity)}.wav`);
 }
 async function cached(file: string): Promise<boolean> {

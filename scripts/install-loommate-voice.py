@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add a pinned natural Mandarin female voice to the existing local MLX station."""
+"""Add a pinned CPU Mandarin female voice to the existing local voice station."""
 import argparse
 import hashlib
 import importlib.util
@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.request
 
 SPEC_FILE = Path(__file__).resolve().parents[1] / 'apps/server/src/voice/loommate-voice.json'
 
@@ -62,23 +64,80 @@ def atomic_json(file, data):
 
 
 def run_dependency(python, dependency, offline):
+    package = dependency.split('==', 1)[0].split('[', 1)[0]
     version = dependency.split('==', 1)[1]
-    code = 'import misaki.zh; import mlx_audio; import importlib.metadata as m; import sys; sys.exit(0 if m.version("misaki")==sys.argv[1] else 1)'
-    check = subprocess.run([str(python), '-c', code, version], capture_output=True, timeout=60)
+    module = {'misaki': 'misaki.zh', 'phonemizer-fork': 'phonemizer',
+              'espeakng-loader': 'espeakng_loader'}.get(package, package)
+    code = 'import importlib.util as u,importlib.metadata as m,sys; sys.exit(0 if u.find_spec(sys.argv[1]) and m.version(sys.argv[2])==sys.argv[3] else 1)'
+    env = {**os.environ, 'ORT_DISABLE_TELEMETRY': '1'}
+    check = subprocess.run([str(python), '-c', code, module, package, version], env=env, capture_output=True, timeout=60)
     if check.returncode == 0:
         return
     if offline:
         raise RuntimeError('Chinese voice processing dependency is missing; rerun without --offline')
     uv = shutil.which('uv')
     argv = [uv, 'pip', 'install', '--python', str(python), dependency] if uv else [str(python), '-m', 'pip', 'install', dependency]
-    result = subprocess.run(argv, capture_output=True, timeout=600)
+    result = subprocess.run(argv, env=env, capture_output=True, timeout=600)
     if result.returncode:
         raise RuntimeError('Could not install the pinned Chinese processing dependency; install uv or pip and retry')
 
 
+def download_asset(file, url, digest, offline):
+    file.parent.mkdir(parents=True, exist_ok=True)
+    if file.exists():
+        verify_weights(file.parent, {file.name: digest}, required=())
+        return
+    if offline:
+        raise RuntimeError('Pinned voice asset is not cached: ' + file.name)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=file.parent, delete=False) as output:
+            temporary = Path(output.name)
+            sha = hashlib.sha256()
+            size = 0
+            with urllib.request.urlopen(url, timeout=60) as response:
+                while block := response.read(1024 * 1024):
+                    size += len(block)
+                    if size > 400 * 1024 * 1024:
+                        raise RuntimeError('Voice asset exceeds its download size limit')
+                    sha.update(block)
+                    output.write(block)
+        if sha.hexdigest() != digest:
+            raise RuntimeError('Downloaded voice asset checksum mismatch: ' + file.name)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, file)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def prepare_model(station, python, spec, offline):
+    source = station / 'models/loommate-download' / ('kokoro-onnx-' + spec['revision'][:12])
+    for name, digest in spec['weightsSha256'].items():
+        download_asset(source / name, spec['weightsUrls'][name], digest, offline)
+    config = source / 'config.json'
+    if not config.exists():
+        # The exported graph carries its exact vocabulary; never guess from a
+        # different Kokoro revision or fetch a second unpinned configuration.
+        code = ('import onnxruntime as o,json,sys; o.disable_telemetry_events(); '
+                'opt=o.SessionOptions(); opt.intra_op_num_threads=2; opt.inter_op_num_threads=1; '
+                's=o.InferenceSession(sys.argv[1],sess_options=opt,providers=["CPUExecutionProvider"]); '
+                'print(s.get_modelmeta().custom_metadata_map["kokoro_config"])')
+        result = subprocess.run([str(python), '-c', code, str(source / spec['modelFile'])],
+                                env={**os.environ, 'ORT_DISABLE_TELEMETRY': '1'}, text=True, capture_output=True, timeout=120)
+        if result.returncode:
+            raise RuntimeError('Could not read the fixed voice model vocabulary')
+        configuration = json.loads(result.stdout)
+        if not isinstance(configuration.get('vocab'), dict) or not configuration['vocab']:
+            raise RuntimeError('Fixed voice model vocabulary is invalid')
+        atomic_json(config, configuration)
+    verify_weights(source, spec['weightsSha256'], spec['requiredFiles'])
+    return activate_model(station, source, spec)
+
+
 def activate_model(station, source, spec):
-    # Old Kokoro metadata has no model_type. A stable, descriptive local folder lets
-    # mlx-audio identify its architecture without altering upstream config/weights.
+    # Keep immutable downloaded assets separate from the active local manifest.
     target = station / 'models/loommate' / ('kokoro-82m-' + spec['revision'][:12])
     target.mkdir(parents=True, exist_ok=True)
     for name in spec['requiredFiles']:
@@ -91,6 +150,48 @@ def activate_model(station, source, spec):
             raise RuntimeError('Refusing to overwrite an existing local voice asset: ' + name)
         dest.symlink_to(origin)
     return target
+
+
+def wait_worker(spec, timeout_seconds=90):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        try:
+            with opener.open('http://127.0.0.1:' + str(spec['enginePort']) + '/health', timeout=3) as response:
+                data = json.loads(response.read())
+                if response.status == 200 and data.get('revision') == spec['revision'] and data.get('voice') == spec['voice']:
+                    return
+        except (OSError, ValueError):
+            pass  # Startup is bounded and a persistent failure remains fatal.
+        time.sleep(1)
+    raise RuntimeError('LoomMate model worker did not become ready within its startup budget')
+
+
+def bootstrap_worker(domain, plist):
+    # A just-unloaded launch agent may reject its first bootstrap. Retry only
+    # this exact job, with a fixed bound; persistent activation errors stay fatal.
+    for attempt in range(5):
+        result = subprocess.run(['launchctl', 'bootstrap', domain, str(plist)], capture_output=True, timeout=30)
+        if result.returncode == 0:
+            return
+        if attempt < 4:
+            time.sleep(min(4, 2 ** attempt))
+    raise RuntimeError('Could not start the LoomMate launch agent; model is installed but worker activation failed')
+
+
+def start_worker(domain, plist, label, same_arguments):
+    target = domain + '/' + label
+    probe = subprocess.run(['launchctl', 'print', target], capture_output=True, timeout=15)
+    if probe.returncode == 0:
+        if same_arguments:
+            restarted = subprocess.run(['launchctl', 'kickstart', '-k', target], capture_output=True, timeout=30)
+            if restarted.returncode:
+                raise RuntimeError('Could not restart the existing LoomMate worker')
+            return
+        stopped = subprocess.run(['launchctl', 'bootout', target], capture_output=True, timeout=30)
+        if stopped.returncode:
+            raise RuntimeError('Could not stop the previous LoomMate worker; no other voice service was changed')
+    bootstrap_worker(domain, plist)
 
 
 def install_worker(station, python, spec):
@@ -114,7 +215,10 @@ def install_worker(station, python, spec):
     plist.parent.mkdir(parents=True, exist_ok=True)
     data = {'Label': label, 'ProgramArguments': [str(python), str(worker), '--station-dir', str(station), '--spec', str(local_spec)],
             'RunAtLoad': True, 'KeepAlive': False, 'WorkingDirectory': str(station),
+            'ProcessType': 'Interactive',
             'StandardOutPath': str(log), 'StandardErrorPath': str(log)}
+    previous = plistlib.loads(plist.read_bytes()) if plist.exists() else {}
+    same_arguments = previous.get('ProgramArguments') == data['ProgramArguments'] and previous.get('ProcessType') == data['ProcessType']
     temporary = plist.with_suffix('.tmp')
     try:
         with temporary.open('wb') as stream:
@@ -124,14 +228,8 @@ def install_worker(station, python, spec):
     finally:
         temporary.unlink(missing_ok=True)
     domain = 'gui/' + str(os.getuid())
-    probe = subprocess.run(['launchctl', 'print', domain + '/' + label], capture_output=True, timeout=15)
-    if probe.returncode == 0:
-        stopped = subprocess.run(['launchctl', 'bootout', domain + '/' + label], capture_output=True, timeout=30)
-        if stopped.returncode:
-            raise RuntimeError('Could not stop the previous LoomMate worker; no other voice service was changed')
-    result = subprocess.run(['launchctl', 'bootstrap', domain, str(plist)], capture_output=True, timeout=30)
-    if result.returncode:
-        raise RuntimeError('Could not start the LoomMate launch agent; model is installed but worker activation failed')
+    start_worker(domain, plist, label, same_arguments)
+    wait_worker(spec)
 
 
 def main(argv=None):
@@ -150,32 +248,27 @@ def main(argv=None):
         raise RuntimeError('Existing station needs tested mlx-audio==' + spec['mlxAudioVersion'] + '; its shared environment was not upgraded')
     manifest = station / 'loommate-voice.json'
     if args.check:
+        for dependency in [spec['pythonDependency'], spec['runtimeDependency'], *spec.get('extraDependencies', [])]:
+            run_dependency(python, dependency, True)
         installed = json.loads(manifest.read_text())
-        if installed.get('model') != spec['model'] or installed.get('revision') != spec['revision']:
+        if (installed.get('model') != spec['model'] or installed.get('revision') != spec['revision']
+                or installed.get('voice') != spec['voice']
+                or installed.get('phonemizerVersion') != spec.get('phonemizerVersion')):
             raise RuntimeError('Installed LoomMate model does not match the pinned model')
         model_path = Path(installed['modelPath'])
     else:
         if platform.system() != 'Darwin' or platform.machine() != 'arm64':
-            raise RuntimeError('This MLX voice pack requires Apple Silicon macOS; existing clone/system fallback remains available elsewhere')
-        run_dependency(python, spec['pythonDependency'], args.offline)
-        code = ('from huggingface_hub import snapshot_download; import sys,json; '
-                'print(snapshot_download(repo_id=sys.argv[1], revision=sys.argv[2], '
-                'cache_dir=sys.argv[3], local_files_only=sys.argv[4]=="1",allow_patterns=json.loads(sys.argv[5])))')
-        env = os.environ.copy()
-        env['HF_HUB_DISABLE_XET'] = '1'
-        result = subprocess.run([str(python), '-c', code, spec['model'], spec['revision'],
-                                 str(station / 'models/hub'), '1' if args.offline else '0', json.dumps(spec['requiredFiles'])],
-                                env=env, text=True, capture_output=True, timeout=1800)
-        if result.returncode:
-            raise RuntimeError('Pinned model download failed; check network/proxy or use --offline with a complete cached model')
-        source = Path(result.stdout.strip().splitlines()[-1]).resolve()
-        verify_weights(source, spec['weightsSha256'], spec['requiredFiles'])
-        model_path = activate_model(station, source, spec)
+            raise RuntimeError('This installer is verified on Apple Silicon macOS; existing clone/system fallback remains available elsewhere')
+        for dependency in [spec['pythonDependency'], spec['runtimeDependency'], *spec.get('extraDependencies', [])]:
+            run_dependency(python, dependency, args.offline)
+        model_path = prepare_model(station, python, spec, args.offline)
     verify_weights(model_path, spec['weightsSha256'], spec['requiredFiles'])
     if not args.check:
         atomic_json(manifest, {'schema': spec['schema'], 'model': spec['model'],
                               'revision': spec['revision'], 'modelPath': str(model_path),
-                              'profile': spec['profile'], 'voice': spec['voice'], 'license': spec['license']})
+                              'profile': spec['profile'], 'voice': spec['voice'],
+                              'phonemizerVersion': spec.get('phonemizerVersion'),
+                              'license': spec['license'], 'backend': spec['backend']})
         if not args.skip_worker:
             install_worker(station, python, spec)
     print(json.dumps({'ok': True, 'profile': spec['profile'], 'voice': spec['voice'], 'revision': spec['revision'],
