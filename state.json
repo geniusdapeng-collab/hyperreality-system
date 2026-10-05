@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "repo": "workloom-ai/hyperreality-system",
+  "revision": 6,
+  "tasks": {
+    "87": {
+      "number": 87,
+      "status": "developing",
+      "firstSeen": 1791244405405,
+      "attempts": {},
+      "admission": {
+        "number": 87,
+        "headSha": "a982e8f4f5453fc7086c7ce7ad6b22697956b6f3",
+        "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+        "filesHash": "407deb2acc024204bc407d5dc3fa81590df049aefa25675a50d33dcb28982cda",
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-87",
+        "generation": {
+          "protocol": 1
+        }
+      },
+      "updatedAt": 1791244405405
+    }
+  },
+  "leases": {
+    "protocol": {
+      "owner": null,
+      "generation": 1,
+      "acquiredAt": 1791244405405,
+      "expiresAt": 1791244405405
+    }
+  },
+  "releases": {},
+  "events": [
+    {
+      "sequence": 1,
+      "at": "2026-10-05T23:53:25.405Z",
+      "kind": "lease_acquire",
+      "data": {
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-87",
+        "generation": {
+          "protocol": 1
+        }
+      },
+      "previous": null,
+      "digest": "5fadfcbfa0f6e3e0ca8d46647f15ea737312c1810b9483a29e3093e7fd282c9b"
+    },
+    {
+      "sequence": 2,
+      "at": "2026-10-05T23:53:25.405Z",
+      "kind": "lease_release",
+      "data": {
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-87",
+        "generation": {
+          "protocol": 1
+        }
+      },
+      "previous": "5fadfcbfa0f6e3e0ca8d46647f15ea737312c1810b9483a29e3093e7fd282c9b",
+      "digest": "6dd66bf4466884632b83a895ef0f273b1e37e7d30db3c236e9edd1a3714a3967"
+    },
+    {
+      "sequence": 3,
+      "at": "2026-10-05T23:53:25.405Z",
+      "kind": "source_admitted",
+      "data": {
+        "number": 87,
+        "headSha": "a982e8f4f5453fc7086c7ce7ad6b22697956b6f3",
+        "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+        "filesHash": "407deb2acc024204bc407d5dc3fa81590df049aefa25675a50d33dcb28982cda",
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-87",
+        "generation": {
+          "protocol": 1
+        }
+      },
+      "previous": "6dd66bf4466884632b83a895ef0f273b1e37e7d30db3c236e9edd1a3714a3967",
+      "digest": "e92cddb18b60ee51e7cd03acbc8498131d2ed6a8d55ce0107cdcfc4b16075bb8"
+    },
+    {
+      "sequence": 4,
+      "at": "2026-10-05T23:53:25.405Z",
+      "kind": "task",
+      "data": {
+        "number": 87,
+        "patch": {
+          "admission": {
+            "number": 87,
+            "headSha": "a982e8f4f5453fc7086c7ce7ad6b22697956b6f3",
+            "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+            "filesHash": "407deb2acc024204bc407d5dc3fa81590df049aefa25675a50d33dcb28982cda",
+            "scopes": [
+              "protocol"
+            ],
+            "owner": "admission/pr-87",
+            "generation": {
+              "protocol": 1
+            }
+          }
+        }
+      },
+      "previous": "e92cddb18b60ee51e7cd03acbc8498131d2ed6a8d55ce0107cdcfc4b16075bb8",
+      "digest": "065f010b2a09533c4071bbd68d28becb3016c9f922e4b7df7bf5836cfb5c735d"
+    },
+    {
+      "sequence": 5,
+      "at": "2026-10-05T23:53:25.405Z",
+      "kind": "installation_prepared",
+      "data": {
+        "installer": 87,
+        "headSha": "a982e8f4f5453fc7086c7ce7ad6b22697956b6f3",
+        "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01"
+      },
+      "previous": "065f010b2a09533c4071bbd68d28becb3016c9f922e4b7df7bf5836cfb5c735d",
+      "digest": "6f7931513e83657631150f96f19d215e7302d1dcdfe4349aa3c8e1a627bf3caa"
+    },
+    {
+      "sequence": 6,
+      "at": "2026-10-05T23:53:24.796Z",
+      "kind": "transaction",
+      "data": {
+        "id": "install-state:87:a982e8f4f5453fc7086c7ce7ad6b22697956b6f3"
+      },
+      "previous": "6f7931513e83657631150f96f19d215e7302d1dcdfe4349aa3c8e1a627bf3caa",
+      "digest": "c55dd1580259f2730772e2fca743062c9f64ead4ddf70edcff025a412340faca"
+    }
+  ]
+}
