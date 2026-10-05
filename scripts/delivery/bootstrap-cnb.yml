@@ -1,0 +1,48 @@
+# First install only: audited installer branch gets the same structured AI gate before trusted-main exists.
+# This does not run the merger, change protection, or fabricate an approval.
+"**":
+  pull_request:
+    - name: delivery-bootstrap-review
+      docker:
+        image: node:24.19.0-bookworm
+      lock:
+        key: workloom-delivery-bootstrap-$CNB_PULL_REQUEST_IID
+        expires: 7200
+        cancel-in-progress: true
+        wait: true
+        timeout: 60
+      env:
+        DELIVERY_REVIEW_STATELESS: "1"
+        CNB_API_ENDPOINT: https://api.cnb.cool
+      stages:
+        - name: Bootstrap installer only
+          timeout: 60s
+          script: |
+            case "$CNB_PULL_REQUEST_BRANCH" in
+              task/T-2026-1005-1001|chore/protocol-onboarding-*) ;;
+              *) exit 78 ;;
+            esac
+        - name: Install locked delivery parser
+          timeout: 120s
+          script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
+        - name: Snapshot exact source and main
+          timeout: 180s
+          script: node scripts/delivery/queue-runner.mjs review-prepare
+          exports:
+            head: REVIEW_HEAD
+            base: REVIEW_BASE
+            pr: REVIEW_PR
+            cwd: REVIEW_CWD
+            rules: REVIEW_RULES
+            output: REVIEW_OUTPUT
+            maxFiles: REVIEW_MAX_FILES
+        - name: Verify protected ledger before installer approval
+          timeout: 180s
+          script: node scripts/delivery/queue-runner.mjs verify-install --root "$REVIEW_CWD" --wait-ms 60000
+        - name: Genuine independent CodeBuddy review
+          image: cnbcool/code-review@sha256:c20b1e826d854738c807f4949859a6df5d58b95545ebefc96197369943a4bcce
+          timeout: 25m
+          script: node scripts/delivery/review-plugin.mjs
+        - name: Require complete structured review and real AI approval
+          timeout: 180s
+          script: node scripts/delivery/queue-runner.mjs review-finish

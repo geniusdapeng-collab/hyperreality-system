@@ -1,0 +1,112 @@
+# Repository-local, trusted-main delivery. No customer data or platform secrets.
+.delivery-admission: &delivery_admission
+  name: delivery-source-admission
+  docker:
+    image: node:24.19.0-bookworm
+  lock:
+    key: workloom-delivery-admission
+    expires: 600
+    wait: true
+    timeout: 60
+  env:
+    DELIVERY_NATIVE_LOCK: workloom-delivery-admission
+  stages:
+    - name: Install locked delivery parser
+      timeout: 120s
+      script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
+    - name: Record exact source admission and release its fenced generation before CI
+      timeout: 180s
+      script: node scripts/delivery/queue-runner.mjs admit
+
+.delivery-review: &delivery_review
+  name: delivery-ai-review
+  env:
+    CNB_API_ENDPOINT: https://api.cnb.cool
+  docker:
+    image: node:24.19.0-bookworm
+  lock:
+    key: workloom-delivery-review
+    expires: 7200
+    wait: true
+    timeout: 60
+  stages:
+    - name: Install locked delivery parser
+      timeout: 120s
+      script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
+    - name: Snapshot exact source and main for independent AI
+      timeout: 180s
+      script: node scripts/delivery/queue-runner.mjs review-prepare
+      exports:
+        head: REVIEW_HEAD
+        base: REVIEW_BASE
+        pr: REVIEW_PR
+        cwd: REVIEW_CWD
+        rules: REVIEW_RULES
+        output: REVIEW_OUTPUT
+        maxFiles: REVIEW_MAX_FILES
+    - name: Independent CodeBuddy review
+      image: cnbcool/code-review@sha256:c20b1e826d854738c807f4949859a6df5d58b95545ebefc96197369943a4bcce
+      timeout: 25m
+      script: node scripts/delivery/review-plugin.mjs
+    - name: Validate complete AI result and real platform review
+      timeout: 180s
+      script: node scripts/delivery/queue-runner.mjs review-finish
+
+.delivery-reconcile: &delivery_reconcile
+  name: delivery-reconcile
+  docker:
+    image: node:24.19.0-bookworm
+  lock:
+    key: workloom-delivery-merge
+    expires: 7200
+    wait: true
+    timeout: 60
+  env:
+    DELIVERY_NATIVE_LOCK: workloom-delivery-merge
+  stages:
+    - name: Install locked delivery parser
+      timeout: 120s
+      script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
+    - name: Recover, align, review and integrate independently of fanout
+      timeout: 12m
+      script: node scripts/delivery/queue-runner.mjs reconcile
+
+.delivery-releases: &delivery_releases
+  name: delivery-releases
+  docker:
+    image: node:24.19.0-bookworm
+  lock:
+    key: workloom-delivery-release
+    expires: 7200
+    wait: true
+    timeout: 60
+  env:
+    DELIVERY_NATIVE_LOCK: workloom-delivery-release
+  stages:
+    - name: Install locked delivery parser
+      timeout: 120s
+      script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
+    - name: Recover frozen publications and verify actual source and bytes
+      timeout: 15m
+      script: node scripts/delivery/queue-runner.mjs releases
+
+main:
+  pull_request.target:
+    - *delivery_admission
+    - *delivery_review
+  api_trigger_delivery_admit:
+    - *delivery_admission
+  pull_request.mergeable:
+    - *delivery_reconcile
+  pull_request.merged:
+    - *delivery_reconcile
+    - *delivery_releases
+  api_trigger_delivery_review:
+    - *delivery_review
+  api_trigger_delivery_reconcile:
+    - *delivery_reconcile
+  api_trigger_delivery_releases:
+    - *delivery_releases
+  "crontab: */5 * * * *":
+    - *delivery_reconcile
+    - *delivery_releases

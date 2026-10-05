@@ -252,3 +252,7 @@ $:
             set -eu
             node scripts/oss-inventory.mjs --self-test
             node scripts/oss-watch-ci.mjs --exit-zero
+include:
+  - scripts/delivery/cnb.yml
+  - scripts/delivery/bootstrap-cnb.yml
+  - scripts/delivery/install-cnb.yml

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
  * 并发冲突检测（docs/DEVELOPMENT-PROTOCOL.md §4）。
- * 逻辑：取本分支改动文件 → 拉同仓 open PR 的改动文件 → 模块级互斥命中即拒；同文件重叠在 PR 事件下默认拒
- * （LOCK_OVERLAP_MODE=warn 可降级；push 事件见下）。
+ * 普通路径重叠只提醒；敏感路径仅受持久化限时开发租约约束。
+ * 实时 PR source/main 与 merge-base 新鲜度仍为硬门禁；--strict 是额外诊断模式。
  *
  * 事件语义（2026-09-27 修订）：
- * - **PR 事件**：按 §4 先到先得拦截（后到者排队），命中即 fail；
+ * - **PR 事件**：普通重叠只提醒；其他 owner 的有效敏感租约拒绝；
  *   事件 source/target SHA 必须与实时 PR/main、compare merge base 一致；缺令牌/API 失败也 fail。
  * - **push 事件（main 合并提交）**：合并已经发生，门禁拦不住任何东西，只降级为**提醒**
  *   （列出需要 rebase 的在途 PR），否则每次并发合并都会把 main 门禁打红——
@@ -21,6 +21,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { findFileOverlaps, findModuleConflicts, parseChangedPaths, resolveLockOverlapMode } from "./protocol-rules.mjs";
+import { admissionErrors, parseIntent, sensitiveScopes, STATE_BRANCH, validateState } from '../delivery/queue-model.mjs';
 
 const API = "https://api.cnb.cool";
 const SHA_RE = /^[0-9a-f]{40,64}$/i;
@@ -51,7 +52,7 @@ function changedFiles(base) {
   return { files: [], range: null };
 }
 
-async function apiJson(url) {
+async function apiJson(url, { raw = false } = {}) {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(15000),
     headers: {
@@ -60,9 +61,9 @@ async function apiJson(url) {
     },
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`CNB API HTTP ${response.status} (${new URL(url).pathname})`);
+  if (!response.ok) throw Object.assign(new Error(`CNB API HTTP ${response.status} (${new URL(url).pathname})`), { status: response.status });
   if (!text) throw new Error(`CNB API 返回空响应 (${new URL(url).pathname})`);
-  return JSON.parse(text);
+  return raw ? text : JSON.parse(text);
 }
 
 export function isPrEvent(env = process.env) {
@@ -97,7 +98,7 @@ export function validatePrSnapshot({ number, branch, eventSourceSha, eventTarget
   if (mergeBase && mainSha && mergeBase !== mainSha) errors.push("PR 分支未包含最新 main，需 rebase 后重跑门禁");
   if (sha(finalPull?.head?.sha) !== head || sha(finalPull?.base?.sha) !== base
     || finalPull?.head?.ref !== pull?.head?.ref || finalPull?.base?.ref !== pull?.base?.ref
-    || finalPull?.state !== "open" || String(finalPull?.number ?? "") !== String(number)) {
+    || finalPull?.state !== "open" || String(finalPull?.number ?? "") !== String(number) || finalPull?.body !== pull?.body) {
     errors.push("查询期间 PR 状态发生变化，需重跑门禁");
   }
   if (sha(finalMain?.commit?.sha) !== mainSha) errors.push("查询期间 main 已变化，需重跑门禁");
@@ -123,7 +124,7 @@ export async function verifyPrFreshness({ repoSlug, number, branch, eventSourceS
   const finalMain = await request(mainUrl);
   const verdict = validatePrSnapshot({ number, branch, eventSourceSha, eventTargetSha, pull, main, compare, finalPull, finalMain });
   if (verdict.errors.length) throw new Error(`PR 新鲜度门禁失败：${verdict.errors.join("；")}`);
-  return { ...verdict, headSha: head, mainSha };
+  return { ...verdict, headSha: head, mainSha, taskId: parseIntent(finalPull).taskId };
 }
 
 /** CNB PR 列表按页读取；页重复、结构异常时拒绝给出不完整的无冲突结论。 */
@@ -221,6 +222,56 @@ export async function openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha,
   return { prs: result, selfNumber: resolvedSelfNumber };
 }
 
+/** Development occupation is a bounded lease, never the age or open state of a PR. */
+export function activeLeaseConflicts(files, state, now = Date.now()) {
+  // PR readiness is a handoff boundary, not a lease mutation. Even the same
+  // owner must release its live generation before CI; a reused task id grants no exemption.
+  return sensitiveScopes(files).filter(scope => state.leases[scope]?.owner && state.leases[scope].expiresAt > now);
+}
+
+export function legacySensitiveConflict(installed, selfNumber, otherNumber) {
+  if (installed !== false) return false;
+  const self = Number(selfNumber); const other = Number(otherNumber);
+  if (!Number.isSafeInteger(self) || self <= 0 || !Number.isSafeInteger(other) || other <= 0) return true;
+  return self > other;
+}
+
+export async function verifyPrLeases(repoSlug, files, request = apiJson, now = Date.now(), identity = {}, { waitMs = 0, elapsedClock = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  if (!sensitiveScopes(files).length) return { installed: true };
+  if (!Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > 180000) throw new Error('Invalid admission wait');
+  const started = elapsedClock();
+  for (;;) {
+    const state = await readLeases(repoSlug, request);
+    if (state === null) return { installed: false }; // A distributed file does not activate the new gate.
+    const conflicts = activeLeaseConflicts(files, state, now + elapsedClock() - started);
+    if (conflicts.length) throw new Error(`敏感模块仍有有效开发租约：${conflicts.join(', ')}；持有者须交接释放或等待期限到期，不按 open PR 编号占锁`);
+    const errors = admissionErrors(state, { ...identity, files });
+    if (!errors.length) return { installed: true, admitted: true };
+    if (elapsedClock() - started >= waitMs) throw new Error(`敏感源码缺少受信接纳回执：${errors.join('; ')}；由 main admission 执行器自动取得并释放 owner/generation 后重跑，不依赖开发者自愿占锁`);
+    await sleep(Math.min(5000, waitMs - (elapsedClock() - started)));
+  }
+}
+
+export async function readLeases(repoSlug, request = apiJson) {
+  try {
+    const state = await request(`${API}/${repoSlug}/-/git/raw/${encodeURIComponent(STATE_BRANCH)}/state.json`);
+    return validateState(state, repoSlug);
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    // A missing file on an existing control branch is corruption, never an empty lease set.
+    try {
+      await request(`${API}/${repoSlug}/-/git/branches/${encodeURIComponent(STATE_BRANCH)}`);
+    } catch (branchError) {
+      if (branchError.status !== 404) throw branchError;
+      const ci = await request(`${API}/${repoSlug}/-/git/raw/main/.cnb.yml`, { raw: true });
+      if (typeof ci !== 'string') throw new Error('DELIVERY_STATE_UNKNOWN：无法读取 main 交付配置，拒绝将缺失账本当成空租约');
+      if (ci.includes('scripts/delivery/cnb.yml')) throw new Error('DELIVERY_LEDGER_CORRUPT：main 已启用交付配置，但租约控制分支缺失，拒绝放行');
+      return null; // Retain the legacy sensitive overlap gate until explicit installation/preparation.
+    }
+    throw new Error('DELIVERY_LEDGER_CORRUPT：租约控制分支存在但 state.json 缺失，拒绝放行');
+  }
+}
+
 function selfTest() {
   const mine = ["sync/base-sync.mjs"];
   const theirs = ["sync/client-foundation.mjs"];
@@ -254,8 +305,8 @@ function selfTest() {
   const modeCases = [
     // push 事件（main 合并）→ 只提醒：合并已发生，拦不住任何东西（2026-09-27 误报回归）
     [{ event: "push" }, "warn"],
-    [{ event: "pull_request" }, "fail"],
-    [{ event: null }, "fail"],
+    [{ event: "pull_request" }, "warn"],
+    [{ event: null }, "warn"],
     [{ event: "push", envMode: "fail" }, "fail"],
     [{ event: "pull_request", strict: true }, "fail"],
   ];
@@ -307,6 +358,7 @@ async function main() {
   // PR 必须先验证实时源/目标/merge-base，再从 compare 取完整路径；不能因本地 diff 为空提前放行。
   let mine;
   let range;
+  let prSnapshot;
   if (prEvent) {
     if (!repoSlug || !process.env.CNB_TOKEN) throw new Error("PR 事件缺少 CNB_REPO_SLUG 或 CNB_TOKEN，锁冲突门禁拒绝放行");
     const snapshot = await verifyPrFreshness({
@@ -319,6 +371,7 @@ async function main() {
     mine = snapshot.files;
     range = `${snapshot.mainSha.slice(0, 12)}...${snapshot.headSha.slice(0, 12)} (CNB compare)`;
     selfHeadSha = snapshot.headSha;
+    prSnapshot = snapshot;
   } else {
     ({ files: mine, range } = changedFiles(base));
   }
@@ -339,12 +392,17 @@ async function main() {
   }
 
   let others;
+  let legacySensitive = false;
+  if (prEvent) {
+    const leases = await verifyPrLeases(repoSlug, mine, apiJson, Date.now(), { number: Number(selfNumber), headSha: prSnapshot.headSha, mainSha: prSnapshot.mainSha }, { waitMs: 180000 });
+    legacySensitive = leases.installed === false;
+  }
   try {
     const scanned = await openPrFiles(repoSlug, selfNumber, selfBranch, selfHeadSha);
     others = scanned.prs;
     if (scanned.selfNumber) {
       selfNumber = scanned.selfNumber;
-      console.log(`  自身 PR 编号：#${selfNumber}（先到先得判定依据）`);
+      console.log(`  自身 PR 编号：#${selfNumber}（排除自身比对）`);
     }
   } catch (error) {
     if (prEvent || strict) throw new Error(`查询 open PR 失败：${error?.message ?? error}`);
@@ -357,32 +415,23 @@ async function main() {
   for (const other of others) {
     const moduleConflicts = findModuleConflicts(mine, other.paths);
     const overlaps = findFileOverlaps(mine, other.paths);
-    // 先到先得：编号小的 PR 优先合并；编号大的（后到者）自行排队；无法判定自身编号时保持对称拦截
-    const mineNumber = Number(selfNumber);
-    const theirNumber = Number(other.number);
-    const iAmLater = Number.isFinite(mineNumber) && Number.isFinite(theirNumber)
-      ? theirNumber < mineNumber
-      : true;
+    // Explicit strict diagnostics can reject overlap; normal CI never leases by PR number.
     if (moduleConflicts.length) {
-      if (advisory) {
+      if (advisory && !legacySensitiveConflict(!legacySensitive, selfNumber, other.number)) {
         console.warn(`! 与 PR #${other.number}「${other.title}」同改互斥模块：${moduleConflicts.join(", ")}（push 事件提醒：该 PR 需 rebase）`);
-      } else if (iAmLater) {
+      } else {
         failed += 1;
         console.error(`✗ 与 PR #${other.number}「${other.title}」互斥模块冲突：${moduleConflicts.join(", ")}`);
-        console.error("   模块级互斥路径同一时刻只允许一个任务（协议 §4）——你是后到者，请排队等其合并后 rebase。");
-      } else {
-        console.warn(`! 与 PR #${other.number}「${other.title}」同改互斥模块 ${moduleConflicts.join(", ")}：该 PR 编号更大（后到），由它排队。`);
+        console.error("   显式 strict 诊断拒绝重叠；正常开发互斥以有效租约为准（协议 §4）。");
       }
     }
     if (overlaps.length) {
       const head = `PR #${other.number}「${other.title}」同时修改：${overlaps.slice(0, 5).join(", ")}${overlaps.length > 5 ? " …" : ""}`;
       if (advisory) {
         console.warn(`! ${head}（push 事件提醒：该 PR 需 rebase 后重跑门禁）`);
-      } else if (iAmLater) {
+      } else {
         failed += 1;
         console.error(`✗ ${head}`);
-      } else {
-        console.warn(`! ${head}（该 PR 后到，由它排队）`);
       }
     }
   }

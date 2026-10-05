@@ -8,7 +8,31 @@
  *   node scripts/tools/task.mjs receipt --repo ... --id T-2026-0918-0042 --progress "..." \
  *        --decisions "..." --next "..." [--close]
  */
-import { closeIssue, createIssue, createIssueComment, listIssues } from "./cnb-api.mjs";
+import { closeIssue, createIssue, createIssueComment, getPull, listIssues, redactCredentials, requireToken } from "./cnb-api.mjs";
+import { GitStateStore } from '../delivery/git-state.mjs';
+import { parseIntent } from '../delivery/queue-model.mjs';
+import { Platform } from '../delivery/queue-platform.mjs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export async function verifyTaskCompletion(repo, number, taskId, { readPull = getPull, store, platform } = {}) {
+  if (!Number.isSafeInteger(number) || number <= 0) throw new Error('--close requires an exact --pr number');
+  const pull = await readPull(repo, number);
+  const intent = parseIntent(pull);
+  if (intent.taskId !== taskId) throw new Error('PR belongs to another task');
+  const state = await (store ?? new GitStateStore({ repo, token: requireToken() })).read();
+  const task = state.tasks[String(number)];
+  if (!task?.merge || task.merge.sourceSha !== pull.head?.sha || !['integrated', 'delivered'].includes(task.status) || task.intent?.taskId !== taskId ||
+    task.mergeSnapshot?.headSha !== task.merge.sourceSha || task.mergeSnapshot.mainSha !== task.merge.mainSha || task.mergeSnapshot.checkSha !== task.merge.checkSha) throw new Error('Task has no current verified integration/delivery receipt');
+  await (platform ?? new Platform(repo, requireToken())).verifyMerge(task.mergeSnapshot, { sha: task.merge.sha });
+  const declarations = [...new Map([...(task.intent?.releases ?? []), ...intent.releases].map(item => [`${item.kind}:${item.version.replace(/^v/, '')}`, item])).values()];
+  for (const declaration of declarations) {
+    const version = declaration.version.replace(/^v/, '');
+    const receipt = Object.values(state.releases).find(release => release.number === number && release.sha === task.merge.sha && release.kind === declaration.kind && release.version.replace(/^v/, '') === version);
+    if (!receipt || receipt.status !== 'delivered' || receipt.receipt?.sha !== task.merge.sha) throw new Error('Declared release lacks a verified frozen-source byte receipt');
+  }
+  return { number, integrated: true, releaseDeclared: declarations.length > 0 };
+}
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -81,6 +105,7 @@ async function commandReceipt() {
   const issues = await listIssues(repo, { state: "all" });
   const issue = issues.find((item) => (item.title ?? "").includes(taskId));
   if (!issue) throw new Error(`未找到任务卡 ${taskId}`);
+  if (process.argv.includes('--close')) await verifyTaskCompletion(repo, Number(arg('--pr')), taskId);
   const lines = [
     `**回执 · ${taskId}**`,
     "",
@@ -88,20 +113,16 @@ async function commandReceipt() {
     `- 决策：${arg("--decisions", "（未填写）")}`,
     `- 未完成：${arg("--open", "无")}`,
     `- 下一步：${arg("--next", "（未填写）")}`,
-    `- 分支状态：${arg("--branch", "已合并/可删")}`,
+    `- 分支状态：${arg("--branch", process.argv.includes('--close') ? '已核验合入；源分支保留' : '未核验；源分支保留')}`,
   ];
   await createIssueComment(repo, issue.number, lines.join("\n"));
   if (process.argv.includes("--close")) await closeIssue(repo, issue.number);
   console.log(`回执已写入 #${issue.number}${process.argv.includes("--close") ? "，并已关单" : ""}`);
 }
 
-const command = process.argv[2];
-const run = { new: commandNew, list: commandList, receipt: commandReceipt }[command];
-if (!run) {
-  console.error("用法：task.mjs <new|list|receipt> [options]");
-  process.exit(2);
+if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+  const command = process.argv[2];
+  const run = { new: commandNew, list: commandList, receipt: commandReceipt }[command];
+  if (!run) { console.error('用法：task.mjs <new|list|receipt> [options]'); process.exitCode = 2; }
+  else run().catch(error => { console.error(`任务卡命令失败：${redactCredentials(error.message)}`); process.exitCode = 1; });
 }
-run().catch((error) => {
-  console.error(`任务卡命令失败：${error?.message ?? error}`);
-  process.exit(1);
-});

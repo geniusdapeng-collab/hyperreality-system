@@ -50,7 +50,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * 因此所有调用默认重试 4 次（指数退避 + 抖动），并尊重 Retry-After。
  */
 export async function api(slug, path, options = {}) {
-  const { method = "GET", body, token = requireToken(), accept = "application/json", retries = 4, baseDelayMs = 700 } = options;
+  const { method = "GET", body, token = requireToken(), accept = "application/json", baseDelayMs = 700 } = options;
+  // Mutating requests can succeed while their response is lost. Their callers must reconcile by identity.
+  const retries = options.retries ?? (method === 'GET' ? 4 : 0);
   const url = path.startsWith("http") ? path : `${API_BASE}/${slug}${path}`;
   if (new URL(url).origin !== API_BASE) throw new Error('CNB API 不允许把凭据发送到其他来源');
   const headers = { Authorization: `Bearer ${token}`, Accept: accept };
@@ -61,6 +63,8 @@ export async function api(slug, path, options = {}) {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(30000),
+      redirect: 'error',
     });
     const text = await response.text();
     if (response.ok) {
@@ -84,15 +88,16 @@ export async function api(slug, path, options = {}) {
 
 /** 读取仓库内文件原文；不存在返回 null（而非抛错） */
 export async function rawFile(slug, ref, path, options = {}) {
-  try {
-    const response = await fetch(`${API_BASE}/${slug}/-/git/raw/${ref}/${path}`, {
-      headers: { Authorization: `Bearer ${options.token ?? requireToken()}` },
-    });
-    if (!response.ok) return null;
-    return await response.text();
-  } catch {
-    return null;
-  }
+  const token = options.token ?? requireToken();
+  const url = `${API_BASE}/${slug}/-/git/raw/${ref}/${path}`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(30000), redirect: 'error',
+  });
+  if (response.status === 404) return null;
+  const text = await response.text();
+  if (!response.ok) throw new CnbError(response.status, text, url, token);
+  return text;
 }
 
 export function listRepos(groupSlug, options = {}) {
@@ -149,13 +154,17 @@ export function branchProtectionPayload({ rule = "main", requireReview = true } 
 }
 
 /** 规则存在不等于保护有效；只接受可回读的实际强约束。 */
-export function validateBranchProtection(rule, { requireReview = true } = {}) {
+export function validateBranchProtection(rule, { requireReview = true, forbidManualOverride = false } = {}) {
   const expected = {
     allow_deletions: false, allow_force_pushes: false, allow_pushes: false,
     allow_master_deletions: false, allow_master_force_pushes: false, allow_master_pushes: false,
     required_must_push_via_pull_request: true, required_status_checks: true,
   };
-  if (requireReview) expected.required_pull_request_reviews = true;
+  if (requireReview) {
+    expected.required_pull_request_reviews = true;
+    expected.forbid_approve_pull_created_by_own_npc = true;
+  }
+  if (forbidManualOverride) expected.allow_master_manual_merge = false;
   const errors = Object.entries(expected).filter(([name, value]) => rule?.[name] !== value).map(([name, value]) => `${name} 必须为 ${value}`);
   if (rule?.rule !== 'main') errors.push('分支保护目标必须为 main');
   if (requireReview && !(Number.isSafeInteger(rule?.required_approved_review_count) && rule.required_approved_review_count >= 1)) errors.push("required_approved_review_count 必须至少为1");
