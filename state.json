@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 33,
+  "revision": 35,
   "tasks": {
     "87": {
       "number": 87,
@@ -659,7 +659,7 @@
     },
     "88": {
       "number": 88,
-      "status": "developing",
+      "status": "integrated",
       "firstSeen": 1791308848259,
       "attempts": {},
       "admission": {
@@ -675,7 +675,7 @@
           "protocol": 4
         }
       },
-      "updatedAt": 1791308852039,
+      "updatedAt": 1791309821044,
       "developerReview": {
         "schemaVersion": 1,
         "provider": "codex",
@@ -1306,6 +1306,64 @@
         "ready": true,
         "dependsOn": [],
         "releases": []
+      },
+      "headSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+      "merge": {
+        "sha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "sourceSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+        "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+        "checkSha": "2ee81dd87265c51668d5874dcfc0429b3bbf5c52",
+        "mergedBy": "cnb.dYiF05kxAGA",
+        "verifiedAt": "2026-10-06T18:03:40.334Z"
+      },
+      "mergeSnapshot": {
+        "number": 88,
+        "pull": {
+          "number": 88,
+          "state": "open",
+          "title": "feat(base): 安装普通研发自动交付 [T-2026-1005-8860]",
+          "body": "从已激活且禁用平台 AI 的基座当前主干 2d350b7ec969abb0749f8d8d60a2212b8872e3e0 安装完整研发执行闭包。当前 Codex 会话 review、实际测试并保存准确回执；CNB/GitHub 模型审核、模型代理及 NPC 修复入口关闭。保留目标产品依赖、必需机器 CI、行业身份、业务围栏和隔离；敏感 fenced 租约、不可修改候选、真实依赖和准确 merge 双亲继续核验。\n\n安装准备账本与清单，当前会话实测交接后才能普通合入；缺真实证明保持等待，不伪造批准。任务卡 #86 [T-2026-1005-8860]。\n\n<!-- delivery-install:eadd924affbe00f33296870464578fec1ed1abc715bf15a7c104c48676df8022 -->\n\n<!-- workloom-delivery\n{\n  \"task_id\": \"T-2026-1005-8860\",\n  \"ready\": true,\n  \"depends_on\": [],\n  \"releases\": []\n}\n-->\n\n<!-- installer-policy-refresh:87:e32d9cb5a9e9997ba33667d2b29517735fa7428a:b4b14829b9065b607743995fc79c6dd25d013e01 -->\n\n同一准确源码在现行 Codex/CI 交付规则下重新执行完整独立审查与原有门禁，真实合入后关闭被替代 #87，源分支保留。",
+          "author": {
+            "username": "cnb.dYiF05kxAGA",
+            "nickname": "Genius",
+            "email": "XYpmztfpCvez6l8z5BBAvJ+cnb.dYiF05kxAGA@noreply.cnb.cool",
+            "is_npc": false
+          },
+          "reviewers": [],
+          "labels": [],
+          "base": {
+            "ref": "refs/heads/main",
+            "sha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+            "repo": {
+              "id": "2100397990318039040",
+              "name": "hyperreality-system",
+              "path": "workloom-ai/hyperreality-system",
+              "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+            }
+          },
+          "head": {
+            "ref": "refs/heads/chore/protocol-onboarding-delivery-policy-7a195a983e88480ff8733b52",
+            "sha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+            "repo": {
+              "id": "2100397990318039040",
+              "name": "hyperreality-system",
+              "path": "workloom-ai/hyperreality-system",
+              "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+            }
+          },
+          "blocked_on": "unblocked",
+          "merged_by": {
+            "is_npc": false
+          },
+          "mergeable_state": "mergeable",
+          "is_wip": false,
+          "is_merged": false,
+          "is_force_merged": false,
+          "statuses": {}
+        },
+        "headSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+        "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+        "checkSha": "2ee81dd87265c51668d5874dcfc0429b3bbf5c52"
       }
     }
   },
@@ -3290,6 +3348,93 @@
       },
       "previous": "1f7e839d6cc7376b50d888698f053b8bee6e926d7349a4cb601a1d55625db5e0",
       "digest": "db83b88615e05a3b3fd14ff896a1fc4dc3bdd4d4d86d724e3cfa5c04966186b6"
+    },
+    {
+      "sequence": 34,
+      "at": "2026-10-06T18:03:41.044Z",
+      "kind": "task",
+      "data": {
+        "number": 88,
+        "patch": {
+          "status": "integrated",
+          "headSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+          "intent": {
+            "taskId": "T-2026-1005-8860",
+            "ready": true,
+            "dependsOn": [],
+            "releases": []
+          },
+          "merge": {
+            "sha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "sourceSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+            "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+            "checkSha": "2ee81dd87265c51668d5874dcfc0429b3bbf5c52",
+            "mergedBy": "cnb.dYiF05kxAGA",
+            "verifiedAt": "2026-10-06T18:03:40.334Z"
+          },
+          "mergeSnapshot": {
+            "number": 88,
+            "pull": {
+              "number": 88,
+              "state": "open",
+              "title": "feat(base): 安装普通研发自动交付 [T-2026-1005-8860]",
+              "body": "从已激活且禁用平台 AI 的基座当前主干 2d350b7ec969abb0749f8d8d60a2212b8872e3e0 安装完整研发执行闭包。当前 Codex 会话 review、实际测试并保存准确回执；CNB/GitHub 模型审核、模型代理及 NPC 修复入口关闭。保留目标产品依赖、必需机器 CI、行业身份、业务围栏和隔离；敏感 fenced 租约、不可修改候选、真实依赖和准确 merge 双亲继续核验。\n\n安装准备账本与清单，当前会话实测交接后才能普通合入；缺真实证明保持等待，不伪造批准。任务卡 #86 [T-2026-1005-8860]。\n\n<!-- delivery-install:eadd924affbe00f33296870464578fec1ed1abc715bf15a7c104c48676df8022 -->\n\n<!-- workloom-delivery\n{\n  \"task_id\": \"T-2026-1005-8860\",\n  \"ready\": true,\n  \"depends_on\": [],\n  \"releases\": []\n}\n-->\n\n<!-- installer-policy-refresh:87:e32d9cb5a9e9997ba33667d2b29517735fa7428a:b4b14829b9065b607743995fc79c6dd25d013e01 -->\n\n同一准确源码在现行 Codex/CI 交付规则下重新执行完整独立审查与原有门禁，真实合入后关闭被替代 #87，源分支保留。",
+              "author": {
+                "username": "cnb.dYiF05kxAGA",
+                "nickname": "Genius",
+                "email": "XYpmztfpCvez6l8z5BBAvJ+cnb.dYiF05kxAGA@noreply.cnb.cool",
+                "is_npc": false
+              },
+              "reviewers": [],
+              "labels": [],
+              "base": {
+                "ref": "refs/heads/main",
+                "sha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+                "repo": {
+                  "id": "2100397990318039040",
+                  "name": "hyperreality-system",
+                  "path": "workloom-ai/hyperreality-system",
+                  "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+                }
+              },
+              "head": {
+                "ref": "refs/heads/chore/protocol-onboarding-delivery-policy-7a195a983e88480ff8733b52",
+                "sha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+                "repo": {
+                  "id": "2100397990318039040",
+                  "name": "hyperreality-system",
+                  "path": "workloom-ai/hyperreality-system",
+                  "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+                }
+              },
+              "blocked_on": "unblocked",
+              "merged_by": {
+                "is_npc": false
+              },
+              "mergeable_state": "mergeable",
+              "is_wip": false,
+              "is_merged": false,
+              "is_force_merged": false,
+              "statuses": {}
+            },
+            "headSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+            "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+            "checkSha": "2ee81dd87265c51668d5874dcfc0429b3bbf5c52"
+          }
+        }
+      },
+      "previous": "db83b88615e05a3b3fd14ff896a1fc4dc3bdd4d4d86d724e3cfa5c04966186b6",
+      "digest": "4cfe9ab60bbc1fe69d64bae5741951c91930f96476321bc044f5a0dc73a88bf6"
+    },
+    {
+      "sequence": 35,
+      "at": "2026-10-06T18:03:40.334Z",
+      "kind": "transaction",
+      "data": {
+        "id": "7a975b9e-e0a3-4075-b823-f6d21c034078"
+      },
+      "previous": "4cfe9ab60bbc1fe69d64bae5741951c91930f96476321bc044f5a0dc73a88bf6",
+      "digest": "00084681f4817474eff2254632e60d7426ba89cb9c4b1f5707bbfe54ec8e4536"
     }
   ]
 }
