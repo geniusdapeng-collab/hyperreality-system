@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 90,
+  "revision": 92,
   "tasks": {
     "85": {
       "number": 85,
@@ -1601,7 +1601,7 @@
         "marker": "delivery-origin:90:1a15f134a3dc458389c416e47b86c5408949a3f4:07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
         "at": 1791313266222
       },
-      "mergePhase": "merge_requested",
+      "mergePhase": "merge_verified",
       "mergeSnapshot": {
         "repo": "workloom-ai/hyperreality-system",
         "number": 91,
@@ -1709,7 +1709,15 @@
           "protocol": 8
         }
       },
-      "mergeRequestedAt": 1791313984519
+      "mergeRequestedAt": 1791313984519,
+      "merge": {
+        "sha": "08df432a107c1b59e0d6832e46f050db026832b5",
+        "sourceSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "checkSha": "88f6a03ebff4b69c1e1fcb9bd65ea9051672140c",
+        "mergedBy": "cnb.dYiF05kxAGA",
+        "verifiedAt": "2026-10-06T19:13:13.825Z"
+      }
     },
     "91": {
       "number": 91,
@@ -5141,6 +5149,37 @@
       },
       "previous": "9d625600114fce89f63df8820d3d07ec889847ba0f2f10d4bcf09e9d879f3b10",
       "digest": "e4a43fc03ca8fcd4eb33492451b8df69f3149e64530fa0a450a414a196746ed7"
+    },
+    {
+      "sequence": 91,
+      "at": "2026-10-06T19:13:04.519Z",
+      "kind": "task",
+      "data": {
+        "number": 90,
+        "patch": {
+          "mergePhase": "merge_verified",
+          "merge": {
+            "sha": "08df432a107c1b59e0d6832e46f050db026832b5",
+            "sourceSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "checkSha": "88f6a03ebff4b69c1e1fcb9bd65ea9051672140c",
+            "mergedBy": "cnb.dYiF05kxAGA",
+            "verifiedAt": "2026-10-06T19:13:13.825Z"
+          }
+        }
+      },
+      "previous": "e4a43fc03ca8fcd4eb33492451b8df69f3149e64530fa0a450a414a196746ed7",
+      "digest": "d68f5dfbf4bd03c4878f947bcbee34f3872990890a7a8de6f56eeb0b83370be8"
+    },
+    {
+      "sequence": 92,
+      "at": "2026-10-06T19:13:13.825Z",
+      "kind": "transaction",
+      "data": {
+        "id": "552e6ccd-2748-4ec3-8601-45b4041cf7ff"
+      },
+      "previous": "d68f5dfbf4bd03c4878f947bcbee34f3872990890a7a8de6f56eeb0b83370be8",
+      "digest": "3e90065e96c2174c632991a6af2eeca62c432871ef82921823ad21a6c31fab5e"
     }
   ]
 }
