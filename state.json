@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 31,
+  "revision": 33,
   "tasks": {
     "87": {
       "number": 87,
@@ -3064,6 +3064,232 @@
       },
       "previous": "923c82f032efc6c8d1d196b34e9767058cf5fd178f1bb6ac8a198bef4d78b665",
       "digest": "95b48ad9d15257e91df262a4eff9220504c26219174f3a50f950f5d542cacda4"
+    },
+    {
+      "sequence": 32,
+      "at": "2026-10-06T18:03:33.559Z",
+      "kind": "installer_merge_requested",
+      "data": {
+        "number": 88,
+        "snapshot": {
+          "number": 88,
+          "pull": {
+            "number": 88,
+            "state": "open",
+            "title": "feat(base): 安装普通研发自动交付 [T-2026-1005-8860]",
+            "body": "从已激活且禁用平台 AI 的基座当前主干 2d350b7ec969abb0749f8d8d60a2212b8872e3e0 安装完整研发执行闭包。当前 Codex 会话 review、实际测试并保存准确回执；CNB/GitHub 模型审核、模型代理及 NPC 修复入口关闭。保留目标产品依赖、必需机器 CI、行业身份、业务围栏和隔离；敏感 fenced 租约、不可修改候选、真实依赖和准确 merge 双亲继续核验。\n\n安装准备账本与清单，当前会话实测交接后才能普通合入；缺真实证明保持等待，不伪造批准。任务卡 #86 [T-2026-1005-8860]。\n\n<!-- delivery-install:eadd924affbe00f33296870464578fec1ed1abc715bf15a7c104c48676df8022 -->\n\n<!-- workloom-delivery\n{\n  \"task_id\": \"T-2026-1005-8860\",\n  \"ready\": true,\n  \"depends_on\": [],\n  \"releases\": []\n}\n-->\n\n<!-- installer-policy-refresh:87:e32d9cb5a9e9997ba33667d2b29517735fa7428a:b4b14829b9065b607743995fc79c6dd25d013e01 -->\n\n同一准确源码在现行 Codex/CI 交付规则下重新执行完整独立审查与原有门禁，真实合入后关闭被替代 #87，源分支保留。",
+            "author": {
+              "username": "cnb.dYiF05kxAGA",
+              "nickname": "Genius",
+              "email": "XYpmztfpCvez6l8z5BBAvJ+cnb.dYiF05kxAGA@noreply.cnb.cool",
+              "is_npc": false
+            },
+            "reviewers": [],
+            "labels": [],
+            "base": {
+              "ref": "refs/heads/main",
+              "sha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+              "repo": {
+                "id": "2100397990318039040",
+                "name": "hyperreality-system",
+                "path": "workloom-ai/hyperreality-system",
+                "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+              }
+            },
+            "head": {
+              "ref": "refs/heads/chore/protocol-onboarding-delivery-policy-7a195a983e88480ff8733b52",
+              "sha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+              "repo": {
+                "id": "2100397990318039040",
+                "name": "hyperreality-system",
+                "path": "workloom-ai/hyperreality-system",
+                "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+              }
+            },
+            "blocked_on": "unblocked",
+            "merged_by": {
+              "is_npc": false
+            },
+            "mergeable_state": "mergeable",
+            "is_wip": false,
+            "is_merged": false,
+            "is_force_merged": false,
+            "statuses": {}
+          },
+          "headSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+          "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+          "checkSha": "2ee81dd87265c51668d5874dcfc0429b3bbf5c52"
+        },
+        "developerReview": {
+          "schemaVersion": 1,
+          "provider": "codex",
+          "repo": "workloom-ai/hyperreality-system",
+          "number": 88,
+          "headSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+          "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+          "policyHash": "57cc9d9614c7021a5a9b9838b9e1030555ecf59ab63bf568055e198cd68c9687",
+          "reviewedFiles": [
+            ".cnb.yml",
+            ".workloom-delivery-install.json",
+            "AGENTS.md",
+            "docs/AUTOMATIC-RD-DELIVERY.md",
+            "docs/OPEN_SOURCE_COMPONENTS.md",
+            "scripts/ci/protocol-rules.mjs",
+            "scripts/ci/protocol-rules.test.mjs",
+            "scripts/ci/verify-lock-conflict.mjs",
+            "scripts/delivery/bootstrap-cnb.yml",
+            "scripts/delivery/cnb.yml",
+            "scripts/delivery/git-state.mjs",
+            "scripts/delivery/install-cnb.yml",
+            "scripts/delivery/install-config.mjs",
+            "scripts/delivery/install-manifest.mjs",
+            "scripts/delivery/model-gateway.mjs",
+            "scripts/delivery/queue-controller.mjs",
+            "scripts/delivery/queue-model.mjs",
+            "scripts/delivery/queue-platform.mjs",
+            "scripts/delivery/queue-policy.mjs",
+            "scripts/delivery/queue-release.mjs",
+            "scripts/delivery/queue-runner.mjs",
+            "scripts/delivery/queue-work.mjs",
+            "scripts/delivery/queue.test.mjs",
+            "scripts/delivery/release-source.mjs",
+            "scripts/delivery/review-plugin.mjs",
+            "scripts/delivery/runtime/package-lock.json",
+            "scripts/delivery/runtime/package.json",
+            "scripts/tools/cnb-api.mjs",
+            "scripts/tools/task.mjs"
+          ],
+          "filesHash": "3452e39e660b2f72a68daa9d8868d6a7baf00c768e2f50edbbb553131962cd41",
+          "dependsOn": [],
+          "ciPolicyChanges": [
+            {
+              "id": "CI-001",
+              "rationale": "Handoff requires a clean exact checkout and actual session review/test; source and body read back before durable storage. Bootstrap/activation verify complete manifest, prepared source/main and real product CI before changing human approval counters."
+            },
+            {
+              "id": "CI-002",
+              "rationale": "Use canonical current repository protocol: ordinary overlap is advisory, permanent open-PR occupation is removed, and exact Git/PR, current main and fenced lease admission remain enforced."
+            },
+            {
+              "id": "CI-003",
+              "rationale": "Append three deterministic repository-local includes while retaining all original product pipeline/stage/check signals. Tiger switches only the four legacy protocol invocations to their exact canonical root equivalents; Python, evidence and industry checks remain."
+            },
+            {
+              "id": "CI-004",
+              "rationale": "Verify schema 2 and the complete exact tracked runtime closure, upstream provenance, regular Git objects, checkout/digest identity and target adapters. Missing, altered, foreign or symlink assets fail."
+            },
+            {
+              "id": "CI-005",
+              "rationale": "Keep integration and frozen publication independent. Require exact source/build/event/tag/manifest/digests; authenticate only the initial official private download request, bound redirect/stream failures and omit token on later requests."
+            },
+            {
+              "id": "CI-006",
+              "rationale": "Historical pure receipt readers remain, but CLI and runReview reject before SDK, publisher, subprocess, network or model work. No paid platform approval is created."
+            },
+            {
+              "id": "CI-007",
+              "rationale": "Keep actual task IDs and scoped task contracts. Existing task card creation/validation and errors remain; ready handoff cannot manufacture a lease or a platform approval."
+            },
+            {
+              "id": "CI-008",
+              "rationale": "Retain normal source/main alignment with explicit conflicts. Legacy review preparation/publication and NPC repair dispatch fail before IO; repair diagnostics return to the current Codex session."
+            },
+            {
+              "id": "CI-009",
+              "rationale": "Use current Codex provider with platformAI=false; preserve existing target product pipelines and business holds. Require implementation-change explanations and invalidate receipts on exact policy/source/main drift."
+            },
+            {
+              "id": "CI-010",
+              "rationale": "Parse local CI and append only missing delivery includes. Compare the remaining complete configuration hash to preserve existing target pipelines, selectors and permissions."
+            },
+            {
+              "id": "CI-011",
+              "rationale": "Bind repository, PR, source, main, complete compare files, labels, readiness and original CI in snapshots. Candidate creation/merge uses immutable protected source, unique recovery identity and exact original two-parent verification."
+            },
+            {
+              "id": "CI-012",
+              "rationale": "Normalize the bootstrap gate to delivery-bootstrap-checks and run only installation ledger/assets, syntax and existing Codex session verification. Exact onboarding branch selection and independent original product checks remain."
+            },
+            {
+              "id": "CI-013",
+              "rationale": "Require explicit frozen expected source and native repository identity before packaging/upload; current branch/main/tag alone cannot substitute for exact source proof."
+            },
+            {
+              "id": "CI-014",
+              "rationale": "Reject immediately before any model, credential, filesystem, network or SDK operation because the owner revoked platform AI."
+            },
+            {
+              "id": "CI-015",
+              "rationale": "Use the exact reviewed canonical parser dependency/integrity lock; installation ignores package scripts and does not request a model service."
+            },
+            {
+              "id": "CI-016",
+              "rationale": "Validate actual Codex exact repo/PR/head/main/policy/files/tests/timestamps/dependencies and CI IDs. Missing, stale, tampered or partial review, live lease, unresolved dependency and unknown write remain blockers for that task."
+            },
+            {
+              "id": "CI-017",
+              "rationale": "Keep repository/source/main/path and required task contracts. Installed sensitive changes require accurate source admission and live lease checks; old open-PR order no longer occupies a module forever."
+            },
+            {
+              "id": "CI-018",
+              "rationale": "Actual post-commit tests cover exact review drift/partial receipts, leases/CAS/lost acknowledgements, candidates/permissions/dependencies, red-oldest isolation, frozen releases/private redirects and disabled model/NPC IO. Explicitly retain one non-applicable shared UI lane skip per target."
+            },
+            {
+              "id": "CI-019",
+              "rationale": "Persist append-only events and exact tasks on the protected state branch via normal fast-forward CAS. Recover lost push acknowledgement by transaction ID; do not force or blindly repeat external actions."
+            },
+            {
+              "id": "CI-020",
+              "rationale": "Repository-local native main scheduling performs deterministic admission/session record/reconcile/release operations only. Legacy base stage names contain syntax checks and no model image or calls; original locks and five-minute recovery remain."
+            },
+            {
+              "id": "CI-021",
+              "rationale": "Run the real retained canonical parsing/decision/negative cases; per-target post-commit regression confirms the installed copy executes with current protocol semantics."
+            },
+            {
+              "id": "CI-022",
+              "rationale": "Retain official repository-bound API/Git authentication, read retry and zero write retries. Runtime credentials remain process-only and redacted; no model service is called."
+            },
+            {
+              "id": "CI-023",
+              "rationale": "Select healthy reviewed sources independently of older failures; use immutable candidates, all original CI, real dependencies, fenced sensitive integration lease and exact ordinary merge receipts. No paid review/recovery dispatcher or shared AI capacity remains."
+            },
+            {
+              "id": "CI-024",
+              "rationale": "Add deterministic installed queue/protocol regression as an independent required PR pipeline without weakening any original product gate or treating unrelated UI publication as tested."
+            },
+            {
+              "id": "CI-025",
+              "rationale": "Keep the previously verified parser locked at the exact existing runtime version. No SDK or paid model package is introduced; actual installed parser is tested in each owned target checkout."
+            }
+          ],
+          "ciPolicyChangesHash": "a6d622a8b933ad2710e924df8a4b74a2ef4e4cd7f6b621c59e92a332ff54c89e",
+          "tests": [
+            {
+              "command": "/Users/mac/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --test scripts/delivery/queue.test.mjs scripts/ci/protocol-rules.test.mjs",
+              "exitCode": 0,
+              "finishedAt": "2026-10-06T17:23:39.740Z",
+              "result": "lendar time and preserves the exact boundary (0.277667ms)\n✔ legacy review capacity never reads paid build history and cannot block unrelated reviewed source (0.064375ms)\n✔ release enqueue is idempotent by frozen source/kind/version and keeps integration separate (0.1365ms)\n✔ both UI and desktop dispatch pass the explicit frozen SHA to the whole build, independently of current branch SHA (0.507333ms)\n﹣ manual UI event and delivery dispatch use the same actual publishing job and native lock; the scheduler only launches and observes (3.495083ms) # This product has no shared UI publishing lane\n✔ release launch intent survives lost acknowledgement and forbids duplicate publication (0.401375ms)\n✔ release failures use the latest durable attempt count and park after two launches (0.18625ms)\n✔ lost release launch cannot adopt a different manual build with the same source/event (0.177166ms)\n✔ UI release verifies the real Platform API JSON decoding contract and rejects unreadable registration or different bytes (1.635542ms)\n✔ release verifies actual tag source, manifest identity and every downloaded digest (0.287042ms)\n✔ private release download authenticates only the official first request and hashes the actual redirected bytes (0.782125ms)\n✔ private release permission, unsafe redirect, empty/oversized stream and malformed manifest remain explicit failures (0.794375ms)\n✔ a release redirect loop is bounded and every later same-origin or foreign request omits the token (0.149167ms)\nℹ tests 105\nℹ suites 5\nℹ pass 104\nℹ fail 0\nℹ cancelled 0\nℹ skipped 1\nℹ todo 0\nℹ duration_ms 11154.380958\n"
+            }
+          ],
+          "reviewedAt": "2026-10-06T17:44:04.647Z",
+          "summary": "Current Codex reviewed the canonical source execution code and affected dependencies in this conversation. All 24 copied source assets were compared byte-for-byte (B evidence) to that reviewed source. Each target-specific CI/AGENTS/bootstrap diff and Tiger delegate was inspected; schema-2 manifest, exact upstream/target identities, entire changed file set, existing product CI preservation and repeat-install zero-change result were machine-verified. Only target YAML occurrence metadata changed in its offline open-source inventory; no package upgrade or industry/isolation change. Actual tests ran after this exact target commit: 104 passed, zero failed, one shared UI publishing lane case explicitly skipped because the product has no such lane. No unresolved blocker found. Current Codex review plus actual original native product CI authorize only normal first installation; paid platform AI/NPC/gateway and fabricated platform approvals remain disabled.",
+          "passed": true,
+          "id": "9a658cb54d6c715c890e9d9644517f934cb045b5a80e2a19ad41ee700665fb84"
+        }
+      },
+      "previous": "95b48ad9d15257e91df262a4eff9220504c26219174f3a50f950f5d542cacda4",
+      "digest": "1f7e839d6cc7376b50d888698f053b8bee6e926d7349a4cb601a1d55625db5e0"
+    },
+    {
+      "sequence": 33,
+      "at": "2026-10-06T18:03:32.922Z",
+      "kind": "transaction",
+      "data": {
+        "id": "installer-merge:88:e32d9cb5a9e9997ba33667d2b29517735fa7428a"
+      },
+      "previous": "1f7e839d6cc7376b50d888698f053b8bee6e926d7349a4cb601a1d55625db5e0",
+      "digest": "db83b88615e05a3b3fd14ff896a1fc4dc3bdd4d4d86d724e3cfa5c04966186b6"
     }
   ]
 }
