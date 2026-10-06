@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 146,
+  "revision": 148,
   "tasks": {
     "85": {
       "number": 85,
@@ -47,10 +47,10 @@
         "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
         "mainSha": "08df432a107c1b59e0d6832e46f050db026832b5",
         "reason": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
-        "at": 1791322219486
+        "at": 1791323111233
       },
       "recoveryIntent": null,
-      "blockedUntil": 1791322819486,
+      "blockedUntil": 1791323711233,
       "recoveryCount": 0,
       "reviewFailures": null,
       "candidate": null
@@ -6133,6 +6133,39 @@
       },
       "previous": "0873bc3297983908f9bc530a916784c05c4ff77b31616d44e997afffe8f75151",
       "digest": "61231d382b5b86f3aae4d5ede5b4e529981f1a57df624162b58bc7bdead0caad"
+    },
+    {
+      "sequence": 147,
+      "at": "2026-10-06T21:45:11.233Z",
+      "kind": "task",
+      "data": {
+        "number": 85,
+        "patch": {
+          "status": "parked",
+          "error": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
+          "repairRequired": {
+            "provider": "codex",
+            "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
+            "mainSha": "08df432a107c1b59e0d6832e46f050db026832b5",
+            "reason": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
+            "at": 1791323111233
+          },
+          "recoveryIntent": null,
+          "blockedUntil": 1791323711233
+        }
+      },
+      "previous": "61231d382b5b86f3aae4d5ede5b4e529981f1a57df624162b58bc7bdead0caad",
+      "digest": "89dc23752db23e3535ac266ae07e0388990b3020988c8acf70f5d1734f32b7f5"
+    },
+    {
+      "sequence": 148,
+      "at": "2026-10-06T21:45:12.821Z",
+      "kind": "transaction",
+      "data": {
+        "id": "cbe3ec9f-8d4e-4f20-8bed-cbcfef4dfd9d"
+      },
+      "previous": "89dc23752db23e3535ac266ae07e0388990b3020988c8acf70f5d1734f32b7f5",
+      "digest": "08d97ecee07a69b937e98ebe6d0980c50ed8c4d7d3995128fb9c4551ea64ced0"
     }
   ]
 }
