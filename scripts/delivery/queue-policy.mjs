@@ -17,7 +17,9 @@ export async function parser() {
 
 export const REVIEW_IMAGE = 'cnbcool/code-review@sha256:c20b1e826d854738c807f4949859a6df5d58b95545ebefc96197369943a4bcce';
 export const BASE_POLICY = Object.freeze({
-  version: 7,
+  version: 8,
+  reviewProvider: 'codex',
+  platformAI: false,
   cooldownMs: 10 * 60_000,
   maxAlignmentAttempts: 3,
   maxInfrastructureAttempts: 2,
@@ -26,7 +28,7 @@ export const BASE_POLICY = Object.freeze({
   reviewBatchConcurrency: 2,
   ciTimeoutMs: 60 * 60_000,
   branchPrefixes: ['task/', 'industry/', 'experiment/', 'chore/', 'docs/', 'fix/', 'audit/', 'rescue/', 'sync/base-', 'delivery/candidate/'],
-  // These are execution/secret lanes. Ordinary protocol and safety implementation changes use AI review.
+  // These are execution/secret lanes. Ordinary changes are reviewed and tested by the current Codex session.
   businessHoldPaths: ['platform-ops/secrets/', 'secrets/', 'trading/live/', 'broker/live/'],
 });
 
@@ -110,7 +112,7 @@ function controlPipelines(config) {
     if (!mapping(events) || branch.startsWith('.')) continue;
     for (const [event, entries] of Object.entries(events)) {
       if (!Array.isArray(entries)) continue;
-      const required = entries.filter(p => p?.name?.startsWith('delivery-') && p.allowFailure !== true && p.name !== 'delivery-bootstrap-review');
+      const required = entries.filter(p => p?.name?.startsWith('delivery-') && p.allowFailure !== true && !['delivery-bootstrap-review', 'delivery-bootstrap-checks'].includes(p.name));
       if (!required.length) continue;
       if (required.some(p => !Array.isArray(p.stages) || !p.stages.length) || new Set(required.map(p => p.name)).size !== required.length) throw new Error('Delivery pipeline configuration is incomplete/ambiguous');
       result.push({ branch, event, pipelines: required });
@@ -132,11 +134,11 @@ export async function loadPolicy(root) {
   };
   const config = await resolvePipelineConfig(await readFile(join(base, '.cnb.yml'), 'utf8'), { readLocal, onConfig: entry => collectOrigins(entry, pipelineOrigins) });
   const requiredPipelines = pipelines(config);
-  const source = { ...BASE_POLICY, reviewImage: REVIEW_IMAGE, ciFiles: [...ciFiles].sort(), prBranch: prBranch(config), pipelineOrigins, requiredPipelines, requiredControlPipelines: controlPipelines(config) };
+  const source = { ...BASE_POLICY, ciFiles: [...ciFiles].sort(), prBranch: prBranch(config), pipelineOrigins, requiredPipelines, requiredControlPipelines: controlPipelines(config) };
   return { ...source, hash: hash(source), requiredNames: requiredPipelines.map(p => p.name) };
 }
 
-/** Structural checks remain required; changes to their implementation need an explicit, exact AI migration receipt. */
+/** Structural checks remain required; changes to their implementation need an explicit, exact Codex session migration receipt. */
 export async function sourcePipelineReport(sourceText, policy, options = {}) {
   const errors = [];
   const ciFiles = new Set(['.cnb.yml']);

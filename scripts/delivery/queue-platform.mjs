@@ -95,13 +95,13 @@ export class Platform {
     }
     const [finalPull, finalMain] = await Promise.all([this.pull(number), this.main()]);
     if (finalPull.head?.sha !== headSha || finalPull.base?.sha !== pull.base?.sha || finalMain.commit?.sha !== mainSha || finalPull.state !== pull.state || finalPull.head?.ref !== pull.head?.ref || finalPull.base?.ref !== pull.base?.ref || labelSignature(finalPull.labels) !== labelSignature(pull.labels) || finalPull.is_wip !== pull.is_wip || finalPull.body !== pull.body) throw new Error('Platform snapshot changed while reading');
-    return { number: Number(number), pull: finalPull, headSha, mainSha, files, intent: parseIntent(finalPull), headTime: Date.parse(headCommit.commit?.committer?.date ?? headCommit.commit?.author?.date), mergeBase: compare.merge_base_commit?.sha, checkErrors, checkSha, hasFailedChecks, ciPolicyChanges };
+    return { repo: this.repo, number: Number(number), pull: finalPull, headSha, mainSha, files, intent: parseIntent(finalPull), headTime: Date.parse(headCommit.commit?.committer?.date ?? headCommit.commit?.author?.date), mergeBase: compare.merge_base_commit?.sha, checkErrors, checkSha, hasFailedChecks, ciPolicyChanges };
   }
 
   async assertCandidateProtection() {
     const rule = (await this.protections()).find(rule => rule.rule === 'delivery/candidate/**');
     if (!rule || rule.allow_creation !== true || rule.allow_master_creation !== true ||
-      ['allow_pushes', 'allow_master_pushes', 'allow_force_pushes', 'allow_master_force_pushes', 'allow_deletions', 'allow_master_deletions'].some(key => rule[key] !== false)) throw new Error('Immutable candidate protection missing/changed');
+      ['allow_pushes', 'allow_master_pushes', 'allow_force_pushes', 'allow_master_force_pushes', 'allow_deletions', 'allow_master_deletions', 'allow_master_manual_merge'].some(key => rule[key] !== false)) throw new Error('Immutable candidate protection missing/changed');
     return rule;
   }
 
@@ -118,14 +118,21 @@ export class Platform {
     const actual = await this.call(path);
     if (actual.commit?.sha !== snapshot.headSha || actual.protected !== true) throw new Error('Candidate source identity/protection mismatch');
     const marker = `delivery-origin:${snapshot.number}:${snapshot.headSha}:${snapshot.mainSha}`;
-    const list = await this.list('/-/pulls?state=all&base_ref=main');
-    let candidate = list.find(p => String(p.head?.ref ?? '').replace(/^refs\/heads\//, '') === branch);
+    const lookup = async () => {
+      const matches = (await this.list('/-/pulls?state=all&base_ref=main')).filter(p => String(p.head?.ref ?? '').replace(/^refs\/heads\//, '') === branch);
+      if (matches.length > 1) throw new Error('Ambiguous immutable candidate PRs; reconcile the duplicate identities before any merge');
+      return matches[0];
+    };
+    let candidate = await lookup();
     if (!candidate) {
       const intent = { ready: true, depends_on: snapshot.intent.dependsOn, releases: [] };
       const body = `Immutable delivery candidate for #${snapshot.number}. Exact source ${snapshot.headSha}; tested main ${snapshot.mainSha}.\n\n<!-- ${marker} -->\n\n<!-- workloom-delivery\n${JSON.stringify(intent)}\n-->`;
       try { candidate = await this.call('/-/pulls', { method: 'POST', body: { head: branch, base: 'main', title: `chore(ci): deliver #${snapshot.number} ${String(snapshot.pull.title).slice(0, 100)}`, body } }); }
       catch (error) {
-        candidate = (await this.list('/-/pulls?state=all&base_ref=main')).find(p => String(p.head?.ref ?? '').replace(/^refs\/heads\//, '') === branch);
+        for (let attempt = 0; attempt < 3 && !candidate; attempt++) {
+          candidate = await lookup();
+          if (!candidate && attempt < 2) await new Promise(resolve => setTimeout(resolve, 500));
+        }
         if (!candidate) throw error;
       }
     }

@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { GitStateStore, git } from './git-state.mjs';
 import { Platform } from './queue-platform.mjs';
 import { loadPolicy } from './queue-policy.mjs';
-import { prepareReview, finishReview, independentCodeBuddyApproval } from './queue-work.mjs';
 import { reconcile, writeTaskReceipts } from './queue-controller.mjs';
 import { reconcileReleases } from './queue-release.mjs';
-import { admitSource, appendEvent, branchName, checksVerdict, leaseOperation, parseIntent, SHA_RE, STATE_BRANCH, updateTask } from './queue-model.mjs';
+import { admitSource, appendEvent, branchName, checksVerdict, leaseOperation, parseIntent, SHA_RE, STATE_BRANCH, updateTask, validateDeveloperReview } from './queue-model.mjs';
 import { branchProtectionPayload, redactCredentials, requireToken, validateBranchProtection } from '../tools/cnb-api.mjs';
+import { verifyInstallationManifest } from './install-manifest.mjs';
 
 const arg = (name, fallback) => { const index = process.argv.indexOf(name); return index < 0 ? fallback : process.argv[index + 1]; };
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
@@ -40,10 +42,7 @@ export async function ensureStateProtection(platform) {
 async function installerSource(platform, root, installer) {
   if (!Number.isSafeInteger(installer?.number) || installer.number <= 0 || installer.state !== 'open' || installer.is_wip !== false || branchName(installer.base?.ref) !== 'main' || !SHA_RE.test(installer.head?.sha ?? '')) throw new Error('Preparation requires a current open installer PR');
   if (await git(['rev-parse', 'HEAD'], { cwd: root }) !== installer.head.sha) throw new Error('Preparation checkout differs from installer source');
-  try {
-    const manifest = JSON.parse(await readFile(resolve(root, '.workloom-delivery-install.json'), 'utf8'));
-    if (manifest.repo !== platform.repo) throw new Error('Installation manifest belongs to another repository');
-  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  await verifyInstallationManifest({ root, repo: platform.repo, sha: installer.head.sha, allowAbsent: platform.repo === 'workloom-ai/workloom-im' });
   const mainSha = (await platform.main()).commit?.sha;
   if (installer.base?.sha !== mainSha) throw new Error('Installer main changed before state preparation');
   return mainSha;
@@ -90,18 +89,17 @@ export async function requireTrustedRunner(platform, root, env = process.env, lo
 export function verifyInstallerChecks({ state, installer, statuses, tested, requiredNames }) {
   const prepared = state.events.findLast(event => event.kind === 'installation_prepared' && event.data.installer === installer.number && event.data.headSha === installer.head?.sha);
   if (!prepared || !SHA_RE.test(prepared.data.mainSha ?? '')) throw new Error('Installer ledger was not prepared for the exact source before merge');
-  const errors = checksVerdict(statuses, tested, { headSha: installer.head.sha, mainSha: prepared.data.mainSha }, [...new Set([...requiredNames, 'delivery-bootstrap-review'])]);
+  const bootstrap = requiredNames.includes('delivery-bootstrap-review') ? 'delivery-bootstrap-review' : 'delivery-bootstrap-checks';
+  const errors = checksVerdict(statuses, tested, { headSha: installer.head.sha, mainSha: prepared.data.mainSha }, [...new Set([...requiredNames, bootstrap])]);
   if (errors.length) throw new Error(`Installer CI not verified: ${errors.join('; ')}`);
   return prepared.data;
 }
 
-/** CNB's human reviewer counter does not count the genuine CodeBuddy review in the live installation.
- * The exact AI/CI proof replaces that counter; ordinary PR, status and push restrictions remain enforced.
- */
-export async function configureAutomaticReviewPolicy(platform, { independentApproval, preparation } = {}) {
-  if (!independentApproval?.id || independentApproval.isNpc !== true || !independentApproval.author || !independentApproval.creator ||
-    independentApproval.author.toLowerCase() === independentApproval.creator.toLowerCase() ||
-    !SHA_RE.test(preparation?.headSha ?? '') || !SHA_RE.test(preparation?.mainSha ?? '')) throw new Error('Automatic review policy requires independent exact installer AI/CI proof');
+/** The owner requires a Codex session review and actual CI; there is no platform AI or click counter. */
+export async function configureAutomaticReviewPolicy(platform, { developerReview, reviewSnapshot, policy, preparation } = {}) {
+  const proof = validateDeveloperReview(developerReview, reviewSnapshot ?? {}, policy ?? {});
+  if (!SHA_RE.test(preparation?.headSha ?? '') || !SHA_RE.test(preparation?.mainSha ?? '') ||
+    proof.headSha !== preparation.headSha || proof.mainSha !== preparation.mainSha) throw new Error('Review policy requires exact installer Codex/CI proof');
   const main = (await platform.protections()).find(rule => rule.rule === 'main');
   const errors = validateBranchProtection(main, { requireReview: false });
   if (errors.length) throw new Error(errors.join('; '));
@@ -112,10 +110,37 @@ export async function configureAutomaticReviewPolicy(platform, { independentAppr
     try { await platform.call(`/-/settings/branch-protections/${encodeURIComponent(id)}`, { method: 'PATCH', body: expected }); }
     catch (error) { failure = error; }
     const after = (await platform.protections()).find(rule => rule.id === id);
-    if (!after || Object.entries(expected).some(([key, value]) => after[key] !== value) || validateBranchProtection(after, { requireReview: false, forbidManualOverride: true }).length) throw failure ?? new Error('Automatic AI review policy did not read back');
+    if (!after || Object.entries(expected).some(([key, value]) => after[key] !== value) || validateBranchProtection(after, { requireReview: false, forbidManualOverride: true }).length) throw failure ?? new Error('Codex review policy did not read back');
     return after;
   }
   return main;
+}
+
+/** Tighten only the legacy manual exception; never loosen an existing immutable candidate rule. */
+export async function ensureCandidateProtection(platform) {
+  const expected = { ...branchProtectionPayload({ rule: 'delivery/candidate/**', requireReview: false }), required_status_checks: false, allow_master_manual_merge: false };
+  const existing = (await platform.protections()).find(rule => rule.rule === expected.rule);
+  if (!existing) {
+    let failure;
+    try { await platform.call('/-/settings/branch-protections', { method: 'POST', body: expected }); }
+    catch (error) { failure = error; }
+    const actual = (await platform.protections()).find(rule => rule.rule === expected.rule);
+    if (!actual || Object.entries(expected).some(([key, value]) => actual[key] !== value)) throw failure ?? new Error('Candidate protection creation did not read back');
+  } else if (existing.allow_master_manual_merge === true) {
+    if (existing.allow_creation !== true || existing.allow_master_creation !== true || ['allow_pushes', 'allow_master_pushes', 'allow_force_pushes', 'allow_master_force_pushes', 'allow_deletions', 'allow_master_deletions'].some(key => existing[key] !== false)) throw new Error('Existing candidate protection is unsafe; automatic relaxation refused');
+    const { id, ...prior } = existing;
+    const tightened = { ...prior, allow_master_manual_merge: false };
+    let failure;
+    try { await platform.call(`/-/settings/branch-protections/${encodeURIComponent(id)}`, { method: 'PATCH', body: tightened }); }
+    catch (error) { failure = error; }
+    const actual = (await platform.protections()).find(rule => rule.id === id);
+    if (!actual || Object.entries(tightened).some(([key, value]) => actual[key] !== value)) throw failure ?? new Error('Candidate manual exception tightening did not read back');
+  }
+  return platform.assertCandidateProtection();
+}
+
+function protectionReceipt(rule) {
+  return Object.fromEntries(['id', 'rule', 'required_pull_request_reviews', 'required_master_approve', 'required_must_push_via_pull_request', 'required_status_checks', 'forbid_approve_pull_created_by_own_npc', 'allow_master_manual_merge', 'allow_pushes', 'allow_master_pushes', 'allow_force_pushes', 'allow_master_force_pushes', 'allow_deletions', 'allow_master_deletions'].map(key => [key, rule[key]]));
 }
 
 export async function activate({ platform, store, root, installer }) {
@@ -129,23 +154,26 @@ export async function activate({ platform, store, root, installer }) {
   const statuses = await platform.call(`/-/pulls/${installer.number}/commit-statuses`);
   const tested = await platform.commit(statuses.sha);
   const preparation = verifyInstallerChecks({ state: installationState, installer, statuses, tested, requiredNames: policy.requiredNames });
-  await git(['merge-base', '--is-ancestor', installer.head.sha, mainSha], { cwd: root });
-  await git(['merge-base', '--is-ancestor', preparation.mainSha, mainSha], { cwd: root });
-  const reviews = await platform.list(`/-/pulls/${installer.number}/reviews`);
-  const head = await platform.commit(installer.head.sha);
-  const independentApproval = independentCodeBuddyApproval(reviews, installer, Date.parse(head.commit?.committer?.date ?? head.commit?.author?.date));
-  const candidateExpected = { ...branchProtectionPayload({ rule: 'delivery/candidate/**', requireReview: false }), required_status_checks: false };
-  const candidateRule = (await platform.protections()).find(rule => rule.rule === candidateExpected.rule);
-  if (!candidateRule) await platform.call('/-/settings/branch-protections', { method: 'POST', body: candidateExpected });
-  await platform.assertCandidateProtection();
-  await configureAutomaticReviewPolicy(platform, { independentApproval, preparation });
+  try {
+    await git(['merge-base', '--is-ancestor', installer.head.sha, mainSha], { cwd: root });
+    await git(['merge-base', '--is-ancestor', preparation.mainSha, mainSha], { cwd: root });
+  } catch { throw new Error('Installer ancestry is absent: first installation requires the verified two-parent merge commit, never squash; preserve the source and restore through a reviewed merge PR'); }
+  const packageProof = await verifyInstallationManifest({ root, repo: platform.repo, sha: mainSha, allowAbsent: platform.repo === 'workloom-ai/workloom-im' });
+  const task = installationState.tasks[String(installer.number)];
+  const reviewSnapshot = task?.reviewSnapshot;
+  const developerReview = validateDeveloperReview(task?.developerReview, reviewSnapshot ?? {}, policy);
+  if (reviewSnapshot?.number !== installer.number || reviewSnapshot.headSha !== installer.head.sha || reviewSnapshot.mainSha !== preparation.mainSha) throw new Error('Activation review belongs to another installer/source/main');
+  const candidateRule = await ensureCandidateProtection(platform);
+  const previousMain = (await platform.protections()).find(rule => rule.rule === 'main');
+  const actualMain = await configureAutomaticReviewPolicy(platform, { developerReview, reviewSnapshot, policy, preparation });
   await ensureStateProtection(platform);
-  await store.mutate(state => appendEvent(state, 'activated', { mainSha, installer: installer.number, testedMainSha: preparation.mainSha, policyHash: policy.hash, independentApproval, humanClickRequired: false }));
+  await store.mutate(state => appendEvent(state, 'activated', { mainSha, installer: installer.number, testedMainSha: preparation.mainSha, policyHash: policy.hash, developerReview, platformAI: false, packageProof, mainProtectionBefore: protectionReceipt(previousMain), mainProtection: protectionReceipt(actualMain), candidateProtection: protectionReceipt(candidateRule), humanClickRequired: false }));
   return { repo: platform.repo, mainSha, policyHash: policy.hash, humanClickRequired: false };
 }
 
 export async function main() {
   const command = process.argv[2];
+  if (['review-prepare', 'review-finish'].includes(command)) throw new Error('Platform AI is disabled; review and test in the current Codex session.');
   const repo = arg('--repo', process.env.CNB_REPO_SLUG);
   const token = requireToken();
   const root = resolve(arg('--root', ROOT));
@@ -175,11 +203,22 @@ export async function main() {
     const old = String(pull.body ?? '');
     const body = /<!--\s*workloom-delivery\s*\n[\s\S]*?\n\s*-->/.test(old) ? old.replace(/<!--\s*workloom-delivery\s*\n[\s\S]*?\n\s*-->/, block) : `${old}\n\n${block}`;
     const updatedIntent = parseIntent({ ...pull, body });
+    const receiptPath = arg('--review-receipt');
+    if (!receiptPath) throw new Error('Handoff requires --review-receipt from an actual Codex code review and successful local tests');
+    if (await git(['rev-parse', 'HEAD'], { cwd: root }) !== expectedHead || await git(['status', '--porcelain'], { cwd: root })) throw new Error('Codex handoff requires a clean checkout at the exact PR source');
+    const policy = await loadPolicy(root);
+    const snapshot = await platform.snapshot(number, policy, { checks: false });
+    if (snapshot.headSha !== expectedHead || snapshot.checkErrors.length) throw new Error('Review source/CI changed before handoff');
+    snapshot.intent = updatedIntent;
+    const developerReview = validateDeveloperReview(JSON.parse(await readFile(resolve(receiptPath), 'utf8')), snapshot, policy);
     await platform.call(`/-/pulls/${number}`, { method: 'PATCH', body: { body } });
     const actual = await platform.pull(number);
     if (actual.body !== body || actual.head?.sha !== expectedHead || actual.state !== 'open' || actual.is_wip !== false) throw new Error('Handoff source/state changed before readback; re-verify the current source');
+    if ((await platform.main()).commit?.sha !== snapshot.mainSha) throw new Error('Main changed before handoff; repeat Codex review/test for the current tuple');
+    snapshot.pull = actual;
     await store.mutate(state => {
-      updateTask(state, number, { status: actual.is_wip ? 'developing' : 'waiting_ci', headSha: actual.head?.sha, branch: branchName(actual.head?.ref), intent: updatedIntent });
+      appendEvent(state, 'developer_review', { number, id: developerReview.id, headSha: developerReview.headSha, mainSha: developerReview.mainSha });
+      updateTask(state, number, { status: 'waiting_ci', headSha: actual.head.sha, mainSha: snapshot.mainSha, branch: branchName(actual.head.ref), intent: updatedIntent, developerReview, reviewSnapshot: snapshot });
     });
     console.log(JSON.stringify({ number, headSha: actual.head?.sha, handedOff: true, draft: actual.is_wip })); return;
   }
@@ -201,15 +240,29 @@ export async function main() {
     if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Verification requires installer --pr');
     console.log(JSON.stringify(await verifyPreparedInstallation({ platform, store, root, installer: await platform.pull(number), waitMs: Number(arg('--wait-ms', '0')) }), null, 2)); return;
   }
-  if (command === 'review-prepare') {
-    if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Review requires a PR number');
-    const result = await prepareReview({ platform, store, policy, root, number, stateless: process.env.DELIVERY_REVIEW_STATELESS === '1' });
-    if (!result) { process.exitCode = 78; return; }
-    for (const [key, value] of Object.entries(result)) console.log(`##[set-output ${key}=base64,${Buffer.from(String(value)).toString('base64')}]`);
-    return;
+  if (command === 'verify-review') {
+    if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Review verification requires --pr');
+    const pull = await platform.pull(number);
+    const match = /<!-- delivery-origin:(\d+):([a-f0-9]+):([a-f0-9]+) -->/.exec(String(pull.body));
+    if (!match) { console.log(JSON.stringify({ waiting: 'Source review is supplied by the Codex session at handoff', platformAI: false })); return; }
+    const snapshot = await platform.snapshot(number, policy, { checks: false }); snapshot.originNumber = Number(match[1]);
+    const task = (await store.read()).tasks[match[1]];
+    if (snapshot.headSha !== match[2] || snapshot.mainSha !== match[3] || task?.candidate?.number !== number || snapshot.checkErrors.length) throw new Error('Candidate origin/source/main/CI differs from the recorded review');
+    const receipt = validateDeveloperReview(task.developerReview, snapshot, policy);
+    console.log(JSON.stringify({ number, reviewId: receipt.id, platformAI: false, verified: true })); return;
   }
-  if (command === 'review-finish') {
-    console.log(JSON.stringify(await finishReview({ platform, store, policy, root, stateless: process.env.DELIVERY_REVIEW_STATELESS === '1' }), null, 2)); return;
+  if (command === 'verify-bootstrap') {
+    if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Bootstrap verification requires --pr');
+    const installer = await platform.pull(number);
+    const directory = await mkdtemp(join(tmpdir(), 'delivery-bootstrap-'));
+    const remote = `https://cnb.cool/${platform.repo}.git`;
+    try {
+      await git(['init', '--quiet', directory]);
+      await git(['fetch', '--quiet', '--no-tags', remote, installer.head?.sha, installer.base?.sha], { cwd: directory, token, remote });
+      await git(['checkout', '--quiet', '--detach', installer.head.sha], { cwd: directory });
+      console.log(JSON.stringify(await verifyPreparedInstallation({ platform, store, root: directory, installer, waitMs: 60_000 })));
+    } finally { await rm(directory, { recursive: true, force: true }); }
+    return;
   }
   if (command === 'activate') {
     if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Activation requires installer --pr');
@@ -232,7 +285,7 @@ export async function main() {
     if (report.some(item => ['parked', 'unknown', 'failed', 'timeout_running'].includes(item.status))) process.exitCode = 1;
     return;
   }
-  throw new Error('Usage: queue-runner.mjs status|lease|handoff|admit|review-prepare|review-finish|prepare-install|verify-install|activate|reconcile|releases [--repo org/name]');
+  throw new Error('Usage: queue-runner.mjs status|lease|handoff|admit|verify-review|verify-bootstrap|prepare-install|verify-install|activate|reconcile|releases [--repo org/name]');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(redactCredentials(error.message)); process.exitCode = 1; });

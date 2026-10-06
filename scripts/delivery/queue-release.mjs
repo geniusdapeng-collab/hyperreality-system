@@ -1,6 +1,6 @@
 /** Release queue is independent of integration. Completion requires source, build and byte receipts. */
 import { createHash } from 'node:crypto';
-import { appendEvent, releaseKey, SHA_RE, updateTask } from './queue-model.mjs';
+import { appendEvent, releaseKey, SHA_RE, updateTask, validRepoSlug } from './queue-model.mjs';
 
 export function releaseEventFor(kind) {
   if (!['ui', 'desktop'].includes(kind)) throw new Error('Unknown release kind');
@@ -17,21 +17,48 @@ export function enqueueReleases(state, repo, task, now = Date.now()) {
   }
 }
 
-async function bytes(repo, tag, name, { maximum = 1024 * 1024 * 1024, json = false } = {}) {
-  const response = await fetch(`https://cnb.cool/${repo}/-/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(180000) });
+export async function downloadReleaseBytes(repo, tag, name, { token, maximum = 1024 * 1024 * 1024, json = false, request = globalThis.fetch } = {}) {
+  if (!validRepoSlug(repo) || typeof tag !== 'string' || !tag || typeof name !== 'string' || !name || typeof token !== 'string' || !token || !Number.isSafeInteger(maximum) || maximum <= 0) throw new Error('Release download identity/credentials/limit is incomplete');
+  // Official OpenAPI authenticates the first request and returns a time-limited
+  // byte URL. Follow it explicitly so the CNB token never reaches the CDN.
+  let url = new URL(`https://api.cnb.cool/${repo}/-/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`);
+  const signal = AbortSignal.timeout(180000);
+  let response;
+  for (let redirects = 0; redirects <= 5; redirects++) {
+    try { response = await request(url.toString(), { headers: redirects === 0 ? { Authorization: `Bearer ${token}`, Accept: 'application/octet-stream' } : { Accept: 'application/octet-stream' }, redirect: 'manual', signal }); }
+    catch { throw new Error(`Release download transport failed: ${name}`); }
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+    if (redirects === 5) throw new Error(`Release download redirect limit exceeded: ${name}`);
+    const location = response.headers.get('location');
+    if (!location) throw new Error(`Release download redirect lacks a location: ${name}`);
+    try { url = new URL(location, url); }
+    catch { throw new Error(`Release download redirect is invalid: ${name}`); }
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash) throw new Error(`Release download redirect is unsafe: ${name}`);
+  }
   if (!response.ok || !response.body) throw new Error(`Release download failed: ${name} HTTP ${response.status}`);
   const digest = createHash('sha512'); let size = 0; const chunks = [];
-  for await (const chunk of response.body) {
-    size += chunk.length;
-    if (size > maximum) throw new Error(`Release asset exceeds limit: ${name}`);
-    digest.update(chunk);
-    if (json) chunks.push(chunk);
+  try {
+    for await (const chunk of response.body) {
+      size += chunk.length;
+      if (size > maximum) throw new Error(`Release asset exceeds limit: ${name}`);
+      digest.update(chunk);
+      if (json) chunks.push(chunk);
+    }
+  } catch (error) {
+    if (size > maximum) throw error;
+    throw new Error(`Release byte stream failed: ${name}`);
   }
+  if (!size) throw new Error(`Release byte stream is empty: ${name}`);
   const hex = digest.digest('hex');
-  return { name, size, sha512: hex, sri: `sha512-${Buffer.from(hex, 'hex').toString('base64')}`, ...(json ? { data: JSON.parse(Buffer.concat(chunks).toString('utf8')) } : {}) };
+  let data;
+  if (json) {
+    try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+    catch { throw new Error(`Release manifest JSON is invalid: ${name}`); }
+  }
+  return { name, size, sha512: hex, sri: `sha512-${Buffer.from(hex, 'hex').toString('base64')}`, ...(json ? { data } : {}) };
 }
 
-export async function verifyRelease(platform, release, download = bytes) {
+export async function verifyRelease(platform, release, download = downloadReleaseBytes) {
   if (!release.build?.sn) throw new Error('Release has no actual build receipt');
   const key = release.key ?? releaseKey({ repo: platform.repo, sha: release.sha, kind: release.kind, version: release.version });
   const actualBuild = (await releaseBuilds(platform, release)).filter(build => build.sn === release.build.sn && build.sha === release.sha && build.event === releaseEventFor(release.kind) && build.title === `WorkLoom release ${key}`);
@@ -45,18 +72,18 @@ export async function verifyRelease(platform, release, download = bytes) {
     // Platform.call uses the API transport, which already decodes successful JSON responses.
     const registration = await platform.call(`/-/git/raw/${release.sha}/sync/base-capabilities.json`);
     if (!registration || typeof registration !== 'object' || Array.isArray(registration)) throw new Error('UI registration unreadable');
-    const asset = await download(platform.repo, tag, `workloom-ui-${release.version}.tgz`);
+    const asset = await download(platform.repo, tag, `workloom-ui-${release.version}.tgz`, { token: platform.token });
     if (registration.ui?.latestStableVersion !== release.version || registration.ui?.distribution?.integrityByVersion?.[release.version] !== asset.sri) throw new Error('Published UI bytes differ from reviewed registration');
     assets = [asset];
   } else {
-    const manifest = await download(platform.repo, tag, 'WorkLoom-release-manifest.json', { maximum: 1024 * 1024, json: true });
+    const manifest = await download(platform.repo, tag, 'WorkLoom-release-manifest.json', { token: platform.token, maximum: 1024 * 1024, json: true });
     const expected = ['WorkLoom-mac-arm64.dmg', 'WorkLoom-mac-x64.dmg', 'WorkLoom-win-x64.exe'];
     if (manifest.data.schemaVersion !== 1 || manifest.data.tag !== tag || manifest.data.sourceSha !== release.sha || !Array.isArray(manifest.data.assets) || manifest.data.assets.length !== expected.length) throw new Error('Desktop release manifest/source is incomplete');
     assets = [];
     for (const name of expected) {
       const record = manifest.data.assets.filter(asset => asset.name === name);
       if (record.length !== 1 || !Number.isSafeInteger(record[0].size) || record[0].size <= 0 || !/^[a-f0-9]{128}$/.test(record[0].sha512 ?? '')) throw new Error('Desktop manifest digest/size is invalid');
-      const actual = await download(platform.repo, tag, name);
+      const actual = await download(platform.repo, tag, name, { token: platform.token });
       if (actual.size !== record[0].size || actual.sha512 !== record[0].sha512) throw new Error(`Desktop byte receipt mismatch: ${name}`);
       assets.push(actual);
     }

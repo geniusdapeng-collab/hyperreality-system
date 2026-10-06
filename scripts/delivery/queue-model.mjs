@@ -70,7 +70,8 @@ export function leaseOperation(state, { action, scopes, owner, generation, ttlMs
 
 export function sensitiveScopes(files) {
   const result = new Set();
-  for (const path of files) {
+  for (const file of files) {
+    const path = String(file).replace(/^\.\//, '');
     if (/^sync\//.test(path)) result.add('sync');
     if (/^(protocol\/|AGENTS(?:\.repo)?\.md$|docs\/DEVELOPMENT-PROTOCOL\.md$|scripts\/(ci|tools|delivery)\/|\.cnb(?:\.yml|\/))/.test(path)) result.add('protocol');
     if (/(^|\/)migrations\//.test(path)) result.add('migrations');
@@ -164,6 +165,42 @@ export function validateReview(output, snapshot, policyHash) {
   return { id: randomUUID(), number: snapshot.number, headSha: snapshot.headSha, mainSha: snapshot.mainSha, policyHash, filesHash: hash(expected), resultHash: hash(output), dependsOn: output.depends_on, ciPolicyChangesHash: hash(ciDigests), passed: true };
 }
 
+/** A Codex session attests its actual code review and local tests; this is not a platform approval. */
+export function validateDeveloperReview(output, snapshot, policy, now = Date.now()) {
+  const number = snapshot.originNumber ?? snapshot.number;
+  if (output?.schemaVersion !== 1 || output.provider !== 'codex' || !validRepoSlug(snapshot.repo) || output.repo !== snapshot.repo ||
+    output.number !== number || output.headSha !== snapshot.headSha || output.mainSha !== snapshot.mainSha || output.policyHash !== policy.hash) throw new Error('Codex review identity differs from the exact repository/source/main/policy');
+  const files = [...snapshot.files].sort();
+  if (!files.length || !Array.isArray(output.reviewedFiles) || output.reviewedFiles.some(path => typeof path !== 'string' || !path) ||
+    new Set(output.reviewedFiles).size !== output.reviewedFiles.length || JSON.stringify([...output.reviewedFiles].sort()) !== JSON.stringify(files)) throw new Error('Codex review must cover every changed file exactly once');
+  const reviewedAt = Date.parse(output.reviewedAt);
+  if (!Number.isFinite(snapshot.headTime) || !Number.isFinite(reviewedAt) || reviewedAt < snapshot.headTime || reviewedAt > now + 60_000 ||
+    typeof output.summary !== 'string' || !output.summary.trim() || output.summary.length > 20_000) throw new Error('Codex review needs a current timestamp and actual review summary');
+  if (!Array.isArray(output.tests) || !output.tests.length || output.tests.length > 100 || output.tests.some(value =>
+    !value || typeof value.command !== 'string' || !value.command.trim() || value.command.length > 4000 || value.exitCode !== 0 ||
+    !Number.isFinite(Date.parse(value.finishedAt)) || Date.parse(value.finishedAt) < snapshot.headTime || Date.parse(value.finishedAt) > reviewedAt ||
+    typeof value.result !== 'string' || !value.result.trim() || value.result.length > 20_000)) throw new Error('Codex review requires actual successful local test results for this source');
+  const dependsOn = output.dependsOn;
+  if (!Array.isArray(dependsOn) || dependsOn.some(value => !Number.isSafeInteger(value) || value <= 0 || value === number) ||
+    new Set(dependsOn).size !== dependsOn.length || (snapshot.intent?.dependsOn ?? []).some(value => !dependsOn.includes(value))) throw new Error('Codex review cannot omit a real prerequisite');
+  const expectedChanges = snapshot.ciPolicyChanges ?? [];
+  const changes = output.ciPolicyChanges ?? [];
+  if (!Array.isArray(changes) || changes.some(value => typeof value?.id !== 'string' || typeof value.rationale !== 'string' || !value.rationale.trim()) ||
+    JSON.stringify(changes.map(value => value.id).sort()) !== JSON.stringify(expectedChanges.map(value => value.id).sort())) throw new Error('Codex review must explain each exact CI implementation change');
+  const receipt = { schemaVersion: 1, provider: 'codex', repo: output.repo, number, headSha: output.headSha, mainSha: output.mainSha,
+    policyHash: policy.hash, reviewedFiles: files, filesHash: hash(files), dependsOn: [...dependsOn].sort((a,b) => a-b),
+    ciPolicyChanges: structuredClone(changes), ciPolicyChangesHash: hash(expectedChanges.map(value => value.digest ?? value.id).sort()),
+    tests: structuredClone(output.tests), reviewedAt: output.reviewedAt, summary: output.summary, passed: true };
+  const id = hash(receipt);
+  if (output.id !== undefined && (output.id !== id || output.passed !== true || output.filesHash !== receipt.filesHash || output.ciPolicyChangesHash !== receipt.ciPolicyChangesHash)) throw new Error('Stored Codex review receipt was altered');
+  return { ...receipt, id };
+}
+
+export function developerReviewErrors(snapshot, task, policy, now = Date.now()) {
+  try { validateDeveloperReview(task?.developerReview, snapshot, policy, now); return []; }
+  catch (error) { return [error.message]; }
+}
+
 export function checksVerdict(payload, testedCommit, { headSha, mainSha }, requiredNames) {
   const errors = [];
   if (!Array.isArray(payload?.statuses) || !payload.statuses.length || !SHA_RE.test(payload.sha ?? '')) return ['Missing combined status result'];
@@ -187,18 +224,11 @@ export function eligibility(snapshot, task, policy, now = Date.now()) {
   if (policy.businessHoldPaths.some(prefix => files.some(path => path.startsWith(prefix)))) reasons.push('Business action requires separate authorization');
   if (!policy.branchPrefixes.some(prefix => branchName(pull.head?.ref).startsWith(prefix))) reasons.push('Branch is outside delivery lanes');
   if (!SHA_RE.test(headSha ?? '') || !SHA_RE.test(mainSha ?? '') || pull.head?.sha !== headSha || pull.base?.sha !== mainSha || !files.length) reasons.push('Snapshot is incomplete');
-  if (intent.ready === false || (intent.ready !== true && (!Number.isFinite(snapshot.headTime) || now - snapshot.headTime < policy.cooldownMs))) reasons.push('Developer has not handed off');
+  if (intent.ready !== true) reasons.push('Developer has not handed off');
   if (pendingDependencies.length) reasons.push(`Unmerged dependencies: ${pendingDependencies.join(',')}`);
   if (pull.mergeable_state !== 'mergeable') reasons.push('Platform does not allow merge');
   reasons.push(...checkErrors);
-  const review = task?.review;
-  const approval = review?.platformReview;
-  const approvalTime = Date.parse(approval?.createdAt);
-  const independentApproval = approval?.id && approval.isNpc === true && typeof approval.author === 'string' && /codebuddy/i.test(approval.author) &&
-    typeof approval.creator === 'string' && approval.creator && approval.author.toLowerCase() !== approval.creator.toLowerCase() &&
-    approval.creator === pull.author?.username && Number.isFinite(approvalTime) && approvalTime >= snapshot.headTime;
-  if (!review?.passed || !independentApproval || review.headSha !== headSha || review.mainSha !== mainSha || review.policyHash !== policy.hash || review.filesHash !== hash([...files].sort())) reasons.push('No current complete AI review');
-  else if (snapshot.ciPolicyChanges?.length && review.ciPolicyChangesHash !== hash(snapshot.ciPolicyChanges.map(change => change.digest ?? change.id).sort())) reasons.push('No exact AI CI migration receipt');
+  reasons.push(...developerReviewErrors(snapshot, task, policy, now));
   return reasons;
 }
 

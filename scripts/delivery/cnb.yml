@@ -1,4 +1,5 @@
-# Repository-local, trusted-main delivery. No customer data or platform secrets.
+# Repository-local deterministic delivery. Platform AI was disabled by the owner on 2026-10-06.
+# The legacy review pipeline/stage names stay for one compatible migration; they perform no AI/model requests.
 .delivery-admission: &delivery_admission
   name: delivery-source-admission
   docker:
@@ -35,22 +36,13 @@
       script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
     - name: Snapshot exact source and main for independent AI
       timeout: 180s
-      script: node scripts/delivery/queue-runner.mjs review-prepare
-      exports:
-        head: REVIEW_HEAD
-        base: REVIEW_BASE
-        pr: REVIEW_PR
-        cwd: REVIEW_CWD
-        rules: REVIEW_RULES
-        output: REVIEW_OUTPUT
-        maxFiles: REVIEW_MAX_FILES
+      script: node scripts/delivery/queue-runner.mjs verify-review
     - name: Independent CodeBuddy review
-      image: cnbcool/code-review@sha256:c20b1e826d854738c807f4949859a6df5d58b95545ebefc96197369943a4bcce
-      timeout: 25m
-      script: node scripts/delivery/review-plugin.mjs
+      timeout: 60s
+      script: node --check scripts/delivery/model-gateway.mjs && node --check scripts/delivery/review-plugin.mjs
     - name: Validate complete AI result and real platform review
       timeout: 180s
-      script: node scripts/delivery/queue-runner.mjs review-finish
+      script: node scripts/delivery/queue-runner.mjs verify-review
 
 .delivery-reconcile: &delivery_reconcile
   name: delivery-reconcile

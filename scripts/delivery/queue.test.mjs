@@ -4,16 +4,16 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { admissionErrors, admitSource, appendEvent, checksVerdict, dependencyState, eligibility, emptyState, hash, leaseOperation, parseIntent, releaseKey, updateTask, validateReview, validateState } from './queue-model.mjs';
+import { admissionErrors, admitSource, appendEvent, checksVerdict, dependencyState, eligibility, emptyState, hash, leaseOperation, parseIntent, releaseKey, updateTask, validateReview, validateState, validateDeveloperReview } from './queue-model.mjs';
 import { GitStateStore, git } from './git-state.mjs';
-import { alignBranch, independentCodeBuddyApproval } from './queue-work.mjs';
+import { alignBranch, independentCodeBuddyApproval, prepareReview, finishReview, dispatchRecovery } from './queue-work.mjs';
 import { Platform } from './queue-platform.mjs';
 import { BASE_POLICY, REVIEW_IMAGE, ciImplementationChanges, loadPolicy, parser, prPipelines, readableCiChanges, resolvePipelineConfig, sourcePipelineReport, validateSourcePipeline } from './queue-policy.mjs';
 import { dependencies, integratedDependency, mergeCandidate, reconcile, requestReview, reviewSlotBusy, writeTaskReceipts } from './queue-controller.mjs';
-import { enqueueReleases, reconcileReleases, releaseEventFor, verifyRelease } from './queue-release.mjs';
+import { downloadReleaseBytes, enqueueReleases, reconcileReleases, releaseEventFor, verifyRelease } from './queue-release.mjs';
 import { injectDeliveryConfig } from './install-config.mjs';
 import { batchEnvironment, batchSnapshot, botApiEndpoint, combineBatchResults, reviewBatches, reviewEnvironment, runReview, validateIssueSchema } from './review-plugin.mjs';
-import { configureAutomaticReviewPolicy, ensureStateProtection, prepareInstallation, requireTrustedRunner, verifyInstallerChecks, verifyPreparedInstallation } from './queue-runner.mjs';
+import { configureAutomaticReviewPolicy, ensureCandidateProtection, ensureStateProtection, prepareInstallation, requireTrustedRunner, verifyInstallerChecks, verifyPreparedInstallation } from './queue-runner.mjs';
 import { verifyReleaseSource } from './release-source.mjs';
 import { modelGateway } from './model-gateway.mjs';
 import { createHash, randomUUID } from 'node:crypto';
@@ -27,11 +27,17 @@ test('genuine AI endpoint configuration has a clear closed failure for absent, m
   for (const value of [undefined, '', 'invalid', 'http://api.cnb.cool', 'https://example.com']) assert.throws(() => botApiEndpoint({ CNB_API_ENDPOINT: value }), /requires CNB_API_ENDPOINT/);
 });
 function snapshot(number = 1, patch = {}) {
-  return { number, headSha: head, mainSha: main, headTime: 0, mergeBase: main, files: ['apps/example.ts'], checkErrors: [], checkSha: testedSha, intent,
+  return { repo, number, headSha: head, mainSha: main, headTime: 0, mergeBase: main, files: ['apps/example.ts'], checkErrors: [], checkSha: testedSha, intent,
     pull: { number, title: 'fix(base): useful change', body: '', author: { username: 'developer' }, state: 'open', is_wip: false, mergeable_state: 'mergeable', labels: [], head: { sha: head, ref: `task/test-${number}`, repo: { path: repo } }, base: { sha: main, ref: 'main' } }, ...patch };
 }
-function platformApproval(s = snapshot()) { return { id: 'actual-fixture-approval', author: 'CodeBuddy', creator: s.pull.author.username, isNpc: true, createdAt: new Date(now).toISOString() }; }
-function review(s = snapshot()) { return { passed: true, headSha: s.headSha, mainSha: s.mainSha, policyHash: policy.hash, filesHash: hash([...s.files].sort()), dependsOn: [], platformReview: platformApproval(s) }; }
+function reviewInput(s = snapshot(), p = policy, at = now) {
+  return { schemaVersion: 1, provider: 'codex', repo: s.repo, number: s.originNumber ?? s.number, headSha: s.headSha, mainSha: s.mainSha,
+    policyHash: p.hash, reviewedFiles: s.files, dependsOn: s.intent.dependsOn,
+    ciPolicyChanges: (s.ciPolicyChanges ?? []).map(change => ({ id: change.id, rationale: 'Read exact old/new implementation; retained assertions, failure handling and rollback.' })),
+    reviewedAt: new Date(at).toISOString(), summary: 'Actual review of all changed files and their direct dependencies; no unresolved blocking issues.',
+    tests: [{ command: 'node --test actual-regression.test.mjs', exitCode: 0, finishedAt: new Date(at).toISOString(), result: 'Actual fixture test succeeded' }] };
+}
+function review(s = snapshot(), p = policy, at = now) { return validateDeveloperReview(reviewInput(s, p, at), s, p, at); }
 function candidateReceipt(s, origin = s.originNumber) {
   const marker = `delivery-origin:${origin}:${s.headSha}:${s.mainSha}`;
   s.pull.body = `<!-- ${marker} -->`;
@@ -100,30 +106,24 @@ test('unreadable dependency blocks its dependents while unrelated PRs keep progr
   assert.match(map.get(1).error, /Prerequisite #3 is unreadable/); assert.deepEqual(map.get(1).pending, [3]);
   assert.deepEqual(map.get(2), { pending: [], error: null });
 });
-test('AI build watchdog counts terminal failures once and respects backoff, budget and pending runs', async () => {
-  const state = emptyState(repo); updateTask(state, 1, { status: 'waiting_review', headSha: head, mainSha: main,
-    reviewBuild: { sn: 'run-1', headSha: head, mainSha: main, at: now - 600000 } }, now - 600000);
-  const store = memoryStore(state); let writes = 0; let status = 'pending';
-  const platform = { call: async (_path, options) => { if (options?.method === 'POST') writes++; return { status }; }, builds: async () => [] };
-  assert.equal((await requestReview(platform, store, snapshot(), null, now)).waiting, 'running');
-  status = 'error'; await requestReview(platform, store, snapshot(), null, now);
-  assert.equal((await store.read()).tasks['1'].reviewFailures.count, 1);
-  assert.equal((await requestReview(platform, store, snapshot(), null, now + 1)).waiting, 'backoff');
-  await store.mutate(current => updateTask(current, 1, { reviewBuild: { sn: 'run-2', headSha: head, mainSha: main, at: now } }, now));
-  await requestReview(platform, store, snapshot(), null, now + 600001);
-  assert.equal((await requestReview(platform, store, snapshot(), null, now + 1800000)).waiting, 'budget'); assert.equal(writes, 0);
+test('revoked platform review, prepare, finish, recovery and model entry points fail before any IO', async () => {
+  let calls = 0;
+  const forbidden = new Proxy({}, { get() { calls++; throw new Error('External platform IO is forbidden'); } });
+  for (const operation of [requestReview, prepareReview, finishReview, dispatchRecovery, modelGateway, runReview]) await assert.rejects(operation(forbidden, forbidden, forbidden), /Platform AI is disabled/);
+  assert.equal(calls, 0);
+  assert.equal(await reviewSlotBusy(forbidden, forbidden), false); assert.equal(calls, 0);
 });
-test('lost AI launch acknowledgement is recovered by unique title without a duplicate request', async () => {
-  const state = emptyState(repo); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main }, now - 600000);
-  const store = memoryStore(state); let writes = 0; let history = [];
-  const platform = { builds: async () => history, call: async () => { writes++; throw new Error('lost ack'); } };
-  await assert.rejects(requestReview(platform, store, snapshot(), null, now), /lost ack/);
-  assert.equal((await requestReview(platform, store, snapshot(), null, now + 60000)).waiting, 'unknown-launch');
-  const dispatch = (await store.read()).tasks['1'].reviewDispatch;
-  history = [{ sn: 'recovered', title: dispatch.title, sha: main, event: 'api_trigger_delivery_review' }];
-  assert.equal((await requestReview(platform, store, snapshot(), null, now + 120000)).waiting, 'recovered-launch');
-  assert.equal((await store.read()).tasks['1'].reviewBuild.sn, 'recovered'); assert.equal(writes, 1);
+
+test('legacy paid-review CLI commands fail before credentials, Git, snapshots or network', () => {
+  const cli = fileURLToPath(new URL('./queue-runner.mjs', import.meta.url));
+  const env = { ...process.env }; delete env.CNB_TOKEN; delete env.CNB_TOKEN_FOR_AI; delete env.CNB_TOKEN_FOR_CODEBUDDY;
+  const prelude = `globalThis.fetch=()=>{console.error('FORBIDDEN_NETWORK');throw new Error('Unexpected network');};`;
+  for (const command of ['review-prepare', 'review-finish']) {
+    const result = spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(prelude)}`, cli, command], { env, encoding: 'utf8' });
+    assert.equal(result.status, 1); assert.match(result.stderr, /Platform AI is disabled/); assert.doesNotMatch(result.stderr, /FORBIDDEN_NETWORK|CNB_TOKEN is required/);
+  }
 });
+
 test('AI receipt requires exact identity, complete unique scope, no unresolved issues and valid prerequisites', () => {
   const s = snapshot(); const good = { status: 'passed', issues: [], reviewed_files: s.files, head_sha: head, base_sha: main, policy_hash: policy.hash, depends_on: [] };
   assert.equal(validateReview(good, s, policy.hash).passed, true);
@@ -147,7 +147,7 @@ test('CI must test exact main/source parents and each trusted required pipeline,
 test('installer activation binds tested main to the independent preparation receipt, not a tested parent to itself', () => {
   const state = emptyState(repo); const installer = { number: 234, head: { sha: head } };
   appendEvent(state, 'installation_prepared', { installer: 234, headSha: head, mainSha: main });
-  const statuses = { sha: testedSha, statuses: ['static-gate', 'delivery-bootstrap-review'].map(name => ({ context: `cnb/pull_request/pipeline-1(${name})`, state: 'success' })) };
+  const statuses = { sha: testedSha, statuses: ['static-gate', 'delivery-bootstrap-checks'].map(name => ({ context: `cnb/pull_request/pipeline-1(${name})`, state: 'success' })) };
   const tested = { sha: testedSha, parents: [{ sha: main }, { sha: head }] };
   const input = { state, installer, statuses, tested, requiredNames: ['static-gate'] };
   assert.equal(verifyInstallerChecks(input).mainSha, main);
@@ -155,13 +155,13 @@ test('installer activation binds tested main to the independent preparation rece
   assert.throws(() => verifyInstallerChecks({ ...input, state: emptyState(repo) }), /prepared/);
   assert.throws(() => verifyInstallerChecks({ ...input, installer: { ...installer, head: { sha: main } } }), /prepared/);
 });
-test('genuine exact AI replaces the human review counter, removes the admin manual exception and preserves remaining restrictions including lost acknowledgement recovery', async () => {
+test('exact Codex review and local tests replace the human review counter, removes the admin manual exception and preserves remaining restrictions including lost acknowledgement recovery', async () => {
   const { branchProtectionPayload, validateBranchProtection } = await import('../tools/cnb-api.mjs');
   let rule = { ...branchProtectionPayload(), id: 'main-rule', required_master_approve: true }; let writes = 0;
   const platform = { protections: async () => [rule], call: async (_path, options) => { writes++; rule = { ...options.body, id: rule.id }; throw new Error('lost acknowledgement'); } };
-  const proof = { independentApproval: { id: 'genuine-npc-review', author: 'CodeBuddy', creator: 'developer', isNpc: true }, preparation: { headSha: head, mainSha: main } };
-  await assert.rejects(configureAutomaticReviewPolicy(platform), /proof/); assert.equal(writes, 0);
-  await assert.rejects(configureAutomaticReviewPolicy(platform, { ...proof, independentApproval: { ...proof.independentApproval, creator: 'codebuddy' } }), /proof/); assert.equal(writes, 0);
+  const proof = { developerReview: review(), reviewSnapshot: snapshot(), policy, preparation: { headSha: head, mainSha: main } };
+  await assert.rejects(configureAutomaticReviewPolicy(platform), /Codex review identity/); assert.equal(writes, 0);
+  await assert.rejects(configureAutomaticReviewPolicy(platform, { ...proof, developerReview: { ...proof.developerReview, provider: 'external-platform' } }), /Codex review identity/); assert.equal(writes, 0);
   const before = { ...rule }; const after = await configureAutomaticReviewPolicy(platform, proof);
   assert.equal(after.required_pull_request_reviews, false); assert.equal(after.required_master_approve, false);
   assert.equal(after.allow_master_manual_merge, false);
@@ -171,18 +171,23 @@ test('genuine exact AI replaces the human review counter, removes the admin manu
   rule.allow_master_pushes = true; await assert.rejects(configureAutomaticReviewPolicy(platform, proof), /allow_master_pushes/); assert.equal(writes, 1);
 });
 test('eligibility rejects draft/block/expired review/wrong main/unhanded head even with green CI', () => {
-  const s = snapshot(); assert.deepEqual(eligibility(s, { review: review(s) }, policy, now), []);
-  for (const patch of [{ pull: { ...s.pull, is_wip: true } }, { pull: { ...s.pull, labels: ['risk/block'] } }, { mainSha: head }, { intent: { ...intent, ready: false } }, { pendingDependencies: [2] }, { files: ['secrets/real'] }]) assert.ok(eligibility({ ...s, ...patch }, { review: review(s) }, policy, now).length);
-  assert.ok(eligibility(s, { review: { ...review(s), policyHash: 'old' } }, policy, now).includes('No current complete AI review'));
+  const s = snapshot(); assert.deepEqual(eligibility(s, { developerReview: review(s) }, policy, now), []);
+  for (const patch of [{ pull: { ...s.pull, is_wip: true } }, { pull: { ...s.pull, labels: ['risk/block'] } }, { mainSha: head }, { intent: { ...intent, ready: false } }, { pendingDependencies: [2] }, { files: ['secrets/real'] }]) assert.ok(eligibility({ ...s, ...patch }, { developerReview: review(s) }, policy, now).length);
+  assert.ok(eligibility(s, { developerReview: { ...review(s), policyHash: 'old' } }, policy, now).some(value => /Codex review identity/.test(value)));
 });
-test('merge eligibility requires a fresh independent CodeBuddy receipt for the current PR creator', () => {
-  const s = snapshot(); const good = review(s);
-  for (const platformReview of [undefined, { ...good.platformReview, isNpc: false }, { ...good.platformReview, creator: 'other' },
-    { ...good.platformReview, author: 'developer' }, { ...good.platformReview, createdAt: 'invalid' }, { ...good.platformReview, createdAt: new Date(-1).toISOString() }]) {
-    assert.ok(eligibility(s, { review: { ...good, platformReview } }, policy, now).includes('No current complete AI review'));
-  }
-  assert.deepEqual(eligibility(s, { review: good }, policy, now), []);
+test('Codex receipt requires exact repository, source/main/policy, full coverage, actual tests and preserved prerequisites', () => {
+  const s = snapshot(1, { headTime: now - 1000, intent: { ...intent, dependsOn: [2] } }); const input = reviewInput(s);
+  const good = review(s); assert.deepEqual(eligibility(s, { developerReview: good }, policy, now), []);
+  const cases = [{ provider: 'codebuddy' }, { repo: 'foreign/repo' }, { number: 2 }, { headSha: main }, { mainSha: head }, { policyHash: 'old' },
+    { reviewedFiles: [] }, { reviewedFiles: [...s.files, ...s.files] }, { reviewedAt: new Date(now - 1001).toISOString() }, { reviewedAt: new Date(now + 60001).toISOString() },
+    { summary: '' }, { tests: [] }, { tests: [{ ...input.tests[0], exitCode: 1 }] }, { tests: [{ ...input.tests[0], finishedAt: new Date(now - 1001).toISOString() }] },
+    { tests: [{ ...input.tests[0], result: '' }] }, { tests: [{ ...input.tests[0], finishedAt: new Date(now + 1).toISOString() }] }, { dependsOn: [] }, { dependsOn: [1,2] }];
+  for (const patch of cases) assert.throws(() => validateDeveloperReview({ ...input, ...patch }, s, policy, now), JSON.stringify(patch));
+  for (const patch of [{ summary: 'altered' }, { filesHash: 'altered' }, { ciPolicyChangesHash: 'altered' }]) assert.throws(() => validateDeveloperReview({ ...good, ...patch }, s, policy, now), /altered/);
+  assert.ok(eligibility(s, { review: { passed: true, platformReview: { author: 'CodeBuddy' } } }, policy, now).length);
+  assert.ok(eligibility({ ...s, intent: { ...s.intent, ready: undefined } }, { developerReview: good }, policy, now).includes('Developer has not handed off'));
 });
+
 test('only read transport failures and retryable HTTP statuses retry; writes and permission failures remain single attempts', async t => {
   const previous = globalThis.fetch; t.after(() => { globalThis.fetch = previous; });
   let calls = 0;
@@ -217,8 +222,8 @@ test('source CI preserves required identities; implementation changes require ex
   assert.throws(() => validateReview(output, s, policy.hash), /migration/);
   for (const ci_policy_changes of [[{ id: 'wrong', rationale: 'tested' }], [{ id: report.changes[0].id, rationale: '' }]]) assert.throws(() => validateReview({ ...output, ci_policy_changes }, s, policy.hash), /migration/);
   const receipt = validateReview({ ...output, ci_policy_changes: [{ id: report.changes[0].id, rationale: 'The replacement runs the same compile with updated tooling; compile regression remains required.' }] }, s, policy.hash);
-  assert.deepEqual(eligibility(s, { review: { ...receipt, platformReview: platformApproval(s) } }, policy, now), []);
-  assert.ok(eligibility(s, { review: review(s) }, policy, now).includes('No exact AI CI migration receipt'));
+  assert.deepEqual(eligibility(s, { developerReview: review(s) }, policy, now), []);
+  assert.throws(() => validateDeveloperReview({ ...reviewInput(s), ciPolicyChanges: [] }, s, policy, now), /CI implementation change/);
 });
 test('unchanged YAML cannot hide edits to required check implementations and dependency policy', () => {
   const files = [{ path: 'scripts/ci/verify-lock-conflict.mjs', status: 'modify' }, { path: 'governance/scripts/ci/verify.py', status: 'delete' }, { path: 'pnpm-lock.yaml', status: 'modify' }, { path: 'scripts/delivery/cnb.yml', status: 'add' }, { path: 'apps/product.ts', status: 'modify' }];
@@ -258,8 +263,8 @@ test('short AI migration identifiers are deterministic but retain complete diges
   assert.throws(() => readableCiChanges([...changes, changes[0]]), /duplicated/);
   const s = snapshot(1, { files: changes.map(change => change.file), ciPolicyChanges: readable });
   const output = { status: 'passed', issues: [], reviewed_files: s.files, head_sha: head, base_sha: main, policy_hash: policy.hash, depends_on: [], ci_policy_changes: readable.map(change => ({ id: change.id, rationale: 'Read exact old/new source; retained regression and rollback.' })) };
-  const receipt = { ...validateReview(output, s, policy.hash), platformReview: platformApproval(s) }; assert.deepEqual(eligibility(s, { review: receipt }, policy, now), []);
-  assert.ok(eligibility({ ...s, ciPolicyChanges: [{ ...readable[0], digest: 'f'.repeat(64) }, readable[1]] }, { review: receipt }, policy, now).includes('No exact AI CI migration receipt'));
+  const receipt = review(s); assert.deepEqual(eligibility(s, { developerReview: receipt }, policy, now), []);
+  assert.ok(eligibility({ ...s, ciPolicyChanges: [{ ...readable[0], digest: 'f'.repeat(64) }, readable[1]] }, { developerReview: receipt }, policy, now).some(value => /altered/.test(value)));
   assert.throws(() => validateReview({ ...output, ci_policy_changes: [{ id: 'CI-001', rationale: 'read' }, { id: 'CI-001', rationale: 'read' }] }, s, policy.hash), /migration/);
 });
 test('local include graph preserves product arrays and structurally pins delivery events and stage order', async t => {
@@ -318,23 +323,12 @@ test('model tool subprocess excludes approval and unrelated secrets without muta
   assert.deepEqual(batchEnvironment(env), { PATH: '/bin', CNB_REPO_SLUG: repo });
   assert.equal(env.CNB_TOKEN_FOR_CODEBUDDY, 'approve'); assert.equal(env.CNB_TOKEN_FOR_AI, 'approve2');
 });
-test('model broker streams only allowed AI routes and never reflects credentials or backend error bodies', async t => {
-  const calls = []; let fail = false; const fixtureToken = `test-only-${randomUUID()}`;
-  const broker = await modelGateway({ repo, token: fixtureToken, request: async (url, options) => {
-    calls.push({ url, options });
-    return fail ? new Response(`backend exposes ${fixtureToken}`, { status: 401 }) : new Response('data: model-output\n\n', { headers: { 'content-type': 'text/event-stream' } });
-  } }); t.after(() => broker.close());
-  const ask = path => fetch(broker.url + path, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer model-input' }, body: '{}' });
-  assert.equal(await (await ask('/v1/messages?beta=true')).text(), 'data: model-output\n\n');
-  assert.equal(calls[0].url, `https://api.cnb.cool/${repo}/-/ai/v1/messages?beta=true`);
-  assert.equal(calls[0].options.headers.authorization, `Bearer ${fixtureToken}`);
-  assert.equal(calls[0].options.redirect, 'error');
-  for (const path of ['/pulls/1/merge', '/git/branches', '/v1/messages%2f..%2fmerge']) assert.equal((await ask(path)).status, 403);
-  assert.equal((await fetch(broker.url + '/v1/messages')).status, 403);
-  assert.equal(calls.length, 1);
-  fail = true; const denied = await ask('/chat/completions'); assert.equal(denied.status, 401); const errorBody = await denied.text(); assert.ok(!errorBody.includes(fixtureToken)); assert.doesNotMatch(errorBody, /backend exposes/);
-  await assert.rejects(modelGateway({ repo, token: 'test-only', endpoint: 'https://elsewhere.example' }), /identity/);
+test('model broker is permanently closed for valid and malformed inputs without opening a listener or forwarding a request', async () => {
+  let calls = 0;
+  for (const value of [{ repo, token: randomUUID(), request: async () => { calls++; } }, { repo: 'bad', endpoint: 'https://elsewhere.example' }, undefined]) await assert.rejects(modelGateway(value), /Platform AI is disabled/);
+  assert.equal(calls, 0);
 });
+
 test('CI review receipts are assigned to the responsible batch and collected without omission or duplication', () => {
   const files = Array.from({ length: 61 }, (_, index) => `source/${String(index).padStart(2, '0')}.ts`);
   const ciPolicyChanges = [{ id: 'first', file: files[0] }, { id: 'last', file: files[60] }, { id: 'config', file: files[30] }];
@@ -429,15 +423,24 @@ test('required native node-test stages refer to existing repository files', asyn
   }
   assert.ok(verified > 0);
 });
-test('bootstrap and trusted-main AI image digests stay bound to the single policy constant', async () => {
+test('every delivery YAML stage is deterministic and has no model SDK image, legacy executor or NPC call', async () => {
   const YAML = await parser();
-  const trusted = YAML.parse(await readFile(new URL('./cnb.yml', import.meta.url), 'utf8'));
-  const bootstrap = YAML.parse(await readFile(new URL('./bootstrap-cnb.yml', import.meta.url), 'utf8'));
-  const targetReview = trusted.main['pull_request.target'].find(pipeline => pipeline.name === 'delivery-ai-review');
-  assert.ok(targetReview);
-  const images = [targetReview, prPipelines(bootstrap)[0]].flatMap(pipeline => pipeline.stages.filter(stage => stage.image).map(stage => stage.image));
-  assert.deepEqual(images, [REVIEW_IMAGE, REVIEW_IMAGE]);
+  for (const file of ['cnb.yml', 'bootstrap-cnb.yml']) {
+    const config = YAML.parse(await readFile(new URL(file, import.meta.url), 'utf8'));
+    const visit = value => {
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (!value || typeof value !== 'object') return;
+      if (value.script) {
+        assert.doesNotMatch(value.script, /review-prepare|review-finish|node scripts\/delivery\/review-plugin|\/-\/ai\/|work-mode|@CodeBuddy/);
+        assert.ok(!value.image, `Unexpected stage image in ${file}`);
+      }
+      for (const entry of Object.values(value)) visit(entry);
+    };
+    visit(config);
+  }
+  assert.equal(BASE_POLICY.platformAI, false); assert.equal(BASE_POLICY.reviewProvider, 'codex');
 });
+
 test('archived actual non-installer CNB run proves exit 78 preserves all independent product pipelines', async () => {
   // Public API readback, observed 2026-10-05: all four pipelines at the exact tested parents.
   const proof = {
@@ -483,52 +486,33 @@ test('archived actual non-installer CNB run proves exit 78 preserves all indepen
   assert.equal(new Set(proof.statuses.map(status => status.target_url.split('#')[0])).size, 1);
 });
 
-test('installer updates cancel only their own obsolete bootstrap review and do not share the ordinary review lock', async () => {
+test('installer checks cancel only their own obsolete build and verify prepared assets before the session record', async () => {
   const YAML = await parser();
   const bootstrap = prPipelines(YAML.parse(await readFile(new URL('./bootstrap-cnb.yml', import.meta.url), 'utf8')))[0];
   const ordinary = YAML.parse(await readFile(new URL('./cnb.yml', import.meta.url), 'utf8'))['.delivery-review'];
   assert.equal(bootstrap.lock.key, 'workloom-delivery-bootstrap-$CNB_PULL_REQUEST_IID'); assert.equal(bootstrap.lock['cancel-in-progress'], true);
   assert.notEqual(bootstrap.lock.key, ordinary.lock.key); assert.notEqual(ordinary.lock['cancel-in-progress'], true);
-  const names = bootstrap.stages.map(stage => stage.name);
-  assert.ok(names.indexOf('Verify protected ledger before installer approval') > names.indexOf('Snapshot exact source and main'));
-  assert.ok(names.indexOf('Verify protected ledger before installer approval') < names.indexOf('Genuine independent CodeBuddy review'));
+  const verifyAssets = bootstrap.stages.findIndex(stage => String(stage.script).includes('queue-runner.mjs verify-bootstrap'));
+  const installParser = bootstrap.stages.findIndex(stage => String(stage.script).includes('npm ci'));
+  const verifySession = bootstrap.stages.findIndex(stage => String(stage.script).includes('queue-runner.mjs verify-review'));
+  assert.ok(verifyAssets > installParser); assert.ok(verifySession > verifyAssets);
 });
-test('real review orchestration caps concurrent batches and withholds decisions on incomplete coverage or drift', async t => {
-  const root = await temporary(t, 'delivery-batch-'); const directory = join(root, '.delivery-review/snapshot-x'); await mkdir(directory, { recursive: true });
-  const s = snapshot(1, { files: Array.from({ length: 91 }, (_, index) => `source/${index}.ts`) });
-  const manifest = { snapshot: s, policyHash: policy.hash, directory, source: join(directory, 'source'), rules: join(directory, 'rules'), coverage: join(directory, 'coverage'), output: join(directory, 'output') };
-  await writeFile(join(root, '.delivery-review/manifest.json'), JSON.stringify(manifest));
-  let active = 0; let maximum = 0; let published = 0;
-  const runBatch = async (_index, files) => { active++; maximum = Math.max(maximum, active); await new Promise(resolve => setImmediate(resolve)); active--; return { status: 'passed', issues: [], reviewed_files: files, head_sha: head, base_sha: main, policy_hash: policy.hash, depends_on: [] }; };
-  const options = { env: {}, platform: { snapshot: async () => s }, runBatch, publish: async output => { published++; assert.equal(output.reviewed_files.length, 91); } };
-  await runReview(root, options); assert.equal(maximum, 2); assert.equal(published, 1);
-  await assert.rejects(runReview(root, { ...options, runBatch: async (index, files) => ({ ...await runBatch(index, files), reviewed_files: [] }) }), /omitted/);
-  await assert.rejects(runReview(root, { ...options, platform: { snapshot: async () => ({ ...s, mainSha: head }) } }), /expired/);
-  assert.equal(published, 1);
-  let started = 0;
-  await assert.rejects(runReview(root, { ...options, runBatch: async () => { started++; throw new Error('SDK interrupted'); } }), /interrupted/);
-  assert.ok(started <= 2); assert.equal(published, 1);
+test('historical review orchestrator cannot start a batch or publish any platform approval after owner revocation', async () => {
+  let invoked = 0;
+  await assert.rejects(runReview('/nonexistent/forbidden', { runBatch: async () => { invoked++; }, publish: async () => { invoked++; }, platform: { snapshot: async () => { invoked++; } } }), /Platform AI is disabled/);
+  assert.equal(invoked, 0);
 });
-test('actual review failures retain missing receipt counts and genuine findings, including malformed array diagnostics', async t => {
-  const root = await temporary(t, 'delivery-review-diagnostics-'); const directory = join(root, '.delivery-review/snapshot-x'); await mkdir(directory, { recursive: true });
-  const files = Array.from({ length: 31 }, (_, index) => `source/${String(index).padStart(2, '0')}.ts`);
-  const s = snapshot(1, { files, ciPolicyChanges: [{ id: 'CI-FIRST', file: files[0] }, { id: 'CI-LAST', file: files.at(-1) }] });
-  const manifest = { snapshot: s, policyHash: policy.hash, directory, source: join(directory, 'source'), rules: join(directory, 'rules'), coverage: join(directory, 'coverage'), output: join(directory, 'output') };
-  await writeFile(join(root, '.delivery-review/manifest.json'), JSON.stringify(manifest)); let published = 0;
-  const base = (index, paths) => ({ status: 'passed', issues: [], reviewed_files: paths, head_sha: head, base_sha: main, policy_hash: policy.hash, depends_on: [], ci_policy_changes: batchSnapshot(s, index).ciPolicyChanges.map(change => ({ id: change.id, rationale: 'Read exact before and after assertions.' })) });
-  const options = { env: {}, platform: { snapshot: async () => s }, publish: async () => { published++; } };
-  await assert.rejects(runReview(root, { ...options, runBatch: async (index, paths) => ({ ...base(index, paths), ci_policy_changes: [] }) }), error => {
-    assert.match(error.message, /CI-FIRST/); assert.match(error.message, /CI-LAST/); assert.match(error.message, /"missingChangeCount":1/); assert.match(error.message, /fatal=AI CI migration receipt/); return true;
-  });
-  const issue = { severity: 'warning', file: files[0], start_line: 1, problem: 'Real retained finding', suggestion: 'Repair before approval' };
-  await assert.rejects(runReview(root, { ...options, runBatch: async (index, paths) => index === 0 ? { ...base(index, paths), status: 'needs_modification', issues: [issue], reviewed_files: [] } : base(index, paths) }), error => {
-    assert.match(error.message, /Real retained finding/); assert.match(error.message, /"missingFileCount":30/); assert.match(error.message, /omitted changed files/); return true;
-  });
-  await assert.rejects(runReview(root, { ...options, runBatch: async (index, paths) => ({ ...base(index, paths), ci_policy_changes: {} }) }), error => {
-    assert.match(error.message, /batch diagnostics=/); assert.match(error.message, /missingChangeCount/); assert.match(error.message, /fatal=Invalid AI migration receipt shape/); assert.doesNotMatch(error.message, /\.map is not a function/); return true;
-  });
-  assert.equal(published, 0);
+
+test('a missing Codex review parks one task without paid repair and does not admit a candidate', async () => {
+  const s = snapshot(1, { hasFailedChecks: true, checkErrors: ['Required check failed'] }); const store = memoryStore(activate(emptyState(repo)));
+  let writes = 0; let candidates = 0;
+  const platform = { repo, error: error => error.message, pulls: async () => [s.pull], snapshot: async () => s, list: async () => [],
+    call: async () => { writes++; throw new Error('No platform dispatch'); }, ensureCandidate: async () => { candidates++; } };
+  await reconcile({ platform, store, policy, now });
+  const task = (await store.read()).tasks['1']; assert.equal(task.status, 'parked'); assert.equal(task.repairRequired.provider, 'codex');
+  assert.equal(writes, 0); assert.equal(candidates, 0);
 });
+
 test('mutation rejects local/PR-source runners, absent native lock and checkout main drift', async t => {
   const root = await temporary(t, 'delivery-runner-'); await git(['init', '--quiet'], { cwd: root }); await git(['commit', '--allow-empty', '-m', 'init'], { cwd: root });
   const sha = await git(['rev-parse', 'HEAD'], { cwd: root }); const platform = { main: async () => ({ commit: { sha } }) };
@@ -542,7 +526,7 @@ test('state preparation initializes a protected ledger before merge without acti
   const baseTip = await git(['rev-parse', 'HEAD'], { cwd: root });
   await writeFile(join(root, 'AGENTS.md'), 'Installer rules\n'); await git(['add', 'AGENTS.md'], { cwd: root }); await git(['commit', '-m', 'installer'], { cwd: root });
   const tip = await git(['rev-parse', 'HEAD'], { cwd: root }); let rules = []; let writes = 0;
-  const platform = { repo, main: async () => ({ commit: { sha: baseTip } }), protections: async () => rules, call: async (_path, options) => { writes++; rules = [{ ...options.body, id: 'state-rule' }]; throw new Error('lost acknowledgement'); } };
+  const platform = { repo: 'workloom-ai/workloom-im', main: async () => ({ commit: { sha: baseTip } }), protections: async () => rules, call: async (_path, options) => { writes++; rules = [{ ...options.body, id: 'state-rule' }]; throw new Error('lost acknowledgement'); } };
   const installer = { number: 234, state: 'open', is_wip: false, head: { sha: tip }, base: { ref: 'main', sha: baseTip } }; const store = memoryStore();
   const prepared = await prepareInstallation({ platform, store, root, installer }); assert.equal(prepared.activated, false); assert.equal(writes, 1);
   assert.deepEqual(admissionErrors(await store.read(), { number: 234, headSha: tip, mainSha: baseTip, files: ['AGENTS.md'] }), []);
@@ -561,23 +545,35 @@ test('state preparation initializes a protected ledger before merge without acti
   await writeFile(join(root, '.workloom-delivery-install.json'), JSON.stringify({ repo: 'foreign/isolated-copy' }));
   await assert.rejects(prepareInstallation({ platform, store, root, installer }), /another repository/); assert.equal(writes, 1);
 });
-test('actual handoff CLI rejects source drift and draft state, records the exact source and never releases a task-id lease', async t => {
-  const root = await temporary(t, 'delivery-handoff-cli-'); const remote = join(root, 'remote.git'); await git(['init', '--bare', '--quiet', remote]);
+test('actual handoff CLI rejects absent review, source drift and draft state, and writes only an exact real-Git review without releasing a task lease', async t => {
+  const root = await temporary(t, 'delivery-handoff-cli-'); const checkout = join(root, 'checkout'); const remote = join(root, 'remote.git');
+  await mkdir(checkout); await git(['init', '--bare', '--quiet', remote]); await git(['init', '--quiet'], { cwd: checkout });
+  const ci = 'main:\n  pull_request:\n    - name: product-gate\n      stages: [{name: check, script: actual-check}]\n';
+  await writeFile(join(checkout, '.cnb.yml'), ci); await git(['add', '.'], { cwd: checkout }); await git(['commit', '-m', 'initial main'], { cwd: checkout });
+  const baseTip = await git(['rev-parse', 'HEAD'], { cwd: checkout });
+  await writeFile(join(checkout, 'source.txt'), 'Reviewed source fixture'); await git(['add', '.'], { cwd: checkout }); await git(['commit', '-m', 'actual source'], { cwd: checkout });
+  const sourceTip = await git(['rev-parse', 'HEAD'], { cwd: checkout }); const localPolicy = await loadPolicy(checkout); const at = Date.now();
+  const source = snapshot(1, { headSha: sourceTip, mainSha: baseTip, files: ['source.txt'], headTime: at - 1000 });
+  const receiptPath = join(root, 'review.json'); await writeFile(receiptPath, JSON.stringify(reviewInput(source, localPolicy, at)));
   const store = new GitStateStore({ repo, remote }); const taskId = 'T-2026-1006-1003';
   await store.mutate(state => leaseOperation(state, { action: 'acquire', owner: taskId, scopes: ['protocol'] }));
   const configuration = join(root, 'gitconfig'); await writeFile(configuration, `[url "${remote}"]\n\tinsteadOf = https://cnb.cool/${repo}.git\n`);
-  const pull = { ...snapshot().pull, title: `fix(base): handoff [${taskId}]` };
+  const pull = { ...snapshot().pull, title: `fix(base): handoff [${taskId}]`, head: { sha: sourceTip, ref: 'task/source' }, base: { sha: baseTip, ref: 'main' } };
   const run = mode => {
-    const prelude = `let p=${JSON.stringify(pull)};let patched=false;globalThis.fetch=async(_url,o)=>{if(o.method==='PATCH'){p.body=JSON.parse(o.body).body;patched=true;return Response.json(p);}return Response.json({...p,head:{...p.head,sha:patched&&${JSON.stringify(mode)}==='drift'?${JSON.stringify(main)}:p.head.sha},is_wip:patched&&${JSON.stringify(mode)}==='draft'});};`;
-    return spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(prelude)}`, fileURLToPath(new URL('./queue-runner.mjs', import.meta.url)), 'handoff', '--repo', repo, '--pr', '1', '--head', head], {
+    const prelude = `let p=${JSON.stringify(pull)};let patched=false;globalThis.fetch=async(u,o)=>{const path=new URL(String(u)).pathname;let v;if(o.method==='PATCH'){p.body=JSON.parse(o.body).body;patched=true;v=p;}else if(path.endsWith('/git/branches/main'))v={commit:{sha:${JSON.stringify(baseTip)}}};else if(path.includes('/git/compare/'))v={base_commit:{sha:${JSON.stringify(baseTip)}},head_commit:{sha:${JSON.stringify(sourceTip)}},merge_base_commit:{sha:${JSON.stringify(baseTip)}},files:[{path:'source.txt',status:'modify'}]};else if(path.includes('/git/commits/'))v={commit:{committer:{date:${JSON.stringify(new Date(at-1000).toISOString())}}}};else if(path.includes('/git/raw/'))v=${JSON.stringify(ci)};else if(path.endsWith('/pulls/1'))v={...p,head:{...p.head,sha:patched&&${JSON.stringify(mode)}==='drift'?${JSON.stringify(main)}:p.head.sha},is_wip:patched&&${JSON.stringify(mode)}==='draft'};else throw new Error('Unexpected fixture path '+path);return Response.json(v);};`;
+    return spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(prelude)}`, fileURLToPath(new URL('./queue-runner.mjs', import.meta.url)), 'handoff', '--repo', repo, '--root', checkout, '--pr', '1', '--head', sourceTip, ...(mode === 'missing' ? [] : ['--review-receipt', receiptPath])], {
       env: { ...process.env, CNB_TOKEN: randomUUID(), GIT_CONFIG_GLOBAL: configuration, GIT_CONFIG_NOSYSTEM: '1' }, encoding: 'utf8', timeout: 30000,
     });
   };
+  const missing = run('missing'); assert.equal(missing.status, 1); assert.match(missing.stderr, /requires --review-receipt/);
   for (const mode of ['drift', 'draft']) { const result = run(mode); assert.equal(result.status, 1, result.stdout); assert.match(result.stderr, /source\/state changed/); assert.equal((await store.read()).tasks['1'], undefined); }
-  const result = run('exact'); assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).headSha, head);
-  const state = await store.read(); assert.equal(state.tasks['1'].headSha, head); assert.equal(state.leases.protocol.owner, taskId);
+  const result = run('exact'); assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).headSha, sourceTip);
+  const state = await store.read(); assert.equal(state.tasks['1'].headSha, sourceTip); assert.equal(state.leases.protocol.owner, taskId);
+  assert.equal(state.tasks['1'].developerReview.provider, 'codex'); assert.ok(state.events.some(event => event.kind === 'developer_review'));
+  assert.equal(parseIntent(state.tasks['1'].reviewSnapshot.pull).ready, true);
 });
 test('actual activate and admit CLI routes write and read back the real Git ledger with exact API fixtures', async t => {
+  const repo = 'workloom-ai/workloom-im';
   const root = await temporary(t, 'delivery-cli-contract-'); const remote = join(root, 'remote.git'); const checkout = join(root, 'checkout');
   await mkdir(checkout); await mkdir(join(checkout, 'scripts/delivery'), { recursive: true });
   const ci = 'include: scripts/delivery/cnb.yml\nmain:\n  pull_request:\n    - name: static-gate\n      stages: [{name: assertions, script: actual-check}]\n';
@@ -585,38 +581,45 @@ test('actual activate and admit CLI routes write and read back the real Git ledg
   await writeFile(join(checkout, '.cnb.yml'), ci); await writeFile(join(checkout, 'scripts/delivery/cnb.yml'), included);
   await git(['init', '--quiet'], { cwd: checkout }); await git(['add', '.'], { cwd: checkout }); await git(['commit', '-m', 'initial main'], { cwd: checkout });
   const preparedMain = await git(['rev-parse', 'HEAD'], { cwd: checkout });
-  await git(['commit', '--allow-empty', '-m', 'installer source'], { cwd: checkout }); const tip = await git(['rev-parse', 'HEAD'], { cwd: checkout });
+  await git(['checkout', '--quiet', '-b', 'task/fixture-install'], { cwd: checkout });
+  await writeFile(join(checkout, 'installed.txt'), 'Actual base installation source'); await git(['add', '.'], { cwd: checkout }); await git(['commit', '-m', 'installer source'], { cwd: checkout }); const tip = await git(['rev-parse', 'HEAD'], { cwd: checkout });
+  await git(['checkout', '--quiet', '--detach', preparedMain], { cwd: checkout });
+  await git(['merge', '--no-ff', tip, '-m', 'actual reviewed installation merge'], { cwd: checkout });
+  const integratedMain = await git(['rev-parse', 'HEAD'], { cwd: checkout });
+  assert.deepEqual((await git(['rev-list', '--parents', '-n', '1', integratedMain], { cwd: checkout })).split(' ').slice(1), [preparedMain, tip]);
   await git(['init', '--bare', '--quiet', remote]); const store = new GitStateStore({ repo, remote });
-  await store.mutate(state => appendEvent(state, 'installation_prepared', { installer: 234, headSha: tip, mainSha: preparedMain }));
+  const currentPolicy = await loadPolicy(checkout); const at = Date.now();
+  const reviewedSnapshot = snapshot(234, { repo, headSha: tip, mainSha: preparedMain, headTime: at - 1000, files: ['installed.txt'] });
+  const developerReview = review(reviewedSnapshot, currentPolicy, at);
+  await store.mutate(state => { appendEvent(state, 'installation_prepared', { installer: 234, headSha: tip, mainSha: preparedMain }); updateTask(state, 234, { developerReview, reviewSnapshot: reviewedSnapshot }); });
   const { branchProtectionPayload } = await import('../tools/cnb-api.mjs');
   const rules = [
     { ...branchProtectionPayload({ requireReview: false }), id: 'main', allow_master_manual_merge: false },
     { ...branchProtectionPayload({ rule: 'automation/delivery-state', requireReview: false }), id: 'state', allow_master_pushes: true, required_status_checks: false },
-    { ...branchProtectionPayload({ rule: 'delivery/candidate/**', requireReview: false }), id: 'candidate', required_status_checks: false },
+    { ...branchProtectionPayload({ rule: 'delivery/candidate/**', requireReview: false }), id: 'candidate', required_status_checks: false, allow_master_manual_merge: false },
   ];
   const installer = { number: '234', is_merged: true, author: { username: 'developer' }, head: { sha: tip } };
-  const admissionPull = { ...snapshot().pull, base: { ref: 'main', sha: tip } };
+  const admissionPull = { ...snapshot().pull, base: { ref: 'main', sha: integratedMain } };
   const fixture = {
-    tip, ci, included, rules, installer, admissionPull,
-    statuses: { sha: testedSha, statuses: ['static-gate', 'delivery-bootstrap-review'].map(name => ({ context: `cnb/pull_request/pipeline-1(${name})`, state: 'success' })) },
-    tested: { sha: testedSha, parents: [{ sha: preparedMain }, { sha: tip }] },
-    reviews: [{ id: 'genuine-fixture-review', state: 'approved', author: { username: 'CodeBuddy', is_npc: true }, created_at: new Date().toISOString() }],
-    compare: { base_commit: { sha: tip }, head_commit: { sha: head }, merge_base_commit: { sha: tip }, files: [{ path: 'scripts/ci/contract.mjs' }] },
+    tip: integratedMain, ci, included, rules, installer, admissionPull,
+    statuses: { sha: integratedMain, statuses: ['static-gate', 'delivery-bootstrap-checks'].map(name => ({ context: `cnb/pull_request/pipeline-1(${name})`, state: 'success' })) },
+    tested: { sha: integratedMain, parents: [{ sha: preparedMain }, { sha: tip }] },
+    compare: { base_commit: { sha: integratedMain }, head_commit: { sha: head }, merge_base_commit: { sha: integratedMain }, files: [{ path: 'scripts/ci/contract.mjs' }] },
   };
-  const prelude = `const f=${JSON.stringify(fixture)};globalThis.fetch=async input=>{const u=new URL(String(input));const p=u.pathname;let v;if(p.endsWith('/git/branches/main'))v={commit:{sha:f.tip}};else if(p.endsWith('/pulls/234'))v=f.installer;else if(p.endsWith('/pulls/1'))v=f.admissionPull;else if(p.endsWith('/commit-statuses'))v=f.statuses;else if(p.includes('/settings/branch-protections'))v=f.rules;else if(p.endsWith('/reviews'))v=f.reviews;else if(p.includes('/git/compare/'))v=f.compare;else if(p.includes('/git/raw/'))v=p.endsWith('/.cnb.yml')?f.ci:f.included;else if(p.endsWith('/git/commits/${testedSha}'))v=f.tested;else if(p.includes('/git/commits/'))v={commit:{committer:{date:'2026-01-01T00:00:00Z'}}};else throw new Error('Unexpected CLI API fixture '+p);return new Response(JSON.stringify(v),{status:200});};`;
+  const prelude = `const f=${JSON.stringify(fixture)};globalThis.fetch=async input=>{const u=new URL(String(input));const p=u.pathname;let v;if(p.endsWith('/git/branches/main'))v={commit:{sha:f.tip}};else if(p.endsWith('/pulls/234'))v=f.installer;else if(p.endsWith('/pulls/1'))v=f.admissionPull;else if(p.endsWith('/commit-statuses'))v=f.statuses;else if(p.includes('/settings/branch-protections'))v=f.rules;else if(p.includes('/git/compare/'))v=f.compare;else if(p.includes('/git/raw/'))v=p.endsWith('/.cnb.yml')?f.ci:f.included;else if(p.endsWith('/git/commits/${integratedMain}'))v=f.tested;else if(p.includes('/git/commits/'))v={commit:{committer:{date:'2026-01-01T00:00:00Z'}}};else throw new Error('Unexpected CLI API fixture '+p);return new Response(JSON.stringify(v),{status:200});};`;
   const configuration = join(root, 'gitconfig');
   await writeFile(configuration, `[url "${remote}"]\n\tinsteadOf = https://cnb.cool/${repo}.git\n`);
   const cli = fileURLToPath(new URL('./queue-runner.mjs', import.meta.url));
   const run = (command, number, extra = {}) => spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(prelude)}`, cli, command, '--repo', repo, '--root', checkout, '--pr', String(number)], {
     cwd: checkout, env: { ...process.env, CNB_TOKEN: randomUUID(), GIT_CONFIG_GLOBAL: configuration, GIT_CONFIG_NOSYSTEM: '1', ...extra }, encoding: 'utf8', timeout: 30000,
   });
-  const activated = run('activate', 234); assert.equal(activated.status, 0, activated.stderr); assert.equal(JSON.parse(activated.stdout).mainSha, tip);
-  assert.ok((await store.read()).events.some(event => event.kind === 'activated' && event.data.installer === 234 && event.data.mainSha === tip));
+  const activated = run('activate', 234); assert.equal(activated.status, 0, activated.stderr); assert.equal(JSON.parse(activated.stdout).mainSha, integratedMain);
+  assert.ok((await store.read()).events.some(event => event.kind === 'activated' && event.data.installer === 234 && event.data.mainSha === integratedMain && event.data.platformAI === false));
   assert.equal((await store.read()).events.some(event => event.kind === 'source_admitted'), false);
   const env = { CNB_BUILD_ID: 'fixture-build', CNB_EVENT: 'api_trigger_delivery_admit', DELIVERY_NATIVE_LOCK: 'workloom-delivery-admission' };
   const rejected = run('admit', 0, env); assert.equal(rejected.status, 1); assert.match(rejected.stderr, /requires --pr/);
   const admitted = run('admit', 1, env); assert.equal(admitted.status, 0, admitted.stderr); assert.equal(JSON.parse(admitted.stdout).admitted, true);
-  const actual = await store.read(); assert.deepEqual(admissionErrors(actual, { number: 1, headSha: head, mainSha: tip, files: ['scripts/ci/contract.mjs'] }), []);
+  const actual = await store.read(); assert.deepEqual(admissionErrors(actual, { number: 1, headSha: head, mainSha: integratedMain, files: ['scripts/ci/contract.mjs'] }), []);
   assert.equal(actual.leases.protocol.owner, null);
 });
 test('frozen release requires exact checkout and positive main ancestry, without updating its source', async () => {
@@ -661,7 +664,7 @@ test('actual branch alignment uses ordinary merge/push; semantic conflicts prese
 test('immutable candidate creation reuses exact protected refs/PRs and rejects source replacement', async () => {
   let created = false; let posts = 0; const s = snapshot(); const marker = `delivery-origin:1:${head}:${main}`;
   const platform = new Platform(repo, undefined, async (_repo, path, options) => {
-    if (path.includes('branch-protections')) return [{ id: 'candidate-rule', rule: 'delivery/candidate/**', allow_creation: true, allow_master_creation: true, allow_pushes: false, allow_master_pushes: false, allow_force_pushes: false, allow_master_force_pushes: false, allow_deletions: false, allow_master_deletions: false }];
+    if (path.includes('branch-protections')) return [{ id: 'candidate-rule', rule: 'delivery/candidate/**', allow_creation: true, allow_master_creation: true, allow_pushes: false, allow_master_pushes: false, allow_force_pushes: false, allow_master_force_pushes: false, allow_deletions: false, allow_master_deletions: false, allow_master_manual_merge: false }];
     if (path === '/-/git/branches' && options.method === 'POST') { posts++; if (created) throw new Error('already exists'); created = true; return {}; }
     if (path.includes('/git/branches/')) return { commit: { sha: head }, protected: true };
     if (path.includes('/pulls?')) return [];
@@ -670,7 +673,7 @@ test('immutable candidate creation reuses exact protected refs/PRs and rejects s
     throw new Error(`Unexpected ${path}`);
   });
   assert.equal((await platform.ensureCandidate(s)).number, 11); assert.equal((await platform.ensureCandidate(s)).headSha, head); assert.equal(posts, 2);
-  platform.request = async (_repo, path) => path.includes('branch-protections') ? [{ id: 'candidate-rule', rule: 'delivery/candidate/**', allow_creation: true, allow_master_creation: true, allow_pushes: false, allow_master_pushes: false, allow_force_pushes: false, allow_master_force_pushes: false, allow_deletions: false, allow_master_deletions: false }] : path === '/-/git/branches' ? Promise.reject(new Error('already exists')) : { commit: { sha: main }, protected: true };
+  platform.request = async (_repo, path) => path.includes('branch-protections') ? [{ id: 'candidate-rule', rule: 'delivery/candidate/**', allow_creation: true, allow_master_creation: true, allow_pushes: false, allow_master_pushes: false, allow_force_pushes: false, allow_master_force_pushes: false, allow_deletions: false, allow_master_deletions: false, allow_master_manual_merge: false }] : path === '/-/git/branches' ? Promise.reject(new Error('already exists')) : { commit: { sha: main }, protected: true };
   await assert.rejects(platform.ensureCandidate(s), /already exists/);
 });
 test('real CNB summary bodies do not erase actual PR handoff, age or explicit dependencies', async () => {
@@ -721,7 +724,7 @@ test('snapshot accepts label reordering but rejects actual label changes and unr
 });
 test('unknown merge acknowledgement pauses later integration; never repeats the write', async () => {
   const s = snapshot(11); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test';
-  const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate: candidateReceipt(s) }, now); const store = memoryStore(state); let writes = 0;
+  const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, developerReview: review(s), candidate: candidateReceipt(s) }, now); const store = memoryStore(state); let writes = 0;
   const platform = { repo, assertCandidateProtection: async () => {}, snapshot: async () => s, pull: async number => number === 1 ? snapshot().pull : s.pull, merge: async () => { writes++; throw new Error('network lost response'); }, error: e => e.message };
   await assert.rejects(mergeCandidate({ platform, store, policy, snapshot: s, dependencies: new Map([[1, { pending: [] }]]), now }), /lost/); assert.equal(writes, 1); assert.equal((await store.read()).tasks['1'].status, 'merging');
   const report = await reconcile({ platform, store, policy, now, services: { reconcileReleases: async () => [] } }); assert.equal(report.failed[0].stage, 'recover-merge'); assert.equal(writes, 1);
@@ -729,7 +732,7 @@ test('unknown merge acknowledgement pauses later integration; never repeats the 
 test('an explicit 409 with positive unmerged readback releases integration while unreadable or changed readbacks stay unknown', async () => {
   for (const mode of ['rejected', 'unreadable', 'changed']) {
     const s = snapshot(11, { files: ['scripts/ci/protocol-rules.mjs'] }); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test';
-    const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate: candidateReceipt(s) }, now);
+    const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, developerReview: review(s), candidate: candidateReceipt(s) }, now);
     const store = memoryStore(state); let writes = 0;
     const platform = { repo, assertCandidateProtection: async () => {}, snapshot: async () => s, error: error => error.message,
       pull: async number => { if (number === 1) return snapshot().pull; if (mode === 'unreadable') throw new Error('read denied'); return { ...s.pull, is_merged: false, head: { ...s.pull.head, sha: mode === 'changed' ? main : head } }; },
@@ -744,7 +747,7 @@ test('an explicit 409 with positive unmerged readback releases integration while
 test('sensitive integration always acquires a fenced lease, even when developers did not opt in', async () => {
   const s = snapshot(11, { files: ['scripts/ci/protocol-rules.mjs'] }); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test';
   const original = snapshot(1, { files: s.files }); const state = activate(emptyState(repo));
-  updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate: candidateReceipt(s) }, now);
+  updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, developerReview: review(s), candidate: candidateReceipt(s) }, now);
   const store = memoryStore(state); let writes = 0; let phase = 'open';
   const platform = { repo, error: e => e.message, assertCandidateProtection: async () => {}, snapshot: async () => s,
     pull: async number => number === 1 ? { ...original.pull, state: phase } : s.pull, list: async () => [], comment: async () => {},
@@ -760,7 +763,7 @@ test('sensitive integration always acquires a fenced lease, even when developers
 });
 test('red oldest PR and failed release do not stop a later healthy PR candidate', async () => {
   const state = activate(emptyState(repo)); const good = snapshot(2); const candidate = snapshot(22); candidate.pull.head.ref = 'delivery/candidate/22'; candidate.originNumber = 2;
-  updateTask(state, 22, { status: 'waiting_ci', review: review(candidate) }, now); const store = memoryStore(state); let candidateCreated = 0; let originalClosed = false;
+  updateTask(state, 2, { status: 'waiting_ci', headSha: head, mainSha: main, developerReview: review(good) }, now); const store = memoryStore(state); let candidateCreated = 0; let originalClosed = false;
   const platform = { repo, error: e => e.message, pulls: async () => [snapshot(1).pull, good.pull], snapshot: async number => number === 1 ? snapshot(1, { checkErrors: ['Required check static-gate failed'] }) : number === 22 ? candidate : good,
     pull: async number => number === 2 ? { ...good.pull, state: originalClosed ? 'closed' : 'open' } : number === 22 ? candidate.pull : snapshot(number).pull,
     ensureCandidate: async () => { candidateCreated++; return candidateReceipt(candidate); }, assertCandidateProtection: async () => {}, list: async () => [], comment: async () => {},
@@ -797,7 +800,7 @@ test('a reused task id or a ready PR body cannot release a developer lease or ad
 test('candidate body or origin mutation is rejected before sending a platform merge', async () => {
   for (const mode of ['missing-origin', 'changed-body']) {
     const s = snapshot(11); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test'; const candidate = candidateReceipt(s);
-    const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate }, now);
+    const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, developerReview: review(s), candidate }, now);
     const latest = { ...s, pull: { ...s.pull, body: mode === 'missing-origin' ? '' : s.pull.body + '\nchanged intent' } }; let writes = 0;
     await assert.rejects(mergeCandidate({ platform: { repo, assertCandidateProtection: async () => {}, snapshot: async () => latest,
       error: error => error.message, merge: async () => { writes++; } }, store: memoryStore(state), policy, snapshot: s, dependencies: new Map(), now }), /origin\/body/);
@@ -810,18 +813,12 @@ test('runner deadline uses elapsed time independently of injected lease/calendar
   const report = await reconcile({ platform, store: memoryStore(), policy, now: 1, dryRun: true, elapsedClock: () => clocks.shift(), deadlineMs: 240000 });
   assert.deepEqual(scanned, [1]); assert.equal(report.waiting.find(item => item.number === 2).reason, 'Bounded runner time; next reconcile continues');
 });
-test('new candidates reserve actual AI parent capacity; failed, stale and completed reviews do not block unrelated PRs', async () => {
-  const state = emptyState(repo); updateTask(state, 1, { status: 'waiting_ci', headSha: head, candidate: { number: 11, headSha: head, mainSha: main, at: now } }, now); const store = memoryStore(state);
-  let status = 'pending'; const platform = { call: async () => ({ status }) };
-  assert.equal(await reviewSlotBusy(platform, store, 2, main, now), true); assert.equal(await reviewSlotBusy(platform, store, 1, main, now), false);
-  await store.mutate(current => updateTask(current, 11, { status: 'waiting_review', reviewBuild: { sn: 'real-build', at: now } }, now));
-  assert.equal(await reviewSlotBusy(platform, store, 2, main, now), true);
-  status = 'error'; assert.equal(await reviewSlotBusy(platform, store, 2, main, now), false);
-  status = 'unknown'; await assert.rejects(reviewSlotBusy(platform, store, 2, main, now), /unreadable/);
-  assert.equal(await reviewSlotBusy(platform, store, 2, main, now + 45 * 60000), false);
-  status = 'pending'; await store.mutate(current => updateTask(current, 11, { review: review(snapshot(11)) }, now));
-  assert.equal(await reviewSlotBusy(platform, store, 2, main, now), false);
+test('legacy review capacity never reads paid build history and cannot block unrelated reviewed source', async () => {
+  let calls = 0;
+  const platform = { call: async () => { calls++; throw new Error('No build history allowed'); } };
+  assert.equal(await reviewSlotBusy(platform, memoryStore(), 2, main, now), false); assert.equal(calls, 0);
 });
+
 test('release enqueue is idempotent by frozen source/kind/version and keeps integration separate', () => {
   const state = emptyState(repo); const task = { number: 1, merge: { sha: mergedSha }, intent: { releases: [{ kind: 'ui', version: 'v1.2.3' }] } };
   enqueueReleases(state, repo, task, now); enqueueReleases(state, repo, task, now); assert.equal(Object.keys(state.releases).length, 1); assert.equal(Object.values(state.releases)[0].version, '1.2.3');
@@ -916,4 +913,45 @@ test('release verifies actual tag source, manifest identity and every downloaded
   manifest.sourceSha = head; await assert.rejects(verifyRelease(platform, release, download), /manifest/); manifest.sourceSha = mergedSha;
   await assert.rejects(verifyRelease(platform, release, async () => ({ data: manifest, size: 6, sha512: hex })), /byte/);
   build.sha = head; await assert.rejects(verifyRelease(platform, release, download), /build source/);
+});
+
+test('private release download authenticates only the official first request and hashes the actual redirected bytes', async () => {
+  const token = randomUUID(); const bytes = Buffer.from('{"sourceSha":"actual-fixture"}'); const calls = [];
+  const request = async (url, options) => {
+    calls.push({ url, options }); assert.equal(options.redirect, 'manual');
+    if (calls.length === 1) {
+      assert.equal(url, `https://api.cnb.cool/${repo}/-/releases/download/v1.2.3/manifest.json`);
+      assert.equal(options.headers.Authorization, `Bearer ${token}`);
+      return new Response(null, { status: 302, headers: { location: 'https://download.example/temporary-signed-byte-url' } });
+    }
+    assert.equal(options.headers.Authorization, undefined); return new Response(bytes);
+  };
+  const result = await downloadReleaseBytes(repo, 'v1.2.3', 'manifest.json', { token, request, json: true });
+  assert.equal(result.size, bytes.length); assert.equal(result.sha512, createHash('sha512').update(bytes).digest('hex'));
+  assert.deepEqual(result.data, { sourceSha: 'actual-fixture' }); assert.equal(calls.length, 2);
+});
+
+test('private release permission, unsafe redirect, empty/oversized stream and malformed manifest remain explicit failures', async () => {
+  const token = randomUUID(); let calls = 0;
+  const download = options => downloadReleaseBytes(repo, 'v1.2.3', 'asset', { token, ...options });
+  for (const status of [401, 403, 404, 500]) await assert.rejects(download({ request: async () => { calls++; return new Response(token, { status }); } }), error => error.message.includes(`HTTP ${error.status ?? status}`) && !error.message.includes(token));
+  assert.equal(calls, 4);
+  const credentialUrl = new URL('https://download.example/file'); credentialUrl.username = 'fixture'; credentialUrl.password = randomUUID();
+  for (const location of ['http://download.example/file', credentialUrl.href, 'https://download.example/file#fragment'])
+    await assert.rejects(download({ request: async () => new Response(null, { status: 302, headers: { location } }) }), /unsafe/);
+  await assert.rejects(download({ request: async () => new Response(null, { status: 302 }) }), /lacks a location/);
+  await assert.rejects(download({ request: async () => new Response('') }), /empty/);
+  await assert.rejects(download({ maximum: 2, request: async () => new Response('123') }), /exceeds limit/);
+  await assert.rejects(download({ json: true, request: async () => new Response('{invalid') }), /JSON is invalid/);
+  await assert.rejects(download({ request: async () => { throw new Error(token); } }), error => /transport failed/.test(error.message) && !error.message.includes(token));
+  await assert.rejects(download({ request: async () => new Response(new ReadableStream({ start(controller) { controller.error(new Error(token)); } })) }), error => /stream failed/.test(error.message) && !error.message.includes(token));
+});
+
+test('a release redirect loop is bounded and every later same-origin or foreign request omits the token', async () => {
+  const token = randomUUID(); let calls = 0;
+  await assert.rejects(downloadReleaseBytes(repo, 'v1.2.3', 'asset', { token, request: async (url, options) => {
+    calls++; assert.equal(options.headers.Authorization, calls === 1 ? `Bearer ${token}` : undefined);
+    return new Response(null, { status: 302, headers: { location: calls % 2 ? '/same-origin-redirect' : 'https://download.example/again' } });
+  } }), /redirect limit/);
+  assert.equal(calls, 6);
 });
