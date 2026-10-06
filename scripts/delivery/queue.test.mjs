@@ -601,12 +601,12 @@ test('actual activate and admit CLI routes write and read back the real Git ledg
   const installer = { number: '234', is_merged: true, author: { username: 'developer' }, head: { sha: tip } };
   const admissionPull = { ...snapshot().pull, base: { ref: 'main', sha: integratedMain } };
   const fixture = {
-    tip: integratedMain, ci, included, rules, installer, admissionPull,
+    tip: integratedMain, remote, ci, included, rules, installer, admissionPull,
     statuses: { sha: integratedMain, statuses: ['static-gate', 'delivery-bootstrap-checks'].map(name => ({ context: `cnb/pull_request/pipeline-1(${name})`, state: 'success' })) },
     tested: { sha: integratedMain, parents: [{ sha: preparedMain }, { sha: tip }] },
     compare: { base_commit: { sha: integratedMain }, head_commit: { sha: head }, merge_base_commit: { sha: integratedMain }, files: [{ path: 'scripts/ci/contract.mjs' }] },
   };
-  const prelude = `const f=${JSON.stringify(fixture)};globalThis.fetch=async input=>{const u=new URL(String(input));const p=u.pathname;let v;if(p.endsWith('/git/branches/main'))v={commit:{sha:f.tip}};else if(p.endsWith('/pulls/234'))v=f.installer;else if(p.endsWith('/pulls/1'))v=f.admissionPull;else if(p.endsWith('/commit-statuses'))v=f.statuses;else if(p.includes('/settings/branch-protections'))v=f.rules;else if(p.includes('/git/compare/'))v=f.compare;else if(p.includes('/git/raw/'))v=p.endsWith('/.cnb.yml')?f.ci:f.included;else if(p.endsWith('/git/commits/${integratedMain}'))v=f.tested;else if(p.includes('/git/commits/'))v={commit:{committer:{date:'2026-01-01T00:00:00Z'}}};else throw new Error('Unexpected CLI API fixture '+p);return new Response(JSON.stringify(v),{status:200});};`;
+  const prelude = `import {execFileSync} from 'node:child_process';const f=${JSON.stringify(fixture)};globalThis.fetch=async input=>{const u=new URL(String(input));const p=u.pathname;let v;if(p.endsWith('/git/branches/automation%2Fdelivery-state'))v={commit:{sha:execFileSync('git',['--git-dir',f.remote,'rev-parse','refs/heads/automation/delivery-state'],{encoding:'utf8'}).trim()}};else if(p.includes('/git/raw/')&&p.endsWith('/state.json'))v=JSON.parse(execFileSync('git',['--git-dir',f.remote,'show',p.split('/git/raw/')[1].split('/')[0]+':state.json'],{encoding:'utf8'}));else if(p.endsWith('/git/branches/main'))v={commit:{sha:f.tip}};else if(p.endsWith('/pulls/234'))v=f.installer;else if(p.endsWith('/pulls/1'))v=f.admissionPull;else if(p.endsWith('/commit-statuses'))v=f.statuses;else if(p.includes('/settings/branch-protections'))v=f.rules;else if(p.includes('/git/compare/'))v=f.compare;else if(p.includes('/git/raw/'))v=p.endsWith('/.cnb.yml')?f.ci:f.included;else if(p.endsWith('/git/commits/${integratedMain}'))v=f.tested;else if(p.includes('/git/commits/'))v={commit:{committer:{date:'2026-01-01T00:00:00Z'}}};else throw new Error('Unexpected CLI API fixture '+p);return new Response(JSON.stringify(v),{status:200});};`;
   const configuration = join(root, 'gitconfig');
   await writeFile(configuration, `[url "${remote}"]\n\tinsteadOf = https://cnb.cool/${repo}.git\n`);
   const cli = fileURLToPath(new URL('./queue-runner.mjs', import.meta.url));
@@ -631,6 +631,111 @@ test('frozen release requires exact checkout and positive main ancestry, without
   await assert.rejects(verifyReleaseSource({ env: { ...env, RELEASE_EXPECTED_SHA: undefined, CNB_BRANCH_SHA: head }, run }), /identity required/);
   await assert.rejects(verifyReleaseSource({ env: { ...env, CNB_REPO_SLUG: undefined }, run }), /identity required/);
   assert.equal(calls.length, before); // An implicit manual main/tag identity never reaches Git or publishing.
+});
+
+test('official ledger reads accept decoded JSON and text at one immutable commit without Git pack requests', async () => {
+  const state = emptyState(repo); updateTask(state, 8, { status: 'waiting_ci' });
+  for (const raw of [state, JSON.stringify(state)]) {
+    const calls = [];
+    const store = new GitStateStore({ repo, token: 'fixture-token', request: async (slug, path, options) => {
+      calls.push({ slug, path, method: options.method ?? 'GET' });
+      return path.includes('/branches/') ? { commit: { sha: head } } : structuredClone(raw);
+    } });
+    store.withRepository = async () => { throw new Error('Read must not initialize or fetch Git'); };
+    assert.deepEqual(await store.read(), state);
+    assert.deepEqual(calls, [{ slug: repo, path: '/-/git/branches/automation%2Fdelivery-state', method: 'GET' },
+      { slug: repo, path: `/-/git/raw/${head}/state.json`, method: 'GET' }]);
+  }
+});
+test('absent control branch is empty only after a positive readable repository proof', async () => {
+  const calls = [];
+  const store = new GitStateStore({ repo, token: 'fixture-token', request: async (_repo, path) => {
+    calls.push(path);
+    if (path.endsWith('/main')) return { commit: { sha: main } };
+    throw Object.assign(new Error('branch absent'), { status: 404 });
+  } });
+  assert.deepEqual(await store.read(), emptyState(repo));
+  assert.deepEqual(calls, ['/-/git/branches/automation%2Fdelivery-state', '/-/git/branches/main']);
+});
+test('ledger API permission and transport failures cannot fall back to an empty branch or Git reads', async () => {
+  for (const status of [401, 403, 429, 500, undefined]) {
+    let calls = 0;
+    const store = new GitStateStore({ repo, token: 'fixture-token', request: async () => {
+      calls++; throw Object.assign(new Error('unreadable'), { status });
+    } });
+    store.withRepository = async () => { throw new Error('Unexpected Git fallback'); };
+    await assert.rejects(store.read(), /unreadable/); assert.equal(calls, 1);
+  }
+});
+test('missing repository and unreadable main cannot justify a missing ledger', async () => {
+  for (const mainResult of [null, { commit: { sha: 'bad' } }, new Error('hidden repository')]) {
+    const store = new GitStateStore({ repo, token: 'fixture-token', request: async (_repo, path) => {
+      if (!path.endsWith('/main')) throw Object.assign(new Error('absent'), { status: 404 });
+      if (mainResult instanceof Error) throw mainResult;
+      return mainResult;
+    } });
+    await assert.rejects(store.read(), /readable repository proof|hidden repository/);
+  }
+});
+test('ledger branch identities without a full immutable SHA are rejected before reading content', async () => {
+  for (const value of [null, {}, { commit: { sha: 'main' } }, { commit: { sha: 'a'.repeat(12) } }]) {
+    let calls = 0;
+    const store = new GitStateStore({ repo, token: 'fixture-token', request: async () => { calls++; return value; } });
+    await assert.rejects(store.read(), /exact readable Git commit/); assert.equal(calls, 1);
+  }
+});
+test('known ledger content cannot disappear, cross repositories or corrupt the append-only digest chain', async () => {
+  const state = emptyState(repo); updateTask(state, 1, { status: 'waiting_ci' });
+  const foreign = { ...state, repo: 'other/project' };
+  const corrupt = structuredClone(state); corrupt.events[0].data.number = 77;
+  for (const raw of [null, '{broken', foreign, corrupt, Object.assign(new Error('content absent'), { status: 404 })]) {
+    const store = new GitStateStore({ repo, token: 'fixture-token', request: async (_repo, path) => {
+      if (path.includes('/branches/')) return { commit: { sha: head } };
+      if (raw instanceof Error) throw raw;
+      return raw;
+    } });
+    await assert.rejects(store.read());
+  }
+});
+test('explicit Git read throttling uses bounded backoff and can resume the exact read', async () => {
+  const delays = []; let calls = 0;
+  const store = new GitStateStore({ repo, sleep: async ms => delays.push(ms) });
+  const result = await store.readGit(async args => {
+    calls++; assert.equal(args[0], 'fetch');
+    if (calls < 3) throw new Error('RPC failed; HTTP 429 curl 22 The requested URL returned error: 429');
+    return 'completed';
+  }, ['fetch', '--quiet']);
+  assert.equal(result, 'completed'); assert.equal(calls, 3); assert.deepEqual(delays, [2000, 8000]);
+});
+test('exhausted Git throttling stays an error while non-429 reads fail immediately', async () => {
+  const delays = []; let calls = 0;
+  const store = new GitStateStore({ repo, sleep: async ms => delays.push(ms) });
+  await assert.rejects(store.readGit(async () => { calls++; throw new Error('remote: Too Many Requests'); }, ['ls-remote']), /Too Many Requests/);
+  assert.equal(calls, 3); assert.deepEqual(delays, [2000, 8000]);
+  for (const message of ['HTTP 403', 'timed out', 'corrupt packfile']) {
+    calls = 0; delays.length = 0;
+    await assert.rejects(store.readGit(async () => { calls++; throw new Error(message); }, ['fetch']), error => error.message === message);
+    assert.equal(calls, 1); assert.deepEqual(delays, []);
+  }
+});
+test('state read retry cannot invoke push or another external writing command', async () => {
+  const store = new GitStateStore({ repo }); let calls = 0;
+  for (const command of ['push', 'merge', 'commit-tree']) {
+    await assert.rejects(store.readGit(async () => { calls++; }, [command]), /cannot execute a write/);
+  }
+  assert.equal(calls, 0);
+});
+test('a throttled state push with no positive transaction acknowledgement is never retried', async () => {
+  const store = new GitStateStore({ repo, sleep: async () => { throw new Error('Write cannot use read backoff'); } });
+  let pushes = 0; let mutations = 0;
+  store.load = async () => ({ state: emptyState(repo), parent: null });
+  store.withRepository = async operation => operation(async args => {
+    if (args[0] === 'push') { pushes++; throw new Error('HTTP 429 during unknown push'); }
+    if (['hash-object', 'mktree', 'commit-tree'].includes(args[0])) return head;
+    throw new Error('Unexpected mutation command');
+  });
+  await assert.rejects(store.mutate(state => { mutations++; updateTask(state, 1, { status: 'waiting_ci' }); }), /HTTP 429 during unknown push/);
+  assert.equal(pushes, 1); assert.equal(mutations, 1);
 });
 
 test('actual bare Git CAS preserves simultaneous updates and append-only history', async t => {
