@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 85,
+  "revision": 88,
   "tasks": {
     "85": {
       "number": 85,
@@ -1422,7 +1422,7 @@
     },
     "90": {
       "number": 90,
-      "status": "waiting_ci",
+      "status": "merging",
       "firstSeen": 1791312544858,
       "attempts": {},
       "admission": {
@@ -1600,6 +1600,114 @@
         "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
         "marker": "delivery-origin:90:1a15f134a3dc458389c416e47b86c5408949a3f4:07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
         "at": 1791313266222
+      },
+      "mergePhase": "prepared",
+      "mergeSnapshot": {
+        "repo": "workloom-ai/hyperreality-system",
+        "number": 91,
+        "pull": {
+          "number": 91,
+          "state": "open",
+          "title": "chore(ci): deliver #90 feat(base): 安装普通研发自动交付 [T-2026-1006-7744]",
+          "body": "Immutable delivery candidate for #90. Exact source 1a15f134a3dc458389c416e47b86c5408949a3f4; tested main 07c05a06cdd46007fbabcbcd19d83ff4cf125cc4.\n\n<!-- delivery-origin:90:1a15f134a3dc458389c416e47b86c5408949a3f4:07c05a06cdd46007fbabcbcd19d83ff4cf125cc4 -->\n\n<!-- workloom-delivery\n{\"ready\":true,\"depends_on\":[],\"releases\":[]}\n-->",
+          "author": {
+            "username": "OCI",
+            "nickname": "Cloud Native Build",
+            "is_npc": true
+          },
+          "reviewers": [],
+          "labels": [],
+          "base": {
+            "ref": "refs/heads/main",
+            "sha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "repo": {
+              "id": "2100397990318039040",
+              "name": "hyperreality-system",
+              "path": "workloom-ai/hyperreality-system",
+              "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+            }
+          },
+          "head": {
+            "ref": "refs/heads/delivery/candidate/pr-90-1688a7fdffc2278e362d601d69f7d1b1",
+            "sha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "repo": {
+              "id": "2100397990318039040",
+              "name": "hyperreality-system",
+              "path": "workloom-ai/hyperreality-system",
+              "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+            }
+          },
+          "blocked_on": "unblocked",
+          "merged_by": {
+            "is_npc": false
+          },
+          "mergeable_state": "mergeable",
+          "is_wip": false,
+          "is_merged": false,
+          "is_force_merged": false,
+          "statuses": {}
+        },
+        "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "files": [
+          ".workloom-delivery-install.json",
+          "scripts/delivery/git-state.mjs",
+          "scripts/delivery/queue.test.mjs"
+        ],
+        "intent": {
+          "taskId": "T-2026-1006-7744",
+          "ready": true,
+          "dependsOn": [],
+          "releases": []
+        },
+        "headTime": 1791312535000,
+        "mergeBase": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "checkErrors": [],
+        "checkSha": "88f6a03ebff4b69c1e1fcb9bd65ea9051672140c",
+        "hasFailedChecks": false,
+        "ciPolicyChanges": [
+          {
+            "id": "CI-001",
+            "file": "scripts/delivery/git-state.mjs",
+            "before": {
+              "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+              "path": "scripts/delivery/git-state.mjs",
+              "absent": false
+            },
+            "after": {
+              "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+              "path": "scripts/delivery/git-state.mjs",
+              "absent": false
+            },
+            "digest": "8790c9245893c31d69bc319da9063810612690ffc6db5f9f49def57205aef179"
+          },
+          {
+            "id": "CI-002",
+            "file": "scripts/delivery/queue.test.mjs",
+            "before": {
+              "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+              "path": "scripts/delivery/queue.test.mjs",
+              "absent": false
+            },
+            "after": {
+              "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+              "path": "scripts/delivery/queue.test.mjs",
+              "absent": false
+            },
+            "digest": "e75d07191c103a5c80c0c201bf5fe111f695a74f005728488111b8379c815ec7"
+          }
+        ],
+        "originNumber": 90,
+        "pendingDependencies": []
+      },
+      "integrationLease": {
+        "owner": "integration/pr-90",
+        "scopes": [
+          "protocol"
+        ],
+        "generation": {
+          "protocol": 8
+        }
       }
     },
     "91": {
@@ -1625,10 +1733,10 @@
   },
   "leases": {
     "protocol": {
-      "owner": null,
-      "generation": 7,
-      "acquiredAt": 1791313279269,
-      "expiresAt": 1791313279269
+      "owner": "integration/pr-90",
+      "generation": 8,
+      "acquiredAt": 1791313984519,
+      "expiresAt": 1791314884519
     }
   },
   "releases": {},
@@ -4861,6 +4969,153 @@
       },
       "previous": "f289535da3c78365b9f6110fac759ccb6f98ab1a958b3550145db6854c044de5",
       "digest": "84826e047c373c2193b8d88ad9a962564fab216cbccccfc61f7ead2909570534"
+    },
+    {
+      "sequence": 86,
+      "at": "2026-10-06T19:13:04.519Z",
+      "kind": "lease_acquire",
+      "data": {
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "integration/pr-90",
+        "generation": {
+          "protocol": 8
+        }
+      },
+      "previous": "84826e047c373c2193b8d88ad9a962564fab216cbccccfc61f7ead2909570534",
+      "digest": "261adc1ce2a0bd21b2ee81690b11a9ddc0f7fd281e2fd13d4243680952320a98"
+    },
+    {
+      "sequence": 87,
+      "at": "2026-10-06T19:13:04.519Z",
+      "kind": "task",
+      "data": {
+        "number": 90,
+        "patch": {
+          "status": "merging",
+          "mergePhase": "prepared",
+          "mergeSnapshot": {
+            "repo": "workloom-ai/hyperreality-system",
+            "number": 91,
+            "pull": {
+              "number": 91,
+              "state": "open",
+              "title": "chore(ci): deliver #90 feat(base): 安装普通研发自动交付 [T-2026-1006-7744]",
+              "body": "Immutable delivery candidate for #90. Exact source 1a15f134a3dc458389c416e47b86c5408949a3f4; tested main 07c05a06cdd46007fbabcbcd19d83ff4cf125cc4.\n\n<!-- delivery-origin:90:1a15f134a3dc458389c416e47b86c5408949a3f4:07c05a06cdd46007fbabcbcd19d83ff4cf125cc4 -->\n\n<!-- workloom-delivery\n{\"ready\":true,\"depends_on\":[],\"releases\":[]}\n-->",
+              "author": {
+                "username": "OCI",
+                "nickname": "Cloud Native Build",
+                "is_npc": true
+              },
+              "reviewers": [],
+              "labels": [],
+              "base": {
+                "ref": "refs/heads/main",
+                "sha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+                "repo": {
+                  "id": "2100397990318039040",
+                  "name": "hyperreality-system",
+                  "path": "workloom-ai/hyperreality-system",
+                  "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+                }
+              },
+              "head": {
+                "ref": "refs/heads/delivery/candidate/pr-90-1688a7fdffc2278e362d601d69f7d1b1",
+                "sha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+                "repo": {
+                  "id": "2100397990318039040",
+                  "name": "hyperreality-system",
+                  "path": "workloom-ai/hyperreality-system",
+                  "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+                }
+              },
+              "blocked_on": "unblocked",
+              "merged_by": {
+                "is_npc": false
+              },
+              "mergeable_state": "mergeable",
+              "is_wip": false,
+              "is_merged": false,
+              "is_force_merged": false,
+              "statuses": {}
+            },
+            "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "files": [
+              ".workloom-delivery-install.json",
+              "scripts/delivery/git-state.mjs",
+              "scripts/delivery/queue.test.mjs"
+            ],
+            "intent": {
+              "taskId": "T-2026-1006-7744",
+              "ready": true,
+              "dependsOn": [],
+              "releases": []
+            },
+            "headTime": 1791312535000,
+            "mergeBase": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "checkErrors": [],
+            "checkSha": "88f6a03ebff4b69c1e1fcb9bd65ea9051672140c",
+            "hasFailedChecks": false,
+            "ciPolicyChanges": [
+              {
+                "id": "CI-001",
+                "file": "scripts/delivery/git-state.mjs",
+                "before": {
+                  "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+                  "path": "scripts/delivery/git-state.mjs",
+                  "absent": false
+                },
+                "after": {
+                  "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+                  "path": "scripts/delivery/git-state.mjs",
+                  "absent": false
+                },
+                "digest": "8790c9245893c31d69bc319da9063810612690ffc6db5f9f49def57205aef179"
+              },
+              {
+                "id": "CI-002",
+                "file": "scripts/delivery/queue.test.mjs",
+                "before": {
+                  "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+                  "path": "scripts/delivery/queue.test.mjs",
+                  "absent": false
+                },
+                "after": {
+                  "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+                  "path": "scripts/delivery/queue.test.mjs",
+                  "absent": false
+                },
+                "digest": "e75d07191c103a5c80c0c201bf5fe111f695a74f005728488111b8379c815ec7"
+              }
+            ],
+            "originNumber": 90,
+            "pendingDependencies": []
+          },
+          "integrationLease": {
+            "owner": "integration/pr-90",
+            "scopes": [
+              "protocol"
+            ],
+            "generation": {
+              "protocol": 8
+            }
+          }
+        }
+      },
+      "previous": "261adc1ce2a0bd21b2ee81690b11a9ddc0f7fd281e2fd13d4243680952320a98",
+      "digest": "3635fe0acfc7760e06473560a87df01ee252f3149d8a16038c1b3db631e235a5"
+    },
+    {
+      "sequence": 88,
+      "at": "2026-10-06T19:13:11.321Z",
+      "kind": "transaction",
+      "data": {
+        "id": "95c353d1-c1ca-45e0-822c-fcb1cb7a7b2c"
+      },
+      "previous": "3635fe0acfc7760e06473560a87df01ee252f3149d8a16038c1b3db631e235a5",
+      "digest": "2af0fac6bc2fa1c5dfd565ea91f26b2a30c840651c71c4a8a6d51516ed05863e"
     }
   ]
 }
