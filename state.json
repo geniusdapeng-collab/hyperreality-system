@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 37,
+  "revision": 39,
   "tasks": {
     "87": {
       "number": 87,
@@ -3672,6 +3672,28 @@
       },
       "previous": "5b8e72929bf89be8912517ff2b4cc8a7a7b4a77eedde978613a1ce1758894ca2",
       "digest": "d9c191a883715af8971ade8a4f6aeeebe94649979f32fd525eecb3962f1eee9a"
+    },
+    {
+      "sequence": 38,
+      "at": "2026-10-06T18:04:02.126Z",
+      "kind": "installer_replacement_closed",
+      "data": {
+        "number": 87,
+        "replacement": 88,
+        "sha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4"
+      },
+      "previous": "d9c191a883715af8971ade8a4f6aeeebe94649979f32fd525eecb3962f1eee9a",
+      "digest": "c7375152baf3d7c1e46bcb1cdd44776e631cbc1f3e5ebbf819abfa67c4950fea"
+    },
+    {
+      "sequence": 39,
+      "at": "2026-10-06T18:04:01.386Z",
+      "kind": "transaction",
+      "data": {
+        "id": "installer-replacement-closed:87:88"
+      },
+      "previous": "c7375152baf3d7c1e46bcb1cdd44776e631cbc1f3e5ebbf819abfa67c4950fea",
+      "digest": "010fd2a6b73bb3b3f5794d2cb21621f96f7f71e17a72ef55bb9ca7a1633dcb54"
     }
   ]
 }
