@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 35,
+  "revision": 37,
   "tasks": {
     "87": {
       "number": 87,
@@ -3435,6 +3435,243 @@
       },
       "previous": "4cfe9ab60bbc1fe69d64bae5741951c91930f96476321bc044f5a0dc73a88bf6",
       "digest": "00084681f4817474eff2254632e60d7426ba89cb9c4b1f5707bbfe54ec8e4536"
+    },
+    {
+      "sequence": 36,
+      "at": "2026-10-06T18:03:57.981Z",
+      "kind": "activated",
+      "data": {
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "installer": 88,
+        "testedMainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+        "policyHash": "57cc9d9614c7021a5a9b9838b9e1030555ecf59ab63bf568055e198cd68c9687",
+        "developerReview": {
+          "schemaVersion": 1,
+          "provider": "codex",
+          "repo": "workloom-ai/hyperreality-system",
+          "number": 88,
+          "headSha": "e32d9cb5a9e9997ba33667d2b29517735fa7428a",
+          "mainSha": "b4b14829b9065b607743995fc79c6dd25d013e01",
+          "policyHash": "57cc9d9614c7021a5a9b9838b9e1030555ecf59ab63bf568055e198cd68c9687",
+          "reviewedFiles": [
+            ".cnb.yml",
+            ".workloom-delivery-install.json",
+            "AGENTS.md",
+            "docs/AUTOMATIC-RD-DELIVERY.md",
+            "docs/OPEN_SOURCE_COMPONENTS.md",
+            "scripts/ci/protocol-rules.mjs",
+            "scripts/ci/protocol-rules.test.mjs",
+            "scripts/ci/verify-lock-conflict.mjs",
+            "scripts/delivery/bootstrap-cnb.yml",
+            "scripts/delivery/cnb.yml",
+            "scripts/delivery/git-state.mjs",
+            "scripts/delivery/install-cnb.yml",
+            "scripts/delivery/install-config.mjs",
+            "scripts/delivery/install-manifest.mjs",
+            "scripts/delivery/model-gateway.mjs",
+            "scripts/delivery/queue-controller.mjs",
+            "scripts/delivery/queue-model.mjs",
+            "scripts/delivery/queue-platform.mjs",
+            "scripts/delivery/queue-policy.mjs",
+            "scripts/delivery/queue-release.mjs",
+            "scripts/delivery/queue-runner.mjs",
+            "scripts/delivery/queue-work.mjs",
+            "scripts/delivery/queue.test.mjs",
+            "scripts/delivery/release-source.mjs",
+            "scripts/delivery/review-plugin.mjs",
+            "scripts/delivery/runtime/package-lock.json",
+            "scripts/delivery/runtime/package.json",
+            "scripts/tools/cnb-api.mjs",
+            "scripts/tools/task.mjs"
+          ],
+          "filesHash": "3452e39e660b2f72a68daa9d8868d6a7baf00c768e2f50edbbb553131962cd41",
+          "dependsOn": [],
+          "ciPolicyChanges": [
+            {
+              "id": "CI-001",
+              "rationale": "Handoff requires a clean exact checkout and actual session review/test; source and body read back before durable storage. Bootstrap/activation verify complete manifest, prepared source/main and real product CI before changing human approval counters."
+            },
+            {
+              "id": "CI-002",
+              "rationale": "Use canonical current repository protocol: ordinary overlap is advisory, permanent open-PR occupation is removed, and exact Git/PR, current main and fenced lease admission remain enforced."
+            },
+            {
+              "id": "CI-003",
+              "rationale": "Append three deterministic repository-local includes while retaining all original product pipeline/stage/check signals. Tiger switches only the four legacy protocol invocations to their exact canonical root equivalents; Python, evidence and industry checks remain."
+            },
+            {
+              "id": "CI-004",
+              "rationale": "Verify schema 2 and the complete exact tracked runtime closure, upstream provenance, regular Git objects, checkout/digest identity and target adapters. Missing, altered, foreign or symlink assets fail."
+            },
+            {
+              "id": "CI-005",
+              "rationale": "Keep integration and frozen publication independent. Require exact source/build/event/tag/manifest/digests; authenticate only the initial official private download request, bound redirect/stream failures and omit token on later requests."
+            },
+            {
+              "id": "CI-006",
+              "rationale": "Historical pure receipt readers remain, but CLI and runReview reject before SDK, publisher, subprocess, network or model work. No paid platform approval is created."
+            },
+            {
+              "id": "CI-007",
+              "rationale": "Keep actual task IDs and scoped task contracts. Existing task card creation/validation and errors remain; ready handoff cannot manufacture a lease or a platform approval."
+            },
+            {
+              "id": "CI-008",
+              "rationale": "Retain normal source/main alignment with explicit conflicts. Legacy review preparation/publication and NPC repair dispatch fail before IO; repair diagnostics return to the current Codex session."
+            },
+            {
+              "id": "CI-009",
+              "rationale": "Use current Codex provider with platformAI=false; preserve existing target product pipelines and business holds. Require implementation-change explanations and invalidate receipts on exact policy/source/main drift."
+            },
+            {
+              "id": "CI-010",
+              "rationale": "Parse local CI and append only missing delivery includes. Compare the remaining complete configuration hash to preserve existing target pipelines, selectors and permissions."
+            },
+            {
+              "id": "CI-011",
+              "rationale": "Bind repository, PR, source, main, complete compare files, labels, readiness and original CI in snapshots. Candidate creation/merge uses immutable protected source, unique recovery identity and exact original two-parent verification."
+            },
+            {
+              "id": "CI-012",
+              "rationale": "Normalize the bootstrap gate to delivery-bootstrap-checks and run only installation ledger/assets, syntax and existing Codex session verification. Exact onboarding branch selection and independent original product checks remain."
+            },
+            {
+              "id": "CI-013",
+              "rationale": "Require explicit frozen expected source and native repository identity before packaging/upload; current branch/main/tag alone cannot substitute for exact source proof."
+            },
+            {
+              "id": "CI-014",
+              "rationale": "Reject immediately before any model, credential, filesystem, network or SDK operation because the owner revoked platform AI."
+            },
+            {
+              "id": "CI-015",
+              "rationale": "Use the exact reviewed canonical parser dependency/integrity lock; installation ignores package scripts and does not request a model service."
+            },
+            {
+              "id": "CI-016",
+              "rationale": "Validate actual Codex exact repo/PR/head/main/policy/files/tests/timestamps/dependencies and CI IDs. Missing, stale, tampered or partial review, live lease, unresolved dependency and unknown write remain blockers for that task."
+            },
+            {
+              "id": "CI-017",
+              "rationale": "Keep repository/source/main/path and required task contracts. Installed sensitive changes require accurate source admission and live lease checks; old open-PR order no longer occupies a module forever."
+            },
+            {
+              "id": "CI-018",
+              "rationale": "Actual post-commit tests cover exact review drift/partial receipts, leases/CAS/lost acknowledgements, candidates/permissions/dependencies, red-oldest isolation, frozen releases/private redirects and disabled model/NPC IO. Explicitly retain one non-applicable shared UI lane skip per target."
+            },
+            {
+              "id": "CI-019",
+              "rationale": "Persist append-only events and exact tasks on the protected state branch via normal fast-forward CAS. Recover lost push acknowledgement by transaction ID; do not force or blindly repeat external actions."
+            },
+            {
+              "id": "CI-020",
+              "rationale": "Repository-local native main scheduling performs deterministic admission/session record/reconcile/release operations only. Legacy base stage names contain syntax checks and no model image or calls; original locks and five-minute recovery remain."
+            },
+            {
+              "id": "CI-021",
+              "rationale": "Run the real retained canonical parsing/decision/negative cases; per-target post-commit regression confirms the installed copy executes with current protocol semantics."
+            },
+            {
+              "id": "CI-022",
+              "rationale": "Retain official repository-bound API/Git authentication, read retry and zero write retries. Runtime credentials remain process-only and redacted; no model service is called."
+            },
+            {
+              "id": "CI-023",
+              "rationale": "Select healthy reviewed sources independently of older failures; use immutable candidates, all original CI, real dependencies, fenced sensitive integration lease and exact ordinary merge receipts. No paid review/recovery dispatcher or shared AI capacity remains."
+            },
+            {
+              "id": "CI-024",
+              "rationale": "Add deterministic installed queue/protocol regression as an independent required PR pipeline without weakening any original product gate or treating unrelated UI publication as tested."
+            },
+            {
+              "id": "CI-025",
+              "rationale": "Keep the previously verified parser locked at the exact existing runtime version. No SDK or paid model package is introduced; actual installed parser is tested in each owned target checkout."
+            }
+          ],
+          "ciPolicyChangesHash": "a6d622a8b933ad2710e924df8a4b74a2ef4e4cd7f6b621c59e92a332ff54c89e",
+          "tests": [
+            {
+              "command": "/Users/mac/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --test scripts/delivery/queue.test.mjs scripts/ci/protocol-rules.test.mjs",
+              "exitCode": 0,
+              "finishedAt": "2026-10-06T17:23:39.740Z",
+              "result": "lendar time and preserves the exact boundary (0.277667ms)\n✔ legacy review capacity never reads paid build history and cannot block unrelated reviewed source (0.064375ms)\n✔ release enqueue is idempotent by frozen source/kind/version and keeps integration separate (0.1365ms)\n✔ both UI and desktop dispatch pass the explicit frozen SHA to the whole build, independently of current branch SHA (0.507333ms)\n﹣ manual UI event and delivery dispatch use the same actual publishing job and native lock; the scheduler only launches and observes (3.495083ms) # This product has no shared UI publishing lane\n✔ release launch intent survives lost acknowledgement and forbids duplicate publication (0.401375ms)\n✔ release failures use the latest durable attempt count and park after two launches (0.18625ms)\n✔ lost release launch cannot adopt a different manual build with the same source/event (0.177166ms)\n✔ UI release verifies the real Platform API JSON decoding contract and rejects unreadable registration or different bytes (1.635542ms)\n✔ release verifies actual tag source, manifest identity and every downloaded digest (0.287042ms)\n✔ private release download authenticates only the official first request and hashes the actual redirected bytes (0.782125ms)\n✔ private release permission, unsafe redirect, empty/oversized stream and malformed manifest remain explicit failures (0.794375ms)\n✔ a release redirect loop is bounded and every later same-origin or foreign request omits the token (0.149167ms)\nℹ tests 105\nℹ suites 5\nℹ pass 104\nℹ fail 0\nℹ cancelled 0\nℹ skipped 1\nℹ todo 0\nℹ duration_ms 11154.380958\n"
+            }
+          ],
+          "reviewedAt": "2026-10-06T17:44:04.647Z",
+          "summary": "Current Codex reviewed the canonical source execution code and affected dependencies in this conversation. All 24 copied source assets were compared byte-for-byte (B evidence) to that reviewed source. Each target-specific CI/AGENTS/bootstrap diff and Tiger delegate was inspected; schema-2 manifest, exact upstream/target identities, entire changed file set, existing product CI preservation and repeat-install zero-change result were machine-verified. Only target YAML occurrence metadata changed in its offline open-source inventory; no package upgrade or industry/isolation change. Actual tests ran after this exact target commit: 104 passed, zero failed, one shared UI publishing lane case explicitly skipped because the product has no such lane. No unresolved blocker found. Current Codex review plus actual original native product CI authorize only normal first installation; paid platform AI/NPC/gateway and fabricated platform approvals remain disabled.",
+          "passed": true,
+          "id": "9a658cb54d6c715c890e9d9644517f934cb045b5a80e2a19ad41ee700665fb84"
+        },
+        "platformAI": false,
+        "packageProof": {
+          "upstreamRepo": "workloom-ai/workloom-im",
+          "upstreamSourceSha": "2d350b7ec969abb0749f8d8d60a2212b8872e3e0",
+          "installerSourceSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+          "packageHash": "eadd924affbe00f33296870464578fec1ed1abc715bf15a7c104c48676df8022",
+          "assetCount": 26
+        },
+        "mainProtectionBefore": {
+          "id": "b28b7af69320201d1cf206ebf28373980add1451",
+          "rule": "main",
+          "required_pull_request_reviews": false,
+          "required_master_approve": false,
+          "required_must_push_via_pull_request": true,
+          "required_status_checks": true,
+          "forbid_approve_pull_created_by_own_npc": true,
+          "allow_master_manual_merge": false,
+          "allow_pushes": false,
+          "allow_master_pushes": false,
+          "allow_force_pushes": false,
+          "allow_master_force_pushes": false,
+          "allow_deletions": false,
+          "allow_master_deletions": false
+        },
+        "mainProtection": {
+          "id": "b28b7af69320201d1cf206ebf28373980add1451",
+          "rule": "main",
+          "required_pull_request_reviews": false,
+          "required_master_approve": false,
+          "required_must_push_via_pull_request": true,
+          "required_status_checks": true,
+          "forbid_approve_pull_created_by_own_npc": true,
+          "allow_master_manual_merge": false,
+          "allow_pushes": false,
+          "allow_master_pushes": false,
+          "allow_force_pushes": false,
+          "allow_master_force_pushes": false,
+          "allow_deletions": false,
+          "allow_master_deletions": false
+        },
+        "candidateProtection": {
+          "id": "7da6a1224d5466ab2a9ffc0634a88f4c172aff13",
+          "rule": "delivery/candidate/**",
+          "required_pull_request_reviews": false,
+          "required_master_approve": false,
+          "required_must_push_via_pull_request": true,
+          "required_status_checks": false,
+          "forbid_approve_pull_created_by_own_npc": true,
+          "allow_master_manual_merge": false,
+          "allow_pushes": false,
+          "allow_master_pushes": false,
+          "allow_force_pushes": false,
+          "allow_master_force_pushes": false,
+          "allow_deletions": false,
+          "allow_master_deletions": false
+        },
+        "humanClickRequired": false
+      },
+      "previous": "00084681f4817474eff2254632e60d7426ba89cb9c4b1f5707bbfe54ec8e4536",
+      "digest": "5b8e72929bf89be8912517ff2b4cc8a7a7b4a77eedde978613a1ce1758894ca2"
+    },
+    {
+      "sequence": 37,
+      "at": "2026-10-06T18:03:57.285Z",
+      "kind": "transaction",
+      "data": {
+        "id": "0e08ee32-4655-47cf-b333-1eb17c32ade5"
+      },
+      "previous": "5b8e72929bf89be8912517ff2b4cc8a7a7b4a77eedde978613a1ce1758894ca2",
+      "digest": "d9c191a883715af8971ade8a4f6aeeebe94649979f32fd525eecb3962f1eee9a"
     }
   ]
 }
