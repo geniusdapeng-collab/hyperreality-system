@@ -1,0 +1,38 @@
+# First installation verifies its protected ledger and exact tracked installation assets.
+# The current Codex session reviews/tests before handoff. No platform model or approval is invoked.
+"**":
+  pull_request:
+    # Legacy identity preserves the existing base migration gate. This pipeline performs deterministic checks only.
+    - name: delivery-bootstrap-checks
+      docker:
+        image: node:24.19.0-bookworm
+      lock:
+        key: workloom-delivery-bootstrap-$CNB_PULL_REQUEST_IID
+        expires: 600
+        cancel-in-progress: true
+        wait: true
+        timeout: 60
+      stages:
+        - name: Bootstrap installer only
+          timeout: 60s
+          script: |
+            case "$CNB_PULL_REQUEST_BRANCH" in
+              task/T-2026-1005-1001|chore/protocol-onboarding-*) ;;
+              *) exit 78 ;;
+            esac
+        - name: Install locked delivery parser
+          timeout: 120s
+          script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
+        # Existing stage identities are retained only for the base migration; every command is deterministic.
+        - name: Verify exact installation source, ledger and assets
+          timeout: 180s
+          script: node scripts/delivery/queue-runner.mjs verify-bootstrap
+        - name: Validate tracked installation verifier
+          timeout: 60s
+          script: node --check scripts/delivery/install-manifest.mjs
+        - name: Validate disabled legacy platform entry
+          timeout: 60s
+          script: node --check scripts/delivery/review-plugin.mjs
+        - name: Verify session record when applicable
+          timeout: 180s
+          script: node scripts/delivery/queue-runner.mjs verify-review

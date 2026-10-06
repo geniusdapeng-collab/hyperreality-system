@@ -1,0 +1,7 @@
+{
+  "name": "workloom-delivery-parser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Isolated CI parser for mixed Node and Python fleet repositories",
+  "dependencies": { "yaml": "2.9.0" }
+}

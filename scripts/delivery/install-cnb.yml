@@ -1,0 +1,12 @@
+"**":
+  pull_request:
+    - name: delivery-regression
+      docker:
+        image: node:24.19.0-bookworm
+      stages:
+        - name: Install locked delivery parser
+          timeout: 120s
+          script: npm ci --prefix scripts/delivery/runtime --ignore-scripts --no-audit --no-fund
+        - name: Durable delivery, permissions, races and actual Git regression
+          timeout: 5m
+          script: node --test scripts/delivery/queue.test.mjs scripts/ci/protocol-rules.test.mjs
