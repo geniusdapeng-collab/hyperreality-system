@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 72,
+  "revision": 77,
   "tasks": {
     "85": {
       "number": 85,
@@ -1591,14 +1591,34 @@
         "marker": "delivery-origin:90:1a15f134a3dc458389c416e47b86c5408949a3f4:07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
         "at": 1791313266222
       }
+    },
+    "91": {
+      "number": 91,
+      "status": "developing",
+      "firstSeen": 1791313279269,
+      "attempts": {},
+      "admission": {
+        "number": 91,
+        "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "filesHash": "7d9d594424ecc8b2fa088ea1928230b39fbcfa4352d81ac7446e6b2eeafa5a9b",
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-91",
+        "generation": {
+          "protocol": 7
+        }
+      },
+      "updatedAt": 1791313279269
     }
   },
   "leases": {
     "protocol": {
       "owner": null,
-      "generation": 6,
-      "acquiredAt": 1791312546086,
-      "expiresAt": 1791312546086
+      "generation": 7,
+      "acquiredAt": 1791313279269,
+      "expiresAt": 1791313279269
     }
   },
   "releases": {},
@@ -4605,6 +4625,93 @@
       },
       "previous": "f71c6dec1eff6f4d8624a45499774532552b2c290a8ee6b9a1bd88388e60317a",
       "digest": "2772cfa32b3d1673cc69a1c0b3ca35b58b1d7c4f89ac887e389f2499c21021bb"
+    },
+    {
+      "sequence": 73,
+      "at": "2026-10-06T19:01:19.269Z",
+      "kind": "lease_acquire",
+      "data": {
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-91",
+        "generation": {
+          "protocol": 7
+        }
+      },
+      "previous": "2772cfa32b3d1673cc69a1c0b3ca35b58b1d7c4f89ac887e389f2499c21021bb",
+      "digest": "31a8b841418ac9a4d5e586ce52ee9f7f97ac96ffdfdaa9a5d529bf932ba7e588"
+    },
+    {
+      "sequence": 74,
+      "at": "2026-10-06T19:01:19.269Z",
+      "kind": "lease_release",
+      "data": {
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-91",
+        "generation": {
+          "protocol": 7
+        }
+      },
+      "previous": "31a8b841418ac9a4d5e586ce52ee9f7f97ac96ffdfdaa9a5d529bf932ba7e588",
+      "digest": "dd54a4844aebac8af492122c470143139e7464c8d6b7d975640be43bb16180f7"
+    },
+    {
+      "sequence": 75,
+      "at": "2026-10-06T19:01:19.269Z",
+      "kind": "source_admitted",
+      "data": {
+        "number": 91,
+        "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "filesHash": "7d9d594424ecc8b2fa088ea1928230b39fbcfa4352d81ac7446e6b2eeafa5a9b",
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "admission/pr-91",
+        "generation": {
+          "protocol": 7
+        }
+      },
+      "previous": "dd54a4844aebac8af492122c470143139e7464c8d6b7d975640be43bb16180f7",
+      "digest": "179c47721926f6223bda0b330b7b64fb0b6a9aeddab0bd0184c7fc968261b4de"
+    },
+    {
+      "sequence": 76,
+      "at": "2026-10-06T19:01:19.269Z",
+      "kind": "task",
+      "data": {
+        "number": 91,
+        "patch": {
+          "admission": {
+            "number": 91,
+            "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "filesHash": "7d9d594424ecc8b2fa088ea1928230b39fbcfa4352d81ac7446e6b2eeafa5a9b",
+            "scopes": [
+              "protocol"
+            ],
+            "owner": "admission/pr-91",
+            "generation": {
+              "protocol": 7
+            }
+          }
+        }
+      },
+      "previous": "179c47721926f6223bda0b330b7b64fb0b6a9aeddab0bd0184c7fc968261b4de",
+      "digest": "0206ff5d1b7fd281f3ffe34d91d5e585d12c91635498c3a20294e444737c3ece"
+    },
+    {
+      "sequence": 77,
+      "at": "2026-10-06T19:01:19.013Z",
+      "kind": "transaction",
+      "data": {
+        "id": "source-admit:91:1a15f134a3dc458389c416e47b86c5408949a3f4:07c05a06cdd46007fbabcbcd19d83ff4cf125cc4"
+      },
+      "previous": "0206ff5d1b7fd281f3ffe34d91d5e585d12c91635498c3a20294e444737c3ece",
+      "digest": "8eae39a622bf3c772840e5bcca7f5d9721b231f277e1bd258ddd8efcf998c06e"
     }
   ]
 }
