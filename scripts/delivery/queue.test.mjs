@@ -18,6 +18,7 @@ import { verifyReleaseSource } from './release-source.mjs';
 import { modelGateway } from './model-gateway.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { api, rawFile } from '../tools/cnb-api.mjs';
 const repo = 'workloom-ai/test'; const head = 'a'.repeat(40); const main = 'b'.repeat(40); const mergedSha = 'c'.repeat(40); const testedSha = 'd'.repeat(40); const now = 10_000_000;
 const policy = { ...BASE_POLICY, hash: 'policy-1', requiredNames: ['static-gate'] };
 const intent = { ready: true, dependsOn: [], releases: [], taskId: null };
@@ -27,9 +28,15 @@ test('genuine AI endpoint configuration has a clear closed failure for absent, m
 });
 function snapshot(number = 1, patch = {}) {
   return { number, headSha: head, mainSha: main, headTime: 0, mergeBase: main, files: ['apps/example.ts'], checkErrors: [], checkSha: testedSha, intent,
-    pull: { number, title: 'fix(base): useful change', body: '', state: 'open', is_wip: false, mergeable_state: 'mergeable', labels: [], head: { sha: head, ref: `task/test-${number}`, repo: { path: repo } }, base: { sha: main, ref: 'main' } }, ...patch };
+    pull: { number, title: 'fix(base): useful change', body: '', author: { username: 'developer' }, state: 'open', is_wip: false, mergeable_state: 'mergeable', labels: [], head: { sha: head, ref: `task/test-${number}`, repo: { path: repo } }, base: { sha: main, ref: 'main' } }, ...patch };
 }
-function review(s = snapshot()) { return { passed: true, headSha: s.headSha, mainSha: s.mainSha, policyHash: policy.hash, filesHash: hash([...s.files].sort()), dependsOn: [] }; }
+function platformApproval(s = snapshot()) { return { id: 'actual-fixture-approval', author: 'CodeBuddy', creator: s.pull.author.username, isNpc: true, createdAt: new Date(now).toISOString() }; }
+function review(s = snapshot()) { return { passed: true, headSha: s.headSha, mainSha: s.mainSha, policyHash: policy.hash, filesHash: hash([...s.files].sort()), dependsOn: [], platformReview: platformApproval(s) }; }
+function candidateReceipt(s, origin = s.originNumber) {
+  const marker = `delivery-origin:${origin}:${s.headSha}:${s.mainSha}`;
+  s.pull.body = `<!-- ${marker} -->`;
+  return { number: s.number, marker, headSha: s.headSha, mainSha: s.mainSha };
+}
 function memoryStore(initial = emptyState(repo)) {
   let value = structuredClone(initial);
   return { read: async () => structuredClone(value), mutate: async operation => { const next = structuredClone(value); const result = operation(next); validateState(next, repo); value = next; return { state: structuredClone(value), result }; } };
@@ -168,6 +175,35 @@ test('eligibility rejects draft/block/expired review/wrong main/unhanded head ev
   for (const patch of [{ pull: { ...s.pull, is_wip: true } }, { pull: { ...s.pull, labels: ['risk/block'] } }, { mainSha: head }, { intent: { ...intent, ready: false } }, { pendingDependencies: [2] }, { files: ['secrets/real'] }]) assert.ok(eligibility({ ...s, ...patch }, { review: review(s) }, policy, now).length);
   assert.ok(eligibility(s, { review: { ...review(s), policyHash: 'old' } }, policy, now).includes('No current complete AI review'));
 });
+test('merge eligibility requires a fresh independent CodeBuddy receipt for the current PR creator', () => {
+  const s = snapshot(); const good = review(s);
+  for (const platformReview of [undefined, { ...good.platformReview, isNpc: false }, { ...good.platformReview, creator: 'other' },
+    { ...good.platformReview, author: 'developer' }, { ...good.platformReview, createdAt: 'invalid' }, { ...good.platformReview, createdAt: new Date(-1).toISOString() }]) {
+    assert.ok(eligibility(s, { review: { ...good, platformReview } }, policy, now).includes('No current complete AI review'));
+  }
+  assert.deepEqual(eligibility(s, { review: good }, policy, now), []);
+});
+test('only read transport failures and retryable HTTP statuses retry; writes and permission failures remain single attempts', async t => {
+  const previous = globalThis.fetch; t.after(() => { globalThis.fetch = previous; });
+  let calls = 0;
+  globalThis.fetch = async () => { if (++calls === 1) throw new TypeError('network interrupted'); return Response.json({ actual: true }); };
+  assert.deepEqual(await api(repo, '/-/pulls/1', { token: 'fixture', baseDelayMs: 0 }), { actual: true }); assert.equal(calls, 2);
+  calls = 0; globalThis.fetch = async () => { calls++; throw new TypeError('lost write response'); };
+  await assert.rejects(api(repo, '/-/pulls', { method: 'POST', body: {}, token: 'fixture', baseDelayMs: 0 }), /lost write/); assert.equal(calls, 1);
+  calls = 0; globalThis.fetch = async () => { calls++; return new Response('denied', { status: 403 }); };
+  await assert.rejects(api(repo, '/-/pulls/1', { token: 'fixture', baseDelayMs: 0 }), { status: 403 }); assert.equal(calls, 1);
+  calls = 0; globalThis.fetch = async () => ++calls === 1 ? new Response('paced', { status: 429, headers: { 'retry-after': '0.001' } }) : Response.json({ recovered: true });
+  assert.deepEqual(await api(repo, '/-/pulls/1', { token: 'fixture', baseDelayMs: 0 }), { recovered: true }); assert.equal(calls, 2);
+});
+test('raw asset permission and transport failures stay errors and redact actual credentials; only 404 means absent', async t => {
+  const previous = globalThis.fetch; const credential = randomUUID();
+  t.after(() => { globalThis.fetch = previous; });
+  globalThis.fetch = async () => new Response('backend ' + credential, { status: 503 });
+  await assert.rejects(rawFile(repo, main, 'required.json', { token: credential }), error => error.status === 503 && !error.message.includes(credential));
+  globalThis.fetch = async () => { throw new TypeError('network ' + credential); };
+  await assert.rejects(rawFile(repo, main, 'required.json', { token: credential }), error => /network/.test(error.message) && !error.message.includes(credential));
+  globalThis.fetch = async () => new Response('', { status: 404 }); assert.equal(await rawFile(repo, main, 'absent.json', { token: credential }), null);
+});
 test('source CI preserves required identities; implementation changes require exact AI migration evidence', async () => {
   const YAML = await parser(); const baseline = { name: 'static-gate', stages: [{ name: 'compile', script: 'compile' }, { name: 'test', script: 'test' }] };
   const p = { requiredPipelines: [baseline] };
@@ -181,7 +217,7 @@ test('source CI preserves required identities; implementation changes require ex
   assert.throws(() => validateReview(output, s, policy.hash), /migration/);
   for (const ci_policy_changes of [[{ id: 'wrong', rationale: 'tested' }], [{ id: report.changes[0].id, rationale: '' }]]) assert.throws(() => validateReview({ ...output, ci_policy_changes }, s, policy.hash), /migration/);
   const receipt = validateReview({ ...output, ci_policy_changes: [{ id: report.changes[0].id, rationale: 'The replacement runs the same compile with updated tooling; compile regression remains required.' }] }, s, policy.hash);
-  assert.deepEqual(eligibility(s, { review: receipt }, policy, now), []);
+  assert.deepEqual(eligibility(s, { review: { ...receipt, platformReview: platformApproval(s) } }, policy, now), []);
   assert.ok(eligibility(s, { review: review(s) }, policy, now).includes('No exact AI CI migration receipt'));
 });
 test('unchanged YAML cannot hide edits to required check implementations and dependency policy', () => {
@@ -222,7 +258,7 @@ test('short AI migration identifiers are deterministic but retain complete diges
   assert.throws(() => readableCiChanges([...changes, changes[0]]), /duplicated/);
   const s = snapshot(1, { files: changes.map(change => change.file), ciPolicyChanges: readable });
   const output = { status: 'passed', issues: [], reviewed_files: s.files, head_sha: head, base_sha: main, policy_hash: policy.hash, depends_on: [], ci_policy_changes: readable.map(change => ({ id: change.id, rationale: 'Read exact old/new source; retained regression and rollback.' })) };
-  const receipt = validateReview(output, s, policy.hash); assert.deepEqual(eligibility(s, { review: receipt }, policy, now), []);
+  const receipt = { ...validateReview(output, s, policy.hash), platformReview: platformApproval(s) }; assert.deepEqual(eligibility(s, { review: receipt }, policy, now), []);
   assert.ok(eligibility({ ...s, ciPolicyChanges: [{ ...readable[0], digest: 'f'.repeat(64) }, readable[1]] }, { review: receipt }, policy, now).includes('No exact AI CI migration receipt'));
   assert.throws(() => validateReview({ ...output, ci_policy_changes: [{ id: 'CI-001', rationale: 'read' }, { id: 'CI-001', rationale: 'read' }] }, s, policy.hash), /migration/);
 });
@@ -522,6 +558,24 @@ test('state preparation initializes a protected ledger before merge without acti
   await assert.rejects(verifyPreparedInstallation({ platform, store: memoryStore(), root, installer, waitMs: 10000, elapsedClock: () => clock, sleep: async ms => { clock += ms; } }), /exact source/);
   rules[0].allow_master_force_pushes = true; await assert.rejects(ensureStateProtection(platform), /protection/);
   await assert.rejects(prepareInstallation({ platform, store, root, installer: { ...installer, head: { sha: head } } }), /checkout/);
+  await writeFile(join(root, '.workloom-delivery-install.json'), JSON.stringify({ repo: 'foreign/isolated-copy' }));
+  await assert.rejects(prepareInstallation({ platform, store, root, installer }), /another repository/); assert.equal(writes, 1);
+});
+test('actual handoff CLI rejects source drift and draft state, records the exact source and never releases a task-id lease', async t => {
+  const root = await temporary(t, 'delivery-handoff-cli-'); const remote = join(root, 'remote.git'); await git(['init', '--bare', '--quiet', remote]);
+  const store = new GitStateStore({ repo, remote }); const taskId = 'T-2026-1006-1003';
+  await store.mutate(state => leaseOperation(state, { action: 'acquire', owner: taskId, scopes: ['protocol'] }));
+  const configuration = join(root, 'gitconfig'); await writeFile(configuration, `[url "${remote}"]\n\tinsteadOf = https://cnb.cool/${repo}.git\n`);
+  const pull = { ...snapshot().pull, title: `fix(base): handoff [${taskId}]` };
+  const run = mode => {
+    const prelude = `let p=${JSON.stringify(pull)};let patched=false;globalThis.fetch=async(_url,o)=>{if(o.method==='PATCH'){p.body=JSON.parse(o.body).body;patched=true;return Response.json(p);}return Response.json({...p,head:{...p.head,sha:patched&&${JSON.stringify(mode)}==='drift'?${JSON.stringify(main)}:p.head.sha},is_wip:patched&&${JSON.stringify(mode)}==='draft'});};`;
+    return spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(prelude)}`, fileURLToPath(new URL('./queue-runner.mjs', import.meta.url)), 'handoff', '--repo', repo, '--pr', '1', '--head', head], {
+      env: { ...process.env, CNB_TOKEN: randomUUID(), GIT_CONFIG_GLOBAL: configuration, GIT_CONFIG_NOSYSTEM: '1' }, encoding: 'utf8', timeout: 30000,
+    });
+  };
+  for (const mode of ['drift', 'draft']) { const result = run(mode); assert.equal(result.status, 1, result.stdout); assert.match(result.stderr, /source\/state changed/); assert.equal((await store.read()).tasks['1'], undefined); }
+  const result = run('exact'); assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).headSha, head);
+  const state = await store.read(); assert.equal(state.tasks['1'].headSha, head); assert.equal(state.leases.protocol.owner, taskId);
 });
 test('actual activate and admit CLI routes write and read back the real Git ledger with exact API fixtures', async t => {
   const root = await temporary(t, 'delivery-cli-contract-'); const remote = join(root, 'remote.git'); const checkout = join(root, 'checkout');
@@ -619,6 +673,30 @@ test('immutable candidate creation reuses exact protected refs/PRs and rejects s
   platform.request = async (_repo, path) => path.includes('branch-protections') ? [{ id: 'candidate-rule', rule: 'delivery/candidate/**', allow_creation: true, allow_master_creation: true, allow_pushes: false, allow_master_pushes: false, allow_force_pushes: false, allow_master_force_pushes: false, allow_deletions: false, allow_master_deletions: false }] : path === '/-/git/branches' ? Promise.reject(new Error('already exists')) : { commit: { sha: main }, protected: true };
   await assert.rejects(platform.ensureCandidate(s), /already exists/);
 });
+test('real CNB summary bodies do not erase actual PR handoff, age or explicit dependencies', async () => {
+  const created = '2026-10-05T00:00:00Z';
+  const body = '<!-- workloom-delivery\n' + JSON.stringify({ ready: true, depends_on: [2], releases: [] }) + '\n-->';
+  const platform = new Platform(repo, undefined, async (_repo, path) => {
+    if (path.startsWith('/-/pulls?')) return [{ number: '1', body: '', created_at: created, head: { ref: 'task/one' } }];
+    if (path === '/-/pulls/1') return { ...snapshot().pull, body };
+    if (path === '/-/pulls/2') return { number: 2, is_merged: false };
+    throw new Error(`Unexpected ${path}`);
+  });
+  const pulls = await platform.pulls(); assert.equal(pulls[0].body, body); assert.equal(pulls[0].created_at, created);
+  assert.deepEqual((await dependencies(platform, pulls, emptyState(repo))).get(1).pending, [2]);
+  platform.request = async (_repo, path) => path.startsWith('/-/pulls?') ? [{ number: 1, body: '' }] : { number: 1, body: null };
+  await assert.rejects(platform.pulls(), /detail body is unreadable/);
+});
+test('PR summary hydration propagates read failures and refuses a detail for another identity', async () => {
+  const rows = [{ number: 1, body: '' }];
+  const platform = new Platform(repo, undefined, async (_repo, path) => {
+    if (path.startsWith('/-/pulls?')) return rows;
+    throw Object.assign(new Error('Actual detail permission denied'), { status: 403 });
+  });
+  await assert.rejects(platform.pulls(), /permission denied/);
+  platform.request = async (_repo, path) => path.startsWith('/-/pulls?') ? rows : { number: 2, body: '' };
+  await assert.rejects(platform.pulls(), /identity is invalid/);
+});
 test('positive merge readback requires actual is_merged and exact tested parent order', async () => {
   const platform = new Platform(repo); platform.pull = async () => ({ is_merged: true, head: { sha: head }, merged_by: { username: 'npc' } }); platform.commit = async () => ({ parents: [{ sha: main }, { sha: head }] });
   assert.equal((await platform.verifyMerge(snapshot(), { sha: mergedSha })).sha, mergedSha);
@@ -643,7 +721,7 @@ test('snapshot accepts label reordering but rejects actual label changes and unr
 });
 test('unknown merge acknowledgement pauses later integration; never repeats the write', async () => {
   const s = snapshot(11); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test';
-  const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s) }, now); const store = memoryStore(state); let writes = 0;
+  const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate: candidateReceipt(s) }, now); const store = memoryStore(state); let writes = 0;
   const platform = { repo, assertCandidateProtection: async () => {}, snapshot: async () => s, pull: async number => number === 1 ? snapshot().pull : s.pull, merge: async () => { writes++; throw new Error('network lost response'); }, error: e => e.message };
   await assert.rejects(mergeCandidate({ platform, store, policy, snapshot: s, dependencies: new Map([[1, { pending: [] }]]), now }), /lost/); assert.equal(writes, 1); assert.equal((await store.read()).tasks['1'].status, 'merging');
   const report = await reconcile({ platform, store, policy, now, services: { reconcileReleases: async () => [] } }); assert.equal(report.failed[0].stage, 'recover-merge'); assert.equal(writes, 1);
@@ -651,7 +729,7 @@ test('unknown merge acknowledgement pauses later integration; never repeats the 
 test('an explicit 409 with positive unmerged readback releases integration while unreadable or changed readbacks stay unknown', async () => {
   for (const mode of ['rejected', 'unreadable', 'changed']) {
     const s = snapshot(11, { files: ['scripts/ci/protocol-rules.mjs'] }); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test';
-    const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s) }, now);
+    const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate: candidateReceipt(s) }, now);
     const store = memoryStore(state); let writes = 0;
     const platform = { repo, assertCandidateProtection: async () => {}, snapshot: async () => s, error: error => error.message,
       pull: async number => { if (number === 1) return snapshot().pull; if (mode === 'unreadable') throw new Error('read denied'); return { ...s.pull, is_merged: false, head: { ...s.pull.head, sha: mode === 'changed' ? main : head } }; },
@@ -666,7 +744,7 @@ test('an explicit 409 with positive unmerged readback releases integration while
 test('sensitive integration always acquires a fenced lease, even when developers did not opt in', async () => {
   const s = snapshot(11, { files: ['scripts/ci/protocol-rules.mjs'] }); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test';
   const original = snapshot(1, { files: s.files }); const state = activate(emptyState(repo));
-  updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s) }, now);
+  updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate: candidateReceipt(s) }, now);
   const store = memoryStore(state); let writes = 0; let phase = 'open';
   const platform = { repo, error: e => e.message, assertCandidateProtection: async () => {}, snapshot: async () => s,
     pull: async number => number === 1 ? { ...original.pull, state: phase } : s.pull, list: async () => [], comment: async () => {},
@@ -685,7 +763,7 @@ test('red oldest PR and failed release do not stop a later healthy PR candidate'
   updateTask(state, 22, { status: 'waiting_ci', review: review(candidate) }, now); const store = memoryStore(state); let candidateCreated = 0; let originalClosed = false;
   const platform = { repo, error: e => e.message, pulls: async () => [snapshot(1).pull, good.pull], snapshot: async number => number === 1 ? snapshot(1, { checkErrors: ['Required check static-gate failed'] }) : number === 22 ? candidate : good,
     pull: async number => number === 2 ? { ...good.pull, state: originalClosed ? 'closed' : 'open' } : number === 22 ? candidate.pull : snapshot(number).pull,
-    ensureCandidate: async () => { candidateCreated++; return { number: 22 }; }, assertCandidateProtection: async () => {}, list: async () => [], comment: async () => {},
+    ensureCandidate: async () => { candidateCreated++; return candidateReceipt(candidate); }, assertCandidateProtection: async () => {}, list: async () => [], comment: async () => {},
     merge: async () => ({ sha: mergedSha }), verifyMerge: async () => ({ sha: mergedSha, sourceSha: head, mainSha: main }),
     call: async (_path, options) => { if (options?.method === 'PATCH') originalClosed = true; return {}; } };
   let releaseCalls = 0;
@@ -706,6 +784,25 @@ test('a lease acquired by another developer during snapshot reading blocks candi
   const report = await reconcile({ platform, store, policy, now });
   assert.equal(candidates, 0); assert.equal(report.waiting[0].reason, 'Active developer lease protocol');
   assert.equal((await store.read()).leases.protocol.owner, 'other');
+});
+test('a reused task id or a ready PR body cannot release a developer lease or admit a candidate', async () => {
+  const taskId = 'T-2026-1006-1003'; const state = activate(emptyState(repo));
+  leaseOperation(state, { action: 'acquire', owner: taskId, scopes: ['protocol'] }, now);
+  const store = memoryStore(state); const s = snapshot(2, { files: ['AGENTS.md'], intent: { ...intent, taskId } }); let candidates = 0;
+  const report = await reconcile({ platform: { repo, error: error => error.message, pulls: async () => [s.pull], snapshot: async () => s,
+    ensureCandidate: async () => { candidates++; }, list: async () => [] }, store, policy, now });
+  assert.equal(candidates, 0); assert.equal(report.waiting[0].reason, 'Active developer lease protocol');
+  assert.equal((await store.read()).leases.protocol.owner, taskId);
+});
+test('candidate body or origin mutation is rejected before sending a platform merge', async () => {
+  for (const mode of ['missing-origin', 'changed-body']) {
+    const s = snapshot(11); s.originNumber = 1; s.pull.head.ref = 'delivery/candidate/test'; const candidate = candidateReceipt(s);
+    const state = activate(emptyState(repo)); updateTask(state, 1, { status: 'waiting_ci', headSha: head, mainSha: main, originalBody: '', intent, review: review(s), candidate }, now);
+    const latest = { ...s, pull: { ...s.pull, body: mode === 'missing-origin' ? '' : s.pull.body + '\nchanged intent' } }; let writes = 0;
+    await assert.rejects(mergeCandidate({ platform: { repo, assertCandidateProtection: async () => {}, snapshot: async () => latest,
+      error: error => error.message, merge: async () => { writes++; } }, store: memoryStore(state), policy, snapshot: s, dependencies: new Map(), now }), /origin\/body/);
+    assert.equal(writes, 0);
+  }
 });
 test('runner deadline uses elapsed time independently of injected lease/calendar time and preserves the exact boundary', async () => {
   const clocks = [0, 240000, 240001]; const scanned = [];
@@ -760,6 +857,15 @@ test('release launch intent survives lost acknowledgement and forbids duplicate 
   const state = emptyState(repo); const task = { number: 1, merge: { sha: mergedSha }, intent: { releases: [{ kind: 'ui', version: '1.2.3' }] } }; enqueueReleases(state, repo, task, now); const store = memoryStore(state); let launches = 0;
   const platform = { repo, error: e => e.message, call: async (path, options) => { if (path.includes('/build/logs')) return { total: 0, data: [] }; if (options?.method === 'POST') { launches++; throw new Error('lost ack'); } throw new Error('unexpected call'); } };
   assert.equal((await reconcileReleases({ platform, store, now }))[0].status, 'unknown'); await reconcileReleases({ platform, store, now: now + 60000 }); assert.equal(launches, 1);
+});
+test('release failures use the latest durable attempt count and park after two launches', async () => {
+  const state = emptyState(repo); enqueueReleases(state, repo, { number: 1, merge: { sha: mergedSha }, intent: { releases: [{ kind: 'ui', version: '1.2.3' }] } }, now);
+  const item = Object.values(state.releases)[0]; Object.assign(item, { status: 'running', build: { sn: 'failed-second' }, launchedAt: now, attempts: 1 });
+  const store = memoryStore(state);
+  const platform = { repo, error: error => error.message, call: async () => {
+    await store.mutate(current => { current.releases[item.key].attempts = 2; }); return { status: 'error' };
+  } };
+  await reconcileReleases({ platform, store, now }); assert.equal((await store.read()).releases[item.key].status, 'parked');
 });
 test('lost release launch cannot adopt a different manual build with the same source/event', async () => {
   const state = emptyState(repo); enqueueReleases(state, repo, { number: 1, merge: { sha: mergedSha }, intent: { releases: [{ kind: 'ui', version: '1.2.3' }] } }, now);

@@ -131,6 +131,10 @@ export async function mergeCandidate({ platform, store, policy, snapshot, depend
     }
     const reasons = eligibility(latest, state.tasks[String(number)], policy, now);
     if (reasons.length) throw new Error(reasons.join('; '));
+    const candidate = state.tasks[String(number)].candidate;
+    const expectedMarker = `delivery-origin:${number}:${snapshot.headSha}:${snapshot.mainSha}`;
+    if (!candidate || candidate.number !== snapshot.number || candidate.marker !== expectedMarker ||
+      !String(latest.pull.body).includes(`<!-- ${expectedMarker} -->`) || latest.pull.body !== snapshot.pull.body) throw new Error('Immutable candidate origin/body changed before merge');
     const original = await platform.pull(number);
     if (original.state !== 'open' || original.is_wip || original.head?.sha !== snapshot.headSha || original.body !== state.tasks[String(number)].originalBody) throw new Error('Developer changed source/handoff before candidate merge');
     await store.mutate(current => {
@@ -335,19 +339,13 @@ export async function reconcile({ platform, store, policy, now = Date.now(), dry
       // iterations may continue after a handoff mutation. Never reuse loop state.
       state = await store.read();
       const activeScopes = sensitiveScopes(snapshot.files).filter(scope => state.leases[scope]?.owner && state.leases[scope].expiresAt > now);
-      if (activeScopes.some(scope => state.leases[scope].owner !== snapshot.intent.taskId) || (activeScopes.length && snapshot.intent.ready !== true)) {
+      if (activeScopes.length) {
         report.waiting.push({ number, reason: `Active developer lease ${activeScopes.join(',')}` }); continue;
       }
       if (!dryRun) {
         await store.mutate(current => {
           const changedScopes = sensitiveScopes(snapshot.files).filter(scope => current.leases[scope]?.owner && current.leases[scope].expiresAt > now);
-          if (changedScopes.some(scope => current.leases[scope].owner !== snapshot.intent.taskId) || (changedScopes.length && snapshot.intent.ready !== true)) throw new Error('Developer lease changed before handoff');
-          if (snapshot.intent.ready === true && snapshot.intent.taskId) {
-            for (const scope of sensitiveScopes(snapshot.files)) {
-              const lease = current.leases[scope];
-              if (lease?.owner === snapshot.intent.taskId && lease.expiresAt > now) leaseOperation(current, { action: 'release', scopes: [scope], owner: lease.owner, generation: { [scope]: lease.generation } }, now);
-            }
-          }
+          if (changedScopes.length) throw new Error('Developer lease changed before handoff; explicit owner/generation release is required');
           updateTask(current, number, { ...(identityChanged ? { alignmentCount: 0, recoveryCount: 0, reviewFailures: null, blockedUntil: 0, review: null, candidate: null } : {}), headSha: snapshot.headSha, mainSha: snapshot.mainSha, branch: branchName(snapshot.pull.head.ref), intent: snapshot.intent, originalBody: snapshot.pull.body, files: snapshot.files, status: previous?.status === 'parked' ? 'parked' : 'waiting_ci', ciSince: stored?.headSha === snapshot.headSha ? (stored.ciSince ?? now) : now }, now);
         });
       }

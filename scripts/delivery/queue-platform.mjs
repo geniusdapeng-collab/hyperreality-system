@@ -41,7 +41,18 @@ export class Platform {
     }
     throw new Error('Platform pagination limit exceeded');
   }
-  pulls() { return this.list('/-/pulls?state=open&base_ref=main'); }
+  async pulls() {
+    // CNB list rows carry an empty body even when the detail has a handoff/DAG.
+    // Keep list-only age fields, but use actual details for all delivery intent.
+    const summaries = await this.list('/-/pulls?state=open&base_ref=main');
+    const pulls = [];
+    for (const summary of summaries) {
+      const detail = await this.pull(summary.number);
+      if (typeof detail.body !== 'string') throw new Error('Platform PR detail body is unreadable');
+      pulls.push({ ...summary, ...detail });
+    }
+    return pulls;
+  }
   async builds(sha, event) {
     const all = []; const seen = new Set();
     for (let page = 1; page <= 100; page++) {

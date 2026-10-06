@@ -192,7 +192,12 @@ export function eligibility(snapshot, task, policy, now = Date.now()) {
   if (pull.mergeable_state !== 'mergeable') reasons.push('Platform does not allow merge');
   reasons.push(...checkErrors);
   const review = task?.review;
-  if (!review?.passed || review.headSha !== headSha || review.mainSha !== mainSha || review.policyHash !== policy.hash || review.filesHash !== hash([...files].sort())) reasons.push('No current complete AI review');
+  const approval = review?.platformReview;
+  const approvalTime = Date.parse(approval?.createdAt);
+  const independentApproval = approval?.id && approval.isNpc === true && typeof approval.author === 'string' && /codebuddy/i.test(approval.author) &&
+    typeof approval.creator === 'string' && approval.creator && approval.author.toLowerCase() !== approval.creator.toLowerCase() &&
+    approval.creator === pull.author?.username && Number.isFinite(approvalTime) && approvalTime >= snapshot.headTime;
+  if (!review?.passed || !independentApproval || review.headSha !== headSha || review.mainSha !== mainSha || review.policyHash !== policy.hash || review.filesHash !== hash([...files].sort())) reasons.push('No current complete AI review');
   else if (snapshot.ciPolicyChanges?.length && review.ciPolicyChangesHash !== hash(snapshot.ciPolicyChanges.map(change => change.digest ?? change.id).sort())) reasons.push('No exact AI CI migration receipt');
   return reasons;
 }

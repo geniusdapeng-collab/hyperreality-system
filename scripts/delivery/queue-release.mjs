@@ -106,7 +106,7 @@ export async function reconcileReleases({ platform, store, now = Date.now(), ver
           report.push({ kind, status: 'delivered', receipt });
         } else if (['error', 'cancel'].includes(status.status)) {
           await store.mutate(current => {
-            current.releases[item.key] = { ...current.releases[item.key], status: release.attempts < 2 ? 'pending' : 'parked', retryAfter: now + 5 * 60_000, error: `Build ${release.build.sn}: ${status.status}` };
+            current.releases[item.key] = { ...current.releases[item.key], status: current.releases[item.key].attempts < 2 ? 'pending' : 'parked', retryAfter: now + 5 * 60_000, error: `Build ${release.build.sn}: ${status.status}` };
             appendEvent(current, 'release_failed', { key: item.key, sn: release.build.sn, status: status.status }, now);
           });
           report.push({ kind, status: 'failed', sn: release.build.sn });

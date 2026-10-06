@@ -22,6 +22,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { findFileOverlaps, findModuleConflicts, parseChangedPaths, resolveLockOverlapMode } from "./protocol-rules.mjs";
 import { admissionErrors, parseIntent, sensitiveScopes, STATE_BRANCH, validateState } from '../delivery/queue-model.mjs';
+import { api } from '../tools/cnb-api.mjs';
 
 const API = "https://api.cnb.cool";
 const SHA_RE = /^[0-9a-f]{40,64}$/i;
@@ -53,17 +54,11 @@ function changedFiles(base) {
 }
 
 async function apiJson(url, { raw = false } = {}) {
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(15000),
-    headers: {
-      Authorization: `Bearer ${process.env.CNB_TOKEN}`,
-      Accept: "application/json",
-    },
-  });
-  const text = await response.text();
-  if (!response.ok) throw Object.assign(new Error(`CNB API HTTP ${response.status} (${new URL(url).pathname})`), { status: response.status });
-  if (!text) throw new Error(`CNB API 返回空响应 (${new URL(url).pathname})`);
-  return raw ? text : JSON.parse(text);
+  const value = await api('', url, { retries: 4 });
+  if (value === null || value === '') throw new Error(`CNB API 返回空响应 (${new URL(url).pathname})`);
+  if (raw) return typeof value === 'string' ? value : JSON.stringify(value);
+  if (!value || typeof value !== 'object') throw new Error(`CNB API 未返回 JSON 对象 (${new URL(url).pathname})`);
+  return value;
 }
 
 export function isPrEvent(env = process.env) {

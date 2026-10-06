@@ -40,6 +40,10 @@ export async function ensureStateProtection(platform) {
 async function installerSource(platform, root, installer) {
   if (!Number.isSafeInteger(installer?.number) || installer.number <= 0 || installer.state !== 'open' || installer.is_wip !== false || branchName(installer.base?.ref) !== 'main' || !SHA_RE.test(installer.head?.sha ?? '')) throw new Error('Preparation requires a current open installer PR');
   if (await git(['rev-parse', 'HEAD'], { cwd: root }) !== installer.head.sha) throw new Error('Preparation checkout differs from installer source');
+  try {
+    const manifest = JSON.parse(await readFile(resolve(root, '.workloom-delivery-install.json'), 'utf8'));
+    if (manifest.repo !== platform.repo) throw new Error('Installation manifest belongs to another repository');
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const mainSha = (await platform.main()).commit?.sha;
   if (installer.base?.sha !== mainSha) throw new Error('Installer main changed before state preparation');
   return mainSha;
@@ -160,6 +164,9 @@ export async function main() {
   if (command === 'handoff') {
     if (!Number.isSafeInteger(number) || number <= 0) throw new Error('handoff requires --pr');
     const pull = await platform.pull(number);
+    if (pull.state !== 'open' || pull.is_wip !== false || !SHA_RE.test(pull.head?.sha ?? '')) throw new Error('Handoff requires an open non-draft exact source');
+    const expectedHead = arg('--head', pull.head.sha);
+    if (expectedHead !== pull.head.sha) throw new Error('Handoff expected source differs from the current PR');
     const intent = parseIntent(pull);
     const dependencies = arg('--depends-on', intent.dependsOn.join(',')).split(',').filter(Boolean).map(Number);
     const contract = { task_id: intent.taskId, ready: true, depends_on: dependencies, releases: intent.releases };
@@ -170,11 +177,8 @@ export async function main() {
     const updatedIntent = parseIntent({ ...pull, body });
     await platform.call(`/-/pulls/${number}`, { method: 'PATCH', body: { body } });
     const actual = await platform.pull(number);
-    if (actual.body !== body) throw new Error('Handoff did not read back');
+    if (actual.body !== body || actual.head?.sha !== expectedHead || actual.state !== 'open' || actual.is_wip !== false) throw new Error('Handoff source/state changed before readback; re-verify the current source');
     await store.mutate(state => {
-      for (const [scope, lease] of Object.entries(state.leases)) {
-        if (lease.owner === updatedIntent.taskId && lease.expiresAt > Date.now()) leaseOperation(state, { action: 'release', owner: lease.owner, scopes: [scope], generation: { [scope]: lease.generation } });
-      }
       updateTask(state, number, { status: actual.is_wip ? 'developing' : 'waiting_ci', headSha: actual.head?.sha, branch: branchName(actual.head?.ref), intent: updatedIntent });
     });
     console.log(JSON.stringify({ number, headSha: actual.head?.sha, handedOff: true, draft: actual.is_wip })); return;
