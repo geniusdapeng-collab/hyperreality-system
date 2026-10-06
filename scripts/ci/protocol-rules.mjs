@@ -173,14 +173,14 @@ export function findModuleConflicts(mine, theirs) {
  * → `cnb/push/pipeline-1(static-gate)` 红，而同一内容在 PR 门禁下三门禁全绿。
  *
  * 语义：
- * - **PR 事件**：`fail`（保持先到先得拦截——这是门禁真正能拦住并发编辑的时点）；
+ * - **PR 事件**：`warn`（真实开发互斥改由有期限的敏感模块租约承担）；
  * - **push 事件**：`warn`（只提醒重叠的在途 PR "需要 rebase 后重跑"，不判红）；
  * - `LOCK_OVERLAP_MODE=fail|warn` 可显式覆盖事件默认；`--strict` 强制 `fail`（人工复核用）。
  */
 export function resolveLockOverlapMode({ event = null, envMode = null, strict = false } = {}) {
   if (strict) return "fail";
   if (envMode === "fail" || envMode === "warn") return envMode;
-  return event === "push" ? "warn" : "fail";
+  return "warn";
 }
 
 export function parseChangedPaths(output) {

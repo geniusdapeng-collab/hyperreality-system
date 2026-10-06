@@ -12,7 +12,8 @@ import {
   resolveLockOverlapMode,
   validateSubject,
 } from "./protocol-rules.mjs";
-import { isPrEvent, isSelfPull, openPrFiles, validatePrSnapshot, verifyPrFreshness } from "./verify-lock-conflict.mjs";
+import { activeLeaseConflicts, isPrEvent, isSelfPull, legacySensitiveConflict, openPrFiles, readLeases, validatePrSnapshot, verifyPrFreshness, verifyPrLeases } from "./verify-lock-conflict.mjs";
+import { admitSource, emptyState, leaseOperation, sensitiveScopes } from '../delivery/queue-model.mjs';
 
 describe("提交信息规则", () => {
   it("接受合法提交并拒绝缺任务号", () => {
@@ -82,13 +83,69 @@ describe("并发冲突规则", () => {
 
   it("push 事件降级为提醒：合并已发生，跨 PR 重叠不再判红（回归 2026-09-27 main 误报）", () => {
     assert.equal(resolveLockOverlapMode({ event: "push" }), "warn");
-    // PR 事件保持先到先得拦截
-    assert.equal(resolveLockOverlapMode({ event: "pull_request" }), "fail");
-    assert.equal(resolveLockOverlapMode({ event: null }), "fail");
+    // PR 重叠提醒与实际限时租约约束分开。
+    assert.equal(resolveLockOverlapMode({ event: "pull_request" }), "warn");
+    assert.equal(resolveLockOverlapMode({ event: null }), "warn");
     // 显式覆盖与人工严格模式优先
     assert.equal(resolveLockOverlapMode({ event: "push", envMode: "fail" }), "fail");
     assert.equal(resolveLockOverlapMode({ event: "pull_request", envMode: "warn" }), "warn");
     assert.equal(resolveLockOverlapMode({ event: "pull_request", envMode: "warn", strict: true }), "fail");
+  });
+});
+
+describe('限时开发租约代替 open PR 永久占位', () => {
+  it('未首装敏感重叠在任一 PR 编号缺失或无效时拒绝，已启用仓不使用编号永久占位', () => {
+    for (const invalid of [null, undefined, '', 'x', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      assert.equal(legacySensitiveConflict(false, invalid, 1), true);
+      assert.equal(legacySensitiveConflict(false, 1, invalid), true);
+      assert.equal(legacySensitiveConflict(true, invalid, 1), false);
+    }
+    assert.equal(legacySensitiveConflict(false, '2', '1'), true);
+    assert.equal(legacySensitiveConflict(false, '1', '2'), false);
+  });
+  it('原有互斥模块的每种路径都映射到敏感租约', () => {
+    for (const path of ['sync/a.mjs', 'protocol/a.json', 'packages/db/migrations/a.sql', '.cnb.yml', 'AGENTS.md', 'docs/DEVELOPMENT-PROTOCOL.md', 'package.json']) {
+      assert.ok(exclusiveModuleOf(path), path);
+      assert.ok(sensitiveScopes([path]).length, path);
+    }
+  });
+  it('敏感 PR 必须交接释放有效租约，普通文件和到期租约不阻止交付', () => {
+    const state = emptyState('workloom-ai/workloom-im');
+    leaseOperation(state, { action: 'acquire', scopes: ['protocol'], owner: 'T-2026-1005-9999', ttlMs: 60000 }, 0);
+    assert.deepEqual(activeLeaseConflicts(['scripts/ci/a.mjs'], state, 59000), ['protocol']);
+    assert.deepEqual(activeLeaseConflicts(['scripts/ci/a.mjs'], state, 60000), []);
+    assert.deepEqual(activeLeaseConflicts(['apps/web/a.ts'], state, 59000), []);
+  });
+  it('仅分发文件不启用新门禁；未首装保留敏感重叠规则，普通产品 PR 不读账本', async () => {
+    let calls = 0;
+    const missing = async url => { calls++; if (url.endsWith('/git/raw/main/.cnb.yml')) return 'main:\n  push: []\n'; throw Object.assign(new Error('not found'), { status: 404 }); };
+    await verifyPrLeases('workloom-ai/workloom-im', ['apps/web/product.ts'], missing);
+    assert.equal(calls, 0);
+    assert.deepEqual(await verifyPrLeases('workloom-ai/workloom-im', ['AGENTS.md'], missing), { installed: false });
+    assert.equal(calls, 3);
+    assert.equal(legacySensitiveConflict(false, 1, 2), false);
+    assert.equal(legacySensitiveConflict(false, 2, 1), true);
+    assert.equal(legacySensitiveConflict(true, 2, 1), false);
+  });
+  it('显式启用后缺失账本阻断；权限/网络/账本损坏不能伪装成尚未安装', async () => {
+    const absent = () => { throw Object.assign(new Error('not found'), { status: 404 }); };
+    const preInstall = async url => url.endsWith('/git/raw/main/.cnb.yml') ? 'main:\n  push: []\n' : absent();
+    assert.equal(await readLeases('workloom-ai/workloom-im', preInstall), null);
+    await assert.rejects(readLeases('workloom-ai/workloom-im', async url => url.includes('/git/branches/') ? { name: 'automation/delivery-state' } : absent()), /state.json 缺失/);
+    await assert.rejects(readLeases('workloom-ai/workloom-im', async url => url.endsWith('/git/raw/main/.cnb.yml') ? 'include: scripts/delivery/cnb.yml' : absent()), /DELIVERY_LEDGER_CORRUPT.*控制分支缺失/);
+    await assert.rejects(readLeases('workloom-ai/workloom-im', absent), /not found/);
+    for (const status of [403, 429, 500]) await assert.rejects(readLeases('workloom-ai/workloom-im', async () => { throw Object.assign(new Error('unreadable'), { status }); }), /unreadable/);
+    await assert.rejects(readLeases('workloom-ai/workloom-im', async () => ({ schemaVersion: 1 })), /state/);
+  });
+  it('已准备的敏感源码必须有准确正向接纳证明，main 自动接纳后释放锁再通过 CI', async () => {
+    const repo = 'workloom-ai/workloom-im'; const state = emptyState(repo); const identity = { number: 1, headSha: 'a'.repeat(40), mainSha: 'b'.repeat(40) }; const files = ['AGENTS.md'];
+    await assert.rejects(verifyPrLeases(repo, files, async () => state, 0, identity), /缺少受信接纳回执/);
+    admitSource(state, { ...identity, files }, 0);
+    assert.deepEqual(await verifyPrLeases(repo, files, async () => state, 1, identity), { installed: true, admitted: true });
+    assert.equal(state.leases.protocol.owner, null);
+    await assert.rejects(verifyPrLeases(repo, files, async () => state, 1, { ...identity, headSha: 'c'.repeat(40) }), /缺少受信接纳回执/);
+    leaseOperation(state, { action: 'acquire', scopes: ['protocol'], owner: 'editing' }, 1);
+    await assert.rejects(verifyPrLeases(repo, files, async () => state, 2, identity), /有效开发租约/);
   });
 });
 
@@ -172,9 +229,22 @@ describe("PR 锁冲突门禁的新鲜度与失败闭合", () => {
     };
     const result = await verifyPrFreshness({ repoSlug: "workloom-ai/workloom-im", number, branch, eventSourceSha: source, eventTargetSha: main, request });
     assert.equal(result.headSha, source);
+    assert.equal(result.taskId, 'T-2026-0927-0009');
     assert.equal(pullReads, 2);
     await assert.rejects(verifyPrFreshness({ repoSlug: "workloom-ai/workloom-im", number, eventSourceSha: source, eventTargetSha: main, request: async () => { throw new Error("API unavailable"); } }), /API unavailable/);
     await assert.rejects(verifyPrFreshness({ repoSlug: "workloom-ai/workloom-im", number, eventSourceSha: source, eventTargetSha: "", request }), /缺少仓库、编号或 source\/target SHA/);
+  });
+
+  it('非 task 分支用当前 PR 意图识别租约 owner，意图在查询期间变化则拒绝', async () => {
+    const data = fixture(); const taskId = 'T-2026-1005-1001';
+    data.pull.head.ref = data.finalPull.head.ref = 'chore/protocol-onboarding-x';
+    data.pull.body = data.finalPull.body = `<!-- workloom-delivery\n{"task_id":"${taskId}","ready":true}\n-->`;
+    const request = async url => url.endsWith(`/pulls/${number}`) ? data.pull : url.endsWith('/git/branches/main') ? data.main : data.compare;
+    const result = await verifyPrFreshness({ repoSlug: 'workloom-ai/workloom-im', number, branch: 'chore/protocol-onboarding-x', eventSourceSha: source, eventTargetSha: main, request });
+    assert.equal(result.taskId, taskId);
+    const state = emptyState('workloom-ai/workloom-im'); leaseOperation(state, { action: 'acquire', scopes: ['protocol'], owner: taskId, ttlMs: 60000 }, 0);
+    assert.deepEqual(activeLeaseConflicts(result.files, state, 59000), ['protocol']);
+    data.finalPull.body = ''; assert.match(validatePrSnapshot({ ...data, branch: 'chore/protocol-onboarding-x' }).errors.join(';'), /状态发生变化/);
   });
 
   it("已知 PR 编号不同，不能凭祖先关系把并发 PR 排除", () => {
@@ -227,5 +297,17 @@ describe("PR 锁冲突门禁的新鲜度与失败闭合", () => {
     const result = spawnSync(process.execPath, [script], { env, encoding: "utf8" });
     assert.equal(result.status, 1, result.stderr);
     assert.match(result.stderr, /缺少 CNB_REPO_SLUG 或 CNB_TOKEN/);
+  });
+
+  it('PR 查询失败仍退出非零，即使普通路径重叠只提醒', () => {
+    const data = fixture();
+    const admitted = emptyState('workloom-ai/workloom-im'); admitSource(admitted, { number: Number(number), headSha: source, mainSha: main, files: data.compare.files.map(file => file.path) });
+    const prelude = `const f=${JSON.stringify(data)};globalThis.fetch=async input=>{const u=String(input);if(u.includes('/pulls?'))return new Response('unavailable',{status:503});let v;if(u.includes('/git/raw/'))v=${JSON.stringify(admitted)};else if(u.endsWith('/pulls/${number}'))v=f.pull;else if(u.endsWith('/git/branches/main'))v=f.main;else if(u.includes('/git/compare/'))v=f.compare;else throw new Error('Unexpected mocked path');return new Response(JSON.stringify(v),{status:200});};`;
+    const env = { ...process.env, CNB_TOKEN: 'test-only', CNB_EVENT: 'pull_request', CNB_PULL_REQUEST: 'true', CNB_REPO_SLUG: 'workloom-ai/workloom-im', CNB_PULL_REQUEST_IID: number, CNB_PULL_REQUEST_BRANCH: branch, CNB_PULL_REQUEST_SHA: source, CNB_PULL_REQUEST_TARGET_SHA: main };
+    delete env.LOCK_OVERLAP_MODE;
+    const script = fileURLToPath(new URL('./verify-lock-conflict.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(prelude)}`, script], { env, encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /查询 open PR 失败/);
   });
 });

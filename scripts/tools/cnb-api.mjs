@@ -47,21 +47,33 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * 带重试的 API 调用：CNB 对高频调用会返回 429（实测舰队级巡检连续 20+ 次即触发），
- * 因此所有调用默认重试 4 次（指数退避 + 抖动），并尊重 Retry-After。
+ * 只读调用默认重试 4 次（指数退避 + 抖动），并尊重 Retry-After；写入由调用方回读。
  */
 export async function api(slug, path, options = {}) {
-  const { method = "GET", body, token = requireToken(), accept = "application/json", retries = 4, baseDelayMs = 700 } = options;
+  const { method = "GET", body, token = requireToken(), accept = "application/json", baseDelayMs = 700 } = options;
+  // Mutating requests can succeed while their response is lost. Their callers must reconcile by identity.
+  const retries = method === 'GET' ? (options.retries ?? 4) : 0;
   const url = path.startsWith("http") ? path : `${API_BASE}/${slug}${path}`;
   if (new URL(url).origin !== API_BASE) throw new Error('CNB API 不允许把凭据发送到其他来源');
   const headers = { Authorization: `Bearer ${token}`, Accept: accept };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   let lastError = null;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(30000),
+        redirect: 'error',
+      });
+    } catch (error) {
+      lastError = new Error(redactCredentials(`CNB transport failed ${url}: ${error.message}`, token));
+      if (method !== 'GET' || attempt === retries) throw lastError;
+      await sleep(Math.min(baseDelayMs * 2 ** attempt, 30000));
+      continue;
+    }
     const text = await response.text();
     if (response.ok) {
       if (!text) return null;
@@ -82,17 +94,21 @@ export async function api(slug, path, options = {}) {
   throw lastError;
 }
 
-/** 读取仓库内文件原文；不存在返回 null（而非抛错） */
+/** Strict read: only HTTP 404 means absent; permission/transport failures stay errors. */
 export async function rawFile(slug, ref, path, options = {}) {
+  const token = options.token ?? requireToken();
+  const url = `${API_BASE}/${slug}/-/git/raw/${ref}/${path}`;
+  let response;
   try {
-    const response = await fetch(`${API_BASE}/${slug}/-/git/raw/${ref}/${path}`, {
-      headers: { Authorization: `Bearer ${options.token ?? requireToken()}` },
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30000), redirect: 'error',
     });
-    if (!response.ok) return null;
-    return await response.text();
-  } catch {
-    return null;
-  }
+  } catch (error) { throw new Error(redactCredentials(`CNB raw transport failed: ${error.message}`, token)); }
+  if (response.status === 404) return null;
+  const text = await response.text();
+  if (!response.ok) throw new CnbError(response.status, text, url, token);
+  return text;
 }
 
 export function listRepos(groupSlug, options = {}) {
@@ -149,13 +165,17 @@ export function branchProtectionPayload({ rule = "main", requireReview = true } 
 }
 
 /** 规则存在不等于保护有效；只接受可回读的实际强约束。 */
-export function validateBranchProtection(rule, { requireReview = true } = {}) {
+export function validateBranchProtection(rule, { requireReview = true, forbidManualOverride = false } = {}) {
   const expected = {
     allow_deletions: false, allow_force_pushes: false, allow_pushes: false,
     allow_master_deletions: false, allow_master_force_pushes: false, allow_master_pushes: false,
     required_must_push_via_pull_request: true, required_status_checks: true,
   };
-  if (requireReview) expected.required_pull_request_reviews = true;
+  if (requireReview) {
+    expected.required_pull_request_reviews = true;
+    expected.forbid_approve_pull_created_by_own_npc = true;
+  }
+  if (forbidManualOverride) expected.allow_master_manual_merge = false;
   const errors = Object.entries(expected).filter(([name, value]) => rule?.[name] !== value).map(([name, value]) => `${name} 必须为 ${value}`);
   if (rule?.rule !== 'main') errors.push('分支保护目标必须为 main');
   if (requireReview && !(Number.isSafeInteger(rule?.required_approved_review_count) && rule.required_approved_review_count >= 1)) errors.push("required_approved_review_count 必须至少为1");
