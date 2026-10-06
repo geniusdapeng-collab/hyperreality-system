@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 63,
+  "revision": 66,
   "tasks": {
     "85": {
       "number": 85,
@@ -1412,7 +1412,7 @@
     },
     "90": {
       "number": 90,
-      "status": "developing",
+      "status": "waiting_ci",
       "firstSeen": 1791312544858,
       "attempts": {},
       "admission": {
@@ -1428,7 +1428,154 @@
           "protocol": 6
         }
       },
-      "updatedAt": 1791312546086
+      "updatedAt": 1791313167453,
+      "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+      "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+      "branch": "chore/protocol-onboarding-delivery-0b3ca2b2eae4a920-07c05a06cdd4",
+      "intent": {
+        "taskId": "T-2026-1006-7744",
+        "ready": true,
+        "dependsOn": [],
+        "releases": []
+      },
+      "developerReview": {
+        "schemaVersion": 1,
+        "provider": "codex",
+        "repo": "workloom-ai/hyperreality-system",
+        "number": 90,
+        "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "policyHash": "57cc9d9614c7021a5a9b9838b9e1030555ecf59ab63bf568055e198cd68c9687",
+        "reviewedFiles": [
+          ".workloom-delivery-install.json",
+          "scripts/delivery/git-state.mjs",
+          "scripts/delivery/queue.test.mjs"
+        ],
+        "filesHash": "7d9d594424ecc8b2fa088ea1928230b39fbcfa4352d81ac7446e6b2eeafa5a9b",
+        "dependsOn": [],
+        "ciPolicyChanges": [
+          {
+            "id": "CI-001",
+            "rationale": "Current Codex completely reviewed the immutable-SHA read and direct model/API dependencies. Target bytes match the reviewed canonical base implementation. Authenticated canonical read uses branch commit SHA and decoded/text raw state, validates full repository-bound digest chain, and returns empty only after explicit 404 plus readable full-SHA main proof. Permission, malformed/foreign/corrupt content and missing raw state fail. Real Git mutation, ordinary fast-forward CAS and exact transaction recovery after lost acknowledgement remain. Only explicit ls-remote/fetch 429 receives two bounded read delays; no blind push/merge retry, platform AI or NPC call is introduced. Actual tests at this exact target source retain real bare Git CAS/lost-ack and CLI assertions."
+          },
+          {
+            "id": "CI-002",
+            "rationale": "Target bytes match the fully reviewed canonical regression. Added ten behavior tests for immutable SHA API read/decoded/text result, positive-only absence, permissions/transport/hidden main, malformed/foreign/corrupt state and bounded 429 read recovery/exhaustion/write exclusion. Actual CLI fixture derives branch SHA/state bytes from real bare Git, preserving previous CLI, six-writer CAS and lost acknowledgement coverage. Exact post-commit installed target suite passed with zero failures; one non-applicable shared UI publication case remains explicitly skipped. Original product pipelines and all hardened target adapter/checker/tests are unchanged."
+          }
+        ],
+        "ciPolicyChangesHash": "2de77a03c7f574ae76bc931fe1711e3ef753e176d4969d4275a5b6bd52d1bab3",
+        "tests": [
+          {
+            "command": "/Users/mac/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --test scripts/delivery/queue.test.mjs scripts/ci/protocol-rules.test.mjs",
+            "exitCode": 0,
+            "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "finishedAt": "2026-10-06T18:54:47.805Z",
+            "result": "ed unverified release (0.114ms)\n✔ a lease acquired by another developer during snapshot reading blocks candidate creation (0.214458ms)\n✔ a reused task id or a ready PR body cannot release a developer lease or admit a candidate (0.165625ms)\n✔ candidate body or origin mutation is rejected before sending a platform merge (0.74225ms)\n✔ runner deadline uses elapsed time independently of injected lease/calendar time and preserves the exact boundary (0.152833ms)\n✔ legacy review capacity never reads paid build history and cannot block unrelated reviewed source (0.037625ms)\n✔ release enqueue is idempotent by frozen source/kind/version and keeps integration separate (0.106875ms)\n✔ both UI and desktop dispatch pass the explicit frozen SHA to the whole build, independently of current branch SHA (0.443417ms)\n﹣ manual UI event and delivery dispatch use the same actual publishing job and native lock; the scheduler only launches and observes (3.850208ms) # This product has no shared UI publishing lane\n✔ release launch intent survives lost acknowledgement and forbids duplicate publication (0.342625ms)\n✔ release failures use the latest durable attempt count and park after two launches (0.181333ms)\n✔ lost release launch cannot adopt a different manual build with the same source/event (0.187042ms)\n✔ UI release verifies the real Platform API JSON decoding contract and rejects unreadable registration or different bytes (1.616917ms)\n✔ release verifies actual tag source, manifest identity and every downloaded digest (0.242417ms)\n✔ private release download authenticates only the official first request and hashes the actual redirected bytes (0.7035ms)\n✔ private release permission, unsafe redirect, empty/oversized stream and malformed manifest remain explicit failures (0.874625ms)\n✔ a release redirect loop is bounded and every later same-origin or foreign request omits the token (0.168166ms)\nℹ tests 115\nℹ suites 5\nℹ pass 114\nℹ fail 0\nℹ cancelled 0\nℹ skipped 1\nℹ todo 0\nℹ duration_ms 11318.318\n",
+            "logPath": "/Users/mac/Documents/Codex/2026-10-05/agent-pr-pr-pr/work/account-live-install/ledger-tests/workloom-ai-hyperreality-system.txt"
+          }
+        ],
+        "reviewedAt": "2026-10-06T18:58:23.155Z",
+        "summary": "Actual current Codex review of the already-active target update. Canonical source implementation and dependencies were completely read (A origin); actual target copies match those bytes (B). The complete exact changed paths, manifest provenance/digests and zero-change repeat installation were checked. Only ledger read implementation/tests/package provenance change; original CI, business identity, isolation, stronger target checker/test bytes and aliases remain. Actual post-commit target regression and source/main/policy/file/CI IDs are bound in this receipt. No unresolved blocking finding. Requires real original machine CI and native immutable candidate ordinary two-parent integration; no first-install privileged merge, human Approve, platform model or NPC execution.",
+        "passed": true,
+        "id": "4dab7597c27aab254b8f92eed8e9cb3124bb420c63a310339253e2ea61488849"
+      },
+      "reviewSnapshot": {
+        "repo": "workloom-ai/hyperreality-system",
+        "number": 90,
+        "pull": {
+          "number": 90,
+          "state": "open",
+          "title": "feat(base): 安装普通研发自动交付 [T-2026-1006-7744]",
+          "body": "原仓必需检查保留，新增 Codex 审查回执 和交付回归。安装范围及四问见 Issue #89 [T-2026-1006-7744]。\n\n<!-- delivery-install:0b3ca2b2eae4a920cf618a4a2bd57e780df5208bc5ef42ef1498b52dbaab4a03 -->\n\n<!-- workloom-delivery\n{\n  \"task_id\": \"T-2026-1006-7744\",\n  \"ready\": true,\n  \"depends_on\": [],\n  \"releases\": []\n}\n-->",
+          "author": {
+            "username": "cnb.dYiF05kxAGA",
+            "nickname": "Genius",
+            "email": "XYpmztfpCvez6l8z5BBAvJ+cnb.dYiF05kxAGA@noreply.cnb.cool",
+            "is_npc": false
+          },
+          "reviewers": [],
+          "labels": [],
+          "base": {
+            "ref": "refs/heads/main",
+            "sha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "repo": {
+              "id": "2100397990318039040",
+              "name": "hyperreality-system",
+              "path": "workloom-ai/hyperreality-system",
+              "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+            }
+          },
+          "head": {
+            "ref": "refs/heads/chore/protocol-onboarding-delivery-0b3ca2b2eae4a920-07c05a06cdd4",
+            "sha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "repo": {
+              "id": "2100397990318039040",
+              "name": "hyperreality-system",
+              "path": "workloom-ai/hyperreality-system",
+              "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+            }
+          },
+          "blocked_on": "unblocked",
+          "merged_by": {
+            "is_npc": false
+          },
+          "mergeable_state": "mergeable",
+          "is_wip": false,
+          "is_merged": false,
+          "is_force_merged": false,
+          "statuses": {}
+        },
+        "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "files": [
+          ".workloom-delivery-install.json",
+          "scripts/delivery/git-state.mjs",
+          "scripts/delivery/queue.test.mjs"
+        ],
+        "intent": {
+          "taskId": "T-2026-1006-7744",
+          "ready": true,
+          "dependsOn": [],
+          "releases": []
+        },
+        "headTime": 1791312535000,
+        "mergeBase": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "checkErrors": [],
+        "checkSha": null,
+        "hasFailedChecks": false,
+        "ciPolicyChanges": [
+          {
+            "id": "CI-001",
+            "file": "scripts/delivery/git-state.mjs",
+            "before": {
+              "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+              "path": "scripts/delivery/git-state.mjs",
+              "absent": false
+            },
+            "after": {
+              "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+              "path": "scripts/delivery/git-state.mjs",
+              "absent": false
+            },
+            "digest": "8790c9245893c31d69bc319da9063810612690ffc6db5f9f49def57205aef179"
+          },
+          {
+            "id": "CI-002",
+            "file": "scripts/delivery/queue.test.mjs",
+            "before": {
+              "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+              "path": "scripts/delivery/queue.test.mjs",
+              "absent": false
+            },
+            "after": {
+              "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+              "path": "scripts/delivery/queue.test.mjs",
+              "absent": false
+            },
+            "digest": "e75d07191c103a5c80c0c201bf5fe111f695a74f005728488111b8379c815ec7"
+          }
+        ]
+      }
     }
   },
   "leases": {
@@ -4154,6 +4301,189 @@
       },
       "previous": "5a156c16fc9d318cedece36b17493ae696326c7d9744425e2e867fed791423a4",
       "digest": "c57d788fe78abeac0a20bb659448b185701b0511cf3d264e1f6f51fee57d40a7"
+    },
+    {
+      "sequence": 64,
+      "at": "2026-10-06T18:59:27.452Z",
+      "kind": "developer_review",
+      "data": {
+        "number": 90,
+        "id": "4dab7597c27aab254b8f92eed8e9cb3124bb420c63a310339253e2ea61488849",
+        "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4"
+      },
+      "previous": "c57d788fe78abeac0a20bb659448b185701b0511cf3d264e1f6f51fee57d40a7",
+      "digest": "ff190a3fd0beb7ca72c4f9bdc7b58a372651624821beea52fd150e32d77817ce"
+    },
+    {
+      "sequence": 65,
+      "at": "2026-10-06T18:59:27.453Z",
+      "kind": "task",
+      "data": {
+        "number": 90,
+        "patch": {
+          "status": "waiting_ci",
+          "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+          "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+          "branch": "chore/protocol-onboarding-delivery-0b3ca2b2eae4a920-07c05a06cdd4",
+          "intent": {
+            "taskId": "T-2026-1006-7744",
+            "ready": true,
+            "dependsOn": [],
+            "releases": []
+          },
+          "developerReview": {
+            "schemaVersion": 1,
+            "provider": "codex",
+            "repo": "workloom-ai/hyperreality-system",
+            "number": 90,
+            "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "policyHash": "57cc9d9614c7021a5a9b9838b9e1030555ecf59ab63bf568055e198cd68c9687",
+            "reviewedFiles": [
+              ".workloom-delivery-install.json",
+              "scripts/delivery/git-state.mjs",
+              "scripts/delivery/queue.test.mjs"
+            ],
+            "filesHash": "7d9d594424ecc8b2fa088ea1928230b39fbcfa4352d81ac7446e6b2eeafa5a9b",
+            "dependsOn": [],
+            "ciPolicyChanges": [
+              {
+                "id": "CI-001",
+                "rationale": "Current Codex completely reviewed the immutable-SHA read and direct model/API dependencies. Target bytes match the reviewed canonical base implementation. Authenticated canonical read uses branch commit SHA and decoded/text raw state, validates full repository-bound digest chain, and returns empty only after explicit 404 plus readable full-SHA main proof. Permission, malformed/foreign/corrupt content and missing raw state fail. Real Git mutation, ordinary fast-forward CAS and exact transaction recovery after lost acknowledgement remain. Only explicit ls-remote/fetch 429 receives two bounded read delays; no blind push/merge retry, platform AI or NPC call is introduced. Actual tests at this exact target source retain real bare Git CAS/lost-ack and CLI assertions."
+              },
+              {
+                "id": "CI-002",
+                "rationale": "Target bytes match the fully reviewed canonical regression. Added ten behavior tests for immutable SHA API read/decoded/text result, positive-only absence, permissions/transport/hidden main, malformed/foreign/corrupt state and bounded 429 read recovery/exhaustion/write exclusion. Actual CLI fixture derives branch SHA/state bytes from real bare Git, preserving previous CLI, six-writer CAS and lost acknowledgement coverage. Exact post-commit installed target suite passed with zero failures; one non-applicable shared UI publication case remains explicitly skipped. Original product pipelines and all hardened target adapter/checker/tests are unchanged."
+              }
+            ],
+            "ciPolicyChangesHash": "2de77a03c7f574ae76bc931fe1711e3ef753e176d4969d4275a5b6bd52d1bab3",
+            "tests": [
+              {
+                "command": "/Users/mac/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --test scripts/delivery/queue.test.mjs scripts/ci/protocol-rules.test.mjs",
+                "exitCode": 0,
+                "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+                "finishedAt": "2026-10-06T18:54:47.805Z",
+                "result": "ed unverified release (0.114ms)\n✔ a lease acquired by another developer during snapshot reading blocks candidate creation (0.214458ms)\n✔ a reused task id or a ready PR body cannot release a developer lease or admit a candidate (0.165625ms)\n✔ candidate body or origin mutation is rejected before sending a platform merge (0.74225ms)\n✔ runner deadline uses elapsed time independently of injected lease/calendar time and preserves the exact boundary (0.152833ms)\n✔ legacy review capacity never reads paid build history and cannot block unrelated reviewed source (0.037625ms)\n✔ release enqueue is idempotent by frozen source/kind/version and keeps integration separate (0.106875ms)\n✔ both UI and desktop dispatch pass the explicit frozen SHA to the whole build, independently of current branch SHA (0.443417ms)\n﹣ manual UI event and delivery dispatch use the same actual publishing job and native lock; the scheduler only launches and observes (3.850208ms) # This product has no shared UI publishing lane\n✔ release launch intent survives lost acknowledgement and forbids duplicate publication (0.342625ms)\n✔ release failures use the latest durable attempt count and park after two launches (0.181333ms)\n✔ lost release launch cannot adopt a different manual build with the same source/event (0.187042ms)\n✔ UI release verifies the real Platform API JSON decoding contract and rejects unreadable registration or different bytes (1.616917ms)\n✔ release verifies actual tag source, manifest identity and every downloaded digest (0.242417ms)\n✔ private release download authenticates only the official first request and hashes the actual redirected bytes (0.7035ms)\n✔ private release permission, unsafe redirect, empty/oversized stream and malformed manifest remain explicit failures (0.874625ms)\n✔ a release redirect loop is bounded and every later same-origin or foreign request omits the token (0.168166ms)\nℹ tests 115\nℹ suites 5\nℹ pass 114\nℹ fail 0\nℹ cancelled 0\nℹ skipped 1\nℹ todo 0\nℹ duration_ms 11318.318\n",
+                "logPath": "/Users/mac/Documents/Codex/2026-10-05/agent-pr-pr-pr/work/account-live-install/ledger-tests/workloom-ai-hyperreality-system.txt"
+              }
+            ],
+            "reviewedAt": "2026-10-06T18:58:23.155Z",
+            "summary": "Actual current Codex review of the already-active target update. Canonical source implementation and dependencies were completely read (A origin); actual target copies match those bytes (B). The complete exact changed paths, manifest provenance/digests and zero-change repeat installation were checked. Only ledger read implementation/tests/package provenance change; original CI, business identity, isolation, stronger target checker/test bytes and aliases remain. Actual post-commit target regression and source/main/policy/file/CI IDs are bound in this receipt. No unresolved blocking finding. Requires real original machine CI and native immutable candidate ordinary two-parent integration; no first-install privileged merge, human Approve, platform model or NPC execution.",
+            "passed": true,
+            "id": "4dab7597c27aab254b8f92eed8e9cb3124bb420c63a310339253e2ea61488849"
+          },
+          "reviewSnapshot": {
+            "repo": "workloom-ai/hyperreality-system",
+            "number": 90,
+            "pull": {
+              "number": 90,
+              "state": "open",
+              "title": "feat(base): 安装普通研发自动交付 [T-2026-1006-7744]",
+              "body": "原仓必需检查保留，新增 Codex 审查回执 和交付回归。安装范围及四问见 Issue #89 [T-2026-1006-7744]。\n\n<!-- delivery-install:0b3ca2b2eae4a920cf618a4a2bd57e780df5208bc5ef42ef1498b52dbaab4a03 -->\n\n<!-- workloom-delivery\n{\n  \"task_id\": \"T-2026-1006-7744\",\n  \"ready\": true,\n  \"depends_on\": [],\n  \"releases\": []\n}\n-->",
+              "author": {
+                "username": "cnb.dYiF05kxAGA",
+                "nickname": "Genius",
+                "email": "XYpmztfpCvez6l8z5BBAvJ+cnb.dYiF05kxAGA@noreply.cnb.cool",
+                "is_npc": false
+              },
+              "reviewers": [],
+              "labels": [],
+              "base": {
+                "ref": "refs/heads/main",
+                "sha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+                "repo": {
+                  "id": "2100397990318039040",
+                  "name": "hyperreality-system",
+                  "path": "workloom-ai/hyperreality-system",
+                  "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+                }
+              },
+              "head": {
+                "ref": "refs/heads/chore/protocol-onboarding-delivery-0b3ca2b2eae4a920-07c05a06cdd4",
+                "sha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+                "repo": {
+                  "id": "2100397990318039040",
+                  "name": "hyperreality-system",
+                  "path": "workloom-ai/hyperreality-system",
+                  "web_url": "https://cnb.cool/workloom-ai/hyperreality-system"
+                }
+              },
+              "blocked_on": "unblocked",
+              "merged_by": {
+                "is_npc": false
+              },
+              "mergeable_state": "mergeable",
+              "is_wip": false,
+              "is_merged": false,
+              "is_force_merged": false,
+              "statuses": {}
+            },
+            "headSha": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+            "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "files": [
+              ".workloom-delivery-install.json",
+              "scripts/delivery/git-state.mjs",
+              "scripts/delivery/queue.test.mjs"
+            ],
+            "intent": {
+              "taskId": "T-2026-1006-7744",
+              "ready": true,
+              "dependsOn": [],
+              "releases": []
+            },
+            "headTime": 1791312535000,
+            "mergeBase": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "checkErrors": [],
+            "checkSha": null,
+            "hasFailedChecks": false,
+            "ciPolicyChanges": [
+              {
+                "id": "CI-001",
+                "file": "scripts/delivery/git-state.mjs",
+                "before": {
+                  "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+                  "path": "scripts/delivery/git-state.mjs",
+                  "absent": false
+                },
+                "after": {
+                  "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+                  "path": "scripts/delivery/git-state.mjs",
+                  "absent": false
+                },
+                "digest": "8790c9245893c31d69bc319da9063810612690ffc6db5f9f49def57205aef179"
+              },
+              {
+                "id": "CI-002",
+                "file": "scripts/delivery/queue.test.mjs",
+                "before": {
+                  "ref": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+                  "path": "scripts/delivery/queue.test.mjs",
+                  "absent": false
+                },
+                "after": {
+                  "ref": "1a15f134a3dc458389c416e47b86c5408949a3f4",
+                  "path": "scripts/delivery/queue.test.mjs",
+                  "absent": false
+                },
+                "digest": "e75d07191c103a5c80c0c201bf5fe111f695a74f005728488111b8379c815ec7"
+              }
+            ]
+          }
+        }
+      },
+      "previous": "ff190a3fd0beb7ca72c4f9bdc7b58a372651624821beea52fd150e32d77817ce",
+      "digest": "13053a2efa89817e1bc942bdfe8eccd45fbcba48bd0e5ff7e1abb14af0fb32f1"
+    },
+    {
+      "sequence": 66,
+      "at": "2026-10-06T18:59:26.658Z",
+      "kind": "transaction",
+      "data": {
+        "id": "a23ca803-615d-46b1-9989-e5c349c71501"
+      },
+      "previous": "13053a2efa89817e1bc942bdfe8eccd45fbcba48bd0e5ff7e1abb14af0fb32f1",
+      "digest": "b27290fd03da22c60228d70d667315e59c39f5ff0aa6c363833788094124f60b"
     }
   ]
 }
