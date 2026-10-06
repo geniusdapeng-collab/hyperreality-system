@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 120,
+  "revision": 122,
   "tasks": {
     "85": {
       "number": 85,
-      "status": "waiting_ci",
+      "status": "parked",
       "firstSeen": 1791309911910,
       "attempts": {},
       "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
@@ -44,13 +44,13 @@
       "error": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
       "repairRequired": {
         "provider": "codex",
-        "headSha": "6df233c97d67836cc538f4be110cdb01eeb2ce0a",
-        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
+        "mainSha": "08df432a107c1b59e0d6832e46f050db026832b5",
         "reason": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
-        "at": 1791313984519
+        "at": 1791317712247
       },
       "recoveryIntent": null,
-      "blockedUntil": 0,
+      "blockedUntil": 1791318312247,
       "recoveryCount": 0,
       "reviewFailures": null,
       "candidate": null
@@ -5688,6 +5688,39 @@
       },
       "previous": "f0f6132f70666a76a6a02b244a6779c2ec905a27e63981b1fe9c22a5b6fda13c",
       "digest": "5e684567f4fa6177b1031660ecfe87dcc2fee61dc333e074e425e6da3b93321b"
+    },
+    {
+      "sequence": 121,
+      "at": "2026-10-06T20:15:12.247Z",
+      "kind": "task",
+      "data": {
+        "number": 85,
+        "patch": {
+          "status": "parked",
+          "error": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
+          "repairRequired": {
+            "provider": "codex",
+            "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
+            "mainSha": "08df432a107c1b59e0d6832e46f050db026832b5",
+            "reason": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
+            "at": 1791317712247
+          },
+          "recoveryIntent": null,
+          "blockedUntil": 1791318312247
+        }
+      },
+      "previous": "5e684567f4fa6177b1031660ecfe87dcc2fee61dc333e074e425e6da3b93321b",
+      "digest": "256ca5df3588b6beacf95dee949c7bc1edb57179e1015f05849227480fae045d"
+    },
+    {
+      "sequence": 122,
+      "at": "2026-10-06T20:15:13.742Z",
+      "kind": "transaction",
+      "data": {
+        "id": "f50a698a-dda8-4681-9613-ba3315aecb53"
+      },
+      "previous": "256ca5df3588b6beacf95dee949c7bc1edb57179e1015f05849227480fae045d",
+      "digest": "6ab54ac45f5667fd9239246d31f667c0ebcb839f950755b11819e550e642d49e"
     }
   ]
 }
