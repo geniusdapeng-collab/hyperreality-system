@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 95,
+  "revision": 97,
   "tasks": {
     "85": {
       "number": 85,
@@ -1728,7 +1728,12 @@
           "mergedBy": "cnb.dYiF05kxAGA",
           "verifiedAt": "2026-10-06T19:13:13.825Z"
         }
-      ]
+      ],
+      "issueReceipt": {
+        "issue": 89,
+        "marker": "delivery-receipt:90:08df432a107c1b59e0d6832e46f050db026832b5",
+        "verifiedAt": 1791313984519
+      }
     },
     "91": {
       "number": 91,
@@ -5250,6 +5255,33 @@
       },
       "previous": "1f8e74c0315d32e9c3de572184deba7088784614bb3313a1f6f8db12e65b9982",
       "digest": "75d18cf77d9aae28be440c12ddacafca4a07a157712f9ae144822f61d51be49c"
+    },
+    {
+      "sequence": 96,
+      "at": "2026-10-06T19:13:04.519Z",
+      "kind": "task",
+      "data": {
+        "number": 90,
+        "patch": {
+          "issueReceipt": {
+            "issue": 89,
+            "marker": "delivery-receipt:90:08df432a107c1b59e0d6832e46f050db026832b5",
+            "verifiedAt": 1791313984519
+          }
+        }
+      },
+      "previous": "75d18cf77d9aae28be440c12ddacafca4a07a157712f9ae144822f61d51be49c",
+      "digest": "506b2e3a8cb8962d4c6a80e47a3cddb5039ba34b91801b2b6d008b6763665040"
+    },
+    {
+      "sequence": 97,
+      "at": "2026-10-06T19:13:16.890Z",
+      "kind": "transaction",
+      "data": {
+        "id": "e721fb92-0e4d-472e-9e68-e055083c29f7"
+      },
+      "previous": "506b2e3a8cb8962d4c6a80e47a3cddb5039ba34b91801b2b6d008b6763665040",
+      "digest": "e53dba572e3ccd50520b373139915cf293015f1fb212829a0aa20099624ed271"
     }
   ]
 }
