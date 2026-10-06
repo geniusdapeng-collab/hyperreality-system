@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 47,
+  "revision": 50,
   "tasks": {
     "85": {
       "number": 85,
@@ -22,7 +22,7 @@
         "apps/server/src/trpc/router.ts"
       ],
       "ciSince": 1791309911910,
-      "updatedAt": 1791309911910,
+      "updatedAt": 1791309924308,
       "alignmentCount": 1,
       "alignmentIntent": null,
       "developerReview": null,
@@ -31,6 +31,15 @@
         "previousHead": "f48c214cd89c9a2e12611dba38ebd6a490b44850",
         "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
         "verifiedAt": "2026-10-06T18:05:16.360Z"
+      },
+      "admission": {
+        "number": 85,
+        "headSha": "6df233c97d67836cc538f4be110cdb01eeb2ce0a",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "filesHash": "36b5fb2484cfb695bef7db7272dfbd865cdcdbc479a8543a47a3ea4bc5436046",
+        "scopes": [],
+        "owner": "admission/pr-85",
+        "generation": {}
       }
     },
     "87": {
@@ -3855,6 +3864,53 @@
       },
       "previous": "83ba6d56e36d87017d0f6fe9cf39c8fe214c2b69746d1a354cb888f9cda11224",
       "digest": "c6b2705c2d5dff44b61a42c0fe1e2726b4088c9e42054d192978d76efe2c4da3"
+    },
+    {
+      "sequence": 48,
+      "at": "2026-10-06T18:05:24.308Z",
+      "kind": "source_admitted",
+      "data": {
+        "number": 85,
+        "headSha": "6df233c97d67836cc538f4be110cdb01eeb2ce0a",
+        "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+        "filesHash": "36b5fb2484cfb695bef7db7272dfbd865cdcdbc479a8543a47a3ea4bc5436046",
+        "scopes": [],
+        "owner": "admission/pr-85",
+        "generation": {}
+      },
+      "previous": "c6b2705c2d5dff44b61a42c0fe1e2726b4088c9e42054d192978d76efe2c4da3",
+      "digest": "5ca4fd0104b9b354a1583df7fb94d8f9a9067c8d6d26b3849299caf8d6fcb486"
+    },
+    {
+      "sequence": 49,
+      "at": "2026-10-06T18:05:24.308Z",
+      "kind": "task",
+      "data": {
+        "number": 85,
+        "patch": {
+          "admission": {
+            "number": 85,
+            "headSha": "6df233c97d67836cc538f4be110cdb01eeb2ce0a",
+            "mainSha": "07c05a06cdd46007fbabcbcd19d83ff4cf125cc4",
+            "filesHash": "36b5fb2484cfb695bef7db7272dfbd865cdcdbc479a8543a47a3ea4bc5436046",
+            "scopes": [],
+            "owner": "admission/pr-85",
+            "generation": {}
+          }
+        }
+      },
+      "previous": "5ca4fd0104b9b354a1583df7fb94d8f9a9067c8d6d26b3849299caf8d6fcb486",
+      "digest": "5b86bfca1fdb0d4c4fe5a8b7ccf2a31ce9b8a654dcfd18fc41f7a33e4043aa6f"
+    },
+    {
+      "sequence": 50,
+      "at": "2026-10-06T18:05:24.089Z",
+      "kind": "transaction",
+      "data": {
+        "id": "source-admit:85:6df233c97d67836cc538f4be110cdb01eeb2ce0a:07c05a06cdd46007fbabcbcd19d83ff4cf125cc4"
+      },
+      "previous": "5b86bfca1fdb0d4c4fe5a8b7ccf2a31ce9b8a654dcfd18fc41f7a33e4043aa6f",
+      "digest": "ccf36ba69f697d35708ec2c5a24c9ebcf2a74bf6c0c7d5176beab809b587c150"
     }
   ]
 }
