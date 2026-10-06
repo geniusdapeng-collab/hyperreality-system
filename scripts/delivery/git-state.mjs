@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { appendEvent, emptyState, STATE_BRANCH, validateState, validRepoSlug } from './queue-model.mjs';
-import { gitAuthenticationEnvironment, redactCredentials } from '../tools/cnb-api.mjs';
+import { appendEvent, emptyState, SHA_RE, STATE_BRANCH, validateState, validRepoSlug } from './queue-model.mjs';
+import { api, gitAuthenticationEnvironment, redactCredentials } from '../tools/cnb-api.mjs';
 
 const execute = promisify(execFile);
 export async function git(args, { cwd, token, input, remote, raw = false } = {}) {
@@ -42,11 +42,13 @@ export async function git(args, { cwd, token, input, remote, raw = false } = {})
 }
 
 export class GitStateStore {
-  constructor({ repo, token, remote = `https://cnb.cool/${repo}.git`, branch = STATE_BRANCH, retries = 4 }) {
+  constructor({ repo, token, remote = `https://cnb.cool/${repo}.git`, branch = STATE_BRANCH, retries = 4, request = api, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
     if (!validRepoSlug(repo)) throw new Error('Invalid repository slug');
     if (token && remote !== `https://cnb.cool/${repo}.git`) throw new Error('Unexpected credential destination');
     if (!/^automation\/[A-Za-z0-9_.-]+$/.test(branch)) throw new Error('Invalid state branch');
+    if (typeof request !== 'function' || typeof sleep !== 'function') throw new Error('Invalid state read transport');
     this.repo = repo; this.token = token; this.remote = remote; this.branch = branch; this.retries = retries;
+    this.request = request; this.sleep = sleep;
   }
 
   async withRepository(operation) {
@@ -58,18 +60,48 @@ export class GitStateStore {
     } finally { await rm(directory, { recursive: true, force: true }); }
   }
 
+  async readGit(run, args) {
+    if (!['ls-remote', 'fetch'].includes(args[0])) throw new Error('State read retry cannot execute a write');
+    for (let attempt = 0; ; attempt++) {
+      try { return await run(args); }
+      catch (error) {
+        // These commands cannot perform external writes. Never retry an unknown push/merge here.
+        if (attempt >= 2 || !/(?:HTTP 429\b|returned error: 429\b|Too Many Requests\b)/i.test(error.message)) throw error;
+        await this.sleep(attempt === 0 ? 2000 : 8000);
+      }
+    }
+  }
+
   async load(run) {
-    const refs = await run(['ls-remote', this.remote, `refs/heads/${this.branch}`]);
+    const refs = await this.readGit(run, ['ls-remote', this.remote, `refs/heads/${this.branch}`]);
     if (!refs) return { state: emptyState(this.repo), parent: null };
     const parent = refs.split(/\s/)[0];
-    await run(['fetch', '--quiet', '--no-tags', this.remote, `refs/heads/${this.branch}`]);
+    await this.readGit(run, ['fetch', '--quiet', '--no-tags', this.remote, `refs/heads/${this.branch}`]);
     // FETCH_HEAD can be newer than the first read. Its content and parent must stay paired.
     const actual = await run(['rev-parse', 'FETCH_HEAD']);
     const raw = await run(['show', `${actual}:state.json`]);
     return { state: validateState(JSON.parse(raw), this.repo), parent: actual || parent };
   }
 
-  async read() { return this.withRepository(async run => (await this.load(run)).state); }
+  async read() {
+    if (!this.token || this.remote !== `https://cnb.cool/${this.repo}.git`) return this.withRepository(async run => (await this.load(run)).state);
+    const request = path => this.request(this.repo, path, { token: this.token });
+    let branch;
+    try { branch = await request(`/-/git/branches/${encodeURIComponent(this.branch)}`); }
+    catch (error) {
+      if (error.status !== 404) throw error;
+      // A hidden/unreadable repository must not look like an absent control branch.
+      const main = await request('/-/git/branches/main');
+      if (!SHA_RE.test(main?.commit?.sha ?? '')) throw new Error('State branch absence has no readable repository proof');
+      return emptyState(this.repo);
+    }
+    const sha = branch?.commit?.sha;
+    if (!SHA_RE.test(sha ?? '')) throw new Error('State branch has no exact readable Git commit');
+    // The live API decodes JSON objects, while test/alternate transports may retain text.
+    // Pin raw content to the observed immutable commit, never to a moving branch name.
+    const raw = await request(`/-/git/raw/${sha}/state.json`);
+    return validateState(typeof raw === 'string' ? JSON.parse(raw) : raw, this.repo);
+  }
 
   /** Mutators must be pure. Network/Git effects occur only after this transaction returns. */
   async mutate(operation, { id = randomUUID(), now = Date.now() } = {}) {

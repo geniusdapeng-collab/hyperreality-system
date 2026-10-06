@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "repo": "workloom-ai/hyperreality-system",
   "sourceRepo": "workloom-ai/workloom-im",
-  "sourceSha": "2d350b7ec969abb0749f8d8d60a2212b8872e3e0",
+  "sourceSha": "9bf6a1a09ff4805c332f577022b2e079e8daa6b4",
   "assets": {
     "scripts/delivery/queue-model.mjs": "f1ad79c1ade636648a254d5c75e3a4a4cbabbca671b42dd5791726b227fc7511",
     "scripts/delivery/queue-policy.mjs": "62c92f978782fc3ed734ba11b294d2d4bb464dbb69bc00ea8ba4efe8b1011f68",
@@ -11,13 +11,13 @@
     "scripts/delivery/queue-work.mjs": "b0aca36eb5e60b56bee96eb4a15d8adf876872a981f48479023ac27f9932a80b",
     "scripts/delivery/queue-release.mjs": "b47be9384c532fcaf69b46e55f8ad819b341b1f15b2eb14998007cba647d82ef",
     "scripts/delivery/queue-runner.mjs": "8ff634f4ddbed85c0086516cf8c37aa9152eb070c19c58f0ae74454281774dc6",
-    "scripts/delivery/git-state.mjs": "f706ba24503c449a1181ae229e8d147aea9e3a57a6f9035cb24928555feb0941",
+    "scripts/delivery/git-state.mjs": "c20dcfcd6c74af96cd180e515df1531938892fabb334a45a26ad45a7f0b53bf9",
     "scripts/delivery/review-plugin.mjs": "5bf23581c06d67c398f6452abb20e121112d9aaad4a3331326215ab21f733688",
     "scripts/delivery/model-gateway.mjs": "ce875dbe6b02597ef3869f08ceb307dc7e325753dc031cfd5d0ebc4786f42695",
     "scripts/delivery/install-config.mjs": "05a1b2fb76dc7ce680be64a094ab4fa01385ef6a13084673d5d583d8a2f6f966",
     "scripts/delivery/install-manifest.mjs": "92b282f630516f309d56a0217c2e5b632518e0d730ad17bffddd197783330b82",
     "scripts/delivery/release-source.mjs": "1d864f2b7cf35a328ae3f6c02335d6867d0273fd3cb6b68ec08d3b970bfc2e94",
-    "scripts/delivery/queue.test.mjs": "0287f8c566b50c6f4f18a28a8d06ebb71786ddc8430ac9f2e1a19ade91d01f81",
+    "scripts/delivery/queue.test.mjs": "09df2277090a7e4adac6e1d82db59b8ccf994920bd672f0a3f82fa01502856bb",
     "scripts/delivery/cnb.yml": "b4ed7201156776b30b26b01ea91c8f36d059ea0d3cd6bbe8085b80681191f6b4",
     "scripts/delivery/bootstrap-cnb.yml": "fe0731a02907a7588b272ff8f2ae0e11f659293ed83dc78cad6fe117f6f8d7d0",
     "scripts/delivery/runtime/package.json": "8e9141e82fcdb22a079851778c88925c770e274b296d21efc6e65e757fa304d8",
@@ -31,6 +31,6 @@
     "docs/AUTOMATIC-RD-DELIVERY.md": "226f1442c58fa59fc4c6843f010e72a9a445318084cb8054c61ff05726d692bd",
     "scripts/delivery/install-cnb.yml": "24dac42c3574559c2ecfa1934fe798f44e58f1cda8a4d8bb269f2bac1f0ddb86"
   },
-  "packageHash": "eadd924affbe00f33296870464578fec1ed1abc715bf15a7c104c48676df8022",
+  "packageHash": "0b3ca2b2eae4a920cf618a4a2bd57e780df5208bc5ef42ef1498b52dbaab4a03",
   "isolationChanged": false
 }
