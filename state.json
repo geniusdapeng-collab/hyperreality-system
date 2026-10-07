@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 404,
+  "revision": 406,
   "tasks": {
     "85": {
       "number": 85,
@@ -22,7 +22,7 @@
         "apps/server/src/trpc/router.ts"
       ],
       "ciSince": 1791314008374,
-      "updatedAt": 1791378017656,
+      "updatedAt": 1791378912810,
       "alignmentCount": 1,
       "alignmentIntent": null,
       "developerReview": null,
@@ -41,7 +41,7 @@
         "owner": "admission/pr-85",
         "generation": {}
       },
-      "error": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
+      "error": "CNB 429 https://api.cnb.cool/workloom-ai/hyperreality-system/-/pulls/85 :: {\"errcode\":8,\"errmsg\":\"Too many requests. Please try again later.\"}\n",
       "repairRequired": {
         "provider": "codex",
         "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
@@ -50,7 +50,7 @@
         "at": 1791378017656
       },
       "recoveryIntent": null,
-      "blockedUntil": 1791378617656,
+      "blockedUntil": 1791379512810,
       "recoveryCount": 0,
       "reviewFailures": null,
       "candidate": null
@@ -10466,6 +10466,31 @@
       },
       "previous": "178e39457ec1b612601c8eb05901569d58992ab72e699ec8a9fc021c2390a8e3",
       "digest": "f3b97b8ede9e0a91e8423f8141d6efb543e422f13ea5294df27680566e24aa71"
+    },
+    {
+      "sequence": 405,
+      "at": "2026-10-07T13:15:12.810Z",
+      "kind": "task",
+      "data": {
+        "number": 85,
+        "patch": {
+          "status": "parked",
+          "error": "CNB 429 https://api.cnb.cool/workloom-ai/hyperreality-system/-/pulls/85 :: {\"errcode\":8,\"errmsg\":\"Too many requests. Please try again later.\"}\n",
+          "blockedUntil": 1791379512810
+        }
+      },
+      "previous": "f3b97b8ede9e0a91e8423f8141d6efb543e422f13ea5294df27680566e24aa71",
+      "digest": "691f3a1873c07fc6a4c44c13e601243d8e7b94aec639ecd31615ee7481a6ef53"
+    },
+    {
+      "sequence": 406,
+      "at": "2026-10-07T13:15:17.696Z",
+      "kind": "transaction",
+      "data": {
+        "id": "c7b6e7da-b27e-42cd-a5d3-534a0021a183"
+      },
+      "previous": "691f3a1873c07fc6a4c44c13e601243d8e7b94aec639ecd31615ee7481a6ef53",
+      "digest": "3a2cde3439c42d28fcfab55d35fb79bec8bc6406049a0fb67a3557774e810be6"
     }
   ]
 }
