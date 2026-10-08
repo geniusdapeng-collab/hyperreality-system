@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 952,
+  "revision": 954,
   "tasks": {
     "85": {
       "number": 85,
@@ -41,16 +41,16 @@
         "owner": "admission/pr-85",
         "generation": {}
       },
-      "error": "CNB 429 https://api.cnb.cool/workloom-ai/hyperreality-system/-/pulls/85 :: {\"errcode\":8,\"errmsg\":\"Too many requests. Please try again later.\"}\n",
+      "error": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
       "repairRequired": {
         "provider": "codex",
         "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
         "mainSha": "08df432a107c1b59e0d6832e46f050db026832b5",
         "reason": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
-        "at": 1791490817852
+        "at": 1791491717726
       },
       "recoveryIntent": null,
-      "blockedUntil": 1791491716521,
+      "blockedUntil": 1791492317726,
       "recoveryCount": 0,
       "reviewFailures": null,
       "candidate": null
@@ -19748,6 +19748,39 @@
       },
       "previous": "5c56d9e98cb31857e738f71398c53c5e18459351468bbd412debc4b205656f96",
       "digest": "c81f0e3833ff02016958e0016b07b3b581de5d93e90b8e3694e532b9a9f95aa5"
+    },
+    {
+      "sequence": 953,
+      "at": "2026-10-08T20:35:17.726Z",
+      "kind": "task",
+      "data": {
+        "number": 85,
+        "patch": {
+          "status": "parked",
+          "error": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
+          "repairRequired": {
+            "provider": "codex",
+            "headSha": "d17dbc89876a2435f4b3dbe7ab72090014b24ba3",
+            "mainSha": "08df432a107c1b59e0d6832e46f050db026832b5",
+            "reason": "检查/评审阻断：Developer has not handed off; Codex review identity differs from the exact repository/source/main/policy",
+            "at": 1791491717726
+          },
+          "recoveryIntent": null,
+          "blockedUntil": 1791492317726
+        }
+      },
+      "previous": "c81f0e3833ff02016958e0016b07b3b581de5d93e90b8e3694e532b9a9f95aa5",
+      "digest": "a4febee71eeae85f7f2b5d48ef8da6394ec89a9b09d792c1dbb1703f24347802"
+    },
+    {
+      "sequence": 954,
+      "at": "2026-10-08T20:35:20.198Z",
+      "kind": "transaction",
+      "data": {
+        "id": "d225f616-79cc-4930-a791-03ec9b3728d2"
+      },
+      "previous": "a4febee71eeae85f7f2b5d48ef8da6394ec89a9b09d792c1dbb1703f24347802",
+      "digest": "87cabc0ab28c81e46d45b0585917ffcd67314e638bcc12ae38068743e78cc40d"
     }
   ]
 }
