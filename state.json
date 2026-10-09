@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/hyperreality-system",
-  "revision": 1132,
+  "revision": 1134,
   "tasks": {
     "85": {
       "number": 85,
@@ -22,7 +22,7 @@
         "apps/server/src/trpc/router.ts"
       ],
       "ciSince": 1791314008374,
-      "updatedAt": 1791525625659,
+      "updatedAt": 1791527116574,
       "alignmentCount": 1,
       "alignmentIntent": null,
       "developerReview": null,
@@ -50,7 +50,7 @@
         "at": 1791525317970
       },
       "recoveryIntent": null,
-      "blockedUntil": 1791526225659,
+      "blockedUntil": 1791527716574,
       "recoveryCount": 0,
       "reviewFailures": null,
       "candidate": null
@@ -22846,6 +22846,31 @@
       },
       "previous": "a540748a46d9f8a7fa2e38504089168ed579ace3cc3cfbec3e5c4480e900b48b",
       "digest": "f266e71d68d89a4f90442836911d95bb90ceaa8edc2a7ddeaaa71015c13b4ee1"
+    },
+    {
+      "sequence": 1133,
+      "at": "2026-10-09T06:25:16.574Z",
+      "kind": "task",
+      "data": {
+        "number": 85,
+        "patch": {
+          "status": "parked",
+          "error": "CNB 429 https://api.cnb.cool/workloom-ai/hyperreality-system/-/pulls/85 :: {\"errcode\":8,\"errmsg\":\"Too many requests. Please try again later.\"}\n",
+          "blockedUntil": 1791527716574
+        }
+      },
+      "previous": "f266e71d68d89a4f90442836911d95bb90ceaa8edc2a7ddeaaa71015c13b4ee1",
+      "digest": "afc5439ca38347410e140e73b9ec0ff4c5bc49292a5b6fa7cb870085eb101181"
+    },
+    {
+      "sequence": 1134,
+      "at": "2026-10-09T06:25:19.404Z",
+      "kind": "transaction",
+      "data": {
+        "id": "03aee410-7ab8-4267-89e3-3922917114a6"
+      },
+      "previous": "afc5439ca38347410e140e73b9ec0ff4c5bc49292a5b6fa7cb870085eb101181",
+      "digest": "3db2f7312f8e48d98d249ac455aef886f6f95852b10fc78d0e1d191dac98a2f0"
     }
   ]
 }
