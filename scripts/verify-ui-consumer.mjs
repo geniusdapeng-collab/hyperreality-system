@@ -111,7 +111,12 @@ const UI_STATE_SCHEMA = "workloom.ui-consumer-state/v1";
 const UI_PACKAGE = "@workloom/ui";
 const UI_CONTRACT_VERSION = "2.0.0";
 const UI_RELEASE_TYPE = "github-release-tarball";
-const CANONICAL_BASE_REPOSITORY = "workloom-ai/workloom-im";
+const CANONICAL_BASE_REPOSITORY = "geniusdapeng-collab/workloom-im";
+const LEGACY_BASE_REPOSITORY = "workloom-ai/workloom-im";
+function uiArtifactPlatform(state) {
+  const platform = state?.artifact?.platform ?? (state?.source === LEGACY_BASE_REPOSITORY ? "cnb" : "github");
+  return ["github", "cnb"].includes(platform) ? platform : null;
+}
 const EXACT_SEMVER = /^\d+\.\d+\.\d+$/u;
 const GOVERNANCE_TYPESCRIPT = "npm:typescript@5.9.3";
 const GOVERNANCE_YAML = "npm:yaml@2.9.0";
@@ -138,12 +143,14 @@ function validSha512(value) {
   }
 }
 
-function canonicalUiArtifact(version) {
+function canonicalUiArtifact(version, platform = "github") {
   const assetName = `workloom-ui-${version}.tgz`;
   return {
     type: UI_RELEASE_TYPE,
     assetName,
-    url: `https://cnb.cool/${CANONICAL_BASE_REPOSITORY}/-/releases/download/ui-v${version}/${assetName}`,
+    url: platform === "github"
+      ? `https://github.com/${CANONICAL_BASE_REPOSITORY}/releases/download/ui-v${version}/${assetName}`
+      : `https://cnb.cool/${LEGACY_BASE_REPOSITORY}/-/releases/download/ui-v${version}/${assetName}`,
     overrideSelector: `${UI_PACKAGE}@${version}`,
   };
 }
@@ -156,7 +163,9 @@ function isUiOverrideSelector(selector) {
 function validUiStateLockContract(state) {
   if (!state || typeof state !== "object" || Array.isArray(state)) return false;
   if (!EXACT_SEMVER.test(state.version ?? "")) return false;
-  const expectedArtifact = canonicalUiArtifact(state.version);
+  const platform = uiArtifactPlatform(state);
+  if (!platform) return false;
+  const expectedArtifact = canonicalUiArtifact(state.version, platform);
   const exactClientList = (value) => Array.isArray(value)
     && value.length === REQUIRED_CLIENT_PACKAGES.length
     && new Set(value).size === REQUIRED_CLIENT_PACKAGES.length
@@ -164,7 +173,7 @@ function validUiStateLockContract(state) {
   return state.schemaVersion === UI_STATE_SCHEMA
     && state.package === UI_PACKAGE
     && state.contractVersion === UI_CONTRACT_VERSION
-    && state.source === CANONICAL_BASE_REPOSITORY
+    && [CANONICAL_BASE_REPOSITORY, LEGACY_BASE_REPOSITORY].includes(state.source)
     && state.releaseChannel === "stable"
     && state.updatePolicy === "upgrade-pr-only"
     && exactClientList(state.requiredClientPackages)
@@ -715,10 +724,12 @@ export function verifyUiConsumerRepo(repoPath, { allowMissingClients = false, re
   if (state.schemaVersion !== UI_STATE_SCHEMA) errors.push(`.workloom-ui.json schemaVersion 必须为 ${UI_STATE_SCHEMA}`);
   if (state.package !== UI_PACKAGE) errors.push(`.workloom-ui.json package 必须为 ${UI_PACKAGE}`);
   if (state.contractVersion !== UI_CONTRACT_VERSION) errors.push(`.workloom-ui.json contractVersion 必须为 ${UI_CONTRACT_VERSION}`);
-  if (state.source !== CANONICAL_BASE_REPOSITORY) errors.push(`.workloom-ui.json source 必须为 ${CANONICAL_BASE_REPOSITORY}`);
+  if (![CANONICAL_BASE_REPOSITORY, LEGACY_BASE_REPOSITORY].includes(state.source)) errors.push(`.workloom-ui.json source 必须为官方基座身份 ${CANONICAL_BASE_REPOSITORY} 或 ${LEGACY_BASE_REPOSITORY}`);
+  const platform = uiArtifactPlatform(state);
+  if (!platform) errors.push("UI artifact.platform 必须为 github 或显式 legacy cnb");
   if (state.releaseChannel !== "stable") errors.push(".workloom-ui.json releaseChannel 必须为 stable");
   if (state.updatePolicy !== "upgrade-pr-only") errors.push("更新策略必须为 upgrade-pr-only");
-  const expectedArtifact = validVersion ? canonicalUiArtifact(state.version) : null;
+  const expectedArtifact = validVersion && platform ? canonicalUiArtifact(state.version, platform) : null;
   if (!state.artifact || typeof state.artifact !== "object" || Array.isArray(state.artifact)) {
     errors.push(".workloom-ui.json 缺少 GitHub Release artifact 契约");
   } else {
