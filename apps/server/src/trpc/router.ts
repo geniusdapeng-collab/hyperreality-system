@@ -20,7 +20,7 @@ import {
   signDemoToken,
   type Identity,
 } from "@workloom/base/tenancy";
-import { gatewayAppend, gatewayAppendOnClient, insertWithReadableId, MockEmbedder, THREAD_ID_SOURCE, upsertMemoryInTx } from "@workloom/base/workdata";
+import { canonicalJson, gatewayAppend, gatewayAppendOnClient, insertWithReadableId, MockEmbedder, THREAD_ID_SOURCE, upsertMemoryInTx } from "@workloom/base/workdata";
 import { INTENT_ROUTE_TIMEOUT_DISPATCH_MS, makeReadableId } from "@workloom/shared";
 import { registerAskKbSearch } from "@workloom/runtime";
 
@@ -59,11 +59,13 @@ import {
   resumeNight,
 } from "@workloom/base/night-shift";
 import {
-  activateRuleVersion,
-  confirmDryRun,
+  confirmDryRunOnTx,
   createDryRun,
-  fenceActivationFromProposal,
-  fenceRuleRowId,
+  nextRuleRowIdentity,
+  loadActiveRulesInTx,
+  checkCandidateAgainstBaseline,
+  type RuntimeRule,
+  type DryRunReport,
 } from "@workloom/base/fence-engine";
 import { MAX_CONCURRENT_THREADS, PLAN_TIERS } from "@workloom/shared";
 import {
@@ -1254,57 +1256,6 @@ const threadsRouter = router({
     }),
 });
 
-/**
- * E1 联调接线（PF.5/F2.4）：审批手势通过后的副作用分发——
- * 被审批事件为 fence.rule.propose 且手势=通过 → 激活对应围栏规则版本（activateRuleVersion）。
- * 幂等：规则已离开 pending_approval/draft（重复回调/重复提案）时跳过不报错（L5.3 同口径）。
- * 返回激活的规则行 ID（未触发接线返回 null）。
- */
-async function activateFenceRuleAfterApproval(
-  scope: { tenantId: string; workspaceId: string },
-  approvalId: string,
-): Promise<string | null> {
-  const app = getAppPool();
-  const client = await app.connect();
-  try {
-    // 事务级 RLS 上下文必须在显式事务内设置：autocommit 下 set_config(...,true) 语句结束即失效
-    await client.query("BEGIN");
-    await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-    await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-    const r = await client.query<{ payload: unknown }>(
-      `SELECT e.payload FROM approvals a JOIN biz_events e ON e.event_id = a.event_id
-       WHERE a.approval_id=$1 AND a.workspace_id=$2`,
-      [approvalId, scope.workspaceId],
-    );
-    const params = fenceActivationFromProposal(r.rows[0]?.payload, scope.workspaceId);
-    if (!params) return null;
-    // 审批留痕 ID = 手势回写事件（approval.gesture，F5.5 经安全网关落库）
-    const g = await client.query<{ event_id: string }>(
-      `SELECT event_id FROM biz_events
-       WHERE workspace_id=$1 AND payload->'decision'->>'action'='approval.gesture'
-         AND payload->'decision'->'after'->>'approvalId'=$2
-       ORDER BY seq DESC LIMIT 1`,
-      [scope.workspaceId, approvalId],
-    );
-    const approvalEventId = g.rows[0]?.event_id;
-    if (!approvalEventId) return null;
-    const st = await client.query<{ status: string }>(
-      `SELECT status FROM fence_rules WHERE id=$1 AND workspace_id=$2`,
-      [params.ruleRowId, scope.workspaceId],
-    );
-    const status = st.rows[0]?.status;
-    if (status !== "draft" && status !== "pending_approval") return null; // 幂等跳过
-    await activateRuleVersion(app, scope, { ...params, approvalEventId });
-    return params.ruleRowId;
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw err;
-  } finally {
-    await client.query("COMMIT").catch(() => undefined);
-    client.release();
-  }
-}
-
 /** approvals router（B6：统一队列/三手势/批量/超时扫描；L5.1 服务端强制鉴权） */
 const approvalsRouter = router({
   list: protectedProcedure
@@ -1313,7 +1264,7 @@ const approvalsRouter = router({
       return listQueue(getAppPool(), scopeOf(ctx.identity), { status: input?.status });
     }),
 
-  decide: protectedProcedure
+  decide: actionProcedure("approval.decide")
     .input(
       z.object({
         approvalId: z.string(),
@@ -1335,9 +1286,8 @@ const approvalsRouter = router({
           input.approvalId,
           { type: input.gesture, reasonEnum: input.reasonEnum, reasonText: input.reasonText, editedAfter: input.editedAfter, editKind: input.editKind },
         );
-        // E1 联调接线（PF.5/F2.4）：fence.rule.propose 手势通过 → 激活规则版本
-        if (!res.deduped && res.status === "approved") {
-          await activateFenceRuleAfterApproval(scopeOf(ctx.identity), input.approvalId);
+        // 围栏激活已在 decide 的审批事务内完成；其余已批准动作保持原有后置联动。
+        if (!res.deduped && res.status === "approved" && !res.activatedRuleRowId) {
           // D22 汰换重生：hr.replacement 批准 → 旧停用 + 新员工上岗
           const scope2 = scopeOf(ctx.identity);
           const app2 = getAppPool();
@@ -1372,7 +1322,7 @@ const approvalsRouter = router({
       }
     }),
 
-  batchApprove: protectedProcedure
+  batchApprove: actionProcedure("approval.decide")
     .input(z.object({ approvalIds: z.array(z.string()).min(1).max(50) }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -1383,10 +1333,6 @@ const approvalsRouter = router({
           { memberNo: ctx.identity.memberNo, role: ctx.identity.role },
           input.approvalIds,
         );
-        // E1 联调接线（PF.5/F2.4）：批量采纳通过项同样触发围栏激活接线（防御性；围栏提案标记 high_risk 本不可批量）
-        for (const id of res.approved) {
-          await activateFenceRuleAfterApproval(scopeOf(ctx.identity), id);
-        }
         return res;
       } catch (err) {
         if (err instanceof ApprovalError) {
@@ -1397,7 +1343,7 @@ const approvalsRouter = router({
     }),
 
   /** 超时升级扫描（F5.7；高危项不自动放行 L5.4）——由触发器/巡检调度调用 */
-  sweep: writeProcedure.mutation(async ({ ctx }) => {
+  sweep: actionProcedure("approval.decide").mutation(async ({ ctx }) => {
     return expireSweep(getAppPool(), getGatewayPool(), scopeOf(ctx.identity));
   }),
 });
@@ -2083,7 +2029,7 @@ const fenceRouter = router({
   }),
 
   /** NL 新增群规 dry-run（P5E3/P5E4：候选规则回放最近 10 条 F2.5；未确认不生效 L2.4） */
-  dryRun: writeProcedure
+  dryRun: actionProcedure("guardrail.manage")
     .input(z.object({
       ruleId: z.string().regex(/^R\d+$/),
       name: z.string().min(1).max(100),
@@ -2107,19 +2053,18 @@ const fenceRouter = router({
     }),
 
   /** 确认 dry-run（人看过报告才激活 L2.4）→ 规则进 pending_approval + 变更审批（F2.4，走 P4 决断流） */
-  confirmDryRun: writeProcedure
+  confirmDryRun: actionProcedure("guardrail.manage")
     .input(z.object({
-      dryRunId: z.string(),
+      dryRunId: z.string().min(1),
       rule: z.object({
-        ruleId: z.string(), name: z.string(), level: z.enum(["auto", "review", "block"]),
-        objectTypes: z.array(z.string()), actions: z.array(z.string()), when: z.string(),
+        ruleId: z.string().regex(/^R\d+$/), name: z.string().min(1).max(100), level: z.enum(["auto", "review", "block"]),
+        objectTypes: z.array(z.string().min(1)).min(1), actions: z.array(z.string().min(1)).min(1), when: z.string().min(1),
       }),
     }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
-      await confirmDryRun(getAppPool(), scope, input.dryRunId);
       // 规则草稿进 pending_approval（激活须审批事件 ID，activateRuleVersion 在 P4 手势后调用——E1 已接线，见下方 decide/batchApprove）
-      // D16（#1/A）：规则草稿行、提案事件、审批行三者同一事务同一 COMMIT
+      // 确认、版本分配、候选行、提案和审批同一事务，失败不能留下已确认却无候选的半态。
       const app = getAppPool();
       const client = await app.connect();
       let ev: { eventId: string };
@@ -2127,12 +2072,39 @@ const fenceRouter = router({
         await client.query("BEGIN");
         await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
         await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-        const rowId = fenceRuleRowId(input.rule.ruleId, scope.workspaceId);
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`fence-proposal:${scope.workspaceId}:${input.rule.ruleId.toLowerCase()}`]);
+        const dryRun = await client.query<{ rule_id: string; status: string; report: DryRunReport }>(
+          `SELECT rule_id, status, report FROM fence_dry_runs WHERE id=$1 AND workspace_id=$2 FOR UPDATE`,
+          [input.dryRunId, scope.workspaceId],
+        );
+        const recorded = dryRun.rows[0];
+        if (!recorded || recorded.status !== "pending") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "预演不存在、已确认或不属于当前工作区，请重新预演" });
+        }
+        const candidate: RuntimeRule = {
+          rule_id: input.rule.ruleId, version: "v-next", name: input.rule.name, level: input.rule.level,
+          is_baseline: false, objectTypes: input.rule.objectTypes, actions: input.rule.actions, when: input.rule.when,
+        };
+        const snapshotOf = (rule: RuntimeRule) => ({
+          rule_id: rule.rule_id, name: rule.name, level: rule.level,
+          objectTypes: [...rule.objectTypes].sort(), actions: [...rule.actions].sort(), when: rule.when,
+        });
+        const tested = recorded.report.candidateRules;
+        if (recorded.rule_id !== input.rule.ruleId || recorded.report.candidateDefaultLevel !== "review"
+          || !tested || tested.length !== 1 || canonicalJson(snapshotOf(tested[0]!)) !== canonicalJson(snapshotOf(candidate))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "候选规则与预演报告不一致或缺少候选快照，请重新预演后确认" });
+        }
+        const current = await loadActiveRulesInTx(client, scope);
+        const monotonic = checkCandidateAgainstBaseline(current, candidate);
+        if (!monotonic.ok) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `基线规则只可加严，本次变更被拒：${monotonic.violations.map((v) => v.reason).join("；")}` });
+        }
+        await confirmDryRunOnTx(client, scope, input.dryRunId);
+        const identity = await nextRuleRowIdentity(client, scope, input.rule.ruleId);
         await client.query(
           `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
-           VALUES ($1,$2,'v-next',$3,$4,$5,$6,$7,false,'pending_approval',$8)
-           ON CONFLICT (id) DO NOTHING`,
-          [rowId, input.rule.ruleId, scope.workspaceId, input.rule.name, input.rule.level,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,'pending_approval',$9)`,
+          [identity.rowId, input.rule.ruleId, identity.version, scope.workspaceId, input.rule.name, input.rule.level,
            JSON.stringify({ object_types: input.rule.objectTypes, actions: input.rule.actions, when: input.rule.when }),
            JSON.stringify({ result: input.rule.level }), ctx.identity.memberNo],
         );
@@ -2142,7 +2114,10 @@ const fenceRouter = router({
           who: { type: "human", id: ctx.identity.memberNo },
           context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "inapp" },
           object: { type: "staff", id: input.rule.ruleId },
-          decision: { action: "fence.rule.propose", after: { ...input.rule, dryRunId: input.dryRunId } },
+          decision: { action: "fence.rule.propose", after: {
+            ...input.rule, dryRunId: input.dryRunId, ruleRowId: identity.rowId, version: identity.version,
+            inheritedBaseline: identity.inheritedBaseline,
+          } },
           rule_impact: [],
         });
         // E1 联调接线（PF.5/F2.4）：围栏变更提案进 P4 决断队列——高危（不可批量采纳，须逐条手势，F5.4/G6）
@@ -2152,7 +2127,7 @@ const fenceRouter = router({
            VALUES ($1,$2,$3,$4,'inapp','pending',$5)
            ON CONFLICT (event_id, channel) DO NOTHING`,
           [`apr-${ev.eventId.toLowerCase()}`, scope.tenantId, scope.workspaceId, ev.eventId,
-           JSON.stringify({ after: input.rule, high_risk: true })],
+           JSON.stringify({ after: { ...input.rule, ruleRowId: identity.rowId, version: identity.version }, high_risk: true })],
         );
         await client.query("COMMIT");
       } catch (err) {
@@ -2470,7 +2445,7 @@ function imRethrow(err: unknown): never {
     });
   }
   if (err instanceof ApprovalError) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+    throw new TRPCError({ code: err.code === "FORBIDDEN_ROLE" ? "FORBIDDEN" : "BAD_REQUEST", message: err.message });
   }
   throw err;
 }
@@ -2567,7 +2542,7 @@ const imRouter = router({
   /** 手势回调（F5.4 手势回写多通道；decide 内聚 L5.1/L5.2/L5.3/E5.3 全纪律）
    *  P0-1 通道验签：secret 已配置 → x-channel-signature 必须通过；开发缺省 secret 降级为
    *  「仅允许会话成员本人操作」（operatorOpenId 必须等于当前会话成员在该通道绑定的 openid），响应标注 unsigned:true */
-  callback: writeProcedure
+  callback: actionProcedure("approval.decide")
     .input(
       z.object({
         channel: z.enum(["dingtalk", "wecom", "feishu"]),

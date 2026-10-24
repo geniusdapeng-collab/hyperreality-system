@@ -8,7 +8,12 @@ export const UI_STATE_SCHEMA = "workloom.ui-consumer-state/v1";
 export const UI_PACKAGE = "@workloom/ui";
 export const UI_CONTRACT_VERSION = "2.0.0";
 export const UI_RELEASE_TYPE = "github-release-tarball";
-export const CANONICAL_BASE_REPOSITORY = "workloom-ai/workloom-im";
+export const CANONICAL_BASE_REPOSITORY = "geniusdapeng-collab/workloom-im";
+export const LEGACY_BASE_REPOSITORY = "workloom-ai/workloom-im";
+export function uiArtifactPlatform(state) {
+  const platform = state?.artifact?.platform ?? (state?.source === LEGACY_BASE_REPOSITORY ? "cnb" : "github");
+  return ["github", "cnb"].includes(platform) ? platform : null;
+}
 export const LOCKFILE_NAME = "pnpm-lock.yaml";
 export const REQUIRED_CLIENT_PACKAGES = Object.freeze([
   "apps/web/package.json",
@@ -30,12 +35,15 @@ export function validSha512(value) {
   }
 }
 
-export function canonicalUiArtifact(version) {
+export function canonicalUiArtifact(version, platform = "github") {
+  if (!["github", "cnb"].includes(platform)) throw new Error("UI artifact platform must be github or explicit legacy cnb");
   const assetName = `workloom-ui-${version}.tgz`;
   return {
     type: UI_RELEASE_TYPE,
     assetName,
-    url: `https://cnb.cool/${CANONICAL_BASE_REPOSITORY}/-/releases/download/ui-v${version}/${assetName}`,
+    url: platform === "github"
+      ? `https://github.com/${CANONICAL_BASE_REPOSITORY}/releases/download/ui-v${version}/${assetName}`
+      : `https://cnb.cool/${LEGACY_BASE_REPOSITORY}/-/releases/download/ui-v${version}/${assetName}`,
     overrideSelector: `${UI_PACKAGE}@${version}`,
   };
 }
@@ -57,12 +65,14 @@ export function uiStateLockContractErrors(state) {
   if (state.package !== UI_PACKAGE) errors.push(`package 必须为 ${UI_PACKAGE}`);
   if (!validVersion) errors.push("version 必须是精确稳定 semver");
   if (state.contractVersion !== UI_CONTRACT_VERSION) errors.push(`contractVersion 必须为 ${UI_CONTRACT_VERSION}`);
-  if (state.source !== CANONICAL_BASE_REPOSITORY) errors.push(`source 必须为 ${CANONICAL_BASE_REPOSITORY}`);
+  if (![CANONICAL_BASE_REPOSITORY, LEGACY_BASE_REPOSITORY].includes(state.source)) errors.push(`source 必须为官方基座身份 ${CANONICAL_BASE_REPOSITORY} 或 ${LEGACY_BASE_REPOSITORY}`);
+  const platform = uiArtifactPlatform(state);
+  if (!platform) errors.push("artifact.platform 必须为 github 或显式 legacy cnb");
   if (state.releaseChannel !== "stable") errors.push("releaseChannel 必须为 stable");
   if (state.updatePolicy !== "upgrade-pr-only") errors.push("updatePolicy 必须为 upgrade-pr-only");
   if (!exactClientList(state.requiredClientPackages)) errors.push("requiredClientPackages 必须精确登记固定三端");
   if (!exactClientList(state.connectedClientPackages)) errors.push("connectedClientPackages 必须精确登记固定三端");
-  const expected = validVersion ? canonicalUiArtifact(state.version) : null;
+  const expected = validVersion && platform ? canonicalUiArtifact(state.version, platform) : null;
   if (!state.artifact || typeof state.artifact !== "object" || Array.isArray(state.artifact)) {
     errors.push("缺少 artifact 对象");
   } else {

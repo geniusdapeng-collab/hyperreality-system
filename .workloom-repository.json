@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "workloom.repository/v1",
+  "logicalId": "hyperreality-system",
+  "productId": "hyperreality-system",
+  "lane": "industry",
+  "primaryPlatform": "github",
+  "github": {
+    "repository": "geniusdapeng-collab/hyperreality-system",
+    "url": "https://github.com/geniusdapeng-collab/hyperreality-system",
+    "branch": "main"
+  },
+  "cnb": {
+    "repository": "workloom-ai/hyperreality-system",
+    "url": "https://cnb.cool/workloom-ai/hyperreality-system",
+    "branch": "main"
+  },
+  "mirrorPolicy": {
+    "platform": "cnb",
+    "mode": "deferred",
+    "automaticProductSync": false,
+    "configBackupBranchPrefix": "workloom/config-backup/"
+  },
+  "baseSync": {
+    "receive": "subscribed",
+    "reflux": "proposal-only",
+    "pathPrefix": "",
+    "extraExclude": [],
+    "uiRolloutWave": "W3A"
+  },
+  "registry": {
+    "repository": "geniusdapeng-collab/workloom-im",
+    "path": "sync/repository-registry.json"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "workloom.delivery/v1",
+  "platform": "github",
+  "branch": "main",
+  "workflow": "codex-review-and-existing-checks",
+  "mergeMethod": "merge",
+  "requireExactHead": true,
+  "requireMainIntegrationReceipt": true,
+  "preserveExistingChecks": true,
+  "review": {
+    "actor": "codex",
+    "bindHeadAndBase": true,
+    "requirePassedTests": true
+  },
+  "mirror": {
+    "platform": "cnb",
+    "mode": "deferred",
+    "blocksGithubDelivery": false,
+    "automaticProductSync": false
+  }
+}
