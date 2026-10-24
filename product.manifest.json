@@ -4,7 +4,7 @@
   "role": "industry",
   "displayName": "HyperReality 智能视频经营系统",
   "packageName": "hyperreality",
-  "repository": "workloom-ai/hyperreality-system",
+  "repository": "geniusdapeng-collab/hyperreality-system",
   "defaultBundle": "ai-video",
   "demoWorkspaceSlug": "video-studio",
   "demoMemberNo": "MEM-V01",
@@ -18,8 +18,17 @@
     "portOffset": 310
   },
   "clients": {
-    "bPc": { "enabled": true, "entry": "apps/web" },
-    "bMobile": { "enabled": true, "entry": "apps/webb" },
-    "cMobile": { "enabled": true, "entry": "apps/webc" }
+    "bPc": {
+      "enabled": true,
+      "entry": "apps/web"
+    },
+    "bMobile": {
+      "enabled": true,
+      "entry": "apps/webb"
+    },
+    "cMobile": {
+      "enabled": true,
+      "entry": "apps/webc"
+    }
   }
 }
