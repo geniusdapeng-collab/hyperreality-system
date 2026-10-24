@@ -182,6 +182,17 @@ d("PG 集成（dry-run / 激活门禁 / 对象写锁）", async () => {
     await confirmDryRun(appPool, scope, dr.dryRunId);
     await expect(confirmDryRun(appPool, scope, dr.dryRunId)).rejects.toThrow(/非 pending/);
   });
+
+  it("已确认的 dry-run 不能被另一个工作区用于激活", async () => {
+    const dr = await createDryRun(appPool, scope, {
+      ruleId: "R2", ruleVersion: pack.version, rules: pack.rules,
+      defaultLevel: pack.defaultLevel, createdBy: "MEM-001",
+    });
+    await confirmDryRun(appPool, scope, dr.dryRunId);
+    await expect(activateRuleVersion(appPool, { ...scope, workspaceId: `${scope.workspaceId}-foreign` }, {
+      ruleRowId: "fr-r2-v1-ws-yunqi", dryRunId: dr.dryRunId, approvalEventId: "E-8804",
+    })).rejects.toThrow(/未确认/);
+  });
 });
 
 /* ================= E1 联调接线：审批 → 激活参数提取（纯函数，PF.5/F2.4） ================= */
@@ -190,22 +201,33 @@ describe("fenceActivationFromProposal（E1 审批→激活接线）", () => {
   const WS = "ws-yunqi";
 
   it("fenceRuleRowId 生成口径稳定（与 confirmDryRun 入库一致）", () => {
-    expect(fenceRuleRowId("R7", WS)).toBe("fr-r7-vnext-ws-yunqi");
+    expect(fenceRuleRowId("R7", WS, "v2")).toBe("fr-r7-v2-ws-yunqi");
+    expect(fenceRuleRowId("R7", WS, "v3")).toBe("fr-r7-v3-ws-yunqi");
   });
 
   it("fence.rule.propose 事件 → 提取 ruleRowId + dryRunId", () => {
     const payload = {
-      decision: { action: "fence.rule.propose", after: { ruleId: "R7", dryRunId: "fdr-r7-abc" } },
+      decision: { action: "fence.rule.propose", after: {
+        ruleId: "R7", ruleRowId: "fr-r7-v2-ws-yunqi", version: "v2", dryRunId: "fdr-r7-abc", allowWhenChange: true,
+      } },
     };
     expect(fenceActivationFromProposal(payload, WS)).toEqual({
-      ruleRowId: "fr-r7-vnext-ws-yunqi",
+      ruleRowId: "fr-r7-v2-ws-yunqi",
       dryRunId: "fdr-r7-abc",
+      allowWhenChange: true,
     });
+  });
+
+  it("旧提案携带版本时按当前工作区派生行 ID，不复用其他工作区行", () => {
+    const payload = { decision: { action: "fence.rule.propose", after: { ruleId: "R7", version: "v3", dryRunId: "fdr-r7-legacy" } } };
+    expect(fenceActivationFromProposal(payload, WS)).toEqual({ ruleRowId: "fr-r7-v3-ws-yunqi", dryRunId: "fdr-r7-legacy" });
+    expect(fenceActivationFromProposal(payload, "ws-other")).toEqual({ ruleRowId: "fr-r7-v3-ws-other", dryRunId: "fdr-r7-legacy" });
   });
 
   it("非提案事件 / 缺字段 → null（不激活）", () => {
     expect(fenceActivationFromProposal({ decision: { action: "price.adjust" } }, WS)).toBeNull();
     expect(fenceActivationFromProposal({ decision: { action: "fence.rule.propose", after: { ruleId: "R7" } } }, WS)).toBeNull();
+    expect(fenceActivationFromProposal({ decision: { action: "fence.rule.propose", after: { ruleId: "R7", dryRunId: "fdr-r7-no-version" } } }, WS)).toBeNull();
     expect(fenceActivationFromProposal(null, WS)).toBeNull();
     expect(fenceActivationFromProposal({}, WS)).toBeNull();
   });

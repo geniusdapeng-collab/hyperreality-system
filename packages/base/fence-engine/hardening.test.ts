@@ -12,7 +12,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkCandidateAgainstBaseline, checkMonotonic, loadFencePack } from "./dsl.js";
+import YAML from "yaml";
+import { checkCandidateAgainstBaseline, checkMonotonic, fenceRulesOf, loadFencePack } from "./dsl.js";
 import { judge, type RuntimeRule } from "./judge.js";
 import {
   checkPermission, checkHighRiskAuthorization, classifyAction, isReadAction, isWriteAction,
@@ -131,27 +132,61 @@ describe("HP-02 ② 未知动作与规则匹配 fail-closed", () => {
   });
 });
 
-describe.skipIf(!hasHotelPack)("HP-02 ④ DSL 装载器与出厂包一致", () => {
-  it("ai-pm / platform 的 fences: 形态可装载且规则数正确", () => {
-    // 本文件随基座分发到所有子仓，而 bundles/** 属行业资产（platform 包仅存在于仙女座/基座）：
-    // 按包存在性守卫，缺包即跳过该包断言，避免子仓出现"文件不存在"的假红灯。
-    if (existsSync(aipmPackPath)) {
-      const aipm = loadFencePack(readFileSync(aipmPackPath, "utf-8"));
-      expect(aipm.rules.length).toBe(14);
+describe("HP-02 ④ DSL 元数据契约与随附行业资产", () => {
+  const runtimeFixture = {
+    version: "fixture-v1", default_level: "review",
+    fences: [{
+      rule_id: "R1", name: "运行时 DSL 契约", level: "review",
+      match: { object_types: ["fixture"], actions: ["fixture.write"] },
+    }],
+  };
+
+  it("完整元数据的 fences: 包可装载；缺失元数据不能冒充运行时包", () => {
+    const loaded = loadFencePack(YAML.stringify(runtimeFixture));
+    expect(loaded.version).toBe("fixture-v1");
+    expect(loaded.defaultLevel).toBe("review");
+    expect(loaded.rules).toEqual([{
+      rule_id: "R1", version: "fixture-v1", name: "运行时 DSL 契约", level: "review",
+      is_baseline: true, objectTypes: ["fixture"], actions: ["fixture.write"], when: "",
+    }]);
+    expect(() => loadFencePack(YAML.stringify({ fences: runtimeFixture.fences }))).toThrow();
+  });
+
+  it.skipIf(!existsSync(aipmPackPath))("ai-pm 资产按其已声明格式保留完整规则", () => {
+    const text = readFileSync(aipmPackPath, "utf-8");
+    const raw = YAML.parse(text) as { version?: unknown; default_level?: unknown; fences?: unknown };
+    if (raw.version !== undefined || raw.default_level !== undefined) {
+      const aipm = loadFencePack(text);
+      expect(aipm.rules).toHaveLength(14);
       expect(aipm.defaultLevel).toBe("review");
+      expect(new Set(aipm.rules.map((rule) => rule.rule_id)).size).toBe(14);
+      return;
     }
-    if (existsSync(platformPackPath)) {
-      const platform = loadFencePack(readFileSync(platformPackPath, "utf-8"));
-      expect(platform.rules.length).toBe(10);
-    }
-    if (!existsSync(hotelPackPath) && !existsSync(aipmPackPath) && !existsSync(platformPackPath)) {
-      expect(true).toBe(true); // 该仓未随附任何示例围栏包：本用例无对象可校验（已在上面按包跳过）
+    // 旧版 ai-pm 资产由 seed-aipm 的 YAML.parse(...).fences 消费，未宣称是运行时 DSL。
+    // 用受支持的松散适配器核对全部七条，不能为了测试改写原资产或伪造缺失元数据。
+    const rules = fenceRulesOf(raw);
+    expect(rules).toEqual(raw.fences);
+    expect(rules.map((rule) => rule.rule_id)).toEqual(Array.from({ length: 7 }, (_, i) => `R-PM${i + 1}`));
+    expect(rules.map((rule) => rule.level)).toEqual(["review", "review", "review", "block", "review", "review", "review"]);
+    for (const rule of rules) {
+      expect(rule.name).toEqual(expect.any(String));
+      expect(rule.match).toEqual({
+        object_types: expect.arrayContaining([expect.any(String)]),
+        actions: expect.arrayContaining([expect.any(String)]),
+      });
+      expect(rule.action).toEqual({ result: rule.level });
     }
   });
 
+  it.skipIf(!existsSync(platformPackPath))("platform 运行时包包含十条可判定规则", () => {
+    const platform = loadFencePack(readFileSync(platformPackPath, "utf-8"));
+    expect(platform.rules).toHaveLength(10);
+    expect(platform.defaultLevel).toBe("review");
+  });
+
   it("重复 rule_id 装载即拒（防 patchById 静默取最后一条）", () => {
-    const dup = readFileSync(hotelPackPath, "utf-8").replace("rule_id: R3", "rule_id: R2");
-    expect(() => loadFencePack(dup)).toThrowError(/重复|R2/);
+    const duplicate = { ...runtimeFixture, fences: [...runtimeFixture.fences, { ...runtimeFixture.fences[0]!, name: "重复规则" }] };
+    expect(() => loadFencePack(YAML.stringify(duplicate))).toThrowError(/重复|R1/);
   });
 });
 
@@ -231,7 +266,11 @@ describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本�
   }
 
   /** 造一条真实审批链：fence.rule.propose 事件 → approved 审批行 → approval.gesture 事件 */
-  async function buildApprovalChain(ruleId: string, dryRunId: string): Promise<string> {
+  async function buildApprovalChain(
+    ruleId: string,
+    dryRunId: string,
+    binding: { ruleRowId?: string; version?: string; allowWhenChange?: boolean } = {},
+  ): Promise<string> {
     return withAppTx(async (client) => {
       const proposal = await gatewayAppendOnClient(
         client,
@@ -240,7 +279,10 @@ describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本�
           who: { type: "human", id: "MEM-001" },
           context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "inapp" },
           object: { type: "staff", id: ruleId },
-          decision: { action: "fence.rule.propose", after: { ruleId, dryRunId } },
+          decision: { action: "fence.rule.propose", after: {
+            ruleId, dryRunId, ruleRowId: binding.ruleRowId ?? rowId(ruleId),
+            version: binding.version ?? "v-next", allowWhenChange: binding.allowWhenChange === true,
+          } },
           rule_impact: [],
         } as never,
       );
@@ -288,6 +330,20 @@ describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本�
     await expect(activateRuleVersion(appPool, scope, {
       ruleRowId: rowId(newRuleId), dryRunId: dr.dryRunId, approvalEventId: `E-FAKE-${suffix}`,
     })).rejects.toThrowError(/未绑定|伪造/);
+  });
+
+  it("真实 approved 审批也不能被换绑到另一个候选行", async () => {
+    const dr = await createDryRun(appPool, scope, {
+      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPackRules,
+      defaultLevel: hotelPackDefaultLevel, createdBy: "MEM-001",
+    });
+    await confirmDryRun(appPool, scope, dr.dryRunId);
+    await insertCandidate(newRuleId, "review", "after.price < 300");
+    const wrongRule = `R${Number(newRuleId.slice(1)) + 10000}`;
+    const gestureEventId = await buildApprovalChain(wrongRule, dr.dryRunId);
+    await expect(activateRuleVersion(appPool, scope, {
+      ruleRowId: rowId(newRuleId), dryRunId: dr.dryRunId, approvalEventId: gestureEventId,
+    })).rejects.toThrowError(/未绑定/);
   });
 
   it("基线规则放宽在激活期被单调守卫拒绝（level 降档）", async () => {
@@ -359,7 +415,9 @@ describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本�
       });
       await confirmDryRun(appPool, scope, dr.dryRunId);
       await insertProposalRow(row, level, opts.when ?? defaultWhen);
-      const gestureEventId = await buildApprovalChain(mcRule, dr.dryRunId);
+      const gestureEventId = await buildApprovalChain(mcRule, dr.dryRunId, {
+        ruleRowId: row.rowId, version: row.version, allowWhenChange: opts.allowWhenChange,
+      });
       return activateRuleVersion(appPool, scope, {
         ruleRowId: row.rowId, dryRunId: dr.dryRunId, approvalEventId: gestureEventId,
         allowWhenChange: opts.allowWhenChange,

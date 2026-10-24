@@ -21,6 +21,9 @@ import {
   type MemberRole,
 } from "@workloom/shared";
 import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
+import {
+  activateRuleVersionOnTx, FenceActivationError, fenceActivationFromProposal, lockRuleActivationOnTx,
+} from "../fence-engine/lifecycle.js";
 import { upsertMemory, upsertMemoryInTx, MockEmbedder, type Embedder } from "../workdata/memory.js";
 import { assertEditKindValid, assertReasonEnumAllowed, type EditKind } from "../evolve/feedback-enums.js";
 
@@ -66,7 +69,7 @@ export function isHighRiskApproval(row: Pick<ApprovalRow, "tier" | "snapshot">):
 
 export class ApprovalError extends Error {
   constructor(
-    public readonly code: "FORBIDDEN_ROLE" | "EMPTY_REASON" | "REASON_TOO_LONG" | "EDIT_REQUIRES_AFTER" | "EXPIRED" | "NOT_FOUND" | "INVALID_GESTURE",
+    public readonly code: "FORBIDDEN_ROLE" | "EMPTY_REASON" | "REASON_TOO_LONG" | "EDIT_REQUIRES_AFTER" | "EXPIRED" | "NOT_FOUND" | "INVALID_GESTURE" | "ACTIVATION_REJECTED",
     message: string,
   ) {
     super(message);
@@ -170,6 +173,8 @@ export interface DecideResult {
   /** true = 重复回调，只处理首次（L5.3） */
   deduped: boolean;
   gestureEventId?: string;
+  /** 围栏批准与此行激活已在同一事务提交，调用方不得再走提交后激活。 */
+  activatedRuleRowId?: string;
 }
 
 export async function decide(
@@ -195,11 +200,32 @@ export async function decide(
   // scoped 已包裹显式事务（BEGIN→set_config→COMMIT/ROLLBACK），本函数内不再自行开关事务；
   // 过期分支需要「标 expired 落库 + 抛 EXPIRED」——先提交事务再抛，避免 catch 回滚掉过期标记
   const txResult = await scoped(app, scope, async (c) => {
-    const cur = await c.query<ApprovalRow>(
-      `SELECT * FROM approvals WHERE approval_id=$1 AND workspace_id=$2 FOR UPDATE`,
+    // 所有入口（端内、IM 与直接服务调用）复核同一成员事实，不能只信传入 role。
+    const authority = await c.query<{ role: string; permissions: Record<string, unknown> | null }>(
+      `SELECT m.role, m.permissions FROM members m
+         JOIN workspaces w ON w.id=m.workspace_id JOIN tenants t ON t.id=w.tenant_id
+        WHERE m.workspace_id=$1 AND m.member_no=$2 AND w.tenant_id=$3
+          AND m.status='active' AND t.status='active'`,
+      [scope.workspaceId, actor.memberNo, scope.tenantId],
+    );
+    const member = authority.rows[0];
+    const permissions = member?.permissions ?? {};
+    const denied = permissions["approval.decide"] === false
+      || (Array.isArray(permissions.deny) && permissions.deny.includes("approval.decide"));
+    if (!member || !["owner", "manager", "staff"].includes(member.role) || denied) {
+      throw new ApprovalError("FORBIDDEN_ROLE", "当前成员没有审批裁决权限（approval.decide），或成员/租户已停用");
+    }
+    const anchor = await c.query<{ event_id: string }>(
+      `SELECT event_id FROM approvals WHERE approval_id=$1 AND workspace_id=$2`,
       [approvalId, scope.workspaceId],
     );
-    const row = cur.rows[0];
+    if (!anchor.rows[0]) throw new ApprovalError("NOT_FOUND", `审批 ${approvalId} 不存在`);
+    // 同事件的全部通道按固定顺序一次锁定，不能各先锁本行再互等对方行。
+    const group = await c.query<ApprovalRow>(
+      `SELECT * FROM approvals WHERE event_id=$1 AND workspace_id=$2 ORDER BY approval_id FOR UPDATE`,
+      [anchor.rows[0].event_id, scope.workspaceId],
+    );
+    const row = group.rows.find((approval) => approval.approval_id === approvalId);
     if (!row) throw new ApprovalError("NOT_FOUND", `审批 ${approvalId} 不存在`);
 
     // L5.3：非 pending 一律视为重复回调，只处理首次
@@ -207,14 +233,8 @@ export async function decide(
       return { kind: "deduped" as const, row };
     }
 
-    // #43 修复：同事件跨通道幂等——UNIQUE(event_id,channel) 允许 inapp/dingtalk 各一行，
-    // 此前两通道可各批一次（同一动作双批双留痕）。锁同事件全部审批行（FOR UPDATE
-    // 阻塞并发他通道 decide 至本事务提交），任一他行已终态即按重复回调处理
-    const siblings = await c.query<{ approval_id: string; status: ApprovalStatus }>(
-      `SELECT approval_id, status FROM approvals WHERE event_id=$1 AND workspace_id=$2 AND approval_id<>$3 FOR UPDATE`,
-      [row.event_id, scope.workspaceId, approvalId],
-    );
-    const decidedElsewhere = siblings.rows.find((x) => x.status !== "pending");
+    // #43：同事件任一其他通道已处理即去重；上方固定锁序保证并发调用不会互锁。
+    const decidedElsewhere = group.rows.find((approval) => approval.approval_id !== approvalId && approval.status !== "pending");
     if (decidedElsewhere) {
       return { kind: "deduped" as const, row: { ...row, status: decidedElsewhere.status } };
     }
@@ -257,13 +277,33 @@ export async function decide(
      *     runQuest 续跑（#34 恢复闭环携带 approvalRef 直接执行），否则任务永远停在关卡上（MC-101）。
      * 查询仍在本事务内（FOR UPDATE 已锁定 approval 行），不引入新的竞态窗口。
      */
-    const owner = await c.query<{ session_id: string | null; step_id: string | null }>(
-      `SELECT session_id, payload->'decision'->>'step_id' AS step_id
+    const owner = await c.query<{ session_id: string | null; step_id: string | null; payload: BusinessEvent }>(
+      `SELECT session_id, payload, payload->'decision'->>'step_id' AS step_id
          FROM biz_events WHERE event_id=$1 AND workspace_id=$2`,
       [row.event_id, scope.workspaceId],
     );
     const ownerThread = owner.rows[0]?.session_id ?? null;
     const ownerStep = owner.rows[0]?.step_id ?? null;
+
+    // 围栏批准必须与激活同事务。先取 rule 锁，再由网关取事件链锁，与提案生产者顺序一致。
+    const proposal = owner.rows[0]?.payload;
+    const isFenceProposal = proposal?.decision?.action === "fence.rule.propose";
+    if (isFenceProposal && gesture.type === "edit") {
+      throw new ApprovalError("ACTIVATION_REJECTED", "围栏规则修改后须重新预演，请提交新的候选规则");
+    }
+    const isFenceApproval = status === "approved" && isFenceProposal;
+    const fenceActivation = isFenceApproval ? fenceActivationFromProposal(proposal, scope.workspaceId) : null;
+    if (isFenceApproval && !fenceActivation) {
+      throw new ApprovalError("ACTIVATION_REJECTED", "围栏提案缺少候选行、版本或预演绑定，请重新预演后提交");
+    }
+    if (fenceActivation) {
+      try {
+        await lockRuleActivationOnTx(c, scope, fenceActivation.ruleRowId);
+      } catch (error) {
+        if (error instanceof FenceActivationError) throw new ApprovalError("ACTIVATION_REJECTED", error.message);
+        throw error;
+      }
+    }
 
     // D16（#1/A）：状态变更、手势事件、校准记忆全部在同一事务同一 COMMIT——
     // 不再存在「状态已改、事件/记忆未落」的崩溃孤儿窗口
@@ -294,6 +334,15 @@ export async function decide(
       rule_impact: [],
       links: [row.event_id],
     });
+
+    if (fenceActivation) {
+      try {
+        await activateRuleVersionOnTx(c, scope, { ...fenceActivation, approvalEventId: gres.eventId });
+      } catch (error) {
+        if (error instanceof FenceActivationError) throw new ApprovalError("ACTIVATION_REJECTED", error.message);
+        throw error;
+      }
+    }
 
     // F1.7 校准闭环：驳回原因枚举 → 偏好模式记忆（机制位；权重衰减在数据大脑侧）
     if (gesture.type === "reject" && gesture.reasonEnum) {
@@ -348,7 +397,7 @@ export async function decide(
         [ownerThread, scope.workspaceId],
       );
     }
-    return { kind: "decided" as const, row, status, gestureEventId: gres.eventId };
+    return { kind: "decided" as const, row, status, gestureEventId: gres.eventId, activatedRuleRowId: fenceActivation?.ruleRowId };
   });
 
   if (txResult.kind === "deduped") {
@@ -366,7 +415,10 @@ export async function decide(
   if ((txResult.status === "approved" || txResult.status === "edited") && opts?.onApproved) {
     await opts.onApproved(approvalId, txResult.row.snapshot);
   }
-  return { approvalId, status: txResult.status, deduped: false, gestureEventId: txResult.gestureEventId };
+  return {
+    approvalId, status: txResult.status, deduped: false, gestureEventId: txResult.gestureEventId,
+    ...(txResult.activatedRuleRowId ? { activatedRuleRowId: txResult.activatedRuleRowId } : {}),
+  };
 }
 
 /* ================= 批量采纳（F5.2；仅非高危，P4 原型口径） ================= */
